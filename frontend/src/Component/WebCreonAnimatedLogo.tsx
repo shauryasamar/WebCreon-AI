@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useAdminTheme } from "../context/ThemeContext";
 
 export type WebCreonAnimatedLogoProps = {
   width?: string | number;
@@ -13,6 +14,7 @@ export function WebCreonAnimatedLogo({
   showText = true,
   staticMode = false,
 }: WebCreonAnimatedLogoProps) {
+  const { isDark } = useAdminTheme();
   const [key, setKey] = useState(0);
 
   const handleReplay = () => {
@@ -216,10 +218,22 @@ export function WebCreonAnimatedLogo({
           overflow: "visible",
         }}
       >
-        {/* GROUND SHADOW */}
+        {/* GROUND SHADOW / SURFACE PEDESTAL LINE */}
         <g className={staticMode ? "" : "wn-ground-shadow"}>
-          <ellipse cx="200" cy="315" rx="140" ry="12" fill="#091a38" opacity="0.12" />
-          <path d="M 40 315 L 360 315" stroke="#091a38" strokeWidth="8" strokeLinecap="round" />
+          <ellipse
+            cx="200"
+            cy="315"
+            rx="140"
+            ry="12"
+            fill={isDark ? "rgba(255, 255, 255, 0.2)" : "#091a38"}
+            opacity={isDark ? 0.35 : 0.12}
+          />
+          <path
+            d="M 40 315 L 360 315"
+            stroke={isDark ? "rgba(255, 255, 255, 0.55)" : "#091a38"}
+            strokeWidth="8"
+            strokeLinecap="round"
+          />
         </g>
 
         {/* FLOATING BUILDING ENSEMBLE */}

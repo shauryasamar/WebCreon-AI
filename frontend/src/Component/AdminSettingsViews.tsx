@@ -1,12 +1,15 @@
 import React, { useState } from "react";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import { AccessDeniedView } from "./AccessDeniedView";
 import { GlassToast } from "./GlassToast";
+import { AdminCheckbox } from "./AdminProducts";
 
 // ==========================================
 // 1. GENERAL STORE SETTINGS
 // ==========================================
 export const AdminGeneralSettings: React.FC<{ siteId?: string }> = ({ siteId }) => {
+  const { isDark, tokens } = useAdminTheme();
   const { hasPermission, isOwner } = useAdminAuth();
   const canView = isOwner || hasPermission("general_settings:view");
   const canEdit = isOwner || hasPermission("general_settings:edit");
@@ -43,152 +46,169 @@ export const AdminGeneralSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
     }, 600);
   };
 
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "9px 12px",
+    borderRadius: "8px",
+    border: `1px solid ${tokens.border}`,
+    fontSize: "13px",
+    boxSizing: "border-box",
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+    color: tokens.textPrimary,
+    colorScheme: isDark ? "dark" : "light",
+    outline: "none",
+  };
+
+  const optionStyle: React.CSSProperties = {
+    background: isDark ? tokens.surfaceBg : "#ffffff",
+    color: isDark ? tokens.textPrimary : "#0f172a",
+  };
+
   return (
-    <div style={{ padding: "24px 28px", maxWidth: "900px", margin: "0 auto", color: "#0f172a" }}>
+    <div style={{ padding: "24px 28px", maxWidth: "900px", margin: "0 auto", color: tokens.textPrimary }}>
       {toast && <GlassToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "22px", fontWeight: 700, margin: "0 0 6px 0", letterSpacing: "-0.01em" }}>
+        <h1 style={{ fontSize: "22px", fontWeight: 700, margin: "0 0 6px 0", letterSpacing: "-0.01em", color: tokens.textPrimary }}>
           General Settings
         </h1>
-        <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+        <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
           Configure primary storefront branding, currency, contact points, and operational modes.
         </p>
       </div>
 
       <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
         {/* Brand & Identity Card */}
-        <div style={{ background: "#ffffff", borderRadius: "14px", border: "1px solid #e2e8f0", padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-          <h3 style={{ margin: "0 0 16px 0", fontSize: "15px", fontWeight: 600, color: "#1e293b" }}>Store Identity</h3>
+        <div style={{ background: isDark ? tokens.surfaceBg : "#ffffff", borderRadius: "14px", border: `1px solid ${tokens.border}`, padding: "20px 24px", boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.04)" }}>
+          <h3 style={{ margin: "0 0 16px 0", fontSize: "15px", fontWeight: 600, color: tokens.textPrimary }}>Store Identity</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px" }}>
             <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Store Name</label>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>Store Name</label>
               <input
                 type="text"
                 value={storeName}
                 onChange={(e) => setStoreName(e.target.value)}
                 disabled={!canEdit}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", boxSizing: "border-box" }}
+                style={inputStyle}
               />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Order Number Prefix</label>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>Order Number Prefix</label>
               <input
                 type="text"
                 value={orderPrefix}
                 onChange={(e) => setOrderPrefix(e.target.value)}
                 disabled={!canEdit}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", boxSizing: "border-box" }}
+                style={inputStyle}
               />
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Store Description / Tagline</label>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>Store Description / Tagline</label>
               <textarea
                 value={tagline}
                 onChange={(e) => setTagline(e.target.value)}
                 disabled={!canEdit}
                 rows={2}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", boxSizing: "border-box", resize: "vertical" }}
+                style={{ ...inputStyle, resize: "vertical" }}
               />
             </div>
           </div>
         </div>
 
         {/* Contact & Support */}
-        <div style={{ background: "#ffffff", borderRadius: "14px", border: "1px solid #e2e8f0", padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-          <h3 style={{ margin: "0 0 16px 0", fontSize: "15px", fontWeight: 600, color: "#1e293b" }}>Contact & Support</h3>
+        <div style={{ background: isDark ? tokens.surfaceBg : "#ffffff", borderRadius: "14px", border: `1px solid ${tokens.border}`, padding: "20px 24px", boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.04)" }}>
+          <h3 style={{ margin: "0 0 16px 0", fontSize: "15px", fontWeight: 600, color: tokens.textPrimary }}>Contact & Support</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px" }}>
             <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Customer Support Email</label>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>Customer Support Email</label>
               <input
                 type="email"
                 value={supportEmail}
                 onChange={(e) => setSupportEmail(e.target.value)}
                 disabled={!canEdit}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", boxSizing: "border-box" }}
+                style={inputStyle}
               />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Support Phone / Helpline</label>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>Support Phone / Helpline</label>
               <input
                 type="tel"
                 value={supportPhone}
                 onChange={(e) => setSupportPhone(e.target.value)}
                 disabled={!canEdit}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", boxSizing: "border-box" }}
+                style={inputStyle}
               />
             </div>
           </div>
         </div>
 
         {/* Standards & Formats */}
-        <div style={{ background: "#ffffff", borderRadius: "14px", border: "1px solid #e2e8f0", padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-          <h3 style={{ margin: "0 0 16px 0", fontSize: "15px", fontWeight: 600, color: "#1e293b" }}>Regional & Currency</h3>
+        <div style={{ background: isDark ? tokens.surfaceBg : "#ffffff", borderRadius: "14px", border: `1px solid ${tokens.border}`, padding: "20px 24px", boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.04)" }}>
+          <h3 style={{ margin: "0 0 16px 0", fontSize: "15px", fontWeight: 600, color: tokens.textPrimary }}>Regional & Currency</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px" }}>
             <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Storefront Currency</label>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>Storefront Currency</label>
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
                 disabled={!canEdit}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", background: "#ffffff" }}
+                style={inputStyle}
               >
-                <option value="INR">INR (₹) — Indian Rupee</option>
-                <option value="USD">USD ($) — US Dollar</option>
-                <option value="EUR">EUR (€) — Euro</option>
-                <option value="GBP">GBP (£) — British Pound</option>
-                <option value="AED">AED (د.إ) — UAE Dirham</option>
+                <option value="INR" style={optionStyle}>INR (₹) — Indian Rupee</option>
+                <option value="USD" style={optionStyle}>USD ($) — US Dollar</option>
+                <option value="EUR" style={optionStyle}>EUR (€) — Euro</option>
+                <option value="GBP" style={optionStyle}>GBP (£) — British Pound</option>
+                <option value="AED" style={optionStyle}>AED (د.إ) — UAE Dirham</option>
               </select>
             </div>
             <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>Timezone</label>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>Timezone</label>
               <select
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
                 disabled={!canEdit}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", background: "#ffffff" }}
+                style={inputStyle}
               >
-                <option value="Asia/Kolkata">Asia/Kolkata (IST +5:30)</option>
-                <option value="UTC">UTC (GMT +0:00)</option>
-                <option value="America/New_York">America/New_York (EST -5:00)</option>
-                <option value="Europe/London">Europe/London (BST +1:00)</option>
-                <option value="Asia/Dubai">Asia/Dubai (GST +4:00)</option>
+                <option value="Asia/Kolkata" style={optionStyle}>Asia/Kolkata (IST +5:30)</option>
+                <option value="UTC" style={optionStyle}>UTC (GMT +0:00)</option>
+                <option value="America/New_York" style={optionStyle}>America/New_York (EST -5:00)</option>
+                <option value="Europe/London" style={optionStyle}>Europe/London (BST +1:00)</option>
+                <option value="Asia/Dubai" style={optionStyle}>Asia/Dubai (GST +4:00)</option>
               </select>
             </div>
           </div>
         </div>
 
         {/* Operational Status */}
-        <div style={{ background: "#ffffff", borderRadius: "14px", border: "1px solid #e2e8f0", padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-          <h3 style={{ margin: "0 0 16px 0", fontSize: "15px", fontWeight: 600, color: "#1e293b" }}>Store Operations</h3>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #f1f5f9" }}>
+        <div style={{ background: isDark ? tokens.surfaceBg : "#ffffff", borderRadius: "14px", border: `1px solid ${tokens.border}`, padding: "20px 24px", boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.04)" }}>
+          <h3 style={{ margin: "0 0 16px 0", fontSize: "15px", fontWeight: 600, color: tokens.textPrimary }}>Store Operations</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${tokens.border}` }}>
             <div>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>Maintenance Mode</div>
-              <div style={{ fontSize: "12px", color: "#64748b" }}>Temporarily show a "We'll be back soon" banner to buyers while you make changes.</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary }}>Maintenance Mode</div>
+              <div style={{ fontSize: "12px", color: tokens.textSecondary }}>Temporarily show a "We'll be back soon" banner to buyers while you make changes.</div>
             </div>
-            <input
-              type="checkbox"
+            <AdminCheckbox
               checked={maintenanceMode}
               onChange={(e) => canEdit && setMaintenanceMode(e.target.checked)}
               disabled={!canEdit}
-              style={{ width: "18px", height: "18px", cursor: canEdit ? "pointer" : "default" }}
+              ariaLabel="Toggle maintenance mode"
             />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0" }}>
             <div>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>Auto-Cancel Pending Orders</div>
-              <div style={{ fontSize: "12px", color: "#64748b" }}>Automatically cancel unpaid checkout orders after a set time period.</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary }}>Auto-Cancel Pending Orders</div>
+              <div style={{ fontSize: "12px", color: tokens.textSecondary }}>Automatically cancel unpaid checkout orders after a set time period.</div>
             </div>
             <select
               value={autoCancelUnpaidHours}
               onChange={(e) => setAutoCancelUnpaidHours(e.target.value)}
               disabled={!canEdit}
-              style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px" }}
+              style={{ padding: "6px 10px", borderRadius: "6px", border: `1px solid ${tokens.border}`, fontSize: "12px", background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", color: tokens.textPrimary, colorScheme: isDark ? "dark" : "light", outline: "none" }}
             >
-              <option value="12">After 12 Hours</option>
-              <option value="24">After 24 Hours</option>
-              <option value="48">After 48 Hours</option>
-              <option value="never">Never Cancel</option>
+              <option value="12" style={optionStyle}>After 12 Hours</option>
+              <option value="24" style={optionStyle}>After 24 Hours</option>
+              <option value="48" style={optionStyle}>After 48 Hours</option>
+              <option value="never" style={optionStyle}>Never Cancel</option>
             </select>
           </div>
         </div>
@@ -201,7 +221,7 @@ export const AdminGeneralSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
             style={{
               padding: "10px 24px",
               borderRadius: "8px",
-              background: !canEdit ? "#94a3b8" : "#2563eb",
+              background: !canEdit ? tokens.textMuted : (tokens.accent || "#2563eb"),
               color: "#ffffff",
               border: "none",
               fontSize: "13px",
@@ -223,7 +243,6 @@ export const AdminGeneralSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
 // ==========================================
 export { AdminDomainSettings } from "./AdminDomainSettings";
 
-
 // ==========================================
 // 3. BILLING & PLANS SETTINGS
 // ==========================================
@@ -233,6 +252,7 @@ export { AdminBillingSettings } from "./AdminBillingSettings";
 // 4. INTEGRATIONS SETTINGS
 // ==========================================
 export const AdminIntegrationsSettings: React.FC<{ siteId?: string }> = ({ siteId }) => {
+  const { isDark, tokens } = useAdminTheme();
   const { hasPermission, isOwner } = useAdminAuth();
   const canView = isOwner || hasPermission("integrations:view");
   const canEdit = isOwner || hasPermission("integrations:edit");
@@ -269,14 +289,14 @@ export const AdminIntegrationsSettings: React.FC<{ siteId?: string }> = ({ siteI
   };
 
   return (
-    <div style={{ padding: "24px 28px", maxWidth: "900px", margin: "0 auto", color: "#0f172a" }}>
+    <div style={{ padding: "24px 28px", maxWidth: "900px", margin: "0 auto", color: tokens.textPrimary }}>
       {toast && <GlassToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "22px", fontWeight: 700, margin: "0 0 6px 0", letterSpacing: "-0.01em" }}>
+        <h1 style={{ fontSize: "22px", fontWeight: 700, margin: "0 0 6px 0", letterSpacing: "-0.01em", color: tokens.textPrimary }}>
           Integrations & Apps
         </h1>
-        <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+        <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
           Connect WhatsApp, payment gateways, marketing tools, and analytics directly to your storefront.
         </p>
       </div>
@@ -286,11 +306,11 @@ export const AdminIntegrationsSettings: React.FC<{ siteId?: string }> = ({ siteI
           <div
             key={item.id}
             style={{
-              background: "#ffffff",
+              background: isDark ? tokens.surfaceBg : "#ffffff",
               borderRadius: "14px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
               padding: "18px 22px",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+              boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.04)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
@@ -298,16 +318,16 @@ export const AdminIntegrationsSettings: React.FC<{ siteId?: string }> = ({ siteI
             }}
           >
             <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
-              <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#f8fafc", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>
+              <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>
                 {item.icon}
               </div>
               <div>
-                <div style={{ fontSize: "14px", fontWeight: 600, color: "#0f172a" }}>{item.name}</div>
-                <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px", maxWidth: "560px" }}>{item.desc}</div>
+                <div style={{ fontSize: "14px", fontWeight: 600, color: tokens.textPrimary }}>{item.name}</div>
+                <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "2px", maxWidth: "560px" }}>{item.desc}</div>
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span style={{ fontSize: "11px", fontWeight: 700, color: item.enabled ? "#059669" : "#64748b" }}>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: item.enabled ? (isDark ? "#4ade80" : "#059669") : tokens.textSecondary }}>
                 {item.enabled ? "Connected" : "Disabled"}
               </span>
               <button
@@ -317,9 +337,9 @@ export const AdminIntegrationsSettings: React.FC<{ siteId?: string }> = ({ siteI
                 style={{
                   padding: "6px 14px",
                   borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  background: item.enabled ? "#f1f5f9" : "#2563eb",
-                  color: item.enabled ? "#334155" : "#ffffff",
+                  border: `1px solid ${tokens.border}`,
+                  background: item.enabled ? (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9") : (tokens.accent || "#2563eb"),
+                  color: item.enabled ? tokens.textPrimary : "#ffffff",
                   fontSize: "12px",
                   fontWeight: 600,
                   cursor: !canEdit ? "not-allowed" : "pointer",
@@ -339,6 +359,7 @@ export const AdminIntegrationsSettings: React.FC<{ siteId?: string }> = ({ siteI
 // 5. HELP & SUPPORT VIEW
 // ==========================================
 export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) => {
+  const { isDark, tokens } = useAdminTheme();
   const { admin, isOwner } = useAdminAuth();
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
@@ -510,20 +531,20 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
   });
 
   return (
-    <div style={{ padding: "24px 28px", maxWidth: "1000px", margin: "0 auto", color: "#0f172a", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+    <div style={{ padding: "24px 28px", maxWidth: "1000px", margin: "0 auto", color: tokens.textPrimary, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
       {toast && <GlassToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "28px" }}>
         <div>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "3px 10px", borderRadius: "16px", background: "#eff6ff", border: "1px solid #bfdbfe", color: "#2563eb", fontSize: "12px", fontWeight: 600, marginBottom: "8px" }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563eb" }} />
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "3px 10px", borderRadius: "16px", background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff", border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`, color: isDark ? "#93c5fd" : "#2563eb", fontSize: "12px", fontWeight: 600, marginBottom: "8px" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: tokens.accent || "#2563eb" }} />
             WebCreon Merchant Help Center
           </div>
-          <h1 style={{ fontSize: "24px", fontWeight: 700, margin: "0 0 6px 0", letterSpacing: "-0.015em", color: "#0f172a" }}>
+          <h1 style={{ fontSize: "24px", fontWeight: 700, margin: "0 0 6px 0", letterSpacing: "-0.015em", color: tokens.textPrimary }}>
             Help & Support
           </h1>
-          <p style={{ margin: 0, fontSize: "13.5px", color: "#64748b" }}>
+          <p style={{ margin: 0, fontSize: "13.5px", color: tokens.textSecondary }}>
             Get instant assistance, explore guides & documentation, or contact our dedicated support engineers.
           </p>
         </div>
@@ -539,16 +560,13 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
               height: "36px",
               padding: "0 14px",
               borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-              background: "#ffffff",
-              color: "#334155",
+              border: `1px solid ${tokens.border}`,
+              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+              color: tokens.textPrimary,
               fontSize: "13px",
               fontWeight: 600,
               cursor: "pointer",
-              transition: "all 0.15s ease",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#ffffff")}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -568,16 +586,13 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
               padding: "0 16px",
               borderRadius: "8px",
               border: "none",
-              background: "#2563eb",
+              background: tokens.accent || "#2563eb",
               color: "#ffffff",
               fontSize: "13px",
               fontWeight: 600,
               cursor: "pointer",
               boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
-              transition: "all 0.15s ease",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
               <path d="M12 5v14M5 12h14" />
@@ -590,65 +605,65 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
       {/* TOP THREE HIGHLIGHT CARDS */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "32px" }}>
         {/* Card 1: 24/7 Dedicated Support */}
-        <div style={{ background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)", borderRadius: "14px", border: "1px solid #e2e8f0", padding: "20px 22px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+        <div style={{ background: isDark ? tokens.surfaceBg : "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)", borderRadius: "14px", border: `1px solid ${tokens.border}`, padding: "20px 22px", boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.03)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-            <div style={{ width: 38, height: 38, borderRadius: "10px", background: "#eff6ff", border: "1px solid #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center", color: "#2563eb", fontSize: "18px" }}>
+            <div style={{ width: 38, height: 38, borderRadius: "10px", background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff", border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`, display: "flex", alignItems: "center", justifyContent: "center", color: isDark ? "#93c5fd" : "#2563eb", fontSize: "18px" }}>
               🎧
             </div>
-            <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "12px", background: "#dcfce7", color: "#166534" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "12px", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#dcfce7", color: isDark ? "#4ade80" : "#166534" }}>
               24/7 Active
             </span>
           </div>
-          <h3 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+          <h3 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
             Dedicated Engineering Desk
           </h3>
-          <p style={{ margin: "0 0 16px 0", fontSize: "12.5px", color: "#64748b", lineHeight: 1.45 }}>
+          <p style={{ margin: "0 0 16px 0", fontSize: "12.5px", color: tokens.textSecondary, lineHeight: 1.45 }}>
             Direct access to WebCreon systems engineers for custom domain issues, API errors, and order inquiries.
           </p>
-          <div style={{ fontSize: "12px", color: "#334155", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
+          <div style={{ fontSize: "12px", color: tokens.textPrimary, fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
             <span>⚡ Avg response time:</span>
-            <span style={{ color: "#16a34a" }}>&lt; 15 minutes</span>
+            <span style={{ color: isDark ? "#4ade80" : "#16a34a" }}>&lt; 15 minutes</span>
           </div>
         </div>
 
         {/* Card 2: AI Co-Pilot Assistant */}
-        <div style={{ background: "linear-gradient(135deg, #ffffff 0%, #faf5ff 100%)", borderRadius: "14px", border: "1px solid #f3e8ff", padding: "20px 22px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+        <div style={{ background: isDark ? "rgba(168, 85, 247, 0.08)" : "linear-gradient(135deg, #ffffff 0%, #faf5ff 100%)", borderRadius: "14px", border: isDark ? "1px solid rgba(168, 85, 247, 0.2)" : "1px solid #f3e8ff", padding: "20px 22px", boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.03)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-            <div style={{ width: 38, height: 38, borderRadius: "10px", background: "#f5f3ff", border: "1px solid #ddd6fe", display: "flex", alignItems: "center", justifyContent: "center", color: "#7c3aed", fontSize: "18px" }}>
+            <div style={{ width: 38, height: 38, borderRadius: "10px", background: isDark ? "rgba(168, 85, 247, 0.2)" : "#f5f3ff", border: `1px solid ${isDark ? "rgba(168, 85, 247, 0.35)" : "#ddd6fe"}`, display: "flex", alignItems: "center", justifyContent: "center", color: isDark ? "#c084fc" : "#7c3aed", fontSize: "18px" }}>
               ✨
             </div>
-            <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "12px", background: "#f3e8ff", color: "#6b21a8" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "12px", background: isDark ? "rgba(168, 85, 247, 0.2)" : "#f3e8ff", color: isDark ? "#c084fc" : "#6b21a8" }}>
               In-Builder AI
             </span>
           </div>
-          <h3 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+          <h3 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
             WebCreon AI Co-Pilot
           </h3>
-          <p style={{ margin: "0 0 16px 0", fontSize: "12.5px", color: "#64748b", lineHeight: 1.45 }}>
+          <p style={{ margin: "0 0 16px 0", fontSize: "12.5px", color: tokens.textSecondary, lineHeight: 1.45 }}>
             Ask questions, debug storefront styles, or auto-generate marketing sections using the drawer co-pilot chat.
           </p>
-          <div style={{ fontSize: "12px", color: "#7c3aed", fontWeight: 600 }}>
+          <div style={{ fontSize: "12px", color: isDark ? "#c084fc" : "#7c3aed", fontWeight: 600 }}>
             Open from the left sidebar anytime
           </div>
         </div>
 
         {/* Card 3: Platform Health */}
-        <div style={{ background: "linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)", borderRadius: "14px", border: "1px solid #dcfce7", padding: "20px 22px", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+        <div style={{ background: isDark ? "rgba(34, 197, 94, 0.08)" : "linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)", borderRadius: "14px", border: isDark ? "1px solid rgba(34, 197, 94, 0.2)" : "1px solid #dcfce7", padding: "20px 22px", boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.03)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-            <div style={{ width: 38, height: 38, borderRadius: "10px", background: "#dcfce7", border: "1px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center", color: "#15803d", fontSize: "18px" }}>
+            <div style={{ width: 38, height: 38, borderRadius: "10px", background: isDark ? "rgba(34, 197, 94, 0.2)" : "#dcfce7", border: `1px solid ${isDark ? "rgba(34, 197, 94, 0.35)" : "#bbf7d0"}`, display: "flex", alignItems: "center", justifyContent: "center", color: isDark ? "#4ade80" : "#15803d", fontSize: "18px" }}>
               🟢
             </div>
-            <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "12px", background: "#dcfce7", color: "#166534" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "12px", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#dcfce7", color: isDark ? "#4ade80" : "#166534" }}>
               99.98% Uptime
             </span>
           </div>
-          <h3 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+          <h3 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
             All Systems Operational
           </h3>
-          <p style={{ margin: "0 0 16px 0", fontSize: "12.5px", color: "#64748b", lineHeight: 1.45 }}>
+          <p style={{ margin: "0 0 16px 0", fontSize: "12.5px", color: tokens.textSecondary, lineHeight: 1.45 }}>
             Global edge CDN, automated checkout payments, and real-time database sync are functioning smoothly.
           </p>
-          <div style={{ fontSize: "12px", color: "#15803d", fontWeight: 600 }}>
+          <div style={{ fontSize: "12px", color: isDark ? "#4ade80" : "#15803d", fontWeight: 600 }}>
             No active incidents reported
           </div>
         </div>
@@ -656,15 +671,15 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
 
       {/* RECENT TICKETS SECTION */}
       {recentTickets.length > 0 && (
-        <div style={{ background: "#ffffff", borderRadius: "14px", border: "1px solid #e2e8f0", padding: "20px 24px", marginBottom: "32px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+        <div style={{ background: isDark ? tokens.surfaceBg : "#ffffff", borderRadius: "14px", border: `1px solid ${tokens.border}`, padding: "20px 24px", marginBottom: "32px", boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.04)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-            <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+            <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
               Your Support Requests
             </h3>
             <button
               type="button"
               onClick={() => setShowTicketModal(true)}
-              style={{ background: "none", border: "none", color: "#2563eb", fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}
+              style={{ background: "none", border: "none", color: tokens.accent || "#2563eb", fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}
             >
               + Submit New Request
             </button>
@@ -673,7 +688,7 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
-                <tr style={{ borderBottom: "1px solid #e2e8f0", textAlign: "left", color: "#64748b" }}>
+                <tr style={{ borderBottom: `1px solid ${tokens.border}`, textAlign: "left", color: tokens.textSecondary }}>
                   <th style={{ padding: "10px 12px" }}>Ticket ID</th>
                   <th style={{ padding: "10px 12px" }}>Subject</th>
                   <th style={{ padding: "10px 12px" }}>Category</th>
@@ -684,10 +699,10 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
               </thead>
               <tbody>
                 {recentTickets.map((t) => (
-                  <tr key={t.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                    <td style={{ padding: "12px", fontWeight: 700, color: "#2563eb" }}>{t.id}</td>
-                    <td style={{ padding: "12px", fontWeight: 600, color: "#0f172a" }}>{t.subject}</td>
-                    <td style={{ padding: "12px", color: "#64748b" }}>{t.category}</td>
+                  <tr key={t.id} style={{ borderBottom: `1px solid ${tokens.border}` }}>
+                    <td style={{ padding: "12px", fontWeight: 700, color: isDark ? "#60a5fa" : "#2563eb" }}>{t.id}</td>
+                    <td style={{ padding: "12px", fontWeight: 600, color: tokens.textPrimary }}>{t.subject}</td>
+                    <td style={{ padding: "12px", color: tokens.textSecondary }}>{t.category}</td>
                     <td style={{ padding: "12px" }}>
                       <span
                         style={{
@@ -695,8 +710,9 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                           fontWeight: 700,
                           padding: "2px 7px",
                           borderRadius: "6px",
-                          background: t.priority === "Urgent" ? "#fef2f2" : t.priority === "High" ? "#fffbeb" : "#f1f5f9",
-                          color: t.priority === "Urgent" ? "#dc2626" : t.priority === "High" ? "#d97706" : "#475569",
+                          background: t.priority === "Urgent" ? (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2") : t.priority === "High" ? (isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                          color: t.priority === "Urgent" ? (isDark ? "#fca5a5" : "#dc2626") : t.priority === "High" ? (isDark ? "#fcd34d" : "#d97706") : tokens.textSecondary,
+                          border: `1px solid ${t.priority === "Urgent" ? (isDark ? "rgba(239, 68, 68, 0.35)" : "#fecaca") : t.priority === "High" ? (isDark ? "rgba(245, 158, 11, 0.35)" : "#fde68a") : tokens.border}`,
                         }}
                       >
                         {t.priority}
@@ -709,14 +725,15 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                           fontWeight: 600,
                           padding: "2px 8px",
                           borderRadius: "12px",
-                          background: t.status === "Resolved" ? "#dcfce7" : "#eff6ff",
-                          color: t.status === "Resolved" ? "#15803d" : "#2563eb",
+                          background: t.status === "Resolved" ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#dcfce7") : (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff"),
+                          color: t.status === "Resolved" ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#93c5fd" : "#2563eb"),
+                          border: `1px solid ${t.status === "Resolved" ? (isDark ? "rgba(34, 197, 94, 0.35)" : "#bbf7d0") : (isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe")}`,
                         }}
                       >
                         {t.status}
                       </span>
                     </td>
-                    <td style={{ padding: "12px", textAlign: "right", color: "#64748b", fontSize: "12px" }}>{t.date}</td>
+                    <td style={{ padding: "12px", textAlign: "right", color: tokens.textSecondary, fontSize: "12px" }}>{t.date}</td>
                   </tr>
                 ))}
               </tbody>
@@ -729,10 +746,10 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
       <div style={{ marginBottom: "36px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
           <div>
-            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
               Merchant Guides & Documentation
             </h3>
-            <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+            <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
               Learn best practices for configuring your storefront, payments, and team access.
             </p>
           </div>
@@ -749,16 +766,19 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                 height: "34px",
                 padding: "0 10px 0 30px",
                 borderRadius: "8px",
-                border: "1px solid #cbd5e1",
+                border: `1px solid ${tokens.border}`,
                 fontSize: "12.5px",
                 outline: "none",
                 boxSizing: "border-box",
+                background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                color: tokens.textPrimary,
+                colorScheme: isDark ? "dark" : "light",
               }}
             />
             <svg
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#94a3b8"
+              stroke={tokens.textMuted}
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -786,14 +806,12 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
               style={{
                 padding: "5px 12px",
                 borderRadius: "16px",
-                border: "1px solid",
-                borderColor: selectedCategory === cat.id ? "#2563eb" : "#e2e8f0",
-                background: selectedCategory === cat.id ? "#eff6ff" : "#ffffff",
-                color: selectedCategory === cat.id ? "#1d4ed8" : "#475569",
+                border: `1px solid ${selectedCategory === cat.id ? (isDark ? "rgba(59, 130, 246, 0.4)" : "#2563eb") : tokens.border}`,
+                background: selectedCategory === cat.id ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
+                color: selectedCategory === cat.id ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textSecondary,
                 fontSize: "12px",
                 fontWeight: selectedCategory === cat.id ? 600 : 500,
                 cursor: "pointer",
-                transition: "all 0.12s ease",
               }}
             >
               {cat.label}
@@ -807,32 +825,23 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
             <div
               key={guide.id}
               style={{
-                background: "#ffffff",
+                background: isDark ? tokens.surfaceBg : "#ffffff",
                 borderRadius: "12px",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${tokens.border}`,
                 padding: "16px 18px",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                boxShadow: isDark ? "0 4px 14px rgba(0,0,0,0.2)" : "0 1px 2px rgba(0,0,0,0.02)",
                 cursor: "pointer",
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "#bfdbfe";
-                e.currentTarget.style.boxShadow = "0 4px 12px rgba(37,99,235,0.06)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "#e2e8f0";
-                e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.02)";
               }}
               onClick={() => setToast({ message: `Opening guide: ${guide.title}`, type: "info" })}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                 <span style={{ fontSize: "20px" }}>{guide.icon}</span>
-                <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>{guide.readTime}</span>
+                <span style={{ fontSize: "11px", color: tokens.textMuted, fontWeight: 500 }}>{guide.readTime}</span>
               </div>
-              <h4 style={{ margin: "0 0 6px 0", fontSize: "14px", fontWeight: 600, color: "#0f172a" }}>
+              <h4 style={{ margin: "0 0 6px 0", fontSize: "14px", fontWeight: 600, color: tokens.textPrimary }}>
                 {guide.title}
               </h4>
-              <p style={{ margin: 0, fontSize: "12.5px", color: "#64748b", lineHeight: 1.45 }}>
+              <p style={{ margin: 0, fontSize: "12.5px", color: tokens.textSecondary, lineHeight: 1.45 }}>
                 {guide.desc}
               </p>
             </div>
@@ -841,11 +850,11 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
       </div>
 
       {/* INTERACTIVE FAQ ACCORDION */}
-      <div style={{ background: "#ffffff", borderRadius: "14px", border: "1px solid #e2e8f0", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", marginBottom: "32px" }}>
-        <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+      <div style={{ background: isDark ? tokens.surfaceBg : "#ffffff", borderRadius: "14px", border: `1px solid ${tokens.border}`, padding: "24px", boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.04)", marginBottom: "32px" }}>
+        <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
           Frequently Asked Questions
         </h3>
-        <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: "#64748b" }}>
+        <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: tokens.textSecondary }}>
           Instant answers to common merchant questions regarding domains, payouts, and team roles.
         </p>
 
@@ -857,11 +866,9 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                 key={idx}
                 style={{
                   borderRadius: "10px",
-                  border: "1px solid",
-                  borderColor: isOpen ? "#bfdbfe" : "#f1f5f9",
-                  background: isOpen ? "#f8faff" : "#f8fafc",
+                  border: `1px solid ${isOpen ? (isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe") : tokens.border}`,
+                  background: isOpen ? (isDark ? "rgba(59, 130, 246, 0.08)" : "#f8faff") : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
                   overflow: "hidden",
-                  transition: "all 0.15s ease",
                 }}
               >
                 <button
@@ -879,7 +886,7 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                     cursor: "pointer",
                     fontWeight: 600,
                     fontSize: "13.5px",
-                    color: isOpen ? "#1d4ed8" : "#1e293b",
+                    color: isOpen ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
                   }}
                 >
                   <span>{faq.q}</span>
@@ -894,8 +901,7 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                       width: 15,
                       height: 15,
                       transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-                      transition: "transform 0.18s ease",
-                      color: isOpen ? "#2563eb" : "#64748b",
+                      color: isOpen ? (tokens.accent || "#2563eb") : tokens.textSecondary,
                       flexShrink: 0,
                       marginLeft: 12,
                     }}
@@ -904,7 +910,7 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                   </svg>
                 </button>
                 {isOpen && (
-                  <div style={{ padding: "0 16px 14px 16px", fontSize: "13px", color: "#475569", lineHeight: 1.55 }}>
+                  <div style={{ padding: "0 16px 14px 16px", fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.55 }}>
                     {faq.a}
                   </div>
                 )}
@@ -923,7 +929,8 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(15, 23, 42, 0.45)",
+            background: isDark ? "rgba(0, 0, 0, 0.75)" : "rgba(15, 23, 42, 0.45)",
+            backdropFilter: "blur(2px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -937,20 +944,21 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
             style={{
               width: "100%",
               maxWidth: "520px",
-              background: "#ffffff",
+              background: isDark ? tokens.surfaceBg : "#ffffff",
               borderRadius: "16px",
+              border: `1px solid ${tokens.border}`,
               padding: "24px 28px",
-              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+              boxShadow: isDark ? "0 20px 40px rgba(0,0,0,0.6)" : "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
-              <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "#0f172a" }}>
+              <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: tokens.textPrimary }}>
                 Submit Support Ticket
               </h3>
               <button
                 type="button"
                 onClick={() => setShowTicketModal(false)}
-                style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "18px" }}
+                style={{ background: "none", border: "none", color: tokens.textMuted, cursor: "pointer", fontSize: "18px" }}
               >
                 ✕
               </button>
@@ -958,7 +966,7 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
 
             <form onSubmit={handleTicketSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <div>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "5px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "5px" }}>
                   Subject
                 </label>
                 <input
@@ -970,9 +978,13 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                     width: "100%",
                     padding: "8px 12px",
                     borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
+                    border: `1px solid ${tokens.border}`,
                     fontSize: "13px",
                     boxSizing: "border-box",
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
+                    colorScheme: isDark ? "dark" : "light",
+                    outline: "none",
                   }}
                   required
                 />
@@ -980,7 +992,7 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "5px" }}>
                     Category
                   </label>
                   <select
@@ -990,21 +1002,24 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                       width: "100%",
                       padding: "8px 10px",
                       borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
+                      border: `1px solid ${tokens.border}`,
                       fontSize: "13px",
-                      background: "#ffffff",
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      color: tokens.textPrimary,
+                      colorScheme: isDark ? "dark" : "light",
+                      outline: "none",
                       boxSizing: "border-box",
                     }}
                   >
-                    <option value="technical">Technical Issue</option>
-                    <option value="domain">Custom Domain & DNS</option>
-                    <option value="billing">Billing & Payouts</option>
-                    <option value="general">General Question</option>
+                    <option value="technical" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Technical Issue</option>
+                    <option value="domain" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Custom Domain & DNS</option>
+                    <option value="billing" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Billing & Payouts</option>
+                    <option value="general" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>General Question</option>
                   </select>
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "5px" }}>
                     Priority
                   </label>
                   <select
@@ -1014,21 +1029,24 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                       width: "100%",
                       padding: "8px 10px",
                       borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
+                      border: `1px solid ${tokens.border}`,
                       fontSize: "13px",
-                      background: "#ffffff",
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      color: tokens.textPrimary,
+                      colorScheme: isDark ? "dark" : "light",
+                      outline: "none",
                       boxSizing: "border-box",
                     }}
                   >
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent (Live Store)</option>
+                    <option value="normal" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Normal</option>
+                    <option value="high" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>High</option>
+                    <option value="urgent" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Urgent (Live Store)</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "5px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "5px" }}>
                   Description
                 </label>
                 <textarea
@@ -1040,10 +1058,14 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                     width: "100%",
                     padding: "8px 12px",
                     borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
+                    border: `1px solid ${tokens.border}`,
                     fontSize: "13px",
                     boxSizing: "border-box",
                     resize: "vertical",
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
+                    colorScheme: isDark ? "dark" : "light",
+                    outline: "none",
                   }}
                   required
                 />
@@ -1056,9 +1078,9 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                   style={{
                     padding: "8px 16px",
                     borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#334155",
+                    border: `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
                     fontSize: "13px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -1073,7 +1095,7 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                     padding: "8px 18px",
                     borderRadius: "8px",
                     border: "none",
-                    background: "#2563eb",
+                    background: tokens.accent || "#2563eb",
                     color: "#ffffff",
                     fontSize: "13px",
                     fontWeight: 600,
@@ -1091,13 +1113,11 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
   );
 };
 
-
 // ==========================================
-// 5. STATUTORY TAX & WITHHOLDING SETTINGS
+// 6. STATUTORY TAX & WITHHOLDING SETTINGS
 // ==========================================
 import { AdminTaxComplianceDesk } from "./AdminTaxComplianceDesk";
 
 export const AdminTaxSettings: React.FC<{ siteId?: string }> = ({ siteId }) => {
   return <AdminTaxComplianceDesk siteId={siteId} />;
 };
-

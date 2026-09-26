@@ -2,7 +2,9 @@ import React, { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import WebCreonAnimatedLogo from "../Component/WebCreonAnimatedLogo";
+import AdminThemeToggle from "../Component/AdminThemeToggle";
 
 type LocationState = {
   from?: string;
@@ -12,7 +14,9 @@ export default function AdminLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const state = (location.state || {}) as LocationState;
+  const redirectTarget = state.from || "/admin/sites";
   const { refreshAdmin } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,29 +31,6 @@ export default function AdminLoginPage() {
   const [forgotSubmitting, setForgotSubmitting] = useState(false);
   const [forgotMessage, setForgotMessage] = useState("");
   const [forgotError, setForgotError] = useState("");
-
-  const redirectTarget = state.from || "/admin/sites";
-
-  // Google Identity Services (GIS) integration
-  useEffect(() => {
-    const rawClientId = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID;
-    const hasValidClientId = rawClientId && !rawClientId.includes("exampleclientid");
-
-    if (hasValidClientId) {
-      if (!(window as any).google) {
-        const script = document.createElement("script");
-        script.src = "https://accounts.google.com/gsi/client";
-        script.async = true;
-        script.defer = true;
-        script.onload = () => {
-          initGoogleGIS(rawClientId);
-        };
-        document.head.appendChild(script);
-      } else {
-        initGoogleGIS(rawClientId);
-      }
-    }
-  }, []);
 
   const handleGoogleSuccess = async (idToken: string) => {
     setGoogleSubmitting(true);
@@ -105,28 +86,38 @@ export default function AdminLoginPage() {
             }
           },
         });
-
-        const btnContainer = document.getElementById("google-signin-btn");
-        const fallbackBtn = document.getElementById("google-signin-fallback-btn");
-        if (btnContainer) {
-          (window as any).google.accounts.id.renderButton(btnContainer, {
-            theme: "outline",
-            size: "large",
-            width: 340,
-            text: "signin_with",
-            shape: "rectangular",
-          });
-          setTimeout(() => {
-            if (fallbackBtn && btnContainer.children.length > 0) {
-              fallbackBtn.style.display = "none";
-            }
-          }, 100);
-        }
       }
     } catch (e) {
       console.warn("GIS initialization notice:", e);
     }
   };
+
+  // Google Identity Services (GIS) integration
+  useEffect(() => {
+    const rawClientId = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID;
+    const hasValidClientId = rawClientId && !rawClientId.includes("exampleclientid");
+
+    if (hasValidClientId) {
+      if (!(window as any).google?.accounts?.id) {
+        const existingScript = document.getElementById("google-gsi-client-script");
+        if (!existingScript) {
+          const script = document.createElement("script");
+          script.id = "google-gsi-client-script";
+          script.src = "https://accounts.google.com/gsi/client";
+          script.async = true;
+          script.defer = true;
+          script.onload = () => {
+            initGoogleGIS(rawClientId);
+          };
+          document.head.appendChild(script);
+        } else {
+          existingScript.addEventListener("load", () => initGoogleGIS(rawClientId));
+        }
+      } else {
+        initGoogleGIS(rawClientId);
+      }
+    }
+  }, []);
 
   const handleDevGoogleLogin = () => {
     // Simulated token for instant local development testing when Client ID is unconfigured
@@ -230,10 +221,13 @@ export default function AdminLoginPage() {
         width: "100vw",
         display: "flex",
         overflow: "hidden",
-        background: "#ffffff",
+        background: tokens.workspaceBg,
+        color: tokens.textPrimary,
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        position: "relative",
       }}
     >
+      <AdminThemeToggle style={{ position: "fixed", top: "16px", right: "16px", zIndex: 100 }} />
       <style>{`
         @media (max-width: 860px) {
           .wn-login-split-container {
@@ -245,7 +239,7 @@ export default function AdminLoginPage() {
             width: 100% !important;
             padding: 24px 16px 12px 16px !important;
             border-right: none !important;
-            border-bottom: 1px solid #e2e8f0 !important;
+            border-bottom: 1px solid ${tokens.border} !important;
           }
           .wn-login-right-panel {
             flex: 1 1 auto !important;
@@ -269,12 +263,11 @@ export default function AdminLoginPage() {
           className="wn-login-left-panel"
           style={{
             flex: "1 1 58%",
-            background: "#f8fafc",
-            backgroundImage: `
-              radial-gradient(at 50% 0%, rgba(37, 99, 235, 0.04) 0px, transparent 50%),
-              radial-gradient(at 100% 100%, rgba(249, 128, 18, 0.03) 0px, transparent 50%)
-            `,
-            borderRight: "1px solid #e2e8f0",
+            background: tokens.elevatedSurfaceBg,
+            backgroundImage: isDark
+              ? `radial-gradient(at 50% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(249, 115, 22, 0.05) 0px, transparent 50%)`
+              : `radial-gradient(at 50% 0%, rgba(37, 99, 235, 0.04) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(249, 128, 18, 0.03) 0px, transparent 50%)`,
+            borderRight: `1px solid ${tokens.border}`,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -301,7 +294,7 @@ export default function AdminLoginPage() {
             justifyContent: "center",
             alignItems: "center",
             padding: "32px 40px",
-            background: "#ffffff",
+            background: tokens.surfaceBg,
             boxSizing: "border-box",
           }}
         >
@@ -319,23 +312,21 @@ export default function AdminLoginPage() {
                   margin: 0,
                   fontSize: "20px",
                   fontWeight: 700,
-                  color: "#0f172a",
+                  color: tokens.textPrimary,
                   letterSpacing: "-0.01em",
                 }}
               >
                 Sign In to Admin
               </h2>
-              <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#64748b" }}>
+              <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: tokens.textSecondary }}>
                 Enter your credentials or use Google Identity
               </p>
             </div>
 
-            {/* GOOGLE SIGN-IN BUTTON CONTAINER */}
-            <div style={{ marginBottom: "16px", display: "flex", flexDirection: "column" }}>
-              <div id="google-signin-btn" style={{ display: "flex", justifyContent: "center" }}></div>
-              {/* Fallback button shown if GIS button doesn't populate */}
+            {/* GOOGLE SIGN-IN BUTTON */}
+            <div style={{ marginBottom: "16px" }}>
               <button
-                id="google-signin-fallback-btn"
+                id="google-signin-btn"
                 type="button"
                 onClick={() => {
                   if ((window as any).google?.accounts?.id) {
@@ -347,24 +338,35 @@ export default function AdminLoginPage() {
                 disabled={googleSubmitting}
                 style={{
                   width: "100%",
-                  height: "40px",
+                  height: "42px",
                   borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  color: "#334155",
+                  border: `1px solid ${tokens.border}`,
+                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                  color: tokens.textPrimary,
                   fontSize: "13px",
                   fontWeight: 600,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "10px",
-                  cursor: "pointer",
+                  cursor: googleSubmitting ? "not-allowed" : "pointer",
                   transition: "all 0.15s ease",
+                  boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.05)",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#ffffff")}
+                onMouseEnter={(e) => {
+                  if (!googleSubmitting) {
+                    e.currentTarget.style.background = isDark ? tokens.hoverBg : "#f8fafc";
+                    e.currentTarget.style.borderColor = tokens.accent;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!googleSubmitting) {
+                    e.currentTarget.style.background = isDark ? tokens.elevatedSurfaceBg : "#ffffff";
+                    e.currentTarget.style.borderColor = tokens.border;
+                  }
+                }}
               >
-                <svg viewBox="0 0 24 24" style={{ width: "18px", height: "18px" }}>
+                <svg viewBox="0 0 24 24" style={{ width: "18px", height: "18px", flexShrink: 0 }}>
                   <path
                     fill="#4285F4"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -382,16 +384,16 @@ export default function AdminLoginPage() {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                   />
                 </svg>
-                {googleSubmitting ? "Authenticating with Google..." : "Sign in with Google"}
+                <span>{googleSubmitting ? "Authenticating with Google..." : "Sign in with Google"}</span>
               </button>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", margin: "12px 0 16px 0", gap: "10px" }}>
-              <div style={{ flex: 1, height: "1px", background: "#e2e8f0" }}></div>
-              <span style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", textTransform: "uppercase" }}>
+              <div style={{ flex: 1, height: "1px", background: tokens.border }}></div>
+              <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textMuted, textTransform: "uppercase" }}>
                 OR EMAIL
               </span>
-              <div style={{ flex: 1, height: "1px", background: "#e2e8f0" }}></div>
+              <div style={{ flex: 1, height: "1px", background: tokens.border }}></div>
             </div>
 
             {/* FORM */}
@@ -402,7 +404,7 @@ export default function AdminLoginPage() {
                   style={{
                     fontSize: "12px",
                     fontWeight: 600,
-                    color: "#334155",
+                    color: tokens.textSecondary,
                   }}
                 >
                   Email Address
@@ -419,11 +421,11 @@ export default function AdminLoginPage() {
                     width: "100%",
                     height: "40px",
                     borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
+                    border: `1px solid ${tokens.border}`,
                     padding: "0 12px",
                     fontSize: "13px",
-                    color: "#0f172a",
-                    background: "#ffffff",
+                    color: tokens.textPrimary,
+                    background: tokens.elevatedSurfaceBg,
                     outline: "none",
                     boxSizing: "border-box",
                   }}
@@ -437,7 +439,7 @@ export default function AdminLoginPage() {
                     style={{
                       fontSize: "12px",
                       fontWeight: 600,
-                      color: "#334155",
+                      color: tokens.textSecondary,
                     }}
                   >
                     Password
@@ -451,7 +453,7 @@ export default function AdminLoginPage() {
                     style={{
                       background: "none",
                       border: "none",
-                      color: "#2563eb",
+                      color: tokens.accent,
                       fontSize: "12px",
                       fontWeight: 600,
                       cursor: "pointer",
@@ -474,11 +476,11 @@ export default function AdminLoginPage() {
                       width: "100%",
                       height: "40px",
                       borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
+                      border: `1px solid ${tokens.border}`,
                       padding: "0 36px 0 12px",
                       fontSize: "13px",
-                      color: "#0f172a",
-                      background: "#ffffff",
+                      color: tokens.textPrimary,
+                      background: tokens.elevatedSurfaceBg,
                       outline: "none",
                       boxSizing: "border-box",
                     }}
@@ -493,7 +495,7 @@ export default function AdminLoginPage() {
                       transform: "translateY(-50%)",
                       background: "none",
                       border: "none",
-                      color: "#64748b",
+                      color: tokens.textMuted,
                       fontSize: "12px",
                       cursor: "pointer",
                       padding: "4px",
@@ -510,9 +512,9 @@ export default function AdminLoginPage() {
                   style={{
                     borderRadius: "8px",
                     padding: "8px 10px",
-                    background: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    color: "#991b1b",
+                    background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                    border: `1px solid ${isDark ? "rgba(239, 68, 68, 0.35)" : "#fecaca"}`,
+                    color: isDark ? "#fca5a5" : "#991b1b",
                     fontSize: "12px",
                     fontWeight: 500,
                   }}
@@ -529,11 +531,13 @@ export default function AdminLoginPage() {
                   height: "42px",
                   borderRadius: "8px",
                   border: "none",
-                  background: submitting ? "#93c5fd" : "#2563eb",
+                  background: submitting ? (isDark ? "#3b82f6aa" : "#93c5fd") : tokens.accent,
                   color: "#ffffff",
                   fontSize: "13px",
                   fontWeight: 700,
                   cursor: submitting ? "not-allowed" : "pointer",
+                  boxShadow: "0 1px 3px rgba(37,99,235,0.2)",
+                  transition: "background 0.15s ease",
                 }}
               >
                 {submitting ? "Signing in..." : "Sign In to Admin"}
@@ -544,17 +548,17 @@ export default function AdminLoginPage() {
               style={{
                 marginTop: "20px",
                 paddingTop: "14px",
-                borderTop: "1px solid #f1f5f9",
+                borderTop: `1px solid ${tokens.border}`,
                 textAlign: "center",
                 fontSize: "12px",
-                color: "#64748b",
+                color: tokens.textSecondary,
               }}
             >
               Need an admin workspace?{" "}
               <Link
                 to="/admin/signup"
                 style={{
-                  color: "#2563eb",
+                  color: tokens.accent,
                   fontWeight: 600,
                   textDecoration: "none",
                 }}
@@ -572,7 +576,7 @@ export default function AdminLoginPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(15, 23, 42, 0.5)",
+            background: isDark ? "rgba(0, 0, 0, 0.75)" : "rgba(15, 23, 42, 0.5)",
             backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
@@ -585,10 +589,11 @@ export default function AdminLoginPage() {
             style={{
               width: "100%",
               maxWidth: "400px",
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "16px",
               padding: "28px 24px",
-              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+              boxShadow: tokens.shadow,
+              border: `1px solid ${tokens.border}`,
               boxSizing: "border-box",
               position: "relative",
             }}
@@ -607,16 +612,16 @@ export default function AdminLoginPage() {
                 border: "none",
                 fontSize: "18px",
                 cursor: "pointer",
-                color: "#64748b",
+                color: tokens.textMuted,
               }}
             >
               ✕
             </button>
 
-            <h3 style={{ margin: "0 0 6px 0", fontSize: "18px", fontWeight: 700, color: "#0f172a" }}>
+            <h3 style={{ margin: "0 0 6px 0", fontSize: "18px", fontWeight: 700, color: tokens.textPrimary }}>
               Forgot Password
             </h3>
-            <p style={{ margin: "0 0 16px 0", fontSize: "12px", color: "#64748b" }}>
+            <p style={{ margin: "0 0 16px 0", fontSize: "12px", color: tokens.textSecondary }}>
               Enter your registered admin email address and we'll send you a password reset link and 6-digit OTP code.
             </p>
 
@@ -626,9 +631,9 @@ export default function AdminLoginPage() {
                   style={{
                     padding: "12px",
                     borderRadius: "8px",
-                    background: "#f0fdf4",
-                    border: "1px solid #bbf7d0",
-                    color: "#166534",
+                    background: isDark ? "rgba(16, 185, 129, 0.15)" : "#f0fdf4",
+                    border: `1px solid ${isDark ? "rgba(16, 185, 129, 0.35)" : "#bbf7d0"}`,
+                    color: isDark ? "#86efac" : "#166534",
                     fontSize: "12px",
                     fontWeight: 500,
                   }}
@@ -642,7 +647,7 @@ export default function AdminLoginPage() {
                     height: "40px",
                     borderRadius: "8px",
                     border: "none",
-                    background: "#2563eb",
+                    background: tokens.accent,
                     color: "#ffffff",
                     fontSize: "13px",
                     fontWeight: 700,
@@ -655,7 +660,7 @@ export default function AdminLoginPage() {
             ) : (
               <form onSubmit={handleForgotSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#334155" }}>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>
                     Admin Email Address
                   </label>
                   <input
@@ -667,9 +672,11 @@ export default function AdminLoginPage() {
                     style={{
                       height: "40px",
                       borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
+                      border: `1px solid ${tokens.border}`,
                       padding: "0 12px",
                       fontSize: "13px",
+                      color: tokens.textPrimary,
+                      background: tokens.elevatedSurfaceBg,
                       outline: "none",
                     }}
                   />
@@ -680,9 +687,9 @@ export default function AdminLoginPage() {
                     style={{
                       padding: "8px",
                       borderRadius: "6px",
-                      background: "#fef2f2",
-                      border: "1px solid #fecaca",
-                      color: "#991b1b",
+                      background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                      border: `1px solid ${isDark ? "rgba(239, 68, 68, 0.35)" : "#fecaca"}`,
+                      color: isDark ? "#fca5a5" : "#991b1b",
                       fontSize: "12px",
                     }}
                   >
@@ -697,7 +704,7 @@ export default function AdminLoginPage() {
                     height: "40px",
                     borderRadius: "8px",
                     border: "none",
-                    background: forgotSubmitting ? "#93c5fd" : "#2563eb",
+                    background: forgotSubmitting ? (isDark ? "#3b82f6aa" : "#93c5fd") : tokens.accent,
                     color: "#ffffff",
                     fontSize: "13px",
                     fontWeight: 700,

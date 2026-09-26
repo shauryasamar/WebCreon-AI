@@ -6,6 +6,7 @@ import GlassToast from "./GlassToast";
 import { GoogleMapPicker, GeoPickerResult } from "./GoogleMapPicker";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import AccessDeniedView from "./AccessDeniedView";
+import { useAdminTheme } from "../context/ThemeContext";
 
 export type DeliveryMode = "own_agent" | "shiprocket" | "hybrid" | "manual";
 
@@ -131,45 +132,48 @@ const ToggleSwitch = ({
   onChange: (checked: boolean) => void;
   disabled?: boolean;
   id?: string;
-}) => (
-  <button
-    type="button"
-    role="switch"
-    id={id}
-    aria-checked={checked}
-    disabled={disabled}
-    onClick={() => onChange(!checked)}
-    style={{
-      position: "relative",
-      display: "inline-flex",
-      alignItems: "center",
-      width: "38px",
-      height: "22px",
-      flexShrink: 0,
-      cursor: disabled ? "not-allowed" : "pointer",
-      borderRadius: "999px",
-      border: "none",
-      backgroundColor: checked ? "#2563eb" : "#cbd5e1",
-      transition: "background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-      padding: "2px",
-      outline: "none",
-      boxSizing: "border-box",
-    }}
-  >
-    <span
+}) => {
+  const { isDark } = useAdminTheme();
+  return (
+    <button
+      type="button"
+      role="switch"
+      id={id}
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
       style={{
-        display: "inline-block",
-        width: "18px",
-        height: "18px",
-        borderRadius: "50%",
-        backgroundColor: "#ffffff",
-        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.2)",
-        transform: checked ? "translateX(16px)" : "translateX(0px)",
-        transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        width: "38px",
+        height: "22px",
+        flexShrink: 0,
+        cursor: disabled ? "not-allowed" : "pointer",
+        borderRadius: "999px",
+        border: "none",
+        backgroundColor: checked ? "#2563eb" : isDark ? "rgba(255, 255, 255, 0.18)" : "#cbd5e1",
+        transition: "background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        padding: "2px",
+        outline: "none",
+        boxSizing: "border-box",
       }}
-    />
-  </button>
-);
+    >
+      <span
+        style={{
+          display: "inline-block",
+          width: "18px",
+          height: "18px",
+          borderRadius: "50%",
+          backgroundColor: "#ffffff",
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.2)",
+          transform: checked ? "translateX(16px)" : "translateX(0px)",
+          transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
+      />
+    </button>
+  );
+};
 
 const getCachedDeliverySettings = (id?: string): DeliverySettingsData | null => {
   if (!id || typeof window === "undefined") return null;
@@ -192,6 +196,7 @@ const getCachedAgents = (id?: string): Agent[] => {
 };
 
 export default function DeliverySettingsPage() {
+  const { isDark, tokens } = useAdminTheme();
   const { siteId } = useParams<{ siteId: string }>();
   const { hasPermission, isOwner } = useAdminAuth();
   const canView = isOwner || hasPermission("delivery:view");
@@ -838,6 +843,84 @@ export default function DeliverySettingsPage() {
     showFeedback("Store & Warehouse location updated from Map!", "success");
   };
 
+  
+  const labelStyle: React.CSSProperties = {
+    fontSize: "12px",
+    color: tokens.textSecondary,
+    fontWeight: 600,
+  };
+
+  const inputStyle: React.CSSProperties = {
+    padding: "6px 9px",
+    borderRadius: "6px",
+    border: `1px solid ${tokens.border}`,
+    background: tokens.elevatedSurfaceBg,
+    color: tokens.textPrimary,
+    fontSize: "13px",
+    width: "100%",
+    boxSizing: "border-box",
+  };
+
+  const thStyle: React.CSSProperties = {
+    textAlign: "left",
+    padding: "10px 12px",
+    fontSize: "11px",
+    letterSpacing: "0.05em",
+    textTransform: "uppercase",
+    color: tokens.textSecondary,
+    borderBottom: `1px solid ${tokens.border}`,
+    whiteSpace: "nowrap",
+  };
+
+  const tdStyle: React.CSSProperties = {
+    padding: "10px 12px",
+    borderTop: `1px solid ${tokens.border}`,
+    fontSize: "13px",
+    color: tokens.textPrimary,
+    verticalAlign: "middle",
+    whiteSpace: "nowrap",
+  };
+
+  const ghostButtonStyle: React.CSSProperties = {
+    padding: "6px 10px",
+    borderRadius: "6px",
+    border: `1px solid ${tokens.border}`,
+    background: tokens.elevatedSurfaceBg,
+    color: tokens.textPrimary,
+    fontWeight: 600,
+    fontSize: "12px",
+    cursor: "pointer",
+    textDecoration: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    whiteSpace: "nowrap",
+  };
+
+  const primaryButtonStyle: React.CSSProperties = {
+    padding: "7px 12px",
+    borderRadius: "6px",
+    border: "none",
+    background: isDark ? "linear-gradient(135deg, #2563eb, #1d4ed8)" : "#2563eb",
+    color: "#ffffff",
+    fontWeight: 600,
+    fontSize: "12px",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  };
+
+  const dangerButtonStyle: React.CSSProperties = {
+    padding: "6px 10px",
+    borderRadius: "6px",
+    border: `1px solid ${isDark ? "rgba(239, 68, 68, 0.3)" : "#fecaca"}`,
+    background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+    color: isDark ? "#fca5a5" : "#b91c1c",
+    fontWeight: 600,
+    fontSize: "12px",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  };
+
   if (!canView) {
     return (
       <AccessDeniedView
@@ -849,14 +932,14 @@ export default function DeliverySettingsPage() {
 
   if (loadingSettings) {
     return (
-      <div style={{ maxWidth: "1100px", padding: "48px 0", textAlign: "center", color: "#64748b" }}>
+      <div style={{ maxWidth: "1100px", padding: "48px 0", textAlign: "center", color: tokens.textSecondary }}>
         <p style={{ fontSize: "14px", fontWeight: 500 }}>Loading delivery settings...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ width: "100%", maxWidth: "100%", color: "#0f172a", boxSizing: "border-box" }}>
+    <div style={{ width: "100%", maxWidth: "100%", color: tokens.textPrimary, boxSizing: "border-box" }}>
       {/* Toast Feedback */}
       {feedback && (
         <GlassToast
@@ -870,8 +953,8 @@ export default function DeliverySettingsPage() {
       {/* Top Header Card (Segmented Tab Strip on Left + Active Tab Toggle Switch & Save Button on Right) */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: tokens.surfaceBg,
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
           padding: "10px 14px",
           marginBottom: "16px",
@@ -887,10 +970,10 @@ export default function DeliverySettingsPage() {
         <div
           style={{
             display: "inline-flex",
-            background: "#f1f5f9",
+            background: tokens.elevatedSurfaceBg,
             padding: "3px",
             borderRadius: "8px",
-            border: "1px solid #e2e8f0",
+            border: `1px solid ${tokens.border}`,
             gap: "2px",
           }}
         >
@@ -911,8 +994,8 @@ export default function DeliverySettingsPage() {
                   borderRadius: "6px",
                   padding: "6px 14px",
                   border: "none",
-                  background: isActive ? "#ffffff" : "transparent",
-                  color: isActive ? "#0f172a" : "#64748b",
+                  background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                  color: isActive ? tokens.textPrimary : tokens.textSecondary,
                   boxShadow: isActive
                     ? "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
                     : "none",
@@ -933,7 +1016,7 @@ export default function DeliverySettingsPage() {
                     height: "6px",
                     minWidth: "6px",
                     borderRadius: "999px",
-                    background: tab.enabled ? "#16a34a" : "#cbd5e1",
+                    background: tab.enabled ? "#16a34a" : (isDark ? "rgba(255, 255, 255, 0.2)" : "#cbd5e1"),
                     display: "inline-block",
                     transition: "background 0.2s ease",
                   }}
@@ -952,13 +1035,13 @@ export default function DeliverySettingsPage() {
               display: "inline-flex",
               alignItems: "center",
               gap: "8px",
-              background: "#f8fafc",
+              background: tokens.elevatedSurfaceBg,
               padding: "4px 10px 4px 12px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
-            <span style={{ fontSize: "12.5px", fontWeight: 600, color: currentTabEnabled ? "#0f172a" : "#64748b" }}>
+            <span style={{ fontSize: "12.5px", fontWeight: 600, color: currentTabEnabled ? tokens.textPrimary : tokens.textSecondary }}>
               {currentTabEnabled ? "Active" : "Inactive"}
             </span>
             <ToggleSwitch
@@ -984,8 +1067,8 @@ export default function DeliverySettingsPage() {
                 gap: "6px",
                 padding: "7px 16px",
                 borderRadius: "6px",
-                border: "none",
-                background: hasUnsavedChanges ? "#2563eb" : "#0f172a",
+                border: isDark && !hasUnsavedChanges ? `1px solid ${tokens.border}` : "none",
+                background: hasUnsavedChanges ? (isDark ? "linear-gradient(135deg, #2563eb, #1d4ed8)" : "#2563eb") : (isDark ? tokens.elevatedSurfaceBg : "#0f172a"),
                 color: "#ffffff",
                 fontWeight: 700,
                 fontSize: "13px",
@@ -1026,9 +1109,9 @@ export default function DeliverySettingsPage() {
                   gap: "14px",
                   flexWrap: "wrap",
                   padding: "10px 14px",
-                  background: "#ffffff",
+                  background: tokens.surfaceBg,
                   borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                 }}
               >
                 {/* Left: Open Pickup Pool Toggle */}
@@ -1064,7 +1147,7 @@ export default function DeliverySettingsPage() {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        backgroundColor: settings.allow_open_pickup ? "#2563eb" : "#cbd5e1",
+                        backgroundColor: settings.allow_open_pickup ? "#2563eb" : (isDark ? "rgba(255, 255, 255, 0.18)" : "#cbd5e1"),
                         borderRadius: "20px",
                         transition: "0.2s",
                       }}
@@ -1085,7 +1168,7 @@ export default function DeliverySettingsPage() {
                     </span>
                   </label>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", lineHeight: 1.2 }}>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary, lineHeight: 1.2 }}>
                       Open Pickup Pool
                     </span>
                     <InfoTooltip text="Allow active riders to claim unassigned ready orders" />
@@ -1125,9 +1208,9 @@ export default function DeliverySettingsPage() {
                         height: "32px",
                         padding: "0 28px 0 10px",
                         fontSize: "12px",
-                        color: "#0f172a",
-                        background: "#ffffff",
-                        border: "1px solid #cbd5e1",
+                        color: tokens.textPrimary,
+                        background: tokens.elevatedSurfaceBg,
+                        border: `1px solid ${tokens.border}`,
                         borderRadius: "6px",
                         outline: "none",
                         boxSizing: "border-box",
@@ -1181,9 +1264,9 @@ export default function DeliverySettingsPage() {
                         padding: "0 10px",
                         borderRadius: "6px",
                         border: "1px solid",
-                        borderColor: activeFilterCount > 0 ? "#93c5fd" : "#cbd5e1",
-                        background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                        color: activeFilterCount > 0 ? "#1d4ed8" : "#475569",
+                        borderColor: activeFilterCount > 0 ? (isDark ? "rgba(37, 99, 235, 0.5)" : "#93c5fd") : tokens.border,
+                        background: activeFilterCount > 0 ? (isDark ? "rgba(37, 99, 235, 0.18)" : "#eff6ff") : tokens.elevatedSurfaceBg,
+                        color: activeFilterCount > 0 ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textSecondary,
                         fontSize: "12px",
                         fontWeight: 600,
                         cursor: "pointer",
@@ -1220,10 +1303,10 @@ export default function DeliverySettingsPage() {
                           top: "calc(100% + 6px)",
                           right: 0,
                           width: "280px",
-                          background: "#ffffff",
-                          border: "1px solid #cbd5e1",
+                          background: tokens.surfaceBg,
+                          border: `1px solid ${tokens.border}`,
                           borderRadius: "8px",
-                          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+                          boxShadow: isDark ? "0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4)" : "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
                           padding: "14px",
                           zIndex: 50,
                           display: "flex",
@@ -1232,7 +1315,7 @@ export default function DeliverySettingsPage() {
                         }}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Filter Riders</span>
+                          <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>Filter Riders</span>
                           {activeFilterCount > 0 && (
                             <button
                               type="button"
@@ -1254,7 +1337,7 @@ export default function DeliverySettingsPage() {
 
                         {/* Status Filter */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                          <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>Status</span>
+                          <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>Status</span>
                           <select
                             value={statusFilter}
                             onChange={(e) => {
@@ -1271,7 +1354,7 @@ export default function DeliverySettingsPage() {
 
                         {/* Activity / Cash Filter */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                          <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>Activity & Cash</span>
+                          <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>Activity & Cash</span>
                           <select
                             value={activityFilter}
                             onChange={(e) => {
@@ -1289,7 +1372,7 @@ export default function DeliverySettingsPage() {
 
                         {/* Vehicle Type Filter */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                          <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>Vehicle Type</span>
+                          <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>Vehicle Type</span>
                           <select
                             value={vehicleFilter}
                             onChange={(e) => {
@@ -1308,7 +1391,7 @@ export default function DeliverySettingsPage() {
 
                         {/* Sort Order */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                          <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>Sort Order</span>
+                          <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>Sort Order</span>
                           <select
                             value={sortBy}
                             onChange={(e) => {
@@ -1369,7 +1452,7 @@ export default function DeliverySettingsPage() {
               >
                 {/* Left: Compact Serviceable Radius + Store Location Pin */}
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: "#475569", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, whiteSpace: "nowrap" }}>
                     Serviceable Radius:
                   </span>
                   <div style={{ display: "inline-flex", alignItems: "center" }}>
@@ -1393,10 +1476,10 @@ export default function DeliverySettingsPage() {
                         padding: "0 6px",
                         fontSize: "12px",
                         fontWeight: 600,
-                        color: "#0f172a",
-                        border: "1px solid #cbd5e1",
+                        color: tokens.textPrimary,
+                        border: `1px solid ${tokens.border}`,
                         borderRadius: "5px 0 0 5px",
-                        background: canEdit ? "#ffffff" : "#f8fafc",
+                        background: canEdit ? tokens.elevatedSurfaceBg : (isDark ? "rgba(255,255,255,0.03)" : "#f8fafc"),
                         cursor: canEdit ? "text" : "not-allowed",
                         textAlign: "center",
                         outline: "none",
@@ -1410,13 +1493,13 @@ export default function DeliverySettingsPage() {
                         alignItems: "center",
                         justifyContent: "center",
                         padding: "0 7px",
-                        background: "#f1f5f9",
-                        border: "1px solid #cbd5e1",
+                        background: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9",
+                        border: `1px solid ${tokens.border}`,
                         borderLeft: "none",
                         borderRadius: "0 5px 5px 0",
                         fontSize: "11px",
                         fontWeight: 700,
-                        color: "#64748b",
+                        color: tokens.textSecondary,
                         boxSizing: "border-box",
                         userSelect: "none",
                       }}
@@ -1436,10 +1519,10 @@ export default function DeliverySettingsPage() {
                     style={{
                       height: "28px",
                       padding: "0 10px",
-                      border: `1px solid ${settings.sender_latitude ? "#2563eb" : "#cbd5e1"}`,
+                      border: `1px solid ${settings.sender_latitude ? (isDark ? "rgba(37, 99, 235, 0.4)" : "#2563eb") : tokens.border}`,
                       borderRadius: "5px",
-                      background: settings.sender_latitude ? "#eff6ff" : "#ffffff",
-                      color: settings.sender_latitude ? "#1d4ed8" : "#475569",
+                      background: settings.sender_latitude ? (isDark ? "rgba(37, 99, 235, 0.18)" : "#eff6ff") : tokens.elevatedSurfaceBg,
+                      color: settings.sender_latitude ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textSecondary,
                       fontSize: "12px",
                       fontWeight: 600,
                       cursor: canEdit ? "pointer" : "not-allowed",
@@ -1511,11 +1594,11 @@ export default function DeliverySettingsPage() {
               {showAgentForm && (
                 <div
                   style={{
-                    background: "#ffffff",
+                    background: tokens.surfaceBg,
                     borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
+                    border: `1px solid ${tokens.border}`,
                     padding: "16px 18px",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                    boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.04)",
                     display: "flex",
                     flexDirection: "column",
                     gap: "14px",
@@ -1527,14 +1610,14 @@ export default function DeliverySettingsPage() {
                       justifyContent: "space-between",
                       alignItems: "center",
                       paddingBottom: "10px",
-                      borderBottom: "1px solid #f1f5f9",
+                      borderBottom: `1px solid ${tokens.border}`,
                     }}
                   >
                     <div>
-                      <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", margin: "0 0 2px" }}>
+                      <h3 style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 2px" }}>
                         Register Delivery Agent
                       </h3>
-                      <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                      <p style={{ fontSize: "12px", color: tokens.textSecondary, margin: 0 }}>
                         Create login credentials for local fleet riders to accept and deliver customer orders.
                       </p>
                     </div>
@@ -1586,13 +1669,13 @@ export default function DeliverySettingsPage() {
                               display: "inline-flex",
                               alignItems: "center",
                               padding: "0 9px",
-                              background: "#f1f5f9",
-                              border: "1px solid #cbd5e1",
+                              background: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9",
+                              border: `1px solid ${tokens.border}`,
                               borderRight: "none",
                               borderRadius: "6px 0 0 6px",
                               fontSize: "12px",
                               fontWeight: 600,
-                              color: "#475569",
+                              color: tokens.textSecondary,
                               whiteSpace: "nowrap",
                               boxSizing: "border-box",
                             }}
@@ -1660,7 +1743,7 @@ export default function DeliverySettingsPage() {
                         alignItems: "center",
                         gap: "8px",
                         paddingTop: "6px",
-                        borderTop: "1px solid #f8fafc",
+                        borderTop: `1px solid ${tokens.border}`,
                       }}
                     >
                       <button
@@ -1693,7 +1776,7 @@ export default function DeliverySettingsPage() {
                   style={{
                     position: "fixed",
                     inset: 0,
-                    background: "rgba(15, 23, 42, 0.5)",
+                    background: isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(15, 23, 42, 0.5)",
                     display: "grid",
                     placeItems: "center",
                     zIndex: 999,
@@ -1702,18 +1785,18 @@ export default function DeliverySettingsPage() {
                 >
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
                       padding: "18px",
                       maxWidth: "360px",
                       width: "100%",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                     }}
                   >
-                    <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                    <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
                       Reset PIN for {resetPinAgent.name}
                     </h3>
-                    <p style={{ margin: "0 0 12px", fontSize: "12px", color: "#64748b" }}>
+                    <p style={{ margin: "0 0 12px", fontSize: "12px", color: tokens.textSecondary }}>
                       Enter a new 4 to 6 digit login PIN for this rider.
                     </p>
 
@@ -1758,7 +1841,7 @@ export default function DeliverySettingsPage() {
                   style={{
                     position: "fixed",
                     inset: 0,
-                    background: "rgba(15, 23, 42, 0.5)",
+                    background: isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(15, 23, 42, 0.5)",
                     display: "grid",
                     placeItems: "center",
                     zIndex: 999,
@@ -1767,19 +1850,19 @@ export default function DeliverySettingsPage() {
                 >
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
                       padding: "18px",
                       maxWidth: "380px",
                       width: "100%",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                     }}
                   >
-                    <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                    <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
                       Settle Cash for {settleCashAgent.name}
                     </h3>
-                    <p style={{ margin: "0 0 12px", fontSize: "12px", color: "#64748b" }}>
-                      Current uncollected cash in hand: <strong style={{ color: "#b45309" }}>{formatPrice(settleCashAgent.cash_in_hand)}</strong>
+                    <p style={{ margin: "0 0 12px", fontSize: "12px", color: tokens.textSecondary }}>
+                      Current uncollected cash in hand: <strong style={{ color: isDark ? "#fbbf24" : "#b45309" }}>{formatPrice(settleCashAgent.cash_in_hand)}</strong>
                     </p>
 
                     <form onSubmit={handleSettleCash} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -1834,9 +1917,9 @@ export default function DeliverySettingsPage() {
               {/* Fleet Table (Responsive 4-Column Design) */}
               <div
                 style={{
-                  background: "#ffffff",
+                  background: tokens.surfaceBg,
                   borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   overflow: "hidden",
                   width: "100%",
                 }}
@@ -1844,7 +1927,7 @@ export default function DeliverySettingsPage() {
                 <div style={{ overflowX: "auto", width: "100%" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "auto" }}>
                     <thead>
-                      <tr style={{ background: "#f8fafc" }}>
+                      <tr style={{ background: tokens.elevatedSurfaceBg }}>
                         <th style={{ ...thStyle, width: "30%", minWidth: "150px" }}>Rider Details</th>
                         <th style={{ ...thStyle, width: "24%", minWidth: "130px" }}>Duty & Deliveries</th>
                         <th style={{ ...thStyle, width: "18%", minWidth: "100px" }}>Cash in Hand</th>
@@ -1854,13 +1937,13 @@ export default function DeliverySettingsPage() {
                     <tbody>
                       {loadingAgents ? (
                         <tr>
-                          <td colSpan={4} style={{ ...tdStyle, textAlign: "center", padding: "28px", color: "#64748b" }}>
+                          <td colSpan={4} style={{ ...tdStyle, textAlign: "center", padding: "28px", color: tokens.textSecondary }}>
                             Loading delivery fleet...
                           </td>
                         </tr>
                       ) : filteredAgents.length === 0 ? (
                         <tr>
-                          <td colSpan={4} style={{ ...tdStyle, textAlign: "center", padding: "32px", color: "#64748b" }}>
+                          <td colSpan={4} style={{ ...tdStyle, textAlign: "center", padding: "32px", color: tokens.textSecondary }}>
                             {searchQuery ? "No delivery agents match your search." : "No delivery agents registered yet. Click '+ Add delivery agent' above to register your first rider."}
                           </td>
                         </tr>
@@ -1870,8 +1953,8 @@ export default function DeliverySettingsPage() {
                             {/* Column 1: Rider Details (Name, Phone, Vehicle) */}
                             <td style={tdStyle}>
                               <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>{agent.name}</div>
-                                <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#64748b", flexWrap: "wrap" }}>
+                                <div style={{ fontWeight: 700, color: tokens.textPrimary, fontSize: "13px" }}>{agent.name}</div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: tokens.textSecondary, flexWrap: "wrap" }}>
                                   <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
                                     <PhoneIcon />
                                     {formatPhoneDisplay(agent.phone)}
@@ -1895,9 +1978,9 @@ export default function DeliverySettingsPage() {
                                     borderRadius: "4px",
                                     fontSize: "11px",
                                     fontWeight: 600,
-                                    background: agent.is_active ? "#f0fdf4" : "#fef2f2",
-                                    color: agent.is_active ? "#15803d" : "#b91c1c",
-                                    border: `1px solid ${agent.is_active ? "#bbf7d0" : "#fecaca"}`,
+                                    background: agent.is_active ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"),
+                                    color: agent.is_active ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#fca5a5" : "#b91c1c"),
+                                    border: `1px solid ${agent.is_active ? (isDark ? "rgba(34, 197, 94, 0.3)" : "#bbf7d0") : (isDark ? "rgba(239, 68, 68, 0.3)" : "#fecaca")}`,
                                     width: "fit-content",
                                     minWidth: "fit-content",
                                     whiteSpace: "nowrap",
@@ -1915,8 +1998,8 @@ export default function DeliverySettingsPage() {
                                   />
                                   <span style={{ whiteSpace: "nowrap" }}>{agent.is_active ? "On Duty" : "Inactive"}</span>
                                 </span>
-                                <div style={{ fontSize: "11.5px", color: "#64748b" }}>
-                                  <span style={{ color: (agent.current_order_count || 0) > 0 ? "#2563eb" : "#64748b", fontWeight: (agent.current_order_count || 0) > 0 ? 600 : 400 }}>
+                                <div style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
+                                  <span style={{ color: (agent.current_order_count || 0) > 0 ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary, fontWeight: (agent.current_order_count || 0) > 0 ? 600 : 400 }}>
                                     {agent.current_order_count || 0} active
                                   </span>
                                   <span> • </span>
@@ -1934,9 +2017,9 @@ export default function DeliverySettingsPage() {
                                     alignItems: "center",
                                     padding: "3px 8px",
                                     borderRadius: "5px",
-                                    background: "#fffbeb",
-                                    border: "1px solid #fde68a",
-                                    color: "#b45309",
+                                    background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
+                                    border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
+                                    color: isDark ? "#fbbf24" : "#b45309",
                                     fontWeight: 700,
                                     fontSize: "12.5px",
                                   }}
@@ -1944,7 +2027,7 @@ export default function DeliverySettingsPage() {
                                   {formatPrice(agent.cash_in_hand)}
                                 </span>
                               ) : (
-                                <span style={{ color: "#94a3b8", fontSize: "12.5px", fontWeight: 500 }}>
+                                <span style={{ color: tokens.textSecondary, fontSize: "12.5px", fontWeight: 500 }}>
                                   ₹0.00
                                 </span>
                               )}
@@ -1967,9 +2050,9 @@ export default function DeliverySettingsPage() {
                                         height: "28px",
                                         padding: "0 8px",
                                         fontSize: "11.5px",
-                                        color: "#059669",
-                                        borderColor: "#a7f3d0",
-                                        background: "#ecfdf5",
+                                        color: isDark ? "#34d399" : "#059669",
+                                        borderColor: isDark ? "rgba(16, 185, 129, 0.3)" : "#a7f3d0",
+                                        background: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5",
                                         borderRadius: "5px",
                                         whiteSpace: "nowrap",
                                         fontWeight: 600,
@@ -2013,9 +2096,9 @@ export default function DeliverySettingsPage() {
                                       minWidth: "76px",
                                       padding: "0",
                                       fontSize: "11.5px",
-                                      color: agent.is_active ? "#b45309" : "#15803d",
-                                      borderColor: agent.is_active ? "#fde68a" : "#bbf7d0",
-                                      background: agent.is_active ? "#fffbeb" : "#f0fdf4",
+                                      color: agent.is_active ? (isDark ? "#fbbf24" : "#b45309") : (isDark ? "#4ade80" : "#15803d"),
+                                      borderColor: agent.is_active ? (isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a") : (isDark ? "rgba(34, 197, 94, 0.3)" : "#bbf7d0"),
+                                      background: agent.is_active ? (isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb") : (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4"),
                                       borderRadius: "5px",
                                       whiteSpace: "nowrap",
                                       display: "inline-flex",
@@ -2047,9 +2130,9 @@ export default function DeliverySettingsPage() {
                                   </button>
                                 </div>
                               ) : (
-                                <span style={{ fontSize: "11.5px", color: "#94a3b8", fontWeight: 500 }}>
-                                  Read only
-                                </span>
+                                <span style={{ fontSize: "11.5px", color: tokens.textSecondary, fontWeight: 500 }}>
+                                   Read only
+                                 </span>
                               )}
                             </td>
                           </tr>
@@ -2103,9 +2186,9 @@ export default function DeliverySettingsPage() {
           {/* Card 1: API Account Credentials */}
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
               padding: "14px 16px",
             }}
           >
@@ -2120,7 +2203,7 @@ export default function DeliverySettingsPage() {
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>
+                    <span style={{ fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary }}>
                       API Account Credentials
                     </span>
                     <span
@@ -2133,21 +2216,21 @@ export default function DeliverySettingsPage() {
                         fontSize: "11px",
                         fontWeight: 700,
                         background: settings.shiprocket_verified
-                          ? "#f0fdf4"
+                          ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4")
                           : settings.shiprocket_saved
-                          ? "#fffbeb"
-                          : "#fef2f2",
+                          ? (isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb")
+                          : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"),
                         color: settings.shiprocket_verified
-                          ? "#15803d"
+                          ? (isDark ? "#4ade80" : "#15803d")
                           : settings.shiprocket_saved
-                          ? "#b45309"
-                          : "#b91c1c",
+                          ? (isDark ? "#fbbf24" : "#b45309")
+                          : (isDark ? "#fca5a5" : "#b91c1c"),
                         border: `1px solid ${
                           settings.shiprocket_verified
-                            ? "#bbf7d0"
+                            ? (isDark ? "rgba(34, 197, 94, 0.3)" : "#bbf7d0")
                             : settings.shiprocket_saved
-                            ? "#fde68a"
-                            : "#fecaca"
+                            ? (isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a")
+                            : (isDark ? "rgba(239, 68, 68, 0.3)" : "#fecaca")
                         }`,
                       }}
                     >
@@ -2210,7 +2293,7 @@ export default function DeliverySettingsPage() {
                       style={{
                         ...inputStyle,
                         height: "34px",
-                        background: canEdit ? "#ffffff" : "#f8fafc",
+                        background: canEdit ? tokens.elevatedSurfaceBg : (isDark ? "rgba(255,255,255,0.03)" : "#f8fafc"),
                         cursor: canEdit ? "text" : "not-allowed",
                       }}
                     />
@@ -2232,7 +2315,7 @@ export default function DeliverySettingsPage() {
                       style={{
                         ...inputStyle,
                         height: "34px",
-                        background: canEdit ? "#ffffff" : "#f8fafc",
+                        background: canEdit ? tokens.elevatedSurfaceBg : (isDark ? "rgba(255,255,255,0.03)" : "#f8fafc"),
                         cursor: canEdit ? "text" : "not-allowed",
                       }}
                     />
@@ -2241,12 +2324,12 @@ export default function DeliverySettingsPage() {
               </div>
 
               {/* Card 2: Pickup Origin Warehouse Location & Coverage Limits */}
-              <div
-                style={{
-                  background: "#ffffff",
-                  borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
-                  padding: "12px 14px",
+          <div
+            style={{
+              background: tokens.surfaceBg,
+              borderRadius: "8px",
+              border: `1px solid ${tokens.border}`,
+              padding: "12px 14px",
                   display: "flex",
                   flexDirection: "column",
                   gap: "10px",
@@ -2255,10 +2338,10 @@ export default function DeliverySettingsPage() {
                 {/* Header: Title + Map Pin Action */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                   <div>
-                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                       Pickup Origin Warehouse Location
                     </div>
-                    <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                    <div style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
                       Accurate dispatch coordinates for Shiprocket courier pickups & serviceability.
                     </div>
                   </div>
@@ -2273,10 +2356,9 @@ export default function DeliverySettingsPage() {
                     style={{
                       padding: "5px 10px",
                       borderRadius: "6px",
-                      border: "1px solid #cbd5e1",
-                      background: settings.sender_latitude ? "#f0fdf4" : "#eff6ff",
-                      color: settings.sender_latitude ? "#15803d" : "#1d4ed8",
-                      borderColor: settings.sender_latitude ? "#bbf7d0" : "#bfdbfe",
+                      border: `1px solid ${settings.sender_latitude ? (isDark ? "rgba(34, 197, 94, 0.3)" : "#bbf7d0") : (isDark ? "rgba(37, 99, 235, 0.3)" : "#bfdbfe")}`,
+                      background: settings.sender_latitude ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : (isDark ? "rgba(37, 99, 235, 0.15)" : "#eff6ff"),
+                      color: settings.sender_latitude ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#93c5fd" : "#1d4ed8"),
                       fontSize: "11.5px",
                       fontWeight: 600,
                       cursor: canEdit ? "pointer" : "not-allowed",
@@ -2300,8 +2382,8 @@ export default function DeliverySettingsPage() {
                     style={{
                       padding: "8px 10px",
                       borderRadius: "6px",
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
+                      background: tokens.elevatedSurfaceBg,
+                      border: `1px solid ${tokens.border}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
@@ -2310,14 +2392,14 @@ export default function DeliverySettingsPage() {
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
-                      <span style={{ color: "#16a34a", fontWeight: 700, fontSize: "10.5px", background: "#dcfce7", padding: "1px 6px", borderRadius: "4px", flexShrink: 0 }}>
+                      <span style={{ color: isDark ? "#4ade80" : "#16a34a", fontWeight: 700, fontSize: "10.5px", background: isDark ? "rgba(34, 197, 94, 0.2)" : "#dcfce7", padding: "1px 6px", borderRadius: "4px", flexShrink: 0 }}>
                         MAP LOCKED
                       </span>
-                      <span style={{ color: "#334155", fontWeight: 500, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+                      <span style={{ color: tokens.textPrimary, fontWeight: 500, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
                         {[settings.sender_address, settings.sender_city, settings.sender_state, settings.sender_pincode].filter(Boolean).join(", ") || "Pinned Location"}
                       </span>
                     </div>
-                    <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace", flexShrink: 0 }}>
+                    <span style={{ fontSize: "11px", color: tokens.textSecondary, fontFamily: "monospace", flexShrink: 0 }}>
                       {settings.sender_latitude.toFixed(4)}, {settings.sender_longitude?.toFixed(4)}
                     </span>
                   </div>
@@ -2330,9 +2412,9 @@ export default function DeliverySettingsPage() {
                     style={{
                       padding: "10px",
                       borderRadius: "6px",
-                      background: "#fffbeb",
-                      border: "1px dashed #fde68a",
-                      color: "#92400e",
+                      background: isDark ? "rgba(245, 158, 11, 0.12)" : "#fffbeb",
+                      border: `1px dashed ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
+                      color: isDark ? "#fbbf24" : "#92400e",
                       fontSize: "12px",
                       display: "flex",
                       alignItems: "center",
@@ -2368,7 +2450,7 @@ export default function DeliverySettingsPage() {
                         ...inputStyle,
                         height: "30px",
                         fontSize: "12px",
-                        background: canEdit ? "#ffffff" : "#f8fafc",
+                        background: canEdit ? tokens.elevatedSurfaceBg : (isDark ? "rgba(255,255,255,0.03)" : "#f8fafc"),
                         cursor: canEdit ? "text" : "not-allowed",
                       }}
                     />
@@ -2383,13 +2465,13 @@ export default function DeliverySettingsPage() {
                           display: "inline-flex",
                           alignItems: "center",
                           padding: "0 7px",
-                          background: "#f1f5f9",
-                          border: "1px solid #cbd5e1",
+                          background: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9",
+                          border: `1px solid ${tokens.border}`,
                           borderRight: "none",
                           borderRadius: "6px 0 0 6px",
                           fontSize: "11px",
                           fontWeight: 600,
-                          color: "#475569",
+                          color: tokens.textSecondary,
                           boxSizing: "border-box",
                         }}
                       >
@@ -2413,7 +2495,7 @@ export default function DeliverySettingsPage() {
                           height: "30px",
                           fontSize: "12px",
                           borderRadius: "0 6px 6px 0",
-                          background: canEdit ? "#ffffff" : "#f8fafc",
+                          background: canEdit ? tokens.elevatedSurfaceBg : (isDark ? "rgba(255,255,255,0.03)" : "#f8fafc"),
                           cursor: canEdit ? "text" : "not-allowed",
                         }}
                       />
@@ -2435,7 +2517,7 @@ export default function DeliverySettingsPage() {
                         ...inputStyle,
                         height: "30px",
                         fontSize: "12px",
-                        background: canEdit ? "#ffffff" : "#f8fafc",
+                        background: canEdit ? tokens.elevatedSurfaceBg : (isDark ? "rgba(255,255,255,0.03)" : "#f8fafc"),
                         cursor: canEdit ? "text" : "not-allowed",
                       }}
                     />
@@ -2463,7 +2545,7 @@ export default function DeliverySettingsPage() {
                           height: "30px",
                           fontSize: "12px",
                           borderRadius: "6px 0 0 6px",
-                          background: canEdit ? "#ffffff" : "#f8fafc",
+                          background: canEdit ? tokens.elevatedSurfaceBg : (isDark ? "rgba(255,255,255,0.03)" : "#f8fafc"),
                           cursor: canEdit ? "text" : "not-allowed",
                         }}
                       />
@@ -2474,13 +2556,13 @@ export default function DeliverySettingsPage() {
                           alignItems: "center",
                           justifyContent: "center",
                           padding: "0 7px",
-                          background: "#f1f5f9",
-                          border: "1px solid #cbd5e1",
+                          background: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9",
+                          border: `1px solid ${tokens.border}`,
                           borderLeft: "none",
                           borderRadius: "0 6px 6px 0",
                           fontSize: "11px",
                           fontWeight: 600,
-                          color: "#475569",
+                          color: tokens.textSecondary,
                           boxSizing: "border-box",
                           userSelect: "none",
                         }}
@@ -2500,16 +2582,16 @@ export default function DeliverySettingsPage() {
                     flexWrap: "wrap",
                     gap: "8px",
                     padding: "8px 10px",
-                    background: "#f8fafc",
+                    background: tokens.elevatedSurfaceBg,
                     borderRadius: "6px",
-                    border: "1px solid #f1f5f9",
+                    border: `1px solid ${tokens.border}`,
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>
                       Delivery Coverage:
                     </span>
-                    <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
                       {settings.shiprocket_delivery_radius_km
                         ? `Max ${settings.shiprocket_delivery_radius_km} km radius from pinned warehouse`
                         : "Nationwide (All serviceable pincodes across India)"}
@@ -2517,7 +2599,7 @@ export default function DeliverySettingsPage() {
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", color: "#334155", cursor: canEdit ? "pointer" : "not-allowed" }}>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", color: tokens.textPrimary, cursor: canEdit ? "pointer" : "not-allowed" }}>
                       <input
                         type="radio"
                         disabled={!canEdit}
@@ -2531,7 +2613,7 @@ export default function DeliverySettingsPage() {
                       Nationwide
                     </label>
 
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", color: "#334155", cursor: canEdit ? "pointer" : "not-allowed" }}>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", color: tokens.textPrimary, cursor: canEdit ? "pointer" : "not-allowed" }}>
                       <input
                         type="radio"
                         disabled={!canEdit}
@@ -2566,11 +2648,11 @@ export default function DeliverySettingsPage() {
                             height: "26px",
                             fontSize: "11.5px",
                             padding: "2px 6px",
-                            background: canEdit ? "#ffffff" : "#f8fafc",
+                            background: canEdit ? tokens.elevatedSurfaceBg : (isDark ? "rgba(255,255,255,0.03)" : "#f8fafc"),
                             cursor: canEdit ? "text" : "not-allowed",
                           }}
                         />
-                        <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>KM</span>
+                        <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>KM</span>
                       </div>
                     )}
                   </div>
@@ -2596,28 +2678,28 @@ export default function DeliverySettingsPage() {
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
               padding: "16px 18px",
             }}
           >
-            <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", marginBottom: "12px" }}>
+            <div style={{ fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "12px" }}>
               Standard Manual Dispatch Workflow
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
-              <div style={{ padding: "10px 12px", borderRadius: "6px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-                <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", marginBottom: "2px" }}>1. Pack Parcel</div>
-                <div style={{ fontSize: "11.5px", color: "#64748b" }}>Package items and label box at your store.</div>
+              <div style={{ padding: "10px 12px", borderRadius: "6px", background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}` }}>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "2px" }}>1. Pack Parcel</div>
+                <div style={{ fontSize: "11.5px", color: tokens.textSecondary }}>Package items and label box at your store.</div>
               </div>
-              <div style={{ padding: "10px 12px", borderRadius: "6px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-                <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", marginBottom: "2px" }}>2. Courier Handover</div>
-                <div style={{ fontSize: "11.5px", color: "#64748b" }}>Ship with any courier and collect AWB tracking.</div>
+              <div style={{ padding: "10px 12px", borderRadius: "6px", background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}` }}>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "2px" }}>2. Courier Handover</div>
+                <div style={{ fontSize: "11.5px", color: tokens.textSecondary }}>Ship with any courier and collect AWB tracking.</div>
               </div>
-              <div style={{ padding: "10px 12px", borderRadius: "6px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-                <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", marginBottom: "2px" }}>3. Mark Dispatched</div>
-                <div style={{ fontSize: "11.5px", color: "#64748b" }}>Enter tracking code in Orders tab to update buyer.</div>
+              <div style={{ padding: "10px 12px", borderRadius: "6px", background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}` }}>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "2px" }}>3. Mark Dispatched</div>
+                <div style={{ fontSize: "11.5px", color: tokens.textSecondary }}>Enter tracking code in Orders tab to update buyer.</div>
               </div>
             </div>
           </div>
@@ -2644,6 +2726,7 @@ export default function DeliverySettingsPage() {
 // Component Styles matching AdminProducts.tsx
 // -----------------------------------------------------------------------------
 function InfoTooltip({ text }: { text: string }) {
+  const { isDark, tokens } = useAdminTheme();
   const [hovered, setHovered] = useState(false);
   return (
     <div
@@ -2658,7 +2741,7 @@ function InfoTooltip({ text }: { text: string }) {
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        style={{ width: "13px", height: "13px", color: hovered ? "#2563eb" : "#94a3b8", transition: "color 0.15s ease" }}
+        style={{ width: "13px", height: "13px", color: hovered ? "#2563eb" : tokens.textSecondary, transition: "color 0.15s ease" }}
       >
         <circle cx="12" cy="12" r="10" />
         <line x1="12" y1="16" x2="12" y2="12" />
@@ -2671,14 +2754,15 @@ function InfoTooltip({ text }: { text: string }) {
             bottom: "calc(100% + 6px)",
             left: "50%",
             transform: "translateX(-50%)",
-            background: "#0f172a",
-            color: "#ffffff",
+            background: isDark ? tokens.elevatedSurfaceBg : "#0f172a",
+            color: isDark ? tokens.textPrimary : "#ffffff",
+            border: isDark ? `1px solid ${tokens.border}` : "none",
             fontSize: "11px",
             fontWeight: 500,
             padding: "5px 9px",
             borderRadius: "6px",
             whiteSpace: "nowrap",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.5)" : "0 4px 12px rgba(0,0,0,0.15)",
             zIndex: 100,
             pointerEvents: "none",
             fontFamily: "'Inter', sans-serif",
@@ -2695,7 +2779,7 @@ function InfoTooltip({ text }: { text: string }) {
               height: 0,
               borderLeft: "4px solid transparent",
               borderRight: "4px solid transparent",
-              borderTop: "4px solid #0f172a",
+              borderTop: `4px solid ${isDark ? tokens.elevatedSurfaceBg : "#0f172a"}`,
             }}
           />
         </div>
@@ -2704,121 +2788,48 @@ function InfoTooltip({ text }: { text: string }) {
   );
 }
 
-const StatCard = ({ label, value }: { label: string; value: string }) => (
-  <div
-    style={{
-      padding: "12px 14px",
-      borderRadius: "8px",
-      background: "#ffffff",
-      border: "1px solid #e2e8f0",
-      display: "flex",
-      flexDirection: "column",
-      gap: "8px",
-      minWidth: 0,
-      overflow: "hidden",
-      fontFamily: "'Inter', sans-serif",
-    }}
-  >
+const StatCard = ({ label, value }: { label: string; value: string }) => {
+  const { tokens } = useAdminTheme();
+  return (
     <div
       style={{
-        fontSize: "22px",
-        fontWeight: 600,
-        color: "#334155",
-        lineHeight: 1,
-        fontFamily: "'Inter', sans-serif",
-      }}
-    >
-      {value}
-    </div>
-    <div
-      style={{
-        fontSize: "12px",
-        fontWeight: 500,
-        color: "#555555",
-        whiteSpace: "nowrap",
+        padding: "12px 14px",
+        borderRadius: "8px",
+        background: tokens.surfaceBg,
+        border: `1px solid ${tokens.border}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+        minWidth: 0,
         overflow: "hidden",
-        textOverflow: "ellipsis",
         fontFamily: "'Inter', sans-serif",
       }}
     >
-      {label}
+      <div
+        style={{
+          fontSize: "22px",
+          fontWeight: 600,
+          color: tokens.textPrimary,
+          lineHeight: 1,
+          fontFamily: "'Inter', sans-serif",
+        }}
+      >
+        {value}
+      </div>
+      <div
+        style={{
+          fontSize: "12px",
+          fontWeight: 500,
+          color: tokens.textSecondary,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          fontFamily: "'Inter', sans-serif",
+        }}
+      >
+        {label}
+      </div>
     </div>
-  </div>
-);
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "12px",
-  color: "#475569",
-  fontWeight: 600,
+  );
 };
 
-const inputStyle: React.CSSProperties = {
-  padding: "6px 9px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
-  fontSize: "13px",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "10px 12px",
-  fontSize: "11px",
-  letterSpacing: "0.05em",
-  textTransform: "uppercase",
-  color: "#64748b",
-  borderBottom: "1px solid #e2e8f0",
-  whiteSpace: "nowrap",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  borderTop: "1px solid #e2e8f0",
-  fontSize: "13px",
-  color: "#0f172a",
-  verticalAlign: "middle",
-  whiteSpace: "nowrap",
-};
-
-const ghostButtonStyle: React.CSSProperties = {
-  padding: "6px 10px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
-  fontWeight: 600,
-  fontSize: "12px",
-  cursor: "pointer",
-  textDecoration: "none",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  whiteSpace: "nowrap",
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: "7px 12px",
-  borderRadius: "6px",
-  border: "none",
-  background: "#2563eb",
-  color: "white",
-  fontWeight: 600,
-  fontSize: "12px",
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-};
-
-const dangerButtonStyle: React.CSSProperties = {
-  padding: "6px 10px",
-  borderRadius: "6px",
-  border: "1px solid #fecaca",
-  background: "#fef2f2",
-  color: "#b91c1c",
-  fontWeight: 600,
-  fontSize: "12px",
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-};

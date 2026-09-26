@@ -68,6 +68,7 @@ class Admin(SQLModel, table=True):
     is_verified: bool = Field(default=True)
     is_active: bool = Field(default=True)
     timezone: str = Field(default="Asia/Kolkata")
+    theme_preference: Optional[str] = Field(default="light")
     reset_token: Optional[str] = Field(default=None)
     reset_token_expires_at: Optional[datetime] = Field(default=None)
     last_login_at: Optional[datetime] = Field(default=None)

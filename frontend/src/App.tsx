@@ -11,6 +11,7 @@ import {
 } from "react-router-dom";
 import { CustomerAuthProvider } from "./context/CustomerAuthContext";
 import { AdminAuthProvider, useAdminAuth } from "./context/AdminAuthContext";
+import { AdminThemeProvider, useAdminTheme } from "./context/ThemeContext";
 import { CartProvider } from "./CartContext";
 import { API_BASE_URL } from "./config/api";
 import BuilderShell from "./Component/BuilderShell";
@@ -49,22 +50,24 @@ const SupportAgentDashboard = React.lazy(() => import("./pages/SupportAgentDashb
 
 
 function RouteLoadingFallback() {
+  const { isDark, tokens } = useAdminTheme();
   return (
     <div
       style={{
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
-        background: "transparent",
+        backgroundColor: isDark ? tokens.workspaceBg : "#f8fafc",
+        color: isDark ? tokens.textPrimary : "#0f172a",
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
       <div style={{ textAlign: "center" }}>
         <div
           style={{
-            width: "30px",
-            height: "30px",
-            border: "2.5px solid rgba(125,125,125,0.18)",
+            width: "32px",
+            height: "32px",
+            border: `2.5px solid ${isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(125, 125, 125, 0.18)"}`,
             borderTopColor: "#3b82f6",
             borderRadius: "50%",
             animation: "spin 0.8s linear infinite",
@@ -827,6 +830,8 @@ function AdminSitesPage() {
     }
   };
 
+  const { isDark, tokens } = useAdminTheme();
+
   const topBar = (
     <BuilderTopControlBar
       siteName=""
@@ -890,27 +895,27 @@ function AdminSitesPage() {
       plainCenter={true}
     >
       {activeSettingsNavKey === "profile" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
           <AdminProfileSettings />
         </div>
       ) : activeSettingsNavKey === "users-roles" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
           <AdminUsersAndRoles />
         </div>
       ) : activeSettingsNavKey === "domain" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
           <AdminDomainSettings />
         </div>
       ) : activeSettingsNavKey === "billing" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
           <AdminBillingSettings />
         </div>
       ) : activeSettingsNavKey === "audit-logs" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
           <AdminAuditLogs />
         </div>
       ) : activeSettingsNavKey === "help-support" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: "#ffffff", padding: "24px", boxSizing: "border-box" }}>
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
           <AdminHelpSupport />
         </div>
       ) : !isOwner ? (
@@ -918,7 +923,7 @@ function AdminSitesPage() {
           style={{
             height: "100%",
             overflowY: "auto",
-            background: "#f8fafc",
+            background: tokens.workspaceBg,
             padding: "36px 32px",
             boxSizing: "border-box",
             fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -928,14 +933,14 @@ function AdminSitesPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                  <h1 style={{ fontSize: "24px", fontWeight: 700, color: "#0f172a", margin: 0, letterSpacing: "-0.02em" }}>
+                  <h1 style={{ fontSize: "24px", fontWeight: 700, color: tokens.textPrimary, margin: 0, letterSpacing: "-0.02em" }}>
                     Your Assigned Stores
                   </h1>
-                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "12px", background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "12px", background: tokens.accentBg, color: tokens.accentText, border: `1px solid ${tokens.accentBorder}` }}>
                     {admin?.role || "Staff"}
                   </span>
                 </div>
-                <p style={{ margin: 0, fontSize: "14px", color: "#64748b" }}>
+                <p style={{ margin: 0, fontSize: "14px", color: tokens.textSecondary }}>
                   Select an assigned store below to manage products, orders, and storefront configuration.
                 </p>
               </div>
@@ -945,39 +950,39 @@ function AdminSitesPage() {
               style={{
                 padding: "14px 18px",
                 borderRadius: "12px",
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                border: `1px solid ${tokens.border}`,
+                boxShadow: isDark ? "none" : "0 1px 3px rgba(0,0,0,0.04)",
                 display: "flex",
                 alignItems: "center",
                 gap: "12px",
                 marginBottom: "28px",
               }}
             >
-              <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#fef3c7", color: "#b45309", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
+              <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fef3c7", color: tokens.warning, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
                 🛡️
               </div>
-              <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.5 }}>
-                <strong style={{ color: "#0f172a" }}>Store Creation Restricted:</strong> The AI Store Onboarding Agent is accessible strictly by workspace owners. As a team member, you have direct access to your assigned storefronts below.
+              <div style={{ fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.5 }}>
+                <strong style={{ color: tokens.textPrimary }}>Store Creation Restricted:</strong> The AI Store Onboarding Agent is accessible strictly by workspace owners. As a team member, you have direct access to your assigned storefronts below.
               </div>
             </div>
 
             {savedSites.length === 0 ? (
               <div
                 style={{
-                  background: "#ffffff",
+                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                   borderRadius: "16px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "48px 24px",
                   textAlign: "center",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                  boxShadow: isDark ? "none" : "0 1px 4px rgba(0,0,0,0.04)",
                 }}
               >
                 <div style={{ fontSize: "36px", marginBottom: "12px" }}>🏪</div>
-                <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+                <h3 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
                   No Stores Currently Assigned
                 </h3>
-                <p style={{ fontSize: "13.5px", color: "#64748b", maxWidth: "420px", margin: "0 auto", lineHeight: 1.5 }}>
+                <p style={{ fontSize: "13.5px", color: tokens.textSecondary, maxWidth: "420px", margin: "0 auto", lineHeight: 1.5 }}>
                   Your account is active, but you have not been granted access to any store websites yet. Please contact your workspace owner.
                 </p>
               </div>
@@ -996,11 +1001,11 @@ function AdminSitesPage() {
                     <div
                       key={site.id}
                       style={{
-                        background: "#ffffff",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                         borderRadius: "14px",
-                        border: "1px solid #e2e8f0",
+                        border: `1px solid ${tokens.border}`,
                         padding: "20px",
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                        boxShadow: isDark ? "none" : "0 1px 3px rgba(0,0,0,0.04)",
                         display: "flex",
                         flexDirection: "column",
                         justifyContent: "space-between",
@@ -1009,28 +1014,28 @@ function AdminSitesPage() {
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = "translateY(-2px)";
-                        e.currentTarget.style.boxShadow = "0 8px 24px rgba(15,23,42,0.08)";
+                        e.currentTarget.style.boxShadow = isDark ? "0 8px 24px rgba(0,0,0,0.4)" : "0 8px 24px rgba(15,23,42,0.08)";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.transform = "translateY(0)";
-                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
+                        e.currentTarget.style.boxShadow = isDark ? "none" : "0 1px 3px rgba(0,0,0,0.04)";
                       }}
                     >
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", marginBottom: "8px" }}>
-                          <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <h3 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {brand}
                           </h3>
-                          <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "6px", background: "#f1f5f9", color: "#475569", textTransform: "uppercase" }}>
+                          <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "6px", background: isDark ? tokens.surfaceBg : "#f1f5f9", color: tokens.textSecondary, textTransform: "uppercase" }}>
                             {domain}
                           </span>
                         </div>
-                        <div style={{ fontSize: "12px", color: "#64748b", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div style={{ fontSize: "12px", color: tokens.textMuted, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {site.slug}
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", gap: "8px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
+                      <div style={{ display: "flex", gap: "8px", paddingTop: "12px", borderTop: `1px solid ${tokens.divider}` }}>
                         <button
                           type="button"
                           onClick={() => openSite(site.id)}
@@ -1038,7 +1043,7 @@ function AdminSitesPage() {
                             flex: 1,
                             padding: "8px 14px",
                             borderRadius: "8px",
-                            background: "#2563eb",
+                            background: tokens.accent,
                             color: "#ffffff",
                             border: "none",
                             fontSize: "12px",
@@ -1048,7 +1053,7 @@ function AdminSitesPage() {
                             alignItems: "center",
                             justifyContent: "center",
                             gap: "6px",
-                            boxShadow: "0 2px 6px rgba(37,99,235,0.25)",
+                            boxShadow: "0 2px 6px rgba(59,130,246,0.25)",
                           }}
                         >
                           <span>Open Store</span>
@@ -1069,8 +1074,8 @@ function AdminSitesPage() {
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          background: "#ffffff",
-          color: "#0f172a",
+          background: tokens.workspaceBg,
+          color: tokens.textPrimary,
           position: "relative",
           overflow: "hidden",
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -1094,7 +1099,7 @@ function AdminSitesPage() {
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background-color: #64748b;
+            background-color: ${tokens.textMuted};
             display: inline-block;
             animation: onboardingDotPulse 1.4s ease-in-out infinite both;
           }
@@ -1128,7 +1133,7 @@ function AdminSitesPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 height: "100%",
-                color: "#64748b",
+                color: tokens.textSecondary,
                 fontSize: "14px",
                 textAlign: "center",
                 padding: "32px 20px",
@@ -1136,10 +1141,10 @@ function AdminSitesPage() {
                 margin: "auto 0",
               }}
             >
-              <p style={{ margin: 0, fontWeight: 600, color: "#475569", fontSize: "15px" }}>
+              <p style={{ margin: 0, fontWeight: 600, color: tokens.textPrimary, fontSize: "15px" }}>
                 Describe the website or storefront you want to build.
               </p>
-              <p style={{ margin: 0, fontSize: "13px", color: "#94a3b8", maxWidth: "520px", lineHeight: 1.5 }}>
+              <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary, maxWidth: "520px", lineHeight: 1.5 }}>
                 Specify your brand name, products, payment preferences, or color vibe, and WebCreon AI will guide you through building your custom store.
               </p>
             </div>
@@ -1167,7 +1172,7 @@ function AdminSitesPage() {
                       }}
                     >
                       <AiWebpageGeneratingAnimation
-                        themeMode="light"
+                        themeMode={isDark ? "dark" : "light"}
                         brandName={msg.brandName || "Your Website"}
                         progress={msg.progress}
                         currentMessage={msg.currentStepMessage || msg.text}
@@ -1213,17 +1218,17 @@ function AdminSitesPage() {
                             : "18px 18px 18px 4px",
                           padding: "14px 18px",
                           background: isUser
-                            ? "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)"
-                            : "#f8fafc",
+                            ? tokens.accent
+                            : (isDark ? tokens.surfaceBg : "#f8fafc"),
                           border: isUser
                             ? "none"
-                            : "1px solid rgba(15,23,42,0.08)",
-                          color: isUser ? "#ffffff" : "#0f172a",
+                            : `1px solid ${tokens.border}`,
+                          color: isUser ? "#ffffff" : tokens.textPrimary,
                           fontSize: "14px",
                           lineHeight: 1.5,
                           boxShadow: isUser
-                            ? "0 4px 14px rgba(37,99,235,0.22)"
-                            : "0 2px 10px rgba(15,23,42,0.04)",
+                            ? (isDark ? "0 4px 14px rgba(0,0,0,0.4)" : "0 4px 14px rgba(37,99,235,0.22)")
+                            : (isDark ? "none" : "0 2px 10px rgba(15,23,42,0.04)"),
                         }}
                       >
                         {msg.type !== "paywall" && (
@@ -1251,21 +1256,21 @@ function AdminSitesPage() {
                             style={{
                               padding: "12px 14px",
                               borderRadius: "10px",
-                              background: "#ffffff",
-                              border: "1px solid #e2e8f0",
+                              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                              border: `1px solid ${tokens.border}`,
                               display: "flex",
                               flexDirection: "column",
                               gap: "6px",
                             }}
                           >
-                            <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary }}>
                               AI Credit Limit Reached
                             </div>
-                            <div style={{ fontSize: "12px", color: "#64748b", lineHeight: 1.5 }}>
+                            <div style={{ fontSize: "12px", color: tokens.textSecondary, lineHeight: 1.5 }}>
                               You have used all credits in your monthly pool. Upgrade your plan to continue building and generating stores.
                             </div>
                             {msg.paywall_reset_date && (
-                              <div style={{ fontSize: "11px", color: "#94a3b8" }}>
+                              <div style={{ fontSize: "11px", color: tokens.textMuted }}>
                                 Resets on: {new Date(msg.paywall_reset_date).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
                               </div>
                             )}
@@ -1278,7 +1283,7 @@ function AdminSitesPage() {
                                 }}
                                 style={{
                                   padding: "6px 14px",
-                                  background: "#2563eb",
+                                  background: tokens.accent,
                                   color: "#ffffff",
                                   border: "none",
                                   borderRadius: "6px",
@@ -1310,25 +1315,25 @@ function AdminSitesPage() {
                                 style={{
                                   padding: "12px",
                                   borderRadius: "12px",
-                                  background: "#ffffff",
-                                  border: "1.5px solid rgba(15,23,42,0.12)",
+                                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                  border: `1.5px solid ${tokens.border}`,
                                   cursor: "pointer",
                                   transition: "all 0.15s ease",
-                                  boxShadow: "0 2px 8px rgba(15,23,42,0.04)",
+                                  boxShadow: isDark ? "none" : "0 2px 8px rgba(15,23,42,0.04)",
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.currentTarget.style.borderColor = "#2563eb";
+                                  e.currentTarget.style.borderColor = tokens.accent;
                                   e.currentTarget.style.transform = "translateY(-2px)";
                                 }}
                                 onMouseLeave={(e) => {
-                                  e.currentTarget.style.borderColor = "rgba(15,23,42,0.12)";
+                                  e.currentTarget.style.borderColor = tokens.border;
                                   e.currentTarget.style.transform = "translateY(0)";
                                 }}
                               >
-                                <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                                <div style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                                   {idx + 1}. {pal.name}
                                 </div>
-                                <div style={{ fontSize: "11px", color: "#64748b", margin: "4px 0 10px 0" }}>
+                                <div style={{ fontSize: "11px", color: tokens.textSecondary, margin: "4px 0 10px 0" }}>
                                   {pal.description}
                                 </div>
 
@@ -1341,7 +1346,7 @@ function AdminSitesPage() {
                                       height: "24px",
                                       borderRadius: "6px",
                                       background: pal.primary_bg,
-                                      border: "1px solid rgba(0,0,0,0.15)",
+                                      border: `1px solid ${tokens.border}`,
                                     }}
                                   />
                                   <div
@@ -1360,7 +1365,7 @@ function AdminSitesPage() {
                                       height: "24px",
                                       borderRadius: "6px",
                                       background: pal.navbar_bg,
-                                      border: "1px solid rgba(0,0,0,0.15)",
+                                      border: `1px solid ${tokens.border}`,
                                     }}
                                   />
                                   <div
@@ -1370,7 +1375,7 @@ function AdminSitesPage() {
                                       height: "24px",
                                       borderRadius: "6px",
                                       background: pal.footer_bg,
-                                      border: "1px solid rgba(0,0,0,0.15)",
+                                      border: `1px solid ${tokens.border}`,
                                     }}
                                   />
                                 </div>
@@ -1382,7 +1387,7 @@ function AdminSitesPage() {
                                     padding: "6px 0",
                                     borderRadius: "8px",
                                     border: "none",
-                                    background: "#2563eb",
+                                    background: tokens.accent,
                                     color: "#ffffff",
                                     fontSize: "12px",
                                     fontWeight: 600,
@@ -1416,35 +1421,39 @@ function AdminSitesPage() {
                                   style={{
                                     padding: "10px 14px",
                                     borderRadius: "12px",
-                                    border: isBuildNow ? "1px solid #10b981" : "1px solid rgba(37,99,235,0.25)",
-                                    background: isBuildNow ? "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)" : "#ffffff",
-                                    color: isBuildNow ? "#065f46" : "#0f172a",
+                                    border: isBuildNow
+                                      ? `1px solid ${tokens.success}`
+                                      : `1px solid ${tokens.border}`,
+                                    background: isBuildNow
+                                      ? (isDark ? "rgba(16, 185, 129, 0.15)" : "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)")
+                                      : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
+                                    color: isBuildNow ? (isDark ? tokens.success : "#065f46") : tokens.textPrimary,
                                     textAlign: "left",
                                     cursor: "pointer",
                                     transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
                                     display: "flex",
                                     flexDirection: "column",
                                     gap: "4px",
-                                    boxShadow: "0 2px 6px rgba(15,23,42,0.04)",
+                                    boxShadow: isDark ? "none" : "0 2px 6px rgba(15,23,42,0.04)",
                                   }}
                                   onMouseEnter={(e) => {
                                     e.currentTarget.style.transform = "translateY(-1px)";
                                     e.currentTarget.style.boxShadow = isBuildNow
                                       ? "0 6px 16px rgba(16,185,129,0.25)"
-                                      : "0 6px 16px rgba(37,99,235,0.18)";
-                                    e.currentTarget.style.borderColor = isBuildNow ? "#059669" : "#2563eb";
+                                      : (isDark ? "0 6px 16px rgba(0,0,0,0.3)" : "0 6px 16px rgba(37,99,235,0.18)");
+                                    e.currentTarget.style.borderColor = isBuildNow ? tokens.success : tokens.accent;
                                   }}
                                   onMouseLeave={(e) => {
                                     e.currentTarget.style.transform = "translateY(0)";
-                                    e.currentTarget.style.boxShadow = "0 2px 6px rgba(15,23,42,0.04)";
-                                    e.currentTarget.style.borderColor = isBuildNow ? "#10b981" : "rgba(37,99,235,0.25)";
+                                    e.currentTarget.style.boxShadow = isDark ? "none" : "0 2px 6px rgba(15,23,42,0.04)";
+                                    e.currentTarget.style.borderColor = isBuildNow ? tokens.success : tokens.border;
                                   }}
                                 >
-                                  <div style={{ fontSize: "13px", fontWeight: 700, color: isBuildNow ? "#047857" : "#1d4ed8" }}>
+                                  <div style={{ fontSize: "13px", fontWeight: 700, color: isBuildNow ? (isDark ? tokens.success : "#047857") : tokens.accentText }}>
                                     {choice.label}
                                   </div>
                                   {choice.description && (
-                                    <div style={{ fontSize: "11px", color: "#64748b", lineHeight: 1.4 }}>
+                                    <div style={{ fontSize: "11px", color: tokens.textSecondary, lineHeight: 1.4 }}>
                                       {choice.description}
                                     </div>
                                   )}
@@ -1485,8 +1494,8 @@ function AdminSitesPage() {
               }}
             >
               {collectedState.brand_name ? (
-                <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 500 }}>
-                  Store: <strong style={{ color: "#0f172a" }}>{collectedState.brand_name}</strong>
+                <span style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 500 }}>
+                  Store: <strong style={{ color: tokens.textPrimary }}>{collectedState.brand_name}</strong>
                 </span>
               ) : <span />}
               <button
@@ -1496,7 +1505,7 @@ function AdminSitesPage() {
                   background: "transparent",
                   border: "none",
                   fontSize: "11px",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
@@ -1505,8 +1514,8 @@ function AdminSitesPage() {
                   borderRadius: "4px",
                   transition: "color 0.15s ease",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#0f172a")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
+                onMouseEnter={(e) => (e.currentTarget.style.color = tokens.textPrimary)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = tokens.textMuted)}
               >
                 <span>↺ Start Fresh</span>
               </button>
@@ -1516,11 +1525,11 @@ function AdminSitesPage() {
             style={{
               maxWidth: "760px",
               margin: "0 auto",
-              background: "#ffffff",
-              border: "1px solid rgba(15,23,42,0.12)",
+              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+              border: `1px solid ${tokens.border}`,
               borderRadius: "24px",
               padding: "10px 16px",
-              boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
+              boxShadow: isDark ? "0 10px 30px rgba(0,0,0,0.5)" : "0 10px 30px rgba(15,23,42,0.08)",
               display: "flex",
               alignItems: "flex-end",
               gap: "12px",
@@ -1543,7 +1552,7 @@ function AdminSitesPage() {
                 background: "transparent",
                 border: "none",
                 outline: "none",
-                color: isOnboardingPaywallLocked ? "#94a3b8" : "#0f172a",
+                color: isOnboardingPaywallLocked ? tokens.textMuted : tokens.textPrimary,
                 fontSize: "14px",
                 lineHeight: 1.4,
                 resize: "none",
@@ -1564,20 +1573,25 @@ function AdminSitesPage() {
                 width: "38px",
                 height: "38px",
                 borderRadius: "12px",
-                border: "none",
+                border: `1px solid ${
+                  loading || !prompt.trim() || isOnboardingPaywallLocked
+                    ? isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"
+                    : "transparent"
+                }`,
                 background:
                   loading || !prompt.trim() || isOnboardingPaywallLocked
-                    ? "#e2e8f0"
-                    : "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                color: loading || !prompt.trim() || isOnboardingPaywallLocked ? "#94a3b8" : "#ffffff",
+                    ? isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(15, 23, 42, 0.04)"
+                    : tokens.accent,
+                color: loading || !prompt.trim() || isOnboardingPaywallLocked ? tokens.textMuted : "#ffffff",
                 cursor: loading || !prompt.trim() || isOnboardingPaywallLocked ? "not-allowed" : "pointer",
                 display: "grid",
                 placeItems: "center",
                 flexShrink: 0,
+                opacity: loading || !prompt.trim() || isOnboardingPaywallLocked ? 0.6 : 1,
                 boxShadow:
                   loading || !prompt.trim() || isOnboardingPaywallLocked
                     ? "none"
-                    : "0 3px 10px rgba(37,99,235,0.3)",
+                    : "0 3px 12px rgba(59,130,246,0.35)",
                 transition: "all 0.15s ease",
               }}
             >
@@ -1738,14 +1752,16 @@ function AppRoutes() {
 function App() {
   return (
     <AdminAuthProvider>
-      <CustomerAuthProvider>
-        <CartProvider>
-          <BrowserRouter>
-            <ScrollToTop />
-            <AppRoutes />
-          </BrowserRouter>
-        </CartProvider>
-      </CustomerAuthProvider>
+      <AdminThemeProvider>
+        <CustomerAuthProvider>
+          <CartProvider>
+            <BrowserRouter>
+              <ScrollToTop />
+              <AppRoutes />
+            </BrowserRouter>
+          </CartProvider>
+        </CustomerAuthProvider>
+      </AdminThemeProvider>
     </AdminAuthProvider>
   );
 }

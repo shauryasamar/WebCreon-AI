@@ -3,6 +3,7 @@ import { API_BASE_URL } from "../config/api";
 import { AdminCopilotChat } from "./AdminCopilotChat";
 import AdminProfileSettings from "./AdminProfileSettings";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import {
   COMPONENT_ASSETS,
   ComponentAsset,
@@ -239,7 +240,8 @@ function LinkIcon({
   isOnline?: boolean;
   isSelected?: boolean;
 }) {
-  const iconColor = isOnline ? "#2563eb" : "#f59e0b";
+  const { isDark, tokens } = useAdminTheme();
+  const iconColor = isOnline ? (isDark ? "#3b82f6" : "#2563eb") : "#f59e0b";
 
   return (
     <svg
@@ -276,6 +278,7 @@ function SavedSiteCard({
   onDelete?: () => void;
   liveStatus?: boolean;
 }) {
+  const { tokens } = useAdminTheme();
   const [isHovered, setIsHovered] = useState(false);
   const brandName = getBrandName(site);
   const description = getSiteDescription(site);
@@ -291,8 +294,8 @@ function SavedSiteCard({
         textAlign: "left",
         borderRadius: "10px",
         padding: "10px 12px",
-        background: isSelected ? "#eff6ff" : isHovered ? "#f8fafc" : "transparent",
-        border: isSelected ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid transparent",
+        background: isSelected ? tokens.accentBg : isHovered ? tokens.hoverBg : "transparent",
+        border: isSelected ? `1px solid ${tokens.accentBorder}` : "1px solid transparent",
         cursor: "pointer",
         display: "flex",
         alignItems: "flex-start",
@@ -310,10 +313,11 @@ function SavedSiteCard({
             fontSize: "13px",
             fontWeight: 600,
             lineHeight: 1.3,
-            color: isSelected ? "#1d4ed8" : "#0f172a",
+            color: isSelected ? tokens.accentText : tokens.textPrimary,
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
+            transition: "color 0.15s ease",
           }}
         >
           {brandName}
@@ -322,7 +326,7 @@ function SavedSiteCard({
           style={{
             fontSize: "11.5px",
             lineHeight: "1.45",
-            color: "#64748b",
+            color: tokens.textSecondary,
             marginTop: "3px",
             display: "-webkit-box",
             WebkitLineClamp: 2,
@@ -330,6 +334,7 @@ function SavedSiteCard({
             overflow: "hidden",
             textOverflow: "ellipsis",
             wordBreak: "break-word",
+            transition: "color 0.15s ease",
           }}
         >
           {description}
@@ -370,7 +375,8 @@ function SavedSiteCard({
 }
 
 function AdminNavIcon({ navKey, isSelected }: { navKey: AdminNavKey; isSelected: boolean }) {
-  const stroke = isSelected ? "#2563eb" : "#64748b";
+  const { isDark, tokens } = useAdminTheme();
+  const stroke = isSelected ? tokens.accent : tokens.textSecondary;
   const style = { width: 16, height: 16, flexShrink: 0 };
 
   switch (navKey) {
@@ -492,6 +498,7 @@ function AdminNavCard({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -504,8 +511,8 @@ function AdminNavCard({
         textAlign: "left",
         borderRadius: "10px",
         padding: "10px 12px",
-        background: isSelected ? "#eff6ff" : isHovered ? "#f8fafc" : "transparent",
-        border: isSelected ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid transparent",
+        background: isSelected ? tokens.accentBg : isHovered ? tokens.hoverBg : "transparent",
+        border: isSelected ? `1px solid ${tokens.accentBorder}` : "1px solid transparent",
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -518,7 +525,7 @@ function AdminNavCard({
         style={{
           fontSize: "13px",
           fontWeight: 600,
-          color: isSelected ? "#1d4ed8" : "#0f172a",
+          color: isSelected ? tokens.accentText : tokens.textPrimary,
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -539,7 +546,9 @@ function SettingsNavCard({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [isHovered, setIsHovered] = useState(false);
+  const iconStroke = isSelected ? tokens.accent : tokens.textSecondary;
 
   return (
     <div
@@ -551,8 +560,8 @@ function SettingsNavCard({
         textAlign: "left",
         borderRadius: "10px",
         padding: "10px 12px",
-        background: isSelected ? "#eff6ff" : isHovered ? "#f8fafc" : "transparent",
-        border: isSelected ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid transparent",
+        background: isSelected ? tokens.accentBg : isHovered ? tokens.hoverBg : "transparent",
+        border: isSelected ? `1px solid ${tokens.accentBorder}` : "1px solid transparent",
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -564,7 +573,7 @@ function SettingsNavCard({
         <svg
           viewBox="0 0 24 24"
           fill="none"
-          stroke={isSelected ? "#2563eb" : "#64748b"}
+          stroke={iconStroke}
           strokeWidth="1.8"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -579,7 +588,7 @@ function SettingsNavCard({
         <svg
           viewBox="0 0 24 24"
           fill="none"
-          stroke={isSelected ? "#2563eb" : "#64748b"}
+          stroke={iconStroke}
           strokeWidth="1.8"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -593,7 +602,7 @@ function SettingsNavCard({
         <svg
           viewBox="0 0 24 24"
           fill="none"
-          stroke={isSelected ? "#2563eb" : "#64748b"}
+          stroke={iconStroke}
           strokeWidth="1.8"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -606,7 +615,7 @@ function SettingsNavCard({
         <svg
           viewBox="0 0 24 24"
           fill="none"
-          stroke={isSelected ? "#2563eb" : "#64748b"}
+          stroke={iconStroke}
           strokeWidth="1.8"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -622,7 +631,7 @@ function SettingsNavCard({
         <svg
           viewBox="0 0 24 24"
           fill="none"
-          stroke={isSelected ? "#2563eb" : "#64748b"}
+          stroke={iconStroke}
           strokeWidth="1.8"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -636,7 +645,7 @@ function SettingsNavCard({
         <svg
           viewBox="0 0 24 24"
           fill="none"
-          stroke={isSelected ? "#2563eb" : "#64748b"}
+          stroke={iconStroke}
           strokeWidth="1.8"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -650,7 +659,7 @@ function SettingsNavCard({
         style={{
           fontSize: "13px",
           fontWeight: 600,
-          color: isSelected ? "#1d4ed8" : "#0f172a",
+          color: isSelected ? tokens.accentText : tokens.textPrimary,
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -1376,6 +1385,8 @@ export default function BuilderDrawerPanel({
     return (asset.category as string) === (selectedAssetCategory as string);
   });
 
+  const { isDark, tokens } = useAdminTheme();
+
   return (
     <div
       className="builder-drawer-root"
@@ -1383,8 +1394,9 @@ export default function BuilderDrawerPanel({
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        background: "#ffffff",
+        background: tokens.surfaceBg,
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        transition: "background 0.2s ease",
       }}
     >
       <style>{`
@@ -1407,7 +1419,7 @@ export default function BuilderDrawerPanel({
         .builder-drawer-root,
         .builder-drawer-root * {
           scrollbar-width: thin;
-          scrollbar-color: #e9edf2 transparent;
+          scrollbar-color: ${isDark ? "#30363d transparent" : "#e9edf2 transparent"};
         }
 
         .builder-drawer-root *::-webkit-scrollbar {
@@ -1420,17 +1432,17 @@ export default function BuilderDrawerPanel({
         }
 
         .builder-drawer-root *::-webkit-scrollbar-thumb {
-          background: #e9edf2;
+          background: ${isDark ? "#30363d" : "#e9edf2"};
           border-radius: 9999px;
           transition: background-color 0.15s ease;
         }
 
         .builder-drawer-root *::-webkit-scrollbar-thumb:hover {
-          background: #dde3ec;
+          background: ${isDark ? "#484f58" : "#dde3ec"};
         }
 
         .builder-drawer-root *::-webkit-scrollbar-thumb:active {
-          background: #dde3ec;
+          background: ${isDark ? "#484f58" : "#dde3ec"};
         }
       `}</style>
       <div
@@ -1439,17 +1451,18 @@ export default function BuilderDrawerPanel({
           minHeight: "44px",
           maxHeight: "44px",
           padding: "0 16px",
-          borderBottom: "1px solid rgba(15,23,42,0.06)",
+          borderBottom: `1px solid ${tokens.border}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           fontSize: 11.5,
           fontWeight: 700,
           letterSpacing: "0.05em",
-          color: "#64748b",
+          color: tokens.textSecondary,
           textTransform: "uppercase",
           flexShrink: 0,
           boxSizing: "border-box",
+          transition: "border-color 0.2s ease, color 0.2s ease",
         }}
       >
         <span style={{ lineHeight: "44px", display: "inline-block" }}>{title}</span>
@@ -1484,8 +1497,8 @@ export default function BuilderDrawerPanel({
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                background: "#edf2f7",
-                border: "1px solid rgba(15, 23, 42, 0.08)",
+                background: isDark ? tokens.elevatedSurfaceBg : "#edf2f7",
+                border: `1px solid ${tokens.border}`,
                 borderRadius: "7px",
                 padding: "1.5px",
                 gap: "2px",
@@ -1507,8 +1520,8 @@ export default function BuilderDrawerPanel({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: !isOnline ? "#ffffff" : "transparent",
-                  color: !isOnline ? "#f97316" : "#64748b",
+                  background: !isOnline ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                  color: !isOnline ? "#f97316" : tokens.textSecondary,
                   boxShadow: !isOnline ? "0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.06)" : "none",
                   transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
@@ -1530,8 +1543,8 @@ export default function BuilderDrawerPanel({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: isOnline ? "#ffffff" : "transparent",
-                  color: isOnline ? "#2563eb" : "#64748b",
+                  background: isOnline ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                  color: isOnline ? tokens.accent : tokens.textSecondary,
                   boxShadow: isOnline ? "0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.06)" : "none",
                   transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
@@ -1553,11 +1566,13 @@ export default function BuilderDrawerPanel({
               cursor: "pointer",
               fontSize: 18,
               lineHeight: 1,
-              color: "#94a3b8",
+              color: tokens.textSecondary,
               display: "grid",
               placeItems: "center",
               width: "24px",
               height: "24px",
+              borderRadius: "6px",
+              transition: "color 0.15s ease",
             }}
           >
             ×
@@ -1578,7 +1593,7 @@ export default function BuilderDrawerPanel({
         style={{
           padding: "12px",
           fontSize: 12,
-          color: "#4b5563",
+          color: tokens.textSecondary,
           overflowY: "auto",
           flex: 1,
           minHeight: 0,
@@ -1596,7 +1611,9 @@ export default function BuilderDrawerPanel({
                   style={{
                     height: "54px",
                     borderRadius: "10px",
-                    background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)",
+                    background: isDark
+                      ? "linear-gradient(90deg, #21262d 25%, #30363d 50%, #21262d 75%)"
+                      : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)",
                     backgroundSize: "200% 100%",
                     animation: "drawerSkeletonShimmer 1.4s infinite linear",
                   }}
@@ -1614,9 +1631,9 @@ export default function BuilderDrawerPanel({
               style={{
                 padding: "12px",
                 borderRadius: "10px",
-                background: "#ffffff",
-                border: "1px solid rgba(15,23,42,0.08)",
-                color: "#64748b",
+                background: tokens.elevatedSurfaceBg,
+                border: `1px solid ${tokens.border}`,
+                color: tokens.textSecondary,
                 fontSize: 13,
               }}
             >
@@ -1665,10 +1682,10 @@ export default function BuilderDrawerPanel({
                 display: "grid",
                 gridTemplateColumns: "repeat(4, 1fr)",
                 gap: "2px",
-                background: "#f1f5f9",
+                background: tokens.elevatedSurfaceBg,
                 padding: "3px",
                 borderRadius: "10px",
-                border: "1px solid rgba(226, 232, 240, 0.9)",
+                border: `1px solid ${tokens.border}`,
               }}
             >
               {[
@@ -1692,10 +1709,10 @@ export default function BuilderDrawerPanel({
                       padding: "7px 2px",
                       borderRadius: "7px",
                       border: "none",
-                      background: isActive ? "#ffffff" : "transparent",
-                      color: isActive ? "#1d4ed8" : "#64748b",
+                      background: isActive ? tokens.surfaceBg : "transparent",
+                      color: isActive ? tokens.accentText : tokens.textSecondary,
                       boxShadow: isActive
-                        ? "0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04)"
+                        ? (isDark ? "0 1px 3px rgba(0, 0, 0, 0.35)" : "0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04)")
                         : "none",
                       fontSize: "12px",
                       fontWeight: isActive ? 600 : 500,
@@ -1716,9 +1733,9 @@ export default function BuilderDrawerPanel({
                 style={{
                   padding: "8px 12px",
                   borderRadius: "8px",
-                  background: "rgba(37,99,235,0.06)",
-                  border: "1px solid rgba(37,99,235,0.15)",
-                  color: "#2563eb",
+                  background: tokens.accentBg,
+                  border: `1px solid ${tokens.accentBorder}`,
+                  color: tokens.accentText,
                   fontSize: "12px",
                   fontWeight: 600,
                   display: "flex",
@@ -1729,7 +1746,7 @@ export default function BuilderDrawerPanel({
                 <span>Carousel Status</span>
                 <span
                   style={{
-                    background: "#2563eb",
+                    background: tokens.accent,
                     color: "#ffffff",
                     padding: "2px 8px",
                     borderRadius: "999px",
@@ -1775,14 +1792,14 @@ export default function BuilderDrawerPanel({
                           padding: "10px 12px",
                           borderRadius: "10px",
                           border: isCurrentlyActive
-                            ? "1.5px solid #2563eb"
-                            : "1px solid rgba(15,23,42,0.08)",
+                            ? `1.5px solid ${tokens.accent}`
+                            : `1px solid ${tokens.border}`,
                           background: isCurrentlyActive
-                            ? "rgba(37,99,235,0.02)"
-                            : "#ffffff",
+                            ? tokens.accentBg
+                            : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
                           boxShadow: isCurrentlyActive
-                            ? "0 2px 8px rgba(37,99,235,0.08)"
-                            : "0 1px 3px rgba(15,23,42,0.03)",
+                            ? (isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 8px rgba(37,99,235,0.08)")
+                            : (isDark ? "none" : "0 1px 3px rgba(15,23,42,0.03)"),
                           display: "flex",
                           flexDirection: "column",
                           gap: "8px",
@@ -1805,7 +1822,7 @@ export default function BuilderDrawerPanel({
                           style={{
                             fontSize: "12.5px",
                             fontWeight: 700,
-                            color: isCurrentlyActive ? "#1d4ed8" : "#0f172a",
+                            color: isCurrentlyActive ? tokens.accentText : tokens.textPrimary,
                             lineHeight: 1.2,
                           }}
                         >
@@ -1820,9 +1837,9 @@ export default function BuilderDrawerPanel({
                                 fontWeight: 700,
                                 padding: "2px 7px",
                                 borderRadius: "999px",
-                                background: "#eff6ff",
-                                color: "#2563eb",
-                                border: "1px solid #bfdbfe",
+                                background: tokens.accentBg,
+                                color: tokens.accentText,
+                                border: `1px solid ${tokens.accentBorder}`,
                                 whiteSpace: "nowrap",
                               }}
                             >
@@ -1836,9 +1853,9 @@ export default function BuilderDrawerPanel({
                                 fontWeight: 700,
                                 padding: "2px 7px",
                                 borderRadius: "999px",
-                                background: "#ecfdf5",
-                                color: "#059669",
-                                border: "1px solid #a7f3d0",
+                                background: tokens.successBg,
+                                color: tokens.success,
+                                border: `1px solid ${isDark ? "rgba(16, 185, 129, 0.3)" : "#a7f3d0"}`,
                                 whiteSpace: "nowrap",
                               }}
                             >
@@ -1851,7 +1868,7 @@ export default function BuilderDrawerPanel({
                       <div
                         style={{
                           fontSize: "10.5px",
-                          color: "#64748b",
+                          color: tokens.textSecondary,
                           lineHeight: 1.35,
                           width: "100%",
                         }}
@@ -1866,8 +1883,8 @@ export default function BuilderDrawerPanel({
                       style={{
                         padding: "5px",
                         borderRadius: "8px",
-                        background: "#f8fafc",
-                        border: "1px solid rgba(15,23,42,0.06)",
+                        background: isDark ? tokens.surfaceBg : "#f8fafc",
+                        border: `1px solid ${tokens.border}`,
                         overflow: "hidden",
                       }}
                     >
@@ -1882,13 +1899,13 @@ export default function BuilderDrawerPanel({
                       style={{
                         padding: "6px 10px",
                         borderRadius: "6px",
-                        border: isCurrentlyActive ? "1px solid #e2e8f0" : "none",
+                        border: isCurrentlyActive ? `1px solid ${tokens.border}` : "none",
                         background: isJustApplied
-                          ? "#16a34a"
+                          ? tokens.success
                           : isCurrentlyActive
-                            ? "#f8fafc"
-                            : "#2563eb",
-                        color: isCurrentlyActive ? "#475569" : "#ffffff",
+                            ? (isDark ? tokens.surfaceBg : "#f8fafc")
+                            : tokens.accent,
+                        color: isCurrentlyActive ? tokens.textSecondary : "#ffffff",
                         fontSize: "11px",
                         fontWeight: 700,
                         cursor:
@@ -1954,7 +1971,7 @@ export default function BuilderDrawerPanel({
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(15, 23, 42, 0.45)",
+            background: isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(15, 23, 42, 0.45)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1968,17 +1985,17 @@ export default function BuilderDrawerPanel({
             style={{
               width: "100%",
               maxWidth: "360px",
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "16px",
               padding: "20px",
-              boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.22)",
-              border: "1px solid rgba(226, 232, 240, 0.9)",
+              boxShadow: tokens.shadow,
+              border: `1px solid ${tokens.border}`,
               display: "flex",
               flexDirection: "column",
             }}
           >
             {deleteCheckLoading ? (
-              <div style={{ padding: "16px 0", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+              <div style={{ padding: "16px 0", textAlign: "center", color: tokens.textSecondary, fontSize: "13px" }}>
                 Checking store activity...
               </div>
             ) : deleteCheckData && !deleteCheckData.can_delete ? (
@@ -1988,7 +2005,7 @@ export default function BuilderDrawerPanel({
                     margin: "0 0 6px 0",
                     fontSize: "15px",
                     fontWeight: 700,
-                    color: "#dc2626",
+                    color: tokens.danger,
                   }}
                 >
                   Cannot Delete Website
@@ -1998,22 +2015,22 @@ export default function BuilderDrawerPanel({
                   style={{
                     margin: "0 0 12px 0",
                     fontSize: "13px",
-                    color: "#475569",
+                    color: tokens.textSecondary,
                     lineHeight: 1.45,
                   }}
                 >
-                  <strong>"{deleteSiteModal.brandName}"</strong> has active uncleared customer transactions:
+                  <strong style={{ color: tokens.textPrimary }}>"{deleteSiteModal.brandName}"</strong> has active uncleared customer transactions:
                 </p>
 
                 <div
                   style={{
-                    background: "#fef2f2",
-                    border: "1px solid #fee2e2",
+                    background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                    border: isDark ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid #fee2e2",
                     borderRadius: "10px",
                     padding: "10px 12px",
                     marginBottom: "16px",
                     fontSize: "12px",
-                    color: "#991b1b",
+                    color: isDark ? "#fca5a5" : "#991b1b",
                     display: "flex",
                     flexDirection: "column",
                     gap: "4px",
@@ -2037,9 +2054,9 @@ export default function BuilderDrawerPanel({
                     style={{
                       padding: "7px 16px",
                       borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
-                      color: "#334155",
+                      border: `1px solid ${tokens.border}`,
+                      background: tokens.elevatedSurfaceBg,
+                      color: tokens.textPrimary,
                       fontSize: "13px",
                       fontWeight: 600,
                       cursor: "pointer",
@@ -2056,7 +2073,7 @@ export default function BuilderDrawerPanel({
                     margin: "0 0 6px 0",
                     fontSize: "15px",
                     fontWeight: 700,
-                    color: "#0f172a",
+                    color: tokens.textPrimary,
                   }}
                 >
                   Delete website?
@@ -2066,11 +2083,11 @@ export default function BuilderDrawerPanel({
                   style={{
                     margin: "0 0 16px 0",
                     fontSize: "13px",
-                    color: "#64748b",
+                    color: tokens.textSecondary,
                     lineHeight: 1.45,
                   }}
                 >
-                  Are you sure you want to delete <strong>"{deleteSiteModal.brandName}"</strong>? All associated products, carts, inventory records, and order history for this store will be <strong style={{ color: "#ef4444" }}>permanently purged</strong>.
+                  Are you sure you want to delete <strong style={{ color: tokens.textPrimary }}>"{deleteSiteModal.brandName}"</strong>? All associated products, carts, inventory records, and order history for this store will be <strong style={{ color: tokens.danger }}>permanently purged</strong>.
                 </p>
 
                 <div
@@ -2086,9 +2103,9 @@ export default function BuilderDrawerPanel({
                     style={{
                       padding: "7px 14px",
                       borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
-                      color: "#334155",
+                      border: `1px solid ${tokens.border}`,
+                      background: tokens.elevatedSurfaceBg,
+                      color: tokens.textPrimary,
                       fontSize: "13px",
                       fontWeight: 600,
                       cursor: "pointer",
@@ -2109,7 +2126,7 @@ export default function BuilderDrawerPanel({
                       padding: "7px 14px",
                       borderRadius: "8px",
                       border: "none",
-                      background: "#ef4444",
+                      background: tokens.danger,
                       color: "#ffffff",
                       fontSize: "13px",
                       fontWeight: 600,

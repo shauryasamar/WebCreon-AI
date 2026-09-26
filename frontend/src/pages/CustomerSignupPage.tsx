@@ -146,23 +146,6 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
           });
           gisInitializedRef.current = true;
         }
-
-        const btnContainer = document.getElementById("customer-signup-google-btn");
-        const fallbackBtn = document.getElementById("customer-signup-google-fallback");
-        if (btnContainer) {
-          (window as any).google.accounts.id.renderButton(btnContainer, {
-            theme: "outline",
-            size: "large",
-            width: isMobile ? 320 : 380,
-            text: "signup_with",
-            shape: "rectangular",
-          });
-          setTimeout(() => {
-            if (fallbackBtn && btnContainer.children.length > 0) {
-              fallbackBtn.style.display = "none";
-            }
-          }, 100);
-        }
       }
     } catch (e) {
       console.warn("GIS notice:", e);

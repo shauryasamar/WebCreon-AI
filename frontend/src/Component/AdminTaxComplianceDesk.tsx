@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
+import { AdminCheckbox } from "./AdminProducts";
 import { GlassToast } from "./GlassToast";
 import { Pagination } from "./Pagination";
 
@@ -93,6 +95,7 @@ export const AdminTaxComplianceDesk: React.FC<{
   const { siteId: paramSiteId } = useParams<{ siteId: string }>();
   const siteId = propSiteId || paramSiteId || (typeof window !== "undefined" ? localStorage.getItem("last_active_site_id") || "" : "");
   const { isOwner, hasPermission } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"kyc" | "gstr8" | "form26q">("kyc");
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
@@ -417,25 +420,25 @@ export const AdminTaxComplianceDesk: React.FC<{
     width: "100%",
     padding: "9px 12px",
     borderRadius: "7px",
-    border: "1px solid #cbd5e1",
+    border: `1px solid ${tokens.border}`,
     fontSize: "13px",
-    color: "#0f172a",
-    background: "#ffffff",
+    color: tokens.textPrimary,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+    colorScheme: isDark ? "dark" : "light",
     boxSizing: "border-box",
     outline: "none",
-    transition: "border-color 0.15s ease",
   };
 
   const labelStyle: React.CSSProperties = {
     display: "block",
     fontSize: "12px",
     fontWeight: 600,
-    color: "#475569",
+    color: tokens.textSecondary,
     marginBottom: "5px",
   };
 
   return (
-    <div style={{ width: "100%", color: "#0f172a", fontFamily: "inherit" }}>
+    <div style={{ width: "100%", color: tokens.textPrimary, fontFamily: "inherit" }}>
       {toast && <GlassToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Sub-Tab Navigation Bar Matching Standard Charge style */}
@@ -444,7 +447,7 @@ export const AdminTaxComplianceDesk: React.FC<{
           display: "flex",
           flexWrap: "wrap",
           gap: "4px",
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: `1px solid ${tokens.border}`,
           marginBottom: "16px",
         }}
       >
@@ -457,9 +460,9 @@ export const AdminTaxComplianceDesk: React.FC<{
             gap: "6px",
             padding: "8px 12px",
             border: "none",
-            borderBottom: activeTab === "kyc" ? "2px solid #2563eb" : "2px solid transparent",
+            borderBottom: activeTab === "kyc" ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : "2px solid transparent",
             background: "transparent",
-            color: activeTab === "kyc" ? "#2563eb" : "#64748b",
+            color: activeTab === "kyc" ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
             fontSize: "13px",
             fontWeight: 600,
             cursor: "pointer",
@@ -474,7 +477,7 @@ export const AdminTaxComplianceDesk: React.FC<{
               height: "6px",
               minWidth: "6px",
               borderRadius: "999px",
-              background: taxProfile?.is_pan_verified ? "#16a34a" : "#cbd5e1",
+              background: taxProfile?.is_pan_verified ? "#16a34a" : (isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1"),
               display: "inline-block",
               transition: "background 0.2s ease",
             }}
@@ -491,9 +494,9 @@ export const AdminTaxComplianceDesk: React.FC<{
             gap: "6px",
             padding: "8px 12px",
             border: "none",
-            borderBottom: activeTab === "gstr8" ? "2px solid #2563eb" : "2px solid transparent",
+            borderBottom: activeTab === "gstr8" ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : "2px solid transparent",
             background: "transparent",
-            color: activeTab === "gstr8" ? "#2563eb" : "#64748b",
+            color: activeTab === "gstr8" ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
             fontSize: "13px",
             fontWeight: 600,
             cursor: "pointer",
@@ -513,9 +516,9 @@ export const AdminTaxComplianceDesk: React.FC<{
             gap: "6px",
             padding: "8px 12px",
             border: "none",
-            borderBottom: activeTab === "form26q" ? "2px solid #2563eb" : "2px solid transparent",
+            borderBottom: activeTab === "form26q" ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : "2px solid transparent",
             background: "transparent",
-            color: activeTab === "form26q" ? "#2563eb" : "#64748b",
+            color: activeTab === "form26q" ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
             fontSize: "13px",
             fontWeight: 600,
             cursor: "pointer",
@@ -535,9 +538,9 @@ export const AdminTaxComplianceDesk: React.FC<{
             id="tax-kyc-form"
             onSubmit={handleSaveKYC}
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "10px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
               padding: "22px 24px",
               boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
               display: "flex",
@@ -547,7 +550,7 @@ export const AdminTaxComplianceDesk: React.FC<{
           >
             {/* Section 1: Business Details */}
             <div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "14px" }}>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "14px" }}>
                 Business Registration & Tax Details
               </div>
 
@@ -582,13 +585,13 @@ export const AdminTaxComplianceDesk: React.FC<{
                     onChange={(e) => setFormEntityType(e.target.value)}
                     style={inputStyle}
                   >
-                    <option value="proprietorship">Sole Proprietorship</option>
-                    <option value="individual">Individual</option>
-                    <option value="partnership">Partnership Firm</option>
-                    <option value="llp">Limited Liability Partnership (LLP)</option>
-                    <option value="company">Private / Public Limited Company</option>
-                    <option value="huf">Hindu Undivided Family (HUF)</option>
-                    <option value="trust_society">Trust / Society</option>
+                    <option value="proprietorship" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Sole Proprietorship</option>
+                    <option value="individual" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Individual</option>
+                    <option value="partnership" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Partnership Firm</option>
+                    <option value="llp" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Limited Liability Partnership (LLP)</option>
+                    <option value="company" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Private / Public Limited Company</option>
+                    <option value="huf" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Hindu Undivided Family (HUF)</option>
+                    <option value="trust_society" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Trust / Society</option>
                   </select>
                 </div>
 
@@ -604,9 +607,9 @@ export const AdminTaxComplianceDesk: React.FC<{
                     }}
                     style={inputStyle}
                   >
-                    <option value="regular">Regular GST Registered</option>
-                    <option value="composition">Composition Scheme Dealer (Section 10)</option>
-                    <option value="unregistered">Unregistered (Exempted Threshold)</option>
+                    <option value="regular" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Regular GST Registered</option>
+                    <option value="composition" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Composition Scheme Dealer (Section 10)</option>
+                    <option value="unregistered" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Unregistered (Exempted Threshold)</option>
                   </select>
                 </div>
 
@@ -679,9 +682,8 @@ export const AdminTaxComplianceDesk: React.FC<{
               </div>
 
               <div style={{ marginTop: "14px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12.5px", color: "#334155" }}>
-                  <input
-                    type="checkbox"
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12.5px", color: tokens.textSecondary }}>
+                  <AdminCheckbox
                     checked={formIsComposition}
                     onChange={(e) => {
                       const checked = e.target.checked;
@@ -697,14 +699,14 @@ export const AdminTaxComplianceDesk: React.FC<{
               </div>
             </div>
 
-            <div style={{ height: "1px", background: "#f1f5f9" }} />
+            <div style={{ height: "1px", background: tokens.elevatedSurfaceBg }} />
 
             {/* Section 2: Store Default Tax & HSN Settings */}
             <div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "4px" }}>
                 Store Default HSN Code (Optional)
               </div>
-              <p style={{ margin: "0 0 12px 0", fontSize: "12.5px", color: "#64748b" }}>
+              <p style={{ margin: "0 0 12px 0", fontSize: "12.5px", color: tokens.textSecondary }}>
                 Products without an individual HSN code will inherit this code. The statutory GST rate (e.g. 5%, 12%, 18%) is automatically derived by the tax engine.
               </p>
 
@@ -741,9 +743,9 @@ export const AdminTaxComplianceDesk: React.FC<{
             return (
               <div
                 style={{
-                  background: "#ffffff",
+                  background: tokens.surfaceBg,
                   borderRadius: "14px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "18px 20px",
                   boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
                   display: "flex",
@@ -768,8 +770,8 @@ export const AdminTaxComplianceDesk: React.FC<{
                         width: "34px",
                         height: "34px",
                         borderRadius: "8px",
-                        background: "#ffffff",
-                        border: "1px solid #e2e8f0",
+                        background: tokens.surfaceBg,
+                        border: `1px solid ${tokens.border}`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -786,10 +788,10 @@ export const AdminTaxComplianceDesk: React.FC<{
                       </svg>
                     </div>
                     <div>
-                      <div style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.01em" }}>
+                      <div style={{ fontSize: "16px", fontWeight: 800, color: tokens.textPrimary, letterSpacing: "-0.01em" }}>
                         GSTR-8 Section 52 Summary
                       </div>
-                      <div style={{ fontSize: "12px", color: "#64748b" }}>
+                      <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
                         Statutory TCS return and order schedule
                       </div>
                     </div>
@@ -806,17 +808,18 @@ export const AdminTaxComplianceDesk: React.FC<{
                       style={{
                         padding: "6px 10px",
                         borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
+                        border: `1px solid ${tokens.border}`,
                         fontSize: "12px",
                         fontWeight: 600,
-                        color: "#0f172a",
-                        background: "#ffffff",
+                        color: tokens.textPrimary,
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        colorScheme: isDark ? "dark" : "light",
                         outline: "none",
                         cursor: "pointer",
                       }}
                     >
-                      <option value="2026-2027">FY 2026-27</option>
-                      <option value="2025-2026">FY 2025-26</option>
+                      <option value="2026-2027" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>FY 2026-27</option>
+                      <option value="2025-2026" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>FY 2025-26</option>
                     </select>
 
                     <select
@@ -828,28 +831,29 @@ export const AdminTaxComplianceDesk: React.FC<{
                       style={{
                         padding: "6px 10px",
                         borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
+                        border: `1px solid ${tokens.border}`,
                         fontSize: "12px",
                         fontWeight: 600,
-                        color: "#0f172a",
-                        background: "#ffffff",
+                        color: tokens.textPrimary,
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        colorScheme: isDark ? "dark" : "light",
                         outline: "none",
                         cursor: "pointer",
                       }}
                     >
-                      <option value="">All Months (Cumulative)</option>
-                      <option value="4">Apr</option>
-                      <option value="5">May</option>
-                      <option value="6">Jun</option>
-                      <option value="7">Jul</option>
-                      <option value="8">Aug</option>
-                      <option value="9">Sep</option>
-                      <option value="10">Oct</option>
-                      <option value="11">Nov</option>
-                      <option value="12">Dec</option>
-                      <option value="1">Jan</option>
-                      <option value="2">Feb</option>
-                      <option value="3">Mar</option>
+                      <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Months (Cumulative)</option>
+                      <option value="4" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Apr</option>
+                      <option value="5" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>May</option>
+                      <option value="6" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Jun</option>
+                      <option value="7" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Jul</option>
+                      <option value="8" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Aug</option>
+                      <option value="9" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Sep</option>
+                      <option value="10" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Oct</option>
+                      <option value="11" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Nov</option>
+                      <option value="12" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Dec</option>
+                      <option value="1" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Jan</option>
+                      <option value="2" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Feb</option>
+                      <option value="3" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Mar</option>
                     </select>
 
                     <button
@@ -859,9 +863,9 @@ export const AdminTaxComplianceDesk: React.FC<{
                         display: "inline-flex",
                         alignItems: "center",
                         gap: "5px",
-                        background: "#ffffff",
-                        color: "#16a34a",
-                        border: "1px solid #86efac",
+                        background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4",
+                        color: isDark ? "#4ade80" : "#166534",
+                        border: isDark ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid #bbf7d0",
                         borderRadius: "6px",
                         padding: "6px 12px",
                         fontSize: "12px",
@@ -893,22 +897,22 @@ export const AdminTaxComplianceDesk: React.FC<{
                   {/* Card 1: Gross Supplies */}
                   <div
                     style={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
+                      background: tokens.surfaceBg,
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "8px",
                       padding: "10px 12px",
                       minWidth: 0,
                       overflow: "hidden",
                     }}
                   >
-                    <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       Gross Supplies (Taxable)
                     </div>
                     <div
                       style={{
                         fontSize: "clamp(15px, 1.5vw, 19px)",
                         fontWeight: 800,
-                        color: "#0f172a",
+                        color: tokens.textPrimary,
                         letterSpacing: "-0.02em",
                         margin: "3px 0 1px 0",
                         whiteSpace: "nowrap",
@@ -920,7 +924,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                     >
                       ₹{formatINR(gross)}
                     </div>
-                    <div style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: "11px", color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       Taxable base across orders
                     </div>
                   </div>
@@ -928,15 +932,15 @@ export const AdminTaxComplianceDesk: React.FC<{
                   {/* Card 2: Returned / Cancelled */}
                   <div
                     style={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
+                      background: tokens.surfaceBg,
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "8px",
                       padding: "10px 12px",
                       minWidth: 0,
                       overflow: "hidden",
                     }}
                   >
-                    <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       Returned / Cancelled
                     </div>
                     <div
@@ -955,7 +959,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                     >
                       ₹{formatINR(returned)}
                     </div>
-                    <div style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: "11px", color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       Reversed credit notes
                     </div>
                   </div>
@@ -963,15 +967,15 @@ export const AdminTaxComplianceDesk: React.FC<{
                   {/* Card 3: Net Supplies Liable to TCS */}
                   <div
                     style={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
+                      background: tokens.surfaceBg,
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "8px",
                       padding: "10px 12px",
                       minWidth: 0,
                       overflow: "hidden",
                     }}
                   >
-                    <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       Net Supplies (TCS Base)
                     </div>
                     <div
@@ -990,7 +994,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                     >
                       ₹{formatINR(net)}
                     </div>
-                    <div style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: "11px", color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       Gross minus returns
                     </div>
                   </div>
@@ -998,8 +1002,8 @@ export const AdminTaxComplianceDesk: React.FC<{
                   {/* Card 4: Total Section 52 TCS */}
                   <div
                     style={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
+                      background: tokens.surfaceBg,
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "8px",
                       padding: "10px 12px",
                       minWidth: 0,
@@ -1007,7 +1011,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", whiteSpace: "nowrap", overflow: "hidden" }}>
-                      <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         Section 52 TCS
                       </span>
                       <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 5px", borderRadius: "999px", background: "transparent", border: "1px solid #86efac", color: "#16a34a", whiteSpace: "nowrap" }}>
@@ -1030,7 +1034,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                     >
                       ₹{formatINR(tcs)}
                     </div>
-                    <div style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: "11px", color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {igstTcs > 0 ? `IGST ₹${formatINR(igstTcs)}` : `CGST ₹${formatINR(cgstTcs)} + SGST ₹${formatINR(sgstTcs)}`}
                     </div>
                   </div>
@@ -1039,8 +1043,8 @@ export const AdminTaxComplianceDesk: React.FC<{
                 {/* 3. Streamlined Metadata Strip */}
                 <div
                   style={{
-                    background: "#ffffff",
-                    border: "1px solid #e2e8f0",
+                    background: tokens.surfaceBg,
+                    border: `1px solid ${tokens.border}`,
                     borderRadius: "8px",
                     padding: "7px 12px",
                     display: "flex",
@@ -1052,29 +1056,29 @@ export const AdminTaxComplianceDesk: React.FC<{
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, overflow: "hidden" }}>
-                    <span style={{ color: "#64748b", whiteSpace: "nowrap" }}>GSTIN:</span>
+                    <span style={{ color: tokens.textSecondary, whiteSpace: "nowrap" }}>GSTIN:</span>
                     <strong style={{ fontFamily: "monospace", color: "#2563eb", letterSpacing: "0.03em", whiteSpace: "nowrap" }}>{activeGstin}</strong>
-                    <span style={{ color: "#cbd5e1" }}>•</span>
-                    <span style={{ fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{activeLegalName}</span>
+                    <span style={{ color: isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1" }}>•</span>
+                    <span style={{ fontWeight: 600, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{activeLegalName}</span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#64748b", flexShrink: 0 }}>
-                    <span style={{ whiteSpace: "nowrap" }}>State: <strong style={{ color: "#0f172a" }}>{formStateCode || "27"}</strong></span>
-                    <span style={{ color: "#cbd5e1" }}>•</span>
-                    <span style={{ whiteSpace: "nowrap" }}>Period: <strong style={{ color: "#0f172a" }}>{gstr8Month !== "" ? `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(gstr8Month)-1]} (${gstr8FY})` : `${gstr8FY} (Cumulative)`}</strong></span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: tokens.textSecondary, flexShrink: 0 }}>
+                    <span style={{ whiteSpace: "nowrap" }}>State: <strong style={{ color: tokens.textPrimary }}>{formStateCode || "27"}</strong></span>
+                    <span style={{ color: isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1" }}>•</span>
+                    <span style={{ whiteSpace: "nowrap" }}>Period: <strong style={{ color: tokens.textPrimary }}>{gstr8Month !== "" ? `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(gstr8Month)-1]} (${gstr8FY})` : `${gstr8FY} (Cumulative)`}</strong></span>
                   </div>
                 </div>
 
-                <div style={{ height: "1px", background: "#f1f5f9" }} />
+                <div style={{ height: "1px", background: tokens.elevatedSurfaceBg }} />
 
                 {/* 5. Section 52 GST-TCS Transaction Schedule (Order-by-Order) */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
-                    <div style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
+                    <div style={{ fontSize: "11.5px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
                       Section 52 GST-TCS Transaction Schedule (Order-by-Order)
                     </div>
                     {gstr8Data?.total_orders !== undefined && (
-                      <div style={{ fontSize: "12px", color: "#64748b", whiteSpace: "nowrap" }}>
-                        Total Orders: <strong style={{ color: "#0f172a" }}>{gstr8Data.total_orders}</strong>
+                      <div style={{ fontSize: "12px", color: tokens.textSecondary, whiteSpace: "nowrap" }}>
+                        Total Orders: <strong style={{ color: tokens.textPrimary }}>{gstr8Data.total_orders}</strong>
                       </div>
                     )}
                   </div>
@@ -1082,7 +1086,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                   <div style={{ overflowX: "hidden", width: "100%" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11.5px", textAlign: "left" }}>
                       <thead>
-                        <tr style={{ borderBottom: "1px solid #e2e8f0", color: "#64748b", background: "#ffffff" }}>
+                        <tr style={{ borderBottom: `1px solid ${tokens.border}`, color: tokens.textSecondary, background: tokens.surfaceBg }}>
                           <th style={{ padding: "7px 6px", fontWeight: 600, whiteSpace: "nowrap" }}>Order #</th>
                           <th style={{ padding: "7px 6px", fontWeight: 600, whiteSpace: "nowrap" }}>Date</th>
                           <th style={{ padding: "7px 6px", fontWeight: 600, whiteSpace: "nowrap" }}>Mode</th>
@@ -1098,17 +1102,17 @@ export const AdminTaxComplianceDesk: React.FC<{
                       <tbody>
                         {loadingGstr8 ? (
                           <tr>
-                            <td colSpan={10} style={{ padding: "24px", textAlign: "center", color: "#64748b", whiteSpace: "nowrap" }}>
+                            <td colSpan={10} style={{ padding: "24px", textAlign: "center", color: tokens.textSecondary, whiteSpace: "nowrap" }}>
                               Loading Section 52 GST-TCS records...
                             </td>
                           </tr>
                         ) : gstr8Data?.order_schedule && gstr8Data.order_schedule.length > 0 ? (
                           gstr8Data.order_schedule.map((r, idx) => (
-                            <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                            <tr key={idx} style={{ borderBottom: `1px solid ${tokens.border}` }}>
                               <td style={{ padding: "8px 6px", fontFamily: "monospace", fontWeight: 600, color: "#2563eb", whiteSpace: "nowrap" }}>
                                 {r.order_number}
                               </td>
-                              <td style={{ padding: "8px 6px", color: "#64748b", whiteSpace: "nowrap" }}>{r.created_at}</td>
+                              <td style={{ padding: "8px 6px", color: tokens.textSecondary, whiteSpace: "nowrap" }}>{r.created_at}</td>
                               <td style={{ padding: "8px 6px", whiteSpace: "nowrap" }}>
                                 <span
                                   style={{
@@ -1118,7 +1122,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                                     padding: "1px 5px",
                                     borderRadius: "4px",
                                     background: "transparent",
-                                    border: "1px solid #e2e8f0",
+                                    border: `1px solid ${tokens.border}`,
                                     color: r.payment_method.includes("COD") ? "#d97706" : "#2563eb",
                                     whiteSpace: "nowrap",
                                   }}
@@ -1126,22 +1130,22 @@ export const AdminTaxComplianceDesk: React.FC<{
                                   {r.payment_method}
                                 </span>
                               </td>
-                              <td style={{ padding: "8px 6px", textAlign: "right", color: r.is_returned ? "#dc2626" : "#0f172a", fontWeight: 600, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                              <td style={{ padding: "8px 6px", textAlign: "right", color: r.is_returned ? "#dc2626" : tokens.textPrimary, fontWeight: 600, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
                                 {r.is_returned ? `-₹${formatINR(r.taxable_product_value)}` : `₹${formatINR(r.taxable_product_value)}`}
                               </td>
-                              <td style={{ padding: "8px 6px", textAlign: "right", color: "#64748b", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                              <td style={{ padding: "8px 6px", textAlign: "right", color: tokens.textSecondary, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
                                 {r.tcs_rate.toFixed(2)}%
                               </td>
-                              <td style={{ padding: "8px 6px", textAlign: "right", color: "#64748b", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                              <td style={{ padding: "8px 6px", textAlign: "right", color: tokens.textSecondary, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
                                 ₹{formatINR(r.cgst_tcs)}
                               </td>
-                              <td style={{ padding: "8px 6px", textAlign: "right", color: "#64748b", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                              <td style={{ padding: "8px 6px", textAlign: "right", color: tokens.textSecondary, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
                                 ₹{formatINR(r.sgst_tcs)}
                               </td>
-                              <td style={{ padding: "8px 6px", textAlign: "right", color: "#64748b", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                              <td style={{ padding: "8px 6px", textAlign: "right", color: tokens.textSecondary, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
                                 ₹{formatINR(r.igst_tcs)}
                               </td>
-                              <td style={{ padding: "8px 6px", textAlign: "right", fontWeight: 800, color: r.total_tcs > 0 ? "#16a34a" : "#64748b", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                              <td style={{ padding: "8px 6px", textAlign: "right", fontWeight: 800, color: r.total_tcs > 0 ? "#16a34a" : tokens.textSecondary, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
                                 ₹{formatINR(r.total_tcs)}
                               </td>
                               <td style={{ padding: "8px 6px", textAlign: "center", whiteSpace: "nowrap" }}>
@@ -1158,7 +1162,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                                         ? "1px solid #86efac"
                                         : r.status === "reversed"
                                         ? "1px solid #fca5a5"
-                                        : "1px solid #e2e8f0",
+                                        : isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid #e2e8f0",
                                     color:
                                       r.status === "deducted"
                                         ? "#16a34a"
@@ -1180,10 +1184,10 @@ export const AdminTaxComplianceDesk: React.FC<{
                         ) : (
                           <tr>
                             <td colSpan={10} style={{ padding: "32px 20px", textAlign: "center" }}>
-                              <div style={{ fontSize: "13.5px", fontWeight: 600, color: "#0f172a", marginBottom: "4px" }}>
+                              <div style={{ fontSize: "13.5px", fontWeight: 600, color: tokens.textPrimary, marginBottom: "4px" }}>
                                 No Section 52 GST-TCS records for this period
                               </div>
-                              <div style={{ fontSize: "12px", color: "#64748b", maxWidth: "540px", margin: "0 auto" }}>
+                              <div style={{ fontSize: "12px", color: tokens.textSecondary, maxWidth: "540px", margin: "0 auto" }}>
                                 Orders fulfilled during the selected calendar month will be itemized here with exact CGST/SGST/IGST withholdings.
                               </div>
                             </td>
@@ -1225,7 +1229,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                     </div>
                   )}
 
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 6px 0", fontSize: "11px", color: "#94a3b8" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 6px 0", fontSize: "11px", color: tokens.textMuted }}>
                     <span>Statutory monthly ECO return under Section 52 CGST/SGST Act reported via GSTR-8 on the GST Portal.</span>
                     <span>Status: Auto-Reconciled</span>
                   </div>
@@ -1241,9 +1245,9 @@ export const AdminTaxComplianceDesk: React.FC<{
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "14px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
               padding: "18px 20px",
               boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
               display: "flex",
@@ -1267,8 +1271,8 @@ export const AdminTaxComplianceDesk: React.FC<{
                     width: "34px",
                     height: "34px",
                     borderRadius: "8px",
-                    background: "#ffffff",
-                    border: "1px solid #e2e8f0",
+                    background: tokens.surfaceBg,
+                    border: `1px solid ${tokens.border}`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1284,10 +1288,10 @@ export const AdminTaxComplianceDesk: React.FC<{
                   </svg>
                 </div>
                 <div>
-                  <div style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.01em" }}>
+                  <div style={{ fontSize: "16px", fontWeight: 800, color: tokens.textPrimary, letterSpacing: "-0.01em" }}>
                     Form 26Q (TDS) Summary
                   </div>
-                  <div style={{ fontSize: "12px", color: "#64748b" }}>
+                  <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
                     Section 194-O Income-Tax quarterly returns and schedule
                   </div>
                 </div>
@@ -1304,17 +1308,18 @@ export const AdminTaxComplianceDesk: React.FC<{
                   style={{
                     padding: "6px 10px",
                     borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
+                    border: `1px solid ${tokens.border}`,
                     fontSize: "12px",
                     fontWeight: 600,
-                    color: "#0f172a",
-                    background: "#ffffff",
-                    outline: "none",
-                    cursor: "pointer",
+                    color: tokens.textPrimary,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        colorScheme: isDark ? "dark" : "light",
+                        outline: "none",
+                        cursor: "pointer",
                   }}
                 >
-                  <option value="2026-2027">FY 2026-27</option>
-                  <option value="2025-2026">FY 2025-26</option>
+                  <option value="2026-2027" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>FY 2026-27</option>
+                  <option value="2025-2026" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>FY 2025-26</option>
                 </select>
 
                 <select
@@ -1326,16 +1331,17 @@ export const AdminTaxComplianceDesk: React.FC<{
                   style={{
                     padding: "6px 10px",
                     borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
+                    border: `1px solid ${tokens.border}`,
                     fontSize: "12px",
                     fontWeight: 600,
-                    color: "#0f172a",
-                    background: "#ffffff",
-                    outline: "none",
-                    cursor: "pointer",
+                    color: tokens.textPrimary,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        colorScheme: isDark ? "dark" : "light",
+                        outline: "none",
+                        cursor: "pointer",
                   }}
                 >
-                  <option value="">Full Year (Cumulative)</option>
+                  <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Full Year (Cumulative)</option>
                   <option value="1">Q1 (Apr - Jun)</option>
                   <option value="2">Q2 (Jul - Sep)</option>
                   <option value="3">Q3 (Oct - Dec)</option>
@@ -1349,9 +1355,9 @@ export const AdminTaxComplianceDesk: React.FC<{
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "5px",
-                    background: "#ffffff",
-                    color: "#16a34a",
-                    border: "1px solid #86efac",
+                    background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4",
+                        color: isDark ? "#4ade80" : "#166534",
+                        border: isDark ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid #bbf7d0",
                     borderRadius: "6px",
                     padding: "6px 12px",
                     fontSize: "12px",
@@ -1376,15 +1382,15 @@ export const AdminTaxComplianceDesk: React.FC<{
             {sec194O && (
               <div
                 style={{
-                  background: "#ffffff",
+                  background: tokens.surfaceBg,
                   borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "10px 14px",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "8px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>Section 194-O TDS Tracker</span>
+                    <span style={{ fontSize: "12.5px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap" }}>Section 194-O TDS Tracker</span>
                     <span
                       style={{
                         display: "inline-block",
@@ -1409,10 +1415,10 @@ export const AdminTaxComplianceDesk: React.FC<{
                         : "0.00% TDS (Under ₹5L)"}
                     </span>
                   </div>
-                  <div style={{ fontSize: "12px", color: "#64748b", whiteSpace: "nowrap" }}>
-                    FY Sales: <strong style={{ color: "#0f172a", whiteSpace: "nowrap" }}>₹{formatINR(sec194O.cumulative_sales)}</strong>
+                  <div style={{ fontSize: "12px", color: tokens.textSecondary, whiteSpace: "nowrap" }}>
+                    FY Sales: <strong style={{ color: tokens.textPrimary, whiteSpace: "nowrap" }}>₹{formatINR(sec194O.cumulative_sales)}</strong>
                     {sec194O.is_individual_or_huf && sec194O.has_pan !== false && (
-                      <span style={{ color: "#94a3b8", whiteSpace: "nowrap" }}> / ₹5,00,000.00</span>
+                      <span style={{ color: tokens.textMuted, whiteSpace: "nowrap" }}> / ₹5,00,000.00</span>
                     )}
                   </div>
                 </div>
@@ -1423,7 +1429,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                   </div>
                 ) : sec194O.is_individual_or_huf ? (
                   <>
-                    <div style={{ width: "100%", height: "5px", borderRadius: "999px", background: "#e2e8f0", overflow: "hidden", marginBottom: "5px" }}>
+                    <div style={{ width: "100%", height: "5px", borderRadius: "999px", background: isDark ? "rgba(255, 255, 255, 0.1)" : "#e2e8f0", overflow: "hidden", marginBottom: "5px" }}>
                       <div
                         style={{
                           height: "100%",
@@ -1434,7 +1440,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                         }}
                       />
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#64748b" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: tokens.textSecondary }}>
                       <span>
                         {sec194O.is_threshold_exceeded
                           ? "Exemption threshold reached. 0.10% TDS applies on order credits."
@@ -1444,7 +1450,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                     </div>
                   </>
                 ) : (
-                  <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                  <div style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
                     Corporate / LLP Entity (0.10% standard TDS applies).
                   </div>
                 )}
@@ -1462,22 +1468,22 @@ export const AdminTaxComplianceDesk: React.FC<{
               {/* Card 1: Deductee Entity Type */}
               <div
                 style={{
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
+                  background: tokens.surfaceBg,
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "8px",
                   padding: "10px 12px",
                   minWidth: 0,
                   overflow: "hidden",
                 }}
               >
-                <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   Deductee Entity
                 </div>
                 <div
                   style={{
                     fontSize: "clamp(15px, 1.5vw, 19px)",
                     fontWeight: 800,
-                    color: "#0f172a",
+                    color: tokens.textPrimary,
                     letterSpacing: "-0.01em",
                     margin: "3px 0 1px 0",
                     whiteSpace: "nowrap",
@@ -1487,7 +1493,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                 >
                   Sole Proprietor
                 </div>
-                <div style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ fontSize: "11px", color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   Individual PAN ('P')
                 </div>
               </div>
@@ -1495,15 +1501,15 @@ export const AdminTaxComplianceDesk: React.FC<{
               {/* Card 2: Withholding Rate */}
               <div
                 style={{
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
+                  background: tokens.surfaceBg,
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "8px",
                   padding: "10px 12px",
                   minWidth: 0,
                   overflow: "hidden",
                 }}
               >
-                <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   Withholding Rate
                 </div>
                 <div
@@ -1532,15 +1538,15 @@ export const AdminTaxComplianceDesk: React.FC<{
               {/* Card 3: Gross Orders Paid */}
               <div
                 style={{
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
+                  background: tokens.surfaceBg,
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "8px",
                   padding: "10px 12px",
                   minWidth: 0,
                   overflow: "hidden",
                 }}
               >
-                <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   Gross Orders Paid
                 </div>
                 <div
@@ -1559,7 +1565,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                 >
                   ₹{formatINR(tdsData?.total_gross_paid)}
                 </div>
-                <div style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ fontSize: "11px", color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   Total credit value
                 </div>
               </div>
@@ -1567,8 +1573,8 @@ export const AdminTaxComplianceDesk: React.FC<{
               {/* Card 4: Total TDS Deducted */}
               <div
                 style={{
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
+                  background: tokens.surfaceBg,
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "8px",
                   padding: "10px 12px",
                   minWidth: 0,
@@ -1576,10 +1582,10 @@ export const AdminTaxComplianceDesk: React.FC<{
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", whiteSpace: "nowrap", overflow: "hidden" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     Total TDS Deducted
                   </span>
-                  <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 5px", borderRadius: "999px", background: "transparent", border: "1px solid #cbd5e1", color: "#64748b", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 5px", borderRadius: "999px", background: "transparent", border: `1px solid ${tokens.border}`, color: tokens.textSecondary, whiteSpace: "nowrap" }}>
                     NSDL
                   </span>
                 </div>
@@ -1599,7 +1605,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                 >
                   ₹{formatINR(tdsData?.total_tds_deducted)}
                 </div>
-                <div style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ fontSize: "11px", color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   For Form 16A credit
                 </div>
               </div>
@@ -1608,8 +1614,8 @@ export const AdminTaxComplianceDesk: React.FC<{
             {/* 4. Streamlined Metadata Strip */}
             <div
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
+                background: tokens.surfaceBg,
+                border: `1px solid ${tokens.border}`,
                 borderRadius: "8px",
                 padding: "7px 12px",
                 display: "flex",
@@ -1621,31 +1627,31 @@ export const AdminTaxComplianceDesk: React.FC<{
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, overflow: "hidden" }}>
-                <span style={{ color: "#64748b", whiteSpace: "nowrap" }}>PAN:</span>
+                <span style={{ color: tokens.textSecondary, whiteSpace: "nowrap" }}>PAN:</span>
                 <strong style={{ fontFamily: "monospace", color: "#2563eb", letterSpacing: "0.03em", whiteSpace: "nowrap" }}>{formPan || "Not Provided"}</strong>
-                <span style={{ color: "#cbd5e1" }}>•</span>
-                <span style={{ fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formLegalName || "Store Owner"}</span>
+                <span style={{ color: isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1" }}>•</span>
+                <span style={{ fontWeight: 600, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formLegalName || "Store Owner"}</span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#64748b", flexShrink: 0 }}>
-                <span style={{ whiteSpace: "nowrap" }}>Sec: <strong style={{ color: "#0f172a" }}>194-O</strong></span>
-                <span style={{ color: "#cbd5e1" }}>•</span>
-                <span style={{ whiteSpace: "nowrap" }}>TAN: <strong style={{ color: "#0f172a" }}>MUMB12345D</strong></span>
-                <span style={{ color: "#cbd5e1" }}>•</span>
-                <span style={{ whiteSpace: "nowrap" }}>Period: <strong style={{ color: "#0f172a" }}>{tdsQuarter !== "" ? `Q${tdsQuarter} (${tdsFY})` : `${tdsFY} (Full Year)`}</strong></span>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: tokens.textSecondary, flexShrink: 0 }}>
+                <span style={{ whiteSpace: "nowrap" }}>Sec: <strong style={{ color: tokens.textPrimary }}>194-O</strong></span>
+                <span style={{ color: isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1" }}>•</span>
+                <span style={{ whiteSpace: "nowrap" }}>TAN: <strong style={{ color: tokens.textPrimary }}>MUMB12345D</strong></span>
+                <span style={{ color: isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1" }}>•</span>
+                <span style={{ whiteSpace: "nowrap" }}>Period: <strong style={{ color: tokens.textPrimary }}>{tdsQuarter !== "" ? `Q${tdsQuarter} (${tdsFY})` : `${tdsFY} (Full Year)`}</strong></span>
               </div>
             </div>
 
-            <div style={{ height: "1px", background: "#f1f5f9" }} />
+            <div style={{ height: "1px", background: tokens.elevatedSurfaceBg }} />
 
             {/* 6. Order-by-Order Transaction Schedule Table */}
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
-                <div style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: "11.5px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
                   Form 26Q Transaction Schedule (Order-by-Order)
                 </div>
                 {tdsData?.total_records !== undefined && (
-                  <div style={{ fontSize: "12px", color: "#64748b", whiteSpace: "nowrap" }}>
-                    Total Deductions: <strong style={{ color: "#0f172a" }}>{tdsData.total_records}</strong>
+                  <div style={{ fontSize: "12px", color: tokens.textSecondary, whiteSpace: "nowrap" }}>
+                    Total Deductions: <strong style={{ color: tokens.textPrimary }}>{tdsData.total_records}</strong>
                   </div>
                 )}
               </div>
@@ -1653,7 +1659,7 @@ export const AdminTaxComplianceDesk: React.FC<{
               <div style={{ overflowX: "hidden", width: "100%" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11.5px", textAlign: "left" }}>
                   <thead>
-                    <tr style={{ borderBottom: "1px solid #e2e8f0", color: "#64748b", background: "#ffffff" }}>
+                    <tr style={{ borderBottom: `1px solid ${tokens.border}`, color: tokens.textSecondary, background: tokens.surfaceBg }}>
                       <th style={{ padding: "7px 8px", fontWeight: 600, whiteSpace: "nowrap" }}>Order #</th>
                       <th style={{ padding: "7px 8px", fontWeight: 600, whiteSpace: "nowrap" }}>Deductee PAN</th>
                       <th style={{ padding: "7px 8px", fontWeight: 600, whiteSpace: "nowrap" }}>Deductee Name</th>
@@ -1666,27 +1672,27 @@ export const AdminTaxComplianceDesk: React.FC<{
                   <tbody>
                     {loadingTds ? (
                       <tr>
-                        <td colSpan={7} style={{ padding: "24px", textAlign: "center", color: "#64748b", whiteSpace: "nowrap" }}>Loading Form 26Q records...</td>
+                        <td colSpan={7} style={{ padding: "24px", textAlign: "center", color: tokens.textSecondary, whiteSpace: "nowrap" }}>Loading Form 26Q records...</td>
                       </tr>
                     ) : tdsData && tdsData.records.length > 0 ? (
                       tdsData.records.map((r, idx) => (
-                        <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <tr key={idx} style={{ borderBottom: `1px solid ${tokens.border}` }}>
                           <td style={{ padding: "8px 8px", fontFamily: "monospace", fontWeight: 600, color: "#2563eb", whiteSpace: "nowrap" }}>{r.order_number || `ORD-${r.order_id.slice(0, 8).toUpperCase()}`}</td>
-                          <td style={{ padding: "8px 8px", fontFamily: "monospace", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap" }}>{r.merchant_pan}</td>
-                          <td style={{ padding: "8px 8px", color: "#334155", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "160px" }} title={r.merchant_name}>{r.merchant_name}</td>
-                          <td style={{ padding: "8px 8px", color: "#64748b", whiteSpace: "nowrap" }}>{r.payment_date}</td>
-                          <td style={{ padding: "8px 8px", textAlign: "right", color: "#0f172a", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>₹{formatINR(r.gross_amount_paid)}</td>
-                          <td style={{ padding: "8px 8px", textAlign: "right", color: "#64748b", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{r.tds_rate.toFixed(2)}%</td>
+                          <td style={{ padding: "8px 8px", fontFamily: "monospace", fontWeight: 600, color: tokens.textPrimary, whiteSpace: "nowrap" }}>{r.merchant_pan}</td>
+                          <td style={{ padding: "8px 8px", color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "160px" }} title={r.merchant_name}>{r.merchant_name}</td>
+                          <td style={{ padding: "8px 8px", color: tokens.textSecondary, whiteSpace: "nowrap" }}>{r.payment_date}</td>
+                          <td style={{ padding: "8px 8px", textAlign: "right", color: tokens.textPrimary, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>₹{formatINR(r.gross_amount_paid)}</td>
+                          <td style={{ padding: "8px 8px", textAlign: "right", color: tokens.textSecondary, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{r.tds_rate.toFixed(2)}%</td>
                           <td style={{ padding: "8px 8px", textAlign: "right", fontWeight: 800, color: "#16a34a", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>₹{formatINR(r.tds_deducted)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
                         <td colSpan={7} style={{ padding: "32px 20px", textAlign: "center" }}>
-                          <div style={{ fontSize: "13.5px", fontWeight: 600, color: "#0f172a", marginBottom: "4px" }}>
+                          <div style={{ fontSize: "13.5px", fontWeight: 600, color: tokens.textPrimary, marginBottom: "4px" }}>
                             No TDS deductions recorded for this period
                           </div>
-                          <div style={{ fontSize: "12px", color: "#64748b", maxWidth: "540px", margin: "0 auto" }}>
+                          <div style={{ fontSize: "12px", color: tokens.textSecondary, maxWidth: "540px", margin: "0 auto" }}>
                             As an individual / sole proprietor, your payouts are exempt from Section 194-O TDS until cumulative sales cross ₹5,00,000.00. Once crossed, each order deduction will be logged here.
                           </div>
                         </td>
@@ -1728,7 +1734,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                 </div>
               )}
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 6px 0", fontSize: "11px", color: "#94a3b8" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 6px 0", fontSize: "11px", color: tokens.textMuted }}>
                 <span>Income-tax quarterly return filed via TRACES / NSDL Portal under Section 194-O.</span>
                 <span>Status: Auto-Tracked</span>
               </div>

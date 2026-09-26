@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { MarkdownContent } from "../utils/markdownRenderer";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import AccessDeniedView from "./AccessDeniedView";
 import GlassToast from "./GlassToast";
 
@@ -217,8 +218,8 @@ const CopyIcon: React.FC = () => (
 );
 
 const plainCardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
+  background: "var(--admin-surface, #ffffff)",
+  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   borderRadius: "10px",
   boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
 };
@@ -228,18 +229,18 @@ const inputStyle: React.CSSProperties = {
   boxSizing: "border-box",
   padding: "8px 12px",
   borderRadius: "6px",
-  border: "1px solid #cbd5e1",
+  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   fontSize: "13px",
-  color: "#0f172a",
+  color: "var(--admin-text-primary, #0f172a)",
   outline: "none",
-  background: "#ffffff",
+  background: "var(--admin-elevated-surface, #f8fafc)",
 };
 
 const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: "12px",
   fontWeight: 600,
-  color: "#475569",
+  color: "var(--admin-text-secondary, #64748b)",
   marginBottom: "4px",
 };
 
@@ -250,6 +251,7 @@ export interface AdminPagesProps {
 
 const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: propSiteSlug }) => {
   const { hasPermission, isOwner } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
   const canViewPages = isOwner || hasPermission("pages:view");
   const canCreatePages = isOwner || hasPermission("pages:create");
   const canEditPages = isOwner || hasPermission("pages:edit");
@@ -292,9 +294,6 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
   const [pages, setPages] = useState<StorePage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Mode switcher (Pages vs Templates)
-  const [mode, setMode] = useState<"pages" | "templates">("pages");
 
   // Filter states
   const [activeTab, setActiveTab] = useState<"all" | "core" | "custom" | "drafts">("all");
@@ -460,34 +459,6 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
       is_published: true,
       meta_title: "",
       meta_description: "",
-      contact_email: "",
-      contact_phone: "",
-      contact_address: "",
-      contact_hours: "",
-    });
-    setEditorTab("write");
-    setEditorError(null);
-    setIsEditorOpen(true);
-  };
-
-  // Open Create From Prebuilt Template
-  const handleCreateFromTemplate = (templateKey: string) => {
-    if (!canCreatePages) {
-      showToast("You do not have permission to create pages.", "error");
-      return;
-    }
-    const t = PREBUILT_TEMPLATES[templateKey];
-    if (!t) return;
-    setEditingPage(null);
-    setFormData({
-      title: t.title,
-      slug: slugify(t.title),
-      subtitle: t.subtitle,
-      content: t.content,
-      page_type: t.page_type,
-      is_published: true,
-      meta_title: `${t.title} | Brand Store`,
-      meta_description: t.subtitle,
       contact_email: "",
       contact_phone: "",
       contact_address: "",
@@ -782,7 +753,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
   }
 
   return (
-    <div style={{ color: "#0f172a" }}>
+    <div style={{ color: tokens.textPrimary }}>
       {/* GlassToast Notification */}
       {toastMessage && (
         <GlassToast
@@ -795,19 +766,19 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
       {/* Top Header Card (Segmented Mode + Global Search & Filter Button) */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
           padding: "10px 14px",
           marginBottom: "16px",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
           flexDirection: "column",
           gap: "10px",
           position: "relative",
         }}
       >
-        {/* Row 1: Mode Switcher + Global Search + Filter Button */}
+        {/* Row 1: Left Segmented Badge + Right Search/Filter (maxWidth: 520px) */}
         <div
           style={{
             display: "flex",
@@ -817,47 +788,36 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
             gap: "10px",
           }}
         >
-          {/* Mode Pill (Pages & Policies vs Templates Library) */}
+          {/* 1. Left Segmented Control Badge */}
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
-            {(["pages", "templates"] as const).map((value) => {
-              const isActive = mode === value;
-              const label = value === "pages" ? "Pages & Policies" : "Templates Library";
-              return (
-                <button
-                  key={value}
-                  onClick={() => {
-                    setMode(value);
-                  }}
-                  style={{
-                    borderRadius: "6px",
-                    padding: "6px 16px",
-                    border: "none",
-                    background: isActive ? "#ffffff" : "transparent",
-                    color: isActive ? "#0f172a" : "#64748b",
-                    boxShadow: isActive
-                      ? "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
-                      : "none",
-                    fontSize: "13px",
-                    fontWeight: isActive ? 700 : 500,
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
+            <button
+              type="button"
+              style={{
+                borderRadius: "6px",
+                padding: "6px 16px",
+                border: "none",
+                background: isDark ? tokens.surfaceBg : "#ffffff",
+                color: tokens.textPrimary,
+                boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "default",
+                transition: "all 0.15s ease",
+              }}
+            >
+              Pages & Policies
+            </button>
           </div>
 
-          {/* Search Bar & Filter Button Container */}
+          {/* 2. Right: Search Bar & Filter Button Container (maxWidth: 520px) */}
           <div
             style={{
               display: "flex",
@@ -875,7 +835,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                   left: "11px",
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   display: "grid",
                   placeItems: "center",
                 }}
@@ -886,11 +846,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={
-                  mode === "pages"
-                    ? "Search pages by title, slug, or subtitle..."
-                    : "Search prebuilt templates..."
-                }
+                placeholder="Search pages by title, slug, or subtitle..."
                 style={{
                   ...inputStyle,
                   paddingLeft: "34px",
@@ -898,12 +854,15 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                   fontSize: "13px",
                   height: "36px",
                   borderRadius: "7px",
-                  border: "1px solid #cbd5e1",
-                  background: "#f8fafc",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.elevatedSurfaceBg,
+                  width: "100%",
+                  boxSizing: "border-box",
                 }}
               />
               {searchQuery && (
                 <button
+                  type="button"
                   onClick={() => setSearchQuery("")}
                   style={{
                     position: "absolute",
@@ -913,7 +872,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "#94a3b8",
+                    color: tokens.textMuted,
                     padding: "2px",
                     display: "grid",
                     placeItems: "center",
@@ -926,57 +885,56 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
             </div>
 
             {/* Filter Toggle Button */}
-            {mode === "pages" && (
-              <button
-                onClick={() => setIsFilterOpen(!isFilterOpen)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  height: "36px",
-                  padding: "0 12px",
-                  borderRadius: "7px",
-                  border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                  background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                  color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  transition: "all 0.15s ease",
-                }}
-                title="Toggle Filters"
-              >
-                <FilterIcon />
-                <span>Filters</span>
-                {activeFilterCount > 0 && (
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      background: "#2563eb",
-                      color: "#ffffff",
-                      borderRadius: "10px",
-                      padding: "0 6px",
-                      marginLeft: "2px",
-                    }}
-                  >
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                height: "36px",
+                padding: "0 12px",
+                borderRadius: "7px",
+                border: activeFilterCount > 0 ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}` : `1px solid ${tokens.border}`,
+                background: activeFilterCount > 0 ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
+                color: activeFilterCount > 0 ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "all 0.15s ease",
+              }}
+              title="Toggle Filters"
+            >
+              <FilterIcon />
+              <span>Filters</span>
+              {activeFilterCount > 0 && (
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    borderRadius: "10px",
+                    padding: "0 6px",
+                    marginLeft: "2px",
+                  }}
+                >
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
 
             {/* Floating Filter Popover Modal */}
-            {isFilterOpen && mode === "pages" && (
+            {isFilterOpen && (
               <div
                 style={{
                   position: "absolute",
                   top: "44px",
                   right: "0",
                   width: "320px",
-                  background: "#ffffff",
-                  border: "1px solid #cbd5e1",
+                  background: tokens.surfaceBg,
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "10px",
                   boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
                   padding: "16px",
@@ -987,10 +945,11 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Filter Pages</div>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>Filter Pages</div>
                   <button
+                    type="button"
                     onClick={() => setIsFilterOpen(false)}
-                    style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", padding: "2px" }}
+                    style={{ background: "none", border: "none", color: tokens.textSecondary, cursor: "pointer", padding: "2px" }}
                   >
                     <XMarkIcon />
                   </button>
@@ -1033,30 +992,33 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     justifyContent: "space-between",
                     alignItems: "center",
                     paddingTop: "8px",
-                    borderTop: "1px solid #f1f5f9",
+                    borderTop: `1px solid ${tokens.border}`,
                   }}
                 >
                   <button
+                    type="button"
                     onClick={() => {
                       resetFilters();
                       setIsFilterOpen(false);
                     }}
                     style={{
                       background: "none",
-                      border: "none",
-                      color: "#dc2626",
+                      border: `1px solid ${tokens.border}`,
+                      color: tokens.textSecondary,
                       fontSize: "12px",
                       fontWeight: 600,
                       cursor: "pointer",
-                      padding: "4px 6px",
+                      padding: "5px 10px",
+                      borderRadius: "6px",
                     }}
                   >
                     Reset All
                   </button>
                   <button
+                    type="button"
                     onClick={() => setIsFilterOpen(false)}
                     style={{
-                      background: "#2563eb",
+                      background: tokens.accent || "#2563eb",
                       border: "none",
                       color: "#ffffff",
                       fontSize: "12.5px",
@@ -1083,10 +1045,10 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
               flexWrap: "wrap",
               gap: "6px",
               paddingTop: "6px",
-              borderTop: "1px solid #f1f5f9",
+              borderTop: `1px solid ${tokens.border}`,
             }}
           >
-            <span style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 600, marginRight: "2px" }}>
+            <span style={{ fontSize: "11.5px", color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>
               Active:
             </span>
 
@@ -1100,15 +1062,16 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>Type: {typeFilter.toUpperCase()}</span>
                 <button
+                  type="button"
                   onClick={() => setTypeFilter("all")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: isDark ? "#93c5fd" : "#1d4ed8", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -1125,15 +1088,16 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>Status: {statusFilter === "published" ? "ACTIVE" : "INACTIVE"}</span>
                 <button
+                  type="button"
                   onClick={() => setStatusFilter("all")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: isDark ? "#93c5fd" : "#1d4ed8", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -1150,15 +1114,16 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>Search: "{searchQuery}"</span>
                 <button
+                  type="button"
                   onClick={() => setSearchQuery("")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: isDark ? "#93c5fd" : "#1d4ed8", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -1166,6 +1131,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
             )}
 
             <button
+              type="button"
               onClick={resetFilters}
               style={{
                 background: "none",
@@ -1183,100 +1149,98 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
         )}
       </div>
 
-      {mode === "pages" ? (
-        <>
-          {/* Underline Filter Tabs Bar with Right-aligned Action Button */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: "8px",
-              borderBottom: "1px solid #e2e8f0",
-              marginBottom: "16px",
-            }}
-          >
-            {/* Left: Underline Filter Tabs Bar */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-              {[
-                { key: "all", label: "All Pages", count: counts.all },
-                { key: "core", label: "Core Policies", count: counts.core },
-                { key: "custom", label: "Custom Pages", count: counts.custom },
-                { key: "drafts", label: "Inactive", count: counts.drafts },
-              ].map((tab) => {
-                const isActive = activeTab === tab.key;
-                return (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setActiveTab(tab.key as any)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "10px 14px",
-                      border: "none",
-                      borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
-                      background: "transparent",
-                      color: isActive ? "#2563eb" : "#64748b",
-                      fontSize: "13px",
-                      fontWeight: isActive ? 700 : 500,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                      transition: "all 0.15s ease",
-                      marginBottom: "-1px",
-                    }}
-                  >
-                    <span>{tab.label}</span>
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        padding: "1px 6px",
-                        borderRadius: "10px",
-                        background: isActive ? "#eff6ff" : "#f1f5f9",
-                        color: isActive ? "#2563eb" : "#64748b",
-                        border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
-                      }}
-                    >
-                      {tab.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Right: Action Button matching height, shape, and placement of other pages */}
-            {canCreatePages && (
+      {/* Underline Filter Tabs Bar with Right-aligned Action Button */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "8px",
+          borderBottom: `1px solid ${tokens.border}`,
+          marginBottom: "16px",
+        }}
+      >
+        {/* Left: Underline Filter Tabs Bar */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+          {[
+            { key: "all", label: "All Pages", count: counts.all },
+            { key: "core", label: "Core Policies", count: counts.core },
+            { key: "custom", label: "Custom Pages", count: counts.custom },
+            { key: "drafts", label: "Inactive", count: counts.drafts },
+          ].map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
               <button
+                key={tab.key}
                 type="button"
-                onClick={handleOpenCreate}
+                onClick={() => setActiveTab(tab.key as any)}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "6px",
-                  height: "34px",
-                  padding: "0 14px",
-                  borderRadius: "7px",
+                  gap: "8px",
+                  padding: "10px 14px",
                   border: "none",
-                  background: "#2563eb",
-                  color: "#ffffff",
+                  borderBottom: isActive ? `2px solid ${isDark ? "#3b82f6" : "#2563eb"}` : "2px solid transparent",
+                  background: "transparent",
+                  color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
                   fontSize: "13px",
-                  fontWeight: 600,
+                  fontWeight: isActive ? 700 : 500,
                   cursor: "pointer",
-                  boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
+                  whiteSpace: "nowrap",
                   transition: "all 0.15s ease",
-                  marginBottom: "4px",
+                  marginBottom: "-1px",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
               >
-                <PlusIcon />
-                <span>Create New Page</span>
+                <span>{tab.label}</span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    background: isActive ? (isDark ? "rgba(37,99,235,0.25)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                    color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
+                    border: `1px solid ${isActive ? (isDark ? "rgba(59,130,246,0.4)" : "#bfdbfe") : tokens.border}`,
+                  }}
+                >
+                  {tab.count}
+                </span>
               </button>
-            )}
-          </div>
+            );
+          })}
+        </div>
+
+        {/* Right: Action Button matching height, shape, and placement of other pages */}
+        {canCreatePages && (
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              height: "34px",
+              padding: "0 14px",
+              borderRadius: "7px",
+              border: "none",
+              background: "#2563eb",
+              color: "#ffffff",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
+              transition: "all 0.15s ease",
+              marginBottom: "4px",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
+          >
+            <PlusIcon />
+            <span>Create New Page</span>
+          </button>
+        )}
+      </div>
 
           {/* Pages Content List */}
           {loading ? (
@@ -1284,10 +1248,10 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
               style={{
                 padding: "48px",
                 textAlign: "center",
-                background: "#ffffff",
+                background: tokens.surfaceBg,
                 borderRadius: "10px",
-                border: "1px solid #e2e8f0",
-                color: "#64748b",
+                border: `1px solid ${tokens.border}`,
+                color: tokens.textSecondary,
                 fontSize: "14px",
               }}
             >
@@ -1311,10 +1275,10 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
               style={{
                 padding: "48px",
                 textAlign: "center",
-                background: "#ffffff",
+                background: tokens.surfaceBg,
                 borderRadius: "10px",
                 border: "1px dashed #cbd5e1",
-                color: "#64748b",
+                color: tokens.textSecondary,
               }}
             >
               <p style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: 500 }}>
@@ -1342,16 +1306,16 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
           ) : (
             <div
               style={{
-                background: "#ffffff",
+                background: tokens.surfaceBg,
                 borderRadius: "10px",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${tokens.border}`,
                 overflow: "hidden",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
               }}
             >
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
                 <thead>
-                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  <tr style={{ background: tokens.elevatedSurfaceBg, borderBottom: `1px solid ${tokens.border}`, color: tokens.textSecondary, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                     <th style={{ padding: "12px 16px", fontWeight: 600 }}>Page Title & URL</th>
                     <th style={{ padding: "12px 16px", fontWeight: 600 }}>Type</th>
                     <th style={{ padding: "12px 16px", fontWeight: 600 }}>Status</th>
@@ -1364,14 +1328,14 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     return (
                       <tr
                         key={page.id}
-                        style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s ease" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                        style={{ borderBottom: `1px solid ${tokens.border}`, transition: "background 0.15s ease" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? tokens.elevatedSurfaceBg : "#f8fafc")}
                         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                       >
                         {/* Title & Slug */}
                         <td style={{ padding: "14px 16px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontWeight: 600, color: "#0f172a", fontSize: "14px" }}>
+                            <span style={{ fontWeight: 600, color: tokens.textPrimary, fontSize: "14px" }}>
                               {page.title}
                             </span>
                             {page.is_default && (
@@ -1380,8 +1344,8 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                                 style={{
                                   fontSize: "10.5px",
                                   fontWeight: 600,
-                                  background: "#f1f5f9",
-                                  color: "#475569",
+                                  background: tokens.elevatedSurfaceBg,
+                                  color: tokens.textSecondary,
                                   padding: "1px 6px",
                                   borderRadius: "4px",
                                 }}
@@ -1391,7 +1355,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                             )}
                           </div>
                           {page.subtitle && (
-                            <p style={{ margin: "2px 0 6px 0", fontSize: "12px", color: "#64748b" }}>
+                            <p style={{ margin: "2px 0 6px 0", fontSize: "12px", color: tokens.textSecondary }}>
                               {page.subtitle}
                             </p>
                           )}
@@ -1401,12 +1365,12 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                               display: "inline-flex",
                               alignItems: "center",
                               gap: "4px",
-                              background: "#f8fafc",
-                              border: "1px solid #e2e8f0",
+                              background: tokens.elevatedSurfaceBg,
+                              border: `1px solid ${tokens.border}`,
                               borderRadius: "4px",
                               padding: "2px 7px",
                               fontSize: "11.5px",
-                              color: "#64748b",
+                              color: tokens.textSecondary,
                               fontFamily: "monospace",
                             }}
                           >
@@ -1425,28 +1389,28 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                               textTransform: "capitalize",
                               background:
                                 page.page_type === "about"
-                                  ? "#f5f3ff"
+                                  ? (isDark ? "rgba(124, 58, 237, 0.2)" : "#f5f3ff")
                                   : page.page_type === "contact"
-                                  ? "#eff6ff"
+                                  ? (isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff")
                                   : page.page_type === "policy"
-                                  ? "#ecfdf5"
+                                  ? (isDark ? "rgba(16, 185, 129, 0.2)" : "#ecfdf5")
                                   : page.page_type === "terms"
-                                  ? "#fef3c7"
+                                  ? (isDark ? "rgba(217, 119, 6, 0.2)" : "#fef3c7")
                                   : page.page_type === "story"
-                                  ? "#fff1f2"
-                                  : "#f8fafc",
+                                  ? (isDark ? "rgba(225, 29, 72, 0.2)" : "#fff1f2")
+                                  : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
                               color:
                                 page.page_type === "about"
-                                  ? "#7c3aed"
+                                  ? (isDark ? "#c084fc" : "#7c3aed")
                                   : page.page_type === "contact"
-                                  ? "#2563eb"
+                                  ? (isDark ? "#60a5fa" : "#2563eb")
                                   : page.page_type === "policy"
-                                  ? "#059669"
+                                  ? (isDark ? "#34d399" : "#059669")
                                   : page.page_type === "terms"
-                                  ? "#d97706"
+                                  ? (isDark ? "#fbbf24" : "#d97706")
                                   : page.page_type === "story"
-                                  ? "#e11d48"
-                                  : "#475569",
+                                  ? (isDark ? "#fb7185" : "#e11d48")
+                                  : tokens.textSecondary,
                             }}
                           >
                             {page.page_type}
@@ -1467,7 +1431,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                                 width: "32px",
                                 height: "18px",
                                 borderRadius: "999px",
-                                background: page.is_published ? "#16a34a" : "#cbd5e1",
+                                background: page.is_published ? (isDark ? "#22c55e" : "#16a34a") : (isDark ? "#475569" : "#cbd5e1"),
                                 border: "none",
                                 cursor: "pointer",
                                 transition: "background 0.2s ease",
@@ -1486,7 +1450,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                                   width: "14px",
                                   height: "14px",
                                   borderRadius: "50%",
-                                  background: "#ffffff",
+                                  background: tokens.surfaceBg,
                                   boxShadow: "0 1px 2px rgba(0,0,0,0.25)",
                                   transition: "left 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
                                 }}
@@ -1496,7 +1460,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                               style={{
                                 fontSize: "12.5px",
                                 fontWeight: 600,
-                                color: page.is_published ? "#15803d" : "#64748b",
+                                color: page.is_published ? (isDark ? "#4ade80" : "#15803d") : tokens.textSecondary,
                                 userSelect: "none",
                               }}
                             >
@@ -1506,7 +1470,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         </td>
 
                         {/* Last Updated */}
-                        <td style={{ padding: "14px 16px", color: "#64748b", fontSize: "12.5px" }}>
+                        <td style={{ padding: "14px 16px", color: tokens.textSecondary, fontSize: "12.5px" }}>
                           {new Date(page.updated_at || page.created_at).toLocaleDateString("en-US", {
                             month: "short",
                             day: "numeric",
@@ -1525,17 +1489,17 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                                 title="Edit page content"
                                 style={{
                                   padding: "5px 12px",
-                                  background: "#eff6ff",
-                                  border: "1px solid #bfdbfe",
+                                  background: isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff",
+                                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe"}`,
                                   borderRadius: "6px",
-                                  color: "#2563eb",
+                                  color: isDark ? "#60a5fa" : "#2563eb",
                                   fontSize: "12px",
                                   fontWeight: 600,
                                   cursor: "pointer",
                                   transition: "all 0.15s ease",
                                 }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#dbeafe")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "#eff6ff")}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? "rgba(37, 99, 235, 0.3)" : "#dbeafe")}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff")}
                               >
                                 Edit
                               </button>
@@ -1549,23 +1513,23 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                               style={{
                                 padding: "6px",
                                 background: "transparent",
-                                border: "1px solid #e2e8f0",
+                                border: `1px solid ${tokens.border}`,
                                 borderRadius: "6px",
-                                color: "#475569",
+                                color: tokens.textSecondary,
                                 cursor: "pointer",
                                 display: "grid",
                                 placeItems: "center",
                                 transition: "all 0.15s ease",
                               }}
                               onMouseEnter={(e) => {
-                                e.currentTarget.style.background = "#f1f5f9";
-                                e.currentTarget.style.borderColor = "#cbd5e1";
-                                e.currentTarget.style.color = "#1e293b";
+                                e.currentTarget.style.background = isDark ? tokens.elevatedSurfaceBg : "#f1f5f9";
+                                e.currentTarget.style.borderColor = isDark ? tokens.accent : "#cbd5e1";
+                                e.currentTarget.style.color = tokens.textPrimary;
                               }}
                               onMouseLeave={(e) => {
                                 e.currentTarget.style.background = "transparent";
-                                e.currentTarget.style.borderColor = "#e2e8f0";
-                                e.currentTarget.style.color = "#475569";
+                                e.currentTarget.style.borderColor = tokens.border;
+                                e.currentTarget.style.color = tokens.textSecondary;
                               }}
                             >
                               <CopyIcon />
@@ -1580,17 +1544,17 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                                   title="Delete custom page"
                                   style={{
                                     padding: "6px",
-                                    background: "transparent",
-                                    border: "1px solid #fee2e2",
+                                    background: isDark ? "rgba(239, 68, 68, 0.15)" : "transparent",
+                                    border: `1px solid ${isDark ? "rgba(239, 68, 68, 0.35)" : "#fee2e2"}`,
                                     borderRadius: "6px",
-                                    color: "#ef4444",
+                                    color: isDark ? "#f87171" : "#ef4444",
                                     cursor: "pointer",
                                     display: "grid",
                                     placeItems: "center",
                                     transition: "all 0.15s ease",
                                   }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.background = "#fef2f2")}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                                  onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? "rgba(239, 68, 68, 0.25)" : "#fef2f2")}
+                                  onMouseLeave={(e) => (e.currentTarget.style.background = isDark ? "rgba(239, 68, 68, 0.15)" : "transparent")}
                                 >
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <polyline points="3 6 5 6 21 6" />
@@ -1623,126 +1587,6 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
               </table>
             </div>
           )}
-        </>
-      ) : (
-        /* Templates Library Grid */
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "16px",
-            }}
-          >
-            <div>
-              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
-                Pre-Built Store & Policy Templates
-              </h3>
-              <p style={{ margin: "2px 0 0 0", fontSize: "12.5px", color: "#64748b" }}>
-                Jumpstart your store content with compliant legal templates, FAQs, and brand story pages.
-              </p>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-              gap: "16px",
-            }}
-          >
-            {Object.entries(PREBUILT_TEMPLATES)
-              .filter(([key, template]) => {
-                if (!searchQuery.trim()) return true;
-                const q = searchQuery.toLowerCase();
-                return (
-                  template.title.toLowerCase().includes(q) ||
-                  template.subtitle.toLowerCase().includes(q) ||
-                  key.toLowerCase().includes(q)
-                );
-              })
-              .map(([key, template]) => (
-                <div
-                  key={key}
-                  style={{
-                    background: "#ffffff",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "10px",
-                    padding: "16px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = "#93c5fd";
-                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.06)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = "#e2e8f0";
-                    e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.03)";
-                  }}
-                >
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", marginBottom: "8px" }}>
-                      <h4 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
-                        {template.title}
-                      </h4>
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          padding: "2px 7px",
-                          borderRadius: "4px",
-                          background: "#eff6ff",
-                          color: "#2563eb",
-                          textTransform: "capitalize",
-                        }}
-                      >
-                        {template.page_type}
-                      </span>
-                    </div>
-                    <p style={{ margin: "0 0 16px 0", fontSize: "12.5px", color: "#64748b", lineHeight: 1.5 }}>
-                      {template.subtitle}
-                    </p>
-                  </div>
-
-                  {canCreatePages && (
-                    <div style={{ display: "flex", gap: "8px", borderTop: "1px solid #f1f5f9", paddingTop: "12px" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleCreateFromTemplate(key)}
-                        style={{
-                          flex: 1,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "6px",
-                          height: "32px",
-                          padding: "0 12px",
-                          borderRadius: "6px",
-                          border: "none",
-                          background: "#2563eb",
-                          color: "#ffffff",
-                          fontSize: "12.5px",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
-                      >
-                        <PlusIcon />
-                        <span>Use Template</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
 
       {/* Markdown Editor Modal / Drawer */}
       {isEditorOpen && (
@@ -1770,7 +1614,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "14px",
               width: "100%",
               maxWidth: "980px",
@@ -1789,15 +1633,15 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "16px 24px",
-                borderBottom: "1px solid #e2e8f0",
-                background: "#f8fafc",
+                borderBottom: `1px solid ${tokens.border}`,
+                background: tokens.elevatedSurfaceBg,
                 flexShrink: 0,
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "#0f172a" }}>
+                    <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: tokens.textPrimary }}>
                       {editingPage ? `Edit "${editingPage.title}"` : "Create New Store Page"}
                     </h2>
                     <span
@@ -1814,7 +1658,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                       {editingPage ? "Editing" : "New Page"}
                     </span>
                   </div>
-                  <p style={{ margin: "2px 0 0 0", fontSize: "12.5px", color: "#64748b" }}>
+                  <p style={{ margin: "2px 0 0 0", fontSize: "12.5px", color: tokens.textSecondary }}>
                     Configure page details, write structured Markdown content, and adjust SEO settings.
                   </p>
                 </div>
@@ -1826,7 +1670,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                 style={{
                   background: "transparent",
                   border: "none",
-                  color: "#64748b",
+                  color: tokens.textSecondary,
                   cursor: "pointer",
                   padding: "6px",
                   borderRadius: "6px",
@@ -1834,7 +1678,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                   placeItems: "center",
                   transition: "all 0.15s ease",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#e2e8f0")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#e2e8f0")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 title="Close editor"
               >
@@ -1873,8 +1717,8 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
               {/* Group 1: General Details */}
               <div
                 style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
+                  background: tokens.elevatedSurfaceBg,
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "10px",
                   padding: "16px",
                   display: "flex",
@@ -1882,7 +1726,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                   gap: "12px",
                 }}
               >
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b", marginBottom: "2px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "2px" }}>
                   1. Page General Information
                 </div>
 
@@ -1908,18 +1752,18 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
                   <div>
                     <label style={labelStyle}>
-                      URL Slug * {editingPage?.is_default && <span style={{ color: "#94a3b8" }}>(Core Locked)</span>}
+                      URL Slug * {editingPage?.is_default && <span style={{ color: tokens.textMuted }}>(Core Locked)</span>}
                     </label>
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <span
                         style={{
                           padding: "8px 10px",
-                          background: "#f1f5f9",
-                          border: "1px solid #cbd5e1",
+                          background: tokens.elevatedSurfaceBg,
+                          border: `1px solid ${tokens.border}`,
                           borderRight: "none",
                           borderRadius: "6px 0 0 6px",
                           fontSize: "12.5px",
-                          color: "#64748b",
+                          color: tokens.textSecondary,
                           fontFamily: "monospace",
                         }}
                       >
@@ -1936,7 +1780,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                           ...inputStyle,
                           borderRadius: "0 6px 6px 0",
                           fontFamily: "monospace",
-                          background: editingPage?.is_default ? "#f1f5f9" : "#ffffff",
+                          background: editingPage?.is_default ? (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9") : (isDark ? tokens.surfaceBg : "#ffffff"),
                         }}
                       />
                     </div>
@@ -1976,15 +1820,15 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                 <div
                   style={{
                     padding: "14px 16px",
-                    background: "#f0f9ff",
-                    border: "1px solid #bae6fd",
+                    background: isDark ? "rgba(2, 132, 199, 0.15)" : "#f0f9ff",
+                    border: `1px solid ${isDark ? "rgba(2, 132, 199, 0.35)" : "#bae6fd"}`,
                     borderRadius: "10px",
                     display: "flex",
                     flexDirection: "column",
                     gap: "10px",
                   }}
                 >
-                  <div style={{ fontSize: "12.5px", fontWeight: 700, color: "#0369a1" }}>
+                  <div style={{ fontSize: "12.5px", fontWeight: 700, color: isDark ? "#38bdf8" : "#0369a1" }}>
                     Contact Details Widget
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
@@ -2035,8 +1879,8 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
               {/* Group 2: Markdown Content & Editor */}
               <div
                 style={{
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
+                  background: tokens.surfaceBg,
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "10px",
                   padding: "16px",
                   display: "flex",
@@ -2053,12 +1897,12 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     gap: "8px",
                   }}
                 >
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                     2. Page Content & Layout (Markdown) *
                   </div>
 
                   {/* Mode Tabs */}
-                  <div style={{ display: "inline-flex", background: "#f1f5f9", borderRadius: "6px", padding: "2px", border: "1px solid #e2e8f0" }}>
+                  <div style={{ display: "inline-flex", background: tokens.elevatedSurfaceBg, borderRadius: "6px", padding: "2px", border: `1px solid ${tokens.border}` }}>
                     <button
                       type="button"
                       onClick={() => setEditorTab("write")}
@@ -2069,9 +1913,9 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         fontSize: "12px",
                         fontWeight: 600,
                         cursor: "pointer",
-                        background: editorTab === "write" ? "#ffffff" : "transparent",
-                        color: editorTab === "write" ? "#0f172a" : "#64748b",
-                        boxShadow: editorTab === "write" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                        background: editorTab === "write" ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                        color: editorTab === "write" ? tokens.textPrimary : tokens.textSecondary,
+                        boxShadow: editorTab === "write" ? (isDark ? "0 1px 2px rgba(0,0,0,0.4)" : "0 1px 2px rgba(0,0,0,0.08)") : "none",
                       }}
                     >
                       ✏️ Write
@@ -2086,9 +1930,9 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         fontSize: "12px",
                         fontWeight: 600,
                         cursor: "pointer",
-                        background: editorTab === "preview" ? "#ffffff" : "transparent",
-                        color: editorTab === "preview" ? "#0f172a" : "#64748b",
-                        boxShadow: editorTab === "preview" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                        background: editorTab === "preview" ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                        color: editorTab === "preview" ? tokens.textPrimary : tokens.textSecondary,
+                        boxShadow: editorTab === "preview" ? (isDark ? "0 1px 2px rgba(0,0,0,0.4)" : "0 1px 2px rgba(0,0,0,0.08)") : "none",
                       }}
                     >
                       👁️ Live Preview
@@ -2103,8 +1947,8 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     alignItems: "center",
                     gap: "4px",
                     padding: "6px 8px",
-                    background: "#f8fafc",
-                    border: "1px solid #cbd5e1",
+                    background: tokens.elevatedSurfaceBg,
+                    border: `1px solid ${tokens.border}`,
                     borderBottom: "none",
                     borderRadius: "6px 6px 0 0",
                     flexWrap: "wrap",
@@ -2114,7 +1958,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     type="button"
                     onClick={() => handleInsertFormat("**", "**", "bold text")}
                     title="Bold (**text**)"
-                    style={{ padding: "4px 8px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", fontWeight: 700, fontSize: "12px", cursor: "pointer" }}
+                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontWeight: 700, fontSize: "12px", cursor: "pointer" }}
                   >
                     B
                   </button>
@@ -2122,7 +1966,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     type="button"
                     onClick={() => handleInsertFormat("*", "*", "italic text")}
                     title="Italic (*text*)"
-                    style={{ padding: "4px 8px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", fontStyle: "italic", fontSize: "12px", cursor: "pointer" }}
+                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontStyle: "italic", fontSize: "12px", cursor: "pointer" }}
                   >
                     I
                   </button>
@@ -2131,7 +1975,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     type="button"
                     onClick={() => handleInsertFormat("# ", "", "Heading 1")}
                     title="H1 Heading"
-                    style={{ padding: "4px 7px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}
+                    style={{ padding: "4px 7px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}
                   >
                     H1
                   </button>
@@ -2139,7 +1983,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     type="button"
                     onClick={() => handleInsertFormat("## ", "", "Heading 2")}
                     title="H2 Heading"
-                    style={{ padding: "4px 7px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}
+                    style={{ padding: "4px 7px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}
                   >
                     H2
                   </button>
@@ -2147,7 +1991,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     type="button"
                     onClick={() => handleInsertFormat("### ", "", "Heading 3")}
                     title="H3 Heading"
-                    style={{ padding: "4px 7px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}
+                    style={{ padding: "4px 7px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}
                   >
                     H3
                   </button>
@@ -2156,7 +2000,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     type="button"
                     onClick={() => handleInsertFormat("- ", "", "List item")}
                     title="Bullet List"
-                    style={{ padding: "4px 8px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
+                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
                   >
                     • List
                   </button>
@@ -2164,7 +2008,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     type="button"
                     onClick={() => handleInsertFormat("1. ", "", "First item")}
                     title="Numbered List"
-                    style={{ padding: "4px 8px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
+                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
                   >
                     1. List
                   </button>
@@ -2172,7 +2016,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     type="button"
                     onClick={() => handleInsertFormat("> ", "", "Quote text")}
                     title="Blockquote"
-                    style={{ padding: "4px 8px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
+                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
                   >
                     ❝ Quote
                   </button>
@@ -2180,7 +2024,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     type="button"
                     onClick={() => handleInsertFormat("\n---\n", "", "")}
                     title="Divider line"
-                    style={{ padding: "4px 8px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
+                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
                   >
                     — Divider
                   </button>
@@ -2188,7 +2032,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     type="button"
                     onClick={() => handleInsertFormat("[", "](https://...)", "Link Text")}
                     title="Insert Link"
-                    style={{ padding: "4px 8px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
+                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
                   >
                     🔗 Link
                   </button>
@@ -2209,8 +2053,8 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         borderRadius: "4px",
                         fontSize: "11.5px",
                         fontWeight: 600,
-                        color: "#1e293b",
-                        background: "#ffffff",
+                        color: tokens.textPrimary,
+                        background: tokens.surfaceBg,
                         cursor: "pointer",
                       }}
                     >
@@ -2239,7 +2083,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                       width: "100%",
                       boxSizing: "border-box",
                       padding: "12px",
-                      border: "1px solid #cbd5e1",
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "0 0 6px 6px",
                       fontSize: "13.5px",
                       fontFamily: "monospace",
@@ -2252,9 +2096,9 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                   <div
                     style={{
                       padding: "20px",
-                      border: "1px solid #cbd5e1",
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "0 0 6px 6px",
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       minHeight: "220px",
                       maxHeight: "360px",
                       overflowY: "auto",
@@ -2268,18 +2112,18 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
               {/* Group 3: SEO Metadata Section (Collapsible) */}
               <details
                 style={{
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "10px",
                   padding: "12px 16px",
-                  background: "#f8fafc",
+                  background: tokens.elevatedSurfaceBg,
                 }}
               >
-                <summary style={{ fontSize: "13px", fontWeight: 700, color: "#334155", cursor: "pointer" }}>
+                <summary style={{ fontSize: "13px", fontWeight: 700, color: tokens.textSecondary, cursor: "pointer" }}>
                   3. Search Engine Optimization (SEO Meta Tags)
                 </summary>
                 <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
                   <div>
-                    <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: "#64748b", marginBottom: "3px" }}>
+                    <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "3px" }}>
                       Meta Title (Recommended under 60 chars)
                     </label>
                     <input
@@ -2292,7 +2136,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     />
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: "#64748b", marginBottom: "3px" }}>
+                    <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "3px" }}>
                       Meta Description (Recommended under 160 chars)
                     </label>
                     <textarea
@@ -2314,7 +2158,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                   justifyContent: "space-between",
                   alignItems: "center",
                   paddingTop: "14px",
-                  borderTop: "1px solid #e2e8f0",
+                  borderTop: `1px solid ${tokens.border}`,
                   marginTop: "4px",
                 }}
               >
@@ -2361,7 +2205,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         width: "15px",
                         height: "15px",
                         borderRadius: "50%",
-                        background: "#ffffff",
+                        background: tokens.surfaceBg,
                         boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
                         transition: "left 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
                       }}
@@ -2378,17 +2222,17 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     onClick={() => setIsEditorOpen(false)}
                     style={{
                       padding: "8px 16px",
-                      background: "#f1f5f9",
-                      border: "1px solid #cbd5e1",
+                      background: tokens.elevatedSurfaceBg,
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "7px",
                       fontSize: "13px",
                       fontWeight: 600,
-                      color: "#475569",
+                      color: tokens.textSecondary,
                       cursor: "pointer",
                       transition: "all 0.15s ease",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#e2e8f0")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#e2e8f0")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = tokens.elevatedSurfaceBg)}
                   >
                     Cancel
                   </button>
@@ -2442,7 +2286,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "12px",
               maxWidth: "420px",
               width: "100%",
@@ -2453,7 +2297,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
             <h3 style={{ margin: "0 0 8px 0", fontSize: "17px", fontWeight: 700, color: "#b91c1c" }}>
               Delete Page?
             </h3>
-            <p style={{ margin: "0 0 20px 0", fontSize: "13.5px", color: "#475569", lineHeight: 1.5 }}>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13.5px", color: tokens.textSecondary, lineHeight: 1.5 }}>
               Are you sure you want to delete <strong>"{deleteTarget.title}"</strong>? Any links pointing to <code>/{deleteTarget.slug}</code> will return a 404 page.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
@@ -2462,12 +2306,12 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                 onClick={() => setDeleteTarget(null)}
                 style={{
                   padding: "8px 14px",
-                  background: "#f1f5f9",
-                  border: "1px solid #cbd5e1",
+                  background: tokens.elevatedSurfaceBg,
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "6px",
                   fontSize: "13px",
                   fontWeight: 600,
-                  color: "#475569",
+                  color: tokens.textSecondary,
                   cursor: "pointer",
                 }}
               >

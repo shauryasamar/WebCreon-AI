@@ -4,6 +4,8 @@ import { API_BASE_URL as API_BASE } from "../config/api";
 import { Pagination } from "./Pagination";
 import GlassToast from "./GlassToast";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
+import { AdminCheckbox } from "./AdminProducts";
 import AccessDeniedView from "./AccessDeniedView";
 
 type AdminMode = "orders" | "returns";
@@ -380,28 +382,26 @@ type RefundDraft = {
 
 const plainCardStyle: React.CSSProperties = {
   borderRadius: "8px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
+  border: "1px solid var(--admin-border, #e2e8f0)",
+  background: "var(--admin-surface, #ffffff)",
   boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
 };
-
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
   borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
+  border: "1px solid var(--admin-border, #cbd5e1)",
+  background: "var(--admin-elevated-surface, #f8fafc)",
+  color: "var(--admin-text-primary, #0f172a)",
   padding: "9px 10px",
   outline: "none",
   fontSize: "14px",
 };
 
-
 const labelStyle: React.CSSProperties = {
   fontSize: "12px",
   fontWeight: 700,
-  color: "#475569",
+  color: "var(--admin-text-secondary, #475569)",
   marginBottom: "6px",
 };
 
@@ -628,7 +628,60 @@ const getStatusLabel = (status: string, cancelReason?: string | null, isRepl?: b
   return status.replaceAll("_", " ");
 };
 
-const getStatusTone = (status: string, isRepl?: boolean) => {
+const getStatusTone = (status: string, isRepl?: boolean, isDark?: boolean) => {
+  if (isDark) {
+    if (isRepl) {
+      if (status === "confirmed" || status === "accepted") {
+        return { bg: "rgba(2, 132, 199, 0.16)", text: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.3)" };
+      }
+      if (status === "shipped" || status === "out_for_delivery") {
+        return { bg: "rgba(3, 105, 161, 0.16)", text: "#7dd3fc", border: "1px solid rgba(125, 211, 252, 0.3)" };
+      }
+      if (status === "delivered") {
+        return { bg: "rgba(21, 128, 61, 0.16)", text: "#4ade80", border: "1px solid rgba(74, 222, 128, 0.3)" };
+      }
+    }
+    switch (status) {
+      case "placed":
+        return { bg: "rgba(29, 78, 216, 0.15)", text: "#60a5fa", border: "1px solid rgba(96, 165, 250, 0.3)" };
+      case "confirmed":
+      case "accepted":
+        return { bg: "rgba(14, 116, 144, 0.15)", text: "#22d3ee", border: "1px solid rgba(34, 211, 238, 0.3)" };
+      case "shipped":
+        return { bg: "rgba(180, 83, 9, 0.15)", text: "#fbbf24", border: "1px solid rgba(251, 191, 36, 0.3)" };
+      case "out_for_delivery":
+        return { bg: "rgba(124, 58, 237, 0.15)", text: "#c084fc", border: "1px solid rgba(192, 132, 252, 0.3)" };
+      case "rescheduled":
+        return { bg: "rgba(180, 83, 9, 0.15)", text: "#fbbf24", border: "1px solid rgba(251, 191, 36, 0.3)" };
+      case "failed":
+        return { bg: "rgba(185, 28, 28, 0.15)", text: "#f87171", border: "1px solid rgba(248, 113, 113, 0.3)" };
+      case "delivered":
+        return { bg: "rgba(21, 128, 61, 0.15)", text: "#4ade80", border: "1px solid rgba(74, 222, 128, 0.3)" };
+      case "returned":
+        return { bg: "rgba(124, 58, 237, 0.15)", text: "#c084fc", border: "1px solid rgba(192, 132, 252, 0.3)" };
+      case "cancelled":
+      case "partially_cancelled":
+        return { bg: "rgba(185, 28, 28, 0.15)", text: "#f87171", border: "1px solid rgba(248, 113, 113, 0.3)" };
+      case "requested":
+        return { bg: "rgba(29, 78, 216, 0.15)", text: "#60a5fa", border: "1px solid rgba(96, 165, 250, 0.3)" };
+      case "approved":
+        return { bg: "rgba(14, 116, 144, 0.15)", text: "#22d3ee", border: "1px solid rgba(34, 211, 238, 0.3)" };
+      case "received":
+        return { bg: "rgba(180, 83, 9, 0.15)", text: "#fbbf24", border: "1px solid rgba(251, 191, 36, 0.3)" };
+      case "inspected":
+        return { bg: "rgba(124, 58, 237, 0.15)", text: "#c084fc", border: "1px solid rgba(192, 132, 252, 0.3)" };
+      case "refunded":
+        return { bg: "rgba(21, 128, 61, 0.15)", text: "#4ade80", border: "1px solid rgba(74, 222, 128, 0.3)" };
+      case "replacement_dispatched":
+        return { bg: "rgba(2, 132, 199, 0.15)", text: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.3)" };
+      case "closed":
+        return { bg: "rgba(255, 255, 255, 0.06)", text: "#94a3b8", border: "1px solid rgba(255, 255, 255, 0.1)" };
+      case "rejected":
+        return { bg: "rgba(185, 28, 28, 0.15)", text: "#f87171", border: "1px solid rgba(248, 113, 113, 0.3)" };
+      default:
+        return { bg: "rgba(255, 255, 255, 0.05)", text: "#94a3b8", border: "1px solid rgba(255, 255, 255, 0.08)" };
+    }
+  }
   if (isRepl) {
     if (status === "confirmed" || status === "accepted") {
       return { bg: "#f0f9ff", text: "#0284c7", border: "1px solid #7dd3fc" };
@@ -674,11 +727,11 @@ const getStatusTone = (status: string, isRepl?: boolean) => {
     case "replacement_dispatched":
       return { bg: "#f0f9ff", text: "#0284c7", border: "1px solid #bae6fd" };
     case "closed":
-      return { bg: "#f1f5f9", text: "#334155", border: "1px solid #e2e8f0" };
+      return { bg: "#f1f5f9", text: "#334155", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" };
     case "rejected":
       return { bg: "#fef2f2", text: "#b91c1c", border: "1px solid #fecaca" };
     default:
-      return { bg: "#f8fafc", text: "#334155", border: "1px solid #e2e8f0" };
+      return { bg: "#f8fafc", text: "#334155", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" };
   }
 };
 
@@ -777,6 +830,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   initialReturns = [],
 }) => {
   const { hasPermission, isOwner } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
   const canViewOrders = isOwner || hasPermission("orders:view");
   const canUpdateOrders = isOwner || hasPermission("orders:update");
   const canCancelOrders = isOwner || hasPermission("orders:cancel");
@@ -2275,7 +2329,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
   const renderRowActions = (order: AdminOrderListItem) => {
     const actionButtonStyle: React.CSSProperties = {
-      border: "1px solid #cbd5e1",
+      border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
       borderRadius: "6px",
       padding: "8px 10px",
       fontSize: "12px",
@@ -2283,8 +2337,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
       cursor: actionLoadingId === order.id ? "wait" : "pointer",
       whiteSpace: "nowrap",
       opacity: actionLoadingId === order.id ? 0.7 : 1,
-      background: "#ffffff",
-      color: "#0f172a",
+      background: tokens.surfaceBg,
+      color: tokens.textPrimary,
     };
 
 
@@ -2301,9 +2355,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
               style={{
                 ...actionButtonStyle,
                 padding: "5px 12px",
-                background: "#fef3c7",
-                color: "#92400e",
-                border: "1px solid #fde68a",
+                background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fef3c7",
+                color: isDark ? "#fde047" : "#92400e",
+                border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
                 fontWeight: 700,
               }}
               title="Release pre-order for standard shipping and fulfillment"
@@ -2321,9 +2375,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
               style={{
                 ...actionButtonStyle,
                 padding: "5px 10px",
-                background: "#fef2f2",
-                color: "#b91c1c",
-                border: "1px solid #fecaca",
+                background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                color: isDark ? "#fca5a5" : "#b91c1c",
+                border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
               }}
             >
               Reject
@@ -2346,9 +2400,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
               style={{
                 ...actionButtonStyle,
                 padding: "5px 10px",
-                background: "#eff6ff",
-                color: "#1d4ed8",
-                border: "1px solid #bfdbfe",
+                background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
               }}
             >
               Accept
@@ -2364,9 +2418,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
               style={{
                 ...actionButtonStyle,
                 padding: "5px 10px",
-                background: "#fef2f2",
-                color: "#b91c1c",
-                border: "1px solid #fecaca",
+                background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                color: isDark ? "#fca5a5" : "#b91c1c",
+                border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
               }}
             >
               Reject
@@ -2394,9 +2448,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
             style={{
               ...actionButtonStyle,
               padding: "5px 10px",
-              background: "#fef2f2",
-              color: "#dc2626",
-              border: "1px solid #fecaca",
+              background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+              color: isDark ? "#fca5a5" : "#dc2626",
+              border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
@@ -2419,9 +2473,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
             style={{
               ...actionButtonStyle,
               padding: "5px 10px",
-              background: "#ffffff",
-              color: "#475569",
-              border: "1px solid #e2e8f0",
+              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
             }}
           >
             Invoice
@@ -2440,9 +2494,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
         style={{
           ...actionButtonStyle,
           padding: "5px 10px",
-          background: "#ffffff",
-          color: "#475569",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
         }}
       >
         Invoice
@@ -2453,7 +2507,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
   const renderReturnRowActions = (returnItem: AdminReturnListItem) => {
     const actionButtonStyle: React.CSSProperties = {
-      border: "1px solid #cbd5e1",
+      border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
       borderRadius: "6px",
       padding: "8px 10px",
       fontSize: "12px",
@@ -2461,8 +2515,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
       cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
       whiteSpace: "nowrap",
       opacity: actionLoadingId === returnItem.id ? 0.7 : 1,
-      background: "#ffffff",
-      color: "#0f172a",
+      background: tokens.surfaceBg,
+      color: tokens.textPrimary,
     };
 
 
@@ -2476,9 +2530,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
           }}
           style={{
             ...actionButtonStyle,
-            background: "#eff6ff",
-            color: "#1d4ed8",
-            border: "1px solid #bfdbfe",
+            background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
           }}
         >
           Review
@@ -2497,9 +2551,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
           }}
           style={{
             ...actionButtonStyle,
-            background: "#fffbeb",
-            color: "#b45309",
-            border: "1px solid #fde68a",
+            background: isDark ? "rgba(245, 158, 11, 0.2)" : "#fffbeb",
+            color: isDark ? "#fcd34d" : "#b45309",
+            border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.35)" : "#fde68a"}`,
           }}
         >
           Receive
@@ -2518,9 +2572,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
           }}
           style={{
             ...actionButtonStyle,
-            background: "#faf5ff",
-            color: "#7c3aed",
-            border: "1px solid #e9d5ff",
+            background: isDark ? "rgba(168, 85, 247, 0.2)" : "#faf5ff",
+            color: isDark ? "#d8b4fe" : "#7c3aed",
+            border: `1px solid ${isDark ? "rgba(168, 85, 247, 0.35)" : "#e9d5ff"}`,
           }}
         >
           Inspect
@@ -2539,9 +2593,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
           }}
           style={{
             ...actionButtonStyle,
-            background: "#f0fdf4",
-            color: "#15803d",
-            border: "1px solid #bbf7d0",
+            background: isDark ? "rgba(34, 197, 94, 0.2)" : "#f0fdf4",
+            color: isDark ? "#86efac" : "#15803d",
+            border: `1px solid ${isDark ? "rgba(34, 197, 94, 0.35)" : "#bbf7d0"}`,
           }}
         >
           Refund
@@ -2560,9 +2614,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
           }}
           style={{
             ...actionButtonStyle,
-            background: "#f1f5f9",
-            color: "#334155",
-            border: "1px solid #e2e8f0",
+            background: tokens.elevatedSurfaceBg,
+            color: tokens.textSecondary,
+            border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
           }}
         >
           Close
@@ -2585,13 +2639,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   }
 
   return (
-    <div style={{ color: "#0f172a" }}>
+    <div style={{ color: tokens.textPrimary }}>
       {toast && <GlassToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       {/* Top Header Card (Segmented Mode + Search & Filter Button) */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: tokens.surfaceBg,
+          border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
           borderRadius: "10px",
           padding: "10px 14px",
           marginBottom: "16px",
@@ -2616,10 +2670,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: tokens.elevatedSurfaceBg,
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
             }}
           >
             {(["orders", "returns"] as const).map((value) => {
@@ -2637,8 +2691,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                     borderRadius: "6px",
                     padding: "6px 16px",
                     border: "none",
-                    background: isActive ? "#ffffff" : "transparent",
-                    color: isActive ? "#0f172a" : "#64748b",
+                    background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                    color: isActive ? tokens.textPrimary : tokens.textSecondary,
                     boxShadow: isActive
                       ? "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
                       : "none",
@@ -2673,7 +2727,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   left: "11px",
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   display: "grid",
                   placeItems: "center",
                 }}
@@ -2705,8 +2759,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   fontSize: "13px",
                   height: "36px",
                   borderRadius: "7px",
-                  border: "1px solid #cbd5e1",
-                  background: "#f8fafc",
+                  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                  background: tokens.elevatedSurfaceBg,
                 }}
               />
               {searchQuery && (
@@ -2729,7 +2783,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "#94a3b8",
+                    color: tokens.textMuted,
                     padding: "2px",
                     display: "grid",
                     placeItems: "center",
@@ -2751,9 +2805,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                 height: "36px",
                 padding: "0 12px",
                 borderRadius: "7px",
-                border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
+                border: activeFilterCount > 0 ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}` : `1px solid ${tokens.border}`,
+                background: activeFilterCount > 0 ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
+                color: activeFilterCount > 0 ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: "pointer",
@@ -2789,8 +2843,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   top: "44px",
                   right: "0",
                   width: "320px",
-                  background: "#ffffff",
-                  border: "1px solid #cbd5e1",
+                  background: tokens.surfaceBg,
+                  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                   borderRadius: "10px",
                   boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
                   padding: "16px",
@@ -2801,10 +2855,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Filter Orders</div>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>Filter Orders</div>
                   <button
                     onClick={() => setIsFilterOpen(false)}
-                    style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", padding: "2px" }}
+                    style={{ background: "none", border: "none", color: tokens.textSecondary, cursor: "pointer", padding: "2px" }}
                   >
                     <XMarkIcon />
                   </button>
@@ -2821,11 +2875,11 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                     }}
                     style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
                   >
-                    <option value="last_30_days">Last 30 Days (Default)</option>
-                    <option value="today">Today</option>
-                    <option value="last_7_days">Last 7 Days</option>
-                    <option value="all">All Time</option>
-                    <option value="custom">Custom Date Range...</option>
+                    <option value="last_30_days" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Last 30 Days (Default)</option>
+                    <option value="today" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Today</option>
+                    <option value="last_7_days" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Last 7 Days</option>
+                    <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Time</option>
+                    <option value="custom" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Custom Date Range...</option>
                   </select>
 
                   {dateFilter === "custom" && (
@@ -2839,7 +2893,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                         }}
                         style={{ ...inputStyle, fontSize: "12px", height: "32px", padding: "0 6px" }}
                       />
-                      <span style={{ fontSize: "12px", color: "#64748b" }}>to</span>
+                      <span style={{ fontSize: "12px", color: tokens.textSecondary }}>to</span>
                       <input
                         type="date"
                         value={customToDate}
@@ -2865,7 +2919,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                       }}
                       style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
                     >
-                      <option value="all">All Payment Methods</option>
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Payment Methods</option>
                       <option value="cod">Cash on Delivery (COD)</option>
                       <option value="online">Prepaid / Online</option>
                       <option value="upi">UPI</option>
@@ -2887,7 +2941,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                       }}
                       style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
                     >
-                      <option value="all">All Orders (Dispatched & Pending)</option>
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Orders (Dispatched & Pending)</option>
                       <option value="unassigned">Unassigned (Pending Dispatch)</option>
                       <option value="dispatched">All Dispatched Orders</option>
 
@@ -2923,7 +2977,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                     justifyContent: "space-between",
                     alignItems: "center",
                     paddingTop: "8px",
-                    borderTop: "1px solid #f1f5f9",
+                    borderTop: `1px solid ${tokens.border}`,
                   }}
                 >
                   <button
@@ -2973,10 +3027,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
               flexWrap: "wrap",
               gap: "6px",
               paddingTop: "6px",
-              borderTop: "1px solid #f1f5f9",
+              borderTop: `1px solid ${tokens.border}`,
             }}
           >
-            <span style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 600, marginRight: "2px" }}>
+            <span style={{ fontSize: "11.5px", color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>
               Active:
             </span>
 
@@ -2990,15 +3044,15 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>Date: {dateFilter === "all" ? "All Time" : dateFilter.replaceAll("_", " ")}</span>
                 <button
                   onClick={() => setDateFilter("last_30_days")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: isDark ? "#93c5fd" : "#1d4ed8", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -3015,15 +3069,15 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>Payment: {paymentFilter.toUpperCase()}</span>
                 <button
                   onClick={() => setPaymentFilter("all")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: isDark ? "#93c5fd" : "#1d4ed8", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -3040,9 +3094,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>
@@ -3062,7 +3116,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                 </span>
                 <button
                   onClick={() => setFulfillmentFilter("all")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: isDark ? "#93c5fd" : "#1d4ed8", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -3093,9 +3147,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
             ...plainCardStyle,
             padding: "12px 14px",
             marginBottom: "16px",
-            color: "#b91c1c",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
+            color: isDark ? "#fca5a5" : "#b91c1c",
+            background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+            border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
           }}
         >
           {error}
@@ -3110,7 +3164,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
               display: "flex",
               flexWrap: "wrap",
               gap: "4px",
-              borderBottom: "1px solid #e2e8f0",
+              borderBottom: `1px solid ${tokens.border}`,
               marginBottom: "16px",
             }}
           >
@@ -3131,9 +3185,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                     gap: "8px",
                     padding: "10px 14px",
                     border: "none",
-                    borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                    borderBottom: isActive ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : "2px solid transparent",
                     background: "transparent",
-                    color: isActive ? "#2563eb" : "#64748b",
+                    color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
                     fontSize: "13px",
                     fontWeight: isActive ? 700 : 500,
                     cursor: "pointer",
@@ -3149,9 +3203,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                       fontWeight: 700,
                       padding: "1px 6px",
                       borderRadius: "10px",
-                      background: isActive ? "#eff6ff" : "#f1f5f9",
-                      color: isActive ? "#2563eb" : "#64748b",
-                      border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
+                      background: isActive ? (isDark ? "rgba(59, 130, 246, 0.25)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                      color: isActive ? (isDark ? "#93c5fd" : "#2563eb") : tokens.textSecondary,
+                      border: `1px solid ${isActive ? (isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe") : tokens.border}`,
                     }}
                   >
                     {count}
@@ -3167,8 +3221,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                 margin: "0 0 12px 0",
                 padding: "8px 12px",
                 borderRadius: "6px",
-                background: "#fefce8",
-                border: "1px solid #fef08a",
+                background: isDark ? "rgba(245, 158, 11, 0.12)" : "#fefce8",
+                border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.25)" : "#fef08a"}`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
@@ -3214,13 +3268,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
             </div>
           )}
 
-          <div style={{ ...plainCardStyle, overflow: "hidden" }}>
+          <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", overflow: "hidden" }}>
             {loading ? (
-              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: tokens.textSecondary }}>
                 Loading orders...
               </div>
             ) : !filteredOrders.length ? (
-              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: tokens.textSecondary }}>
                 {hasActiveFilters ? "No orders match your filter criteria." : "No records in this tab."}
               </div>
             ) : (
@@ -3234,11 +3288,11 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                       gap: "12px",
                       alignItems: "center",
                       padding: "9px 16px",
-                      background: "#f8fafc",
-                      borderBottom: "1px solid #e2e8f0",
+                      background: tokens.elevatedSurfaceBg,
+                      borderBottom: `1px solid ${tokens.border}`,
                       fontSize: "11px",
                       fontWeight: 700,
-                      color: "#64748b",
+                      color: tokens.textSecondary,
                       textTransform: "uppercase",
                       letterSpacing: "0.05em",
                     }}
@@ -3257,7 +3311,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                     const isRepl = isOrderReplacement(order) || isOrderReplacement(detail);
                     const isReplDelivered = isRepl && (order.status === "delivered" || detail?.status === "delivered");
                     const isReplActive = isRepl && !isReplDelivered && order.status !== "cancelled" && detail?.status !== "cancelled";
-                    const tone = getStatusTone(order.status, isRepl);
+                    const tone = getStatusTone(order.status, isRepl, isDark);
                     const shipmentDraft = getShipmentDraft(order);
                     const items = detail?.items || order.items || [];
                     const shippingAddress = detail?.shipping_address || order.shipping_address;
@@ -3266,8 +3320,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                       <div
                         key={order.id}
                         style={{
-                          borderBottom: "1px solid #e2e8f0",
-                          background: isExpanded ? "#f8fafc" : "#ffffff",
+                          borderBottom: `1px solid ${tokens.border}`,
+                          background: isExpanded ? (isDark ? tokens.elevatedSurfaceBg : "#f8fafc") : (isDark ? tokens.surfaceBg : "#ffffff"),
                           transition: "background 0.15s ease",
                         }}
                       >
@@ -3281,8 +3335,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                             alignItems: "center",
                             padding: "12px 16px",
                             cursor: "pointer",
-                            background: isExpanded ? "#f1f5f9" : "transparent",
-                            borderBottom: isExpanded ? "1px solid #e2e8f0" : "none",
+                            background: isExpanded ? (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9") : "transparent",
+                            borderBottom: isExpanded ? `1px solid ${tokens.border}` : "none",
                             transition: "background 0.15s ease",
                           }}
                         >
@@ -3292,7 +3346,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                               style={{
                                 fontSize: "13.5px",
                                 fontWeight: 700,
-                                color: "#0f172a",
+                                color: tokens.textPrimary,
                                 marginBottom: "2px",
                                 display: "flex",
                                 alignItems: "center",
@@ -3305,9 +3359,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                 style={{
                                   fontSize: "11px",
                                   fontWeight: 600,
-                                  color: "#64748b",
-                                  background: "#f1f5f9",
-                                  border: "1px solid #e2e8f0",
+                                  color: tokens.textSecondary,
+                                  background: tokens.elevatedSurfaceBg,
+                                  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                   padding: "1px 5px",
                                   borderRadius: "4px",
                                 }}
@@ -3357,7 +3411,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                             <div
                               style={{
                                 fontSize: "12px",
-                                color: "#64748b",
+                                color: tokens.textSecondary,
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
@@ -3373,7 +3427,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                       <span>
                                         <strong style={{ color: "#0369a1" }}>Replacing: </strong>
                                         {replItems.map((i) => `${i.product_name} ×${i.quantity}`).join(", ")}
-                                        <span style={{ color: "#94a3b8", marginLeft: "5px" }}>
+                                        <span style={{ color: tokens.textMuted, marginLeft: "5px" }}>
                                           ({deliveredItems.length} item{deliveredItems.length > 1 ? "s" : ""} delivered earlier)
                                         </span>
                                       </span>
@@ -3390,7 +3444,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                           {/* Col 2: Amount & Date */}
                           <div style={{ minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <span style={{ fontSize: "13.5px", color: "#0f172a", fontWeight: 700 }}>
+                              <span style={{ fontSize: "13.5px", color: tokens.textPrimary, fontWeight: 700 }}>
                                 {formatPrice(order.total)}
                               </span>
                               <span
@@ -3399,9 +3453,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                   fontWeight: 600,
                                   padding: "1px 6px",
                                   borderRadius: "4px",
-                                  background: "#f8fafc",
-                                  color: "#475569",
-                                  border: "1px solid #e2e8f0",
+                                  background: tokens.elevatedSurfaceBg,
+                                  color: tokens.textSecondary,
+                                  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "4px",
@@ -3411,7 +3465,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                 <span>{formatPaymentMethodName(order.payment_method)}</span>
                               </span>
                             </div>
-                            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                            <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "2px" }}>
                               {formatDate(order.created_at)}
                             </div>
                           </div>
@@ -3421,14 +3475,14 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                             {order.shipment?.delivery_partner_name ? (
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#16a34a", flexShrink: 0 }} />
-                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {order.shipment.delivery_partner_name}
                                 </span>
                               </div>
                             ) : order.shipment?.courier_name ? (
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#7c3aed", flexShrink: 0 }} />
-                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {order.shipment.courier_name}
                                 </span>
                               </div>
@@ -3440,7 +3494,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                 </span>
                               </div>
                             ) : (
-                              <span style={{ fontSize: "12px", color: "#94a3b8" }}>—</span>
+                              <span style={{ fontSize: "12px", color: tokens.textMuted }}>—</span>
                             )}
                           </div>
 
@@ -3479,13 +3533,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                           </div>
 
                           {/* Col 6: Chevron */}
-                          <div style={{ color: "#94a3b8", display: "grid", placeItems: "center" }}>
+                          <div style={{ color: tokens.textMuted, display: "grid", placeItems: "center" }}>
                             {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
                           </div>
                         </div>
 
                         {isExpanded && (
-                          <div style={{ padding: "16px", borderTop: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                          <div style={{ padding: "16px", borderTop: `1px solid ${tokens.border}`, background: isDark ? "rgba(0,0,0,0.25)" : tokens.elevatedSurfaceBg }}>
                             <div
                               style={{
                                 display: "grid",
@@ -3496,7 +3550,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                 {/* Left Column: Destination, Items Breakdown & Pricing Snapshot */}
                                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                                   {/* Card 1: Customer Destination & Notes */}
-                                  <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                  <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                     <div
                                       style={{
                                         display: "flex",
@@ -3504,10 +3558,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         alignItems: "center",
                                         marginBottom: "12px",
                                         paddingBottom: "8px",
-                                        borderBottom: "1px solid #f1f5f9",
+                                        borderBottom: `1px solid ${tokens.border}`,
                                       }}
                                     >
-                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                         Customer & Destination
                                       </span>
                                       <span
@@ -3516,9 +3570,29 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           fontWeight: 700,
                                           padding: "3px 8px",
                                           borderRadius: "4px",
-                                          background: (detail?.payment_status || order.payment_status) === "paid" ? "#f0fdf4" : (detail?.payment_status || order.payment_status) === "refunded" ? "#f0fdf4" : (detail?.payment_status || order.payment_status) === "partially_refunded" ? "#eff6ff" : "#fef2f2",
-                                          color: (detail?.payment_status || order.payment_status) === "paid" ? "#15803d" : (detail?.payment_status || order.payment_status) === "refunded" ? "#15803d" : (detail?.payment_status || order.payment_status) === "partially_refunded" ? "#1d4ed8" : "#b91c1c",
-                                          border: `1px solid ${(detail?.payment_status || order.payment_status) === "paid" ? "#bbf7d0" : (detail?.payment_status || order.payment_status) === "refunded" ? "#bbf7d0" : (detail?.payment_status || order.payment_status) === "partially_refunded" ? "#bfdbfe" : "#fecaca"}`,
+                                          background: (detail?.payment_status || order.payment_status) === "paid"
+                                            ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4")
+                                            : (detail?.payment_status || order.payment_status) === "refunded"
+                                            ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4")
+                                            : (detail?.payment_status || order.payment_status) === "partially_refunded"
+                                            ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                                            : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"),
+                                          color: (detail?.payment_status || order.payment_status) === "paid"
+                                            ? (isDark ? "#4ade80" : "#15803d")
+                                            : (detail?.payment_status || order.payment_status) === "refunded"
+                                            ? (isDark ? "#4ade80" : "#15803d")
+                                            : (detail?.payment_status || order.payment_status) === "partially_refunded"
+                                            ? (isDark ? "#93c5fd" : "#1d4ed8")
+                                            : (isDark ? "#fca5a5" : "#b91c1c"),
+                                          border: `1px solid ${
+                                            (detail?.payment_status || order.payment_status) === "paid"
+                                              ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0")
+                                              : (detail?.payment_status || order.payment_status) === "refunded"
+                                              ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0")
+                                              : (detail?.payment_status || order.payment_status) === "partially_refunded"
+                                              ? (isDark ? "rgba(147, 197, 253, 0.3)" : "#bfdbfe")
+                                              : (isDark ? "rgba(252, 165, 165, 0.3)" : "#fecaca")
+                                          }`,
                                           textTransform: "capitalize",
                                         }}
                                       >
@@ -3526,17 +3600,17 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                       </span>
                                     </div>
 
-                                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+                                    <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "4px" }}>
                                       {order.customer_name || shippingAddress?.fullName || "Guest Customer"}
                                     </div>
-                                    <div style={{ fontSize: "12.5px", color: "#475569", lineHeight: "1.5" }}>
-                                      <span style={{ fontWeight: 600, color: "#334155" }}>Delivery Address:</span><br />
+                                    <div style={{ fontSize: "12.5px", color: tokens.textSecondary, lineHeight: "1.5" }}>
+                                      <span style={{ fontWeight: 600, color: tokens.textSecondary }}>Delivery Address:</span><br />
                                       {shippingAddress?.addressLine1 || shippingAddress?.street || "No address line"}<br />
                                       {shippingAddress?.city ? `${shippingAddress.city} - ${shippingAddress.postalCode || ""}` : ""}
                                     </div>
 
                                     {(order.customer_phone || shippingAddress?.mobileNumber) && (
-                                      <div style={{ fontSize: "12.5px", color: "#475569", marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                      <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
                                         <PhoneIcon />
                                         <a href={`tel:${order.customer_phone || shippingAddress?.mobileNumber}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
                                           {formatPhoneDisplay(order.customer_phone || shippingAddress?.mobileNumber || "")}
@@ -3544,26 +3618,26 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                       </div>
                                     )}
                                     {(order.customer_email || shippingAddress?.email) && (
-                                      <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                                      <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "2px" }}>
                                         {order.customer_email || shippingAddress?.email}
                                       </div>
                                     )}
 
-                                    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                      <span style={{ fontSize: "12px", color: "#64748b" }}>Payment Method:</span>
-                                      <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#0f172a" }}>{formatPaymentMethodName(order.payment_method)}</span>
+                                    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                      <span style={{ fontSize: "12px", color: tokens.textSecondary }}>Payment Method:</span>
+                                      <span style={{ fontSize: "12.5px", fontWeight: 700, color: tokens.textPrimary }}>{formatPaymentMethodName(order.payment_method)}</span>
                                     </div>
 
                                     {(detail?.razorpay_payment_id || order.razorpay_payment_id) && (
                                       <div style={{ marginTop: "4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                        <span style={{ fontSize: "11px", color: "#64748b" }}>Payment Reference:</span>
-                                        <code style={{ fontSize: "11px", color: "#334155", background: "#f1f5f9", padding: "1px 5px", borderRadius: "3px" }}>
+                                        <span style={{ fontSize: "11px", color: tokens.textSecondary }}>Payment Reference:</span>
+                                        <code style={{ fontSize: "11px", color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, padding: "1px 5px", borderRadius: "3px" }}>
                                           {detail?.razorpay_payment_id || order.razorpay_payment_id}
                                         </code>
                                       </div>
                                     )}
 
-                                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "flex-end" }}>
+                                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}`, display: "flex", justifyContent: "flex-end" }}>
                                       <button
                                         type="button"
                                         onClick={(e) => {
@@ -3577,9 +3651,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           gap: "6px",
                                           padding: "7px 12px",
                                           borderRadius: "6px",
-                                          border: "1px solid #cbd5e1",
-                                          background: "#ffffff",
-                                          color: "#0f172a",
+                                          border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                          background: tokens.surfaceBg,
+                                          color: tokens.textPrimary,
                                           fontSize: "12px",
                                           fontWeight: 600,
                                           cursor: "pointer",
@@ -3587,12 +3661,12 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           transition: "all 0.15s ease",
                                         }}
                                         onMouseEnter={(e) => {
-                                          e.currentTarget.style.background = "#f8fafc";
-                                          e.currentTarget.style.borderColor = "#94a3b8";
+                                          e.currentTarget.style.background = isDark ? tokens.elevatedSurfaceBg : "#f8fafc";
+                                          e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.2)" : "#94a3b8";
                                         }}
                                         onMouseLeave={(e) => {
-                                          e.currentTarget.style.background = "#ffffff";
-                                          e.currentTarget.style.borderColor = "#cbd5e1";
+                                          e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#ffffff";
+                                          e.currentTarget.style.borderColor = tokens.border;
                                         }}
                                       >
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3608,7 +3682,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                   </div>
 
                                   {/* Card 2: Order Items & Pricing Breakdown */}
-                                  <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                  <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                     <div
                                       style={{
                                         display: "flex",
@@ -3616,11 +3690,11 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         alignItems: "center",
                                         marginBottom: "12px",
                                         paddingBottom: "8px",
-                                        borderBottom: "1px solid #f1f5f9",
+                                        borderBottom: `1px solid ${tokens.border}`,
                                       }}
                                     >
                                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                        <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                        <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                           Order Items ({items.length})
                                         </span>
                                         {isReplActive && (
@@ -3630,7 +3704,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           </span>
                                         )}
                                       </div>
-                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                                         Total: {formatPrice(order.total)}
                                       </span>
                                     </div>
@@ -3642,7 +3716,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         const deliveredItems = items.filter((i) => i.status === "delivered");
                                         if (replItems.length > 0 && deliveredItems.length > 0) {
                                           return (
-                                            <div style={{ padding: "10px 12px", borderRadius: "6px", background: "#f0f9ff", border: "1.5px solid #bae6fd", marginBottom: "12px", fontSize: "12px", color: "#0369a1", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                                            <div style={{ padding: "10px 12px", borderRadius: "6px", background: isDark ? "rgba(2, 132, 199, 0.12)" : "#f0f9ff", border: `1.5px solid ${isDark ? "rgba(56, 189, 248, 0.3)" : "#bae6fd"}`, marginBottom: "12px", fontSize: "12px", color: isDark ? "#7dd3fc" : "#0369a1", display: "flex", alignItems: "flex-start", gap: "8px" }}>
                                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "2px" }}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                                               <div>
                                                 <strong>Packing Instruction (Partial Re-Dispatch):</strong> Pack only <strong>{replItems.map((i) => `${i.quantity}x ${i.product_name}`).join(", ")}</strong> for this replacement shipment. The other {deliveredItems.length} item(s) were already delivered.
@@ -3669,14 +3743,22 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                               gap: "12px",
                                               padding: "10px 12px",
                                               borderRadius: "6px",
-                                              background: isItemBeingReplaced ? "#f0f9ff" : isItemDeliveredEarlier ? "#f8fafc" : "#ffffff",
-                                              border: isItemBeingReplaced ? "1.5px solid #7dd3fc" : "1px solid #e2e8f0",
+                                              background: isItemBeingReplaced
+                                                ? (isDark ? "rgba(2, 132, 199, 0.12)" : "#f0f9ff")
+                                                : isItemDeliveredEarlier
+                                                ? (isDark ? "rgba(34, 197, 94, 0.08)" : "#f8fafc")
+                                                : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
+                                              border: isItemBeingReplaced
+                                                ? (isDark ? "1.5px solid rgba(125, 211, 252, 0.4)" : "1.5px solid #7dd3fc")
+                                                : isItemDeliveredEarlier
+                                                ? (isDark ? "1px solid rgba(34, 197, 94, 0.2)" : "1px solid #e2e8f0")
+                                                : `1px solid ${tokens.border}`,
                                               transition: "all 0.15s ease",
                                             }}
                                           >
                                             <div style={{ minWidth: 0, flex: 1 }}>
                                               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                                                <span style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>
+                                                <span style={{ fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary }}>
                                                   {item.product_name}
                                                 </span>
                                                 {item.is_preorder && (
@@ -3684,9 +3766,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                     style={{
                                                       fontSize: "11px",
                                                       fontWeight: 700,
-                                                      color: "#b45309",
-                                                      background: "#fffbeb",
-                                                      border: "1px solid #fde68a",
+                                                      color: isDark ? "#fbbf24" : "#b45309",
+                                                      background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
+                                                      border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
                                                       padding: "2px 7px",
                                                       borderRadius: "4px",
                                                       display: "inline-flex",
@@ -3703,20 +3785,20 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                   </span>
                                                 )}
                                                 {isItemBeingReplaced && (
-                                                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#0284c7", background: "#e0f2fe", border: "1px solid #7dd3fc", padding: "2px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                                  <span style={{ fontSize: "11px", fontWeight: 700, color: isDark ? "#38bdf8" : "#0284c7", background: isDark ? "rgba(2, 132, 199, 0.15)" : "#e0f2fe", border: `1px solid ${isDark ? "rgba(56, 189, 248, 0.3)" : "#7dd3fc"}`, padding: "2px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
                                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                                                     <span>Re-Dispatch Item</span>
                                                   </span>
                                                 )}
                                                 {isItemDeliveredEarlier && (
-                                                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "2px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                                  <span style={{ fontSize: "11px", fontWeight: 600, color: isDark ? "#4ade80" : "#15803d", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, padding: "2px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
                                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                                                     <span>Delivered Earlier</span>
                                                   </span>
                                                 )}
                                               </div>
                                               <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap" }}>
-                                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#475569" }}>
+                                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textSecondary }}>
                                                   Qty: {item.quantity}
                                                 </span>
                                                 {item.selected_variant_value && (
@@ -3724,9 +3806,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                     style={{
                                                       fontSize: "11px",
                                                       fontWeight: 600,
-                                                      color: "#2563eb",
-                                                      background: "#eff6ff",
-                                                      border: "1px solid #bfdbfe",
+                                                      color: isDark ? "#60a5fa" : "#2563eb",
+                                                      background: isDark ? "rgba(37, 99, 235, 0.15)" : "#eff6ff",
+                                                      border: `1px solid ${isDark ? "rgba(37, 99, 235, 0.3)" : "#bfdbfe"}`,
                                                       padding: "1px 6px",
                                                       borderRadius: "4px",
                                                     }}
@@ -3735,13 +3817,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                   </span>
                                                 )}
                                                 {!isReplDelivered && !isItemBeingReplaced && !isItemDeliveredEarlier && item.status && item.status !== "delivered" && (
-                                                  <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>
+                                                  <span style={{ fontSize: "11.5px", color: tokens.textMuted }}>
                                                     • {item.status.replaceAll("_", " ")}
                                                   </span>
                                                 )}
                                               </div>
                                             </div>
-                                            <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
+                                            <div style={{ fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap" }}>
                                               {formatPrice(item.line_total)}
                                             </div>
                                           </div>
@@ -3754,7 +3836,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                 {/* Right Column: Fulfillment Dispatch Control & Admin Timeline */}
                                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                                   {/* Card 1: Delivery & Dispatch Control */}
-                                  <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                  <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                     <div
                                       style={{
                                         display: "flex",
@@ -3762,10 +3844,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         alignItems: "center",
                                         marginBottom: "12px",
                                         paddingBottom: "8px",
-                                        borderBottom: "1px solid #f1f5f9",
+                                        borderBottom: `1px solid ${tokens.border}`,
                                       }}
                                     >
-                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                         Fulfillment & Dispatch
                                       </span>
                                       {(detail?.shipment || order.shipment) ? (
@@ -3775,9 +3857,17 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                             fontWeight: 700,
                                             padding: "3px 8px",
                                             borderRadius: "4px",
-                                            background: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#f0fdf4" : "#eff6ff",
-                                            color: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#15803d" : "#1d4ed8",
-                                            border: `1px solid ${(detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#bbf7d0" : "#bfdbfe"}`,
+                                            background: (detail?.shipment?.status || order.shipment?.status) === "delivered"
+                                              ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4")
+                                              : (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff"),
+                                            color: (detail?.shipment?.status || order.shipment?.status) === "delivered"
+                                              ? (isDark ? "#4ade80" : "#15803d")
+                                              : (isDark ? "#93c5fd" : "#1d4ed8"),
+                                            border: `1px solid ${
+                                              (detail?.shipment?.status || order.shipment?.status) === "delivered"
+                                                ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0")
+                                                : (isDark ? "rgba(147, 197, 253, 0.3)" : "#bfdbfe")
+                                            }`,
                                             textTransform: "capitalize",
                                           }}
                                         >
@@ -3790,9 +3880,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                             fontWeight: 700,
                                             padding: "3px 8px",
                                             borderRadius: "4px",
-                                            background: "#fff7ed",
-                                            color: "#c2410c",
-                                            border: "1px solid #ffedd5",
+                                            background: isDark ? "rgba(249, 115, 22, 0.15)" : "#fff7ed",
+                                            color: isDark ? "#fb923c" : "#c2410c",
+                                            border: `1px solid ${isDark ? "rgba(249, 115, 22, 0.3)" : "#ffedd5"}`,
                                           }}
                                         >
                                           Pending Dispatch
@@ -3839,13 +3929,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           <div
                                             style={{
                                               padding: "14px",
-                                              background: "#f8fafc",
+                                              background: tokens.elevatedSurfaceBg,
                                               borderRadius: "8px",
-                                              border: "1px solid #e2e8f0",
+                                              border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                             }}
                                           >
                                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                                              <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                              <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                                                 Courier Partner (Shiprocket)
                                               </div>
                                               <span
@@ -3854,9 +3944,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                   fontWeight: 700,
                                                   padding: "2px 7px",
                                                   borderRadius: "4px",
-                                                  background: "#eff6ff",
-                                                  color: "#1d4ed8",
-                                                  border: "1px solid #bfdbfe",
+                                                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                                                   textTransform: "capitalize",
                                                 }}
                                               >
@@ -3864,14 +3954,14 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                               </span>
                                             </div>
 
-                                            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", marginBottom: "6px" }}>
+                                            <div style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "6px" }}>
                                               {currentShipment?.courier_name || "Delhivery Surface"}
                                             </div>
 
                                             {currentShipment?.awb_number && (
                                               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", fontSize: "13px" }}>
-                                                <span style={{ color: "#64748b" }}>AWB Number:</span>
-                                                <code style={{ background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, color: "#0f172a" }}>
+                                                <span style={{ color: tokens.textSecondary }}>AWB Number:</span>
+                                                <code style={{ background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, color: tokens.textPrimary }}>
                                                   {currentShipment.awb_number}
                                                 </code>
                                               </div>
@@ -3911,9 +4001,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                     gap: "5px",
                                                     padding: "6px 12px",
                                                     borderRadius: "6px",
-                                                    background: "#ffffff",
-                                                    color: "#0f172a",
-                                                    border: "1px solid #cbd5e1",
+                                                    background: tokens.surfaceBg,
+                                                    color: tokens.textPrimary,
+                                                    border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                                     fontSize: "12px",
                                                     fontWeight: 700,
                                                     textDecoration: "none",
@@ -3936,13 +4026,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           <div
                                             style={{
                                               padding: "14px",
-                                              background: "#f8fafc",
+                                              background: tokens.elevatedSurfaceBg,
                                               borderRadius: "8px",
-                                              border: "1px solid #e2e8f0",
+                                              border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                             }}
                                           >
                                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                                              <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                              <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                                                 Manual Courier Partner
                                               </div>
                                               <span
@@ -3975,14 +4065,14 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                               </span>
                                             </div>
 
-                                            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+                                            <div style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "4px" }}>
                                               {currentShipment?.delivery_partner_name || "Courier Partner"}
                                             </div>
 
                                             {currentShipment?.delivery_partner_phone && (
                                               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", fontSize: "13px" }}>
-                                                <span style={{ color: "#64748b" }}>Tracking No. / Contact:</span>
-                                                <code style={{ background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, color: "#0f172a" }}>
+                                                <span style={{ color: tokens.textSecondary }}>Tracking No. / Contact:</span>
+                                                <code style={{ background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, color: tokens.textPrimary }}>
                                                   {currentShipment.delivery_partner_phone}
                                                 </code>
                                               </div>
@@ -4011,8 +4101,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
                                             {/* Admin Control Actions for Manual Courier */}
                                             {order.status !== "delivered" && order.status !== "cancelled" ? (
-                                              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #e2e8f0" }}>
-                                                <div style={{ fontSize: "12px", fontWeight: 700, color: "#475569" }}>
+                                              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}` }}>
+                                                <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textSecondary }}>
                                                   Admin Delivery Controls:
                                                 </div>
                                                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -4063,9 +4153,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                        style={{
                                                          padding: "7px 12px",
                                                          borderRadius: "6px",
-                                                         background: "#ffffff",
-                                                         color: "#475569",
-                                                         border: "1px solid #cbd5e1",
+                                                         background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                                          fontSize: "12px",
                                                          fontWeight: 600,
                                                          cursor: "pointer",
@@ -4082,9 +4172,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                     style={{
                                                       marginTop: "8px",
                                                       padding: "10px",
-                                                      background: "#ffffff",
+                                                      background: tokens.surfaceBg,
                                                       borderRadius: "6px",
-                                                      border: "1px solid #cbd5e1",
+                                                      border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                                       display: "flex",
                                                       flexDirection: "column",
                                                       gap: "8px",
@@ -4139,9 +4229,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                         style={{
                                                           padding: "6px 10px",
                                                           borderRadius: "5px",
-                                                          background: "#ffffff",
-                                                          color: "#475569",
-                                                          border: "1px solid #cbd5e1",
+                                                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                                           fontSize: "12px",
                                                           fontWeight: 600,
                                                           cursor: "pointer",
@@ -4158,11 +4248,11 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                 style={{
                                                   marginTop: "10px",
                                                   padding: "8px 12px",
-                                                  background: "#f0fdf4",
-                                                  border: "1px solid #bbf7d0",
+                                                  background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4",
+                                                  border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`,
                                                   borderRadius: "6px",
                                                   fontSize: "12px",
-                                                  color: "#166534",
+                                                  color: isDark ? "#86efac" : "#166534",
                                                   fontWeight: 600,
                                                   display: "flex",
                                                   alignItems: "center",
@@ -4188,13 +4278,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           <div
                                             style={{
                                               padding: "14px",
-                                              background: "#f8fafc",
+                                              background: tokens.elevatedSurfaceBg,
                                               borderRadius: "8px",
-                                              border: "1px solid #e2e8f0",
+                                              border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                             }}
                                           >
                                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                                              <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                              <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                                                 Store Delivery Partner (Own Fleet)
                                               </div>
                                               {order.status === "cancelled" ? (
@@ -4204,9 +4294,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                     fontWeight: 700,
                                                     padding: "2px 7px",
                                                     borderRadius: "4px",
-                                                    background: currentShipment?.status === "returned_to_warehouse" ? "#f0fdf4" : "#fef2f2",
-                                                    color: currentShipment?.status === "returned_to_warehouse" ? "#16a34a" : "#dc2626",
-                                                    border: `1px solid ${currentShipment?.status === "returned_to_warehouse" ? "#bbf7d0" : "#fecaca"}`,
+                                                    background: currentShipment?.status === "returned_to_warehouse" ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"),
+                                                    color: currentShipment?.status === "returned_to_warehouse" ? (isDark ? "#4ade80" : "#16a34a") : (isDark ? "#fca5a5" : "#dc2626"),
+                                                    border: `1px solid ${currentShipment?.status === "returned_to_warehouse" ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0") : (isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca")}`,
                                                     textTransform: "capitalize",
                                                   }}
                                                 >
@@ -4232,10 +4322,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                               ) : null}
                                             </div>
 
-                                            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                                            <div style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
                                               {riderName}
                                               {riderPhone && (
-                                                <div style={{ fontSize: "13px", color: "#475569", marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
+                                                <div style={{ fontSize: "13px", color: tokens.textSecondary, marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
                                                   <PhoneIcon />
                                                   <a href={`tel:${riderPhone}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
                                                     {formatPhoneDisplay(riderPhone)}
@@ -4249,18 +4339,18 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                     marginTop: "10px",
                                                     padding: "9px 12px",
                                                     background: order.status === "cancelled"
-                                                      ? (currentShipment?.status === "returned_to_warehouse" ? "#f0fdf4" : "#fef2f2")
-                                                      : "#fffbeb",
+                                                      ? (currentShipment?.status === "returned_to_warehouse" ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"))
+                                                      : (isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb"),
                                                     borderRadius: "6px",
                                                     border: `1px solid ${
                                                       order.status === "cancelled"
-                                                        ? (currentShipment?.status === "returned_to_warehouse" ? "#bbf7d0" : "#fecaca")
-                                                        : "#fde68a"
+                                                        ? (currentShipment?.status === "returned_to_warehouse" ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0") : (isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"))
+                                                        : (isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a")
                                                     }`,
                                                     fontSize: "12px",
                                                     color: order.status === "cancelled"
-                                                      ? (currentShipment?.status === "returned_to_warehouse" ? "#166534" : "#991b1b")
-                                                      : "#92400e",
+                                                      ? (currentShipment?.status === "returned_to_warehouse" ? (isDark ? "#86efac" : "#166534") : (isDark ? "#fca5a5" : "#991b1b"))
+                                                      : (isDark ? "#fde047" : "#92400e"),
                                                     lineHeight: 1.4,
                                                   }}
                                                 >
@@ -4292,9 +4382,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                   style={{
                                                     marginTop: "12px",
                                                     padding: "12px 14px",
-                                                    background: "#fef2f2",
+                                                    background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
                                                     borderRadius: "8px",
-                                                    border: "1px solid #fecaca",
+                                                    border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
                                                     display: "flex",
                                                     flexDirection: "column",
                                                     gap: "10px",
@@ -4356,9 +4446,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                         style={{
                                                           padding: "7px 12px",
                                                           borderRadius: "6px",
-                                                          background: "#ffffff",
-                                                          border: "1px solid #cbd5e1",
-                                                          color: "#334155",
+                                                          background: tokens.surfaceBg,
+                                                          border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                                          color: tokens.textSecondary,
                                                           fontSize: "12.5px",
                                                           fontWeight: 600,
                                                           cursor: "pointer",
@@ -4378,68 +4468,89 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                 style={{
                                                   marginTop: "12px",
                                                   padding: "12px",
-                                                  background: "#ffffff",
+                                                  background: tokens.surfaceBg,
                                                   borderRadius: "6px",
-                                                  border: "1px solid #cbd5e1",
+                                                  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                                   display: "flex",
                                                   flexDirection: "column",
                                                   gap: "10px",
                                                 }}
                                               >
-                                                <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                                <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>
                                                   Option 1: Choose Replacement In-House Rider
                                                 </div>
-                                                <select
-                                                  value={reassignAgentIdMap[order.id] || ""}
-                                                  onChange={(e) => setReassignAgentIdMap((p) => ({ ...p, [order.id]: e.target.value }))}
-                                                  style={{ ...inputStyle, fontSize: "13px" }}
-                                                >
-                                                  <option value="">-- Choose Rider --</option>
-                                                  {deliveryAgents
-                                                    .filter((a) => a.is_active)
-                                                    .map((a) => (
-                                                      <option key={a.id} value={a.id}>
-                                                        {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
-                                                      </option>
-                                                    ))}
-                                                </select>
+                                                <div style={{ position: "relative" }}>
+                                                  <select
+                                                    value={reassignAgentIdMap[order.id] || ""}
+                                                    onChange={(e) => setReassignAgentIdMap((p) => ({ ...p, [order.id]: e.target.value }))}
+                                                    style={{
+                                                      ...inputStyle,
+                                                      height: "38px",
+                                                      padding: "0 34px 0 12px",
+                                                      borderRadius: "8px",
+                                                      border: `1px solid ${tokens.border}`,
+                                                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                      color: tokens.textPrimary,
+                                                      colorScheme: isDark ? "dark" : "light",
+                                                      cursor: "pointer",
+                                                      appearance: "none",
+                                                      fontSize: "13px",
+                                                      fontWeight: 500,
+                                                    }}
+                                                  >
+                                                    <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>-- Choose Rider --</option>
+                                                    {deliveryAgents
+                                                      .filter((a) => a.is_active)
+                                                      .map((a) => (
+                                                        <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>
+                                                          {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
+                                                        </option>
+                                                      ))}
+                                                  </select>
+                                                  <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: tokens.textSecondary, display: "grid", placeItems: "center" }}>
+                                                    <ChevronDownIcon />
+                                                  </div>
+                                                </div>
                                                 <div style={{ display: "flex", gap: "8px" }}>
                                                   <button
                                                     type="button"
                                                     onClick={() => handleReassignRider(order.id)}
                                                     disabled={actionLoadingId === order.id || !reassignAgentIdMap[order.id]}
                                                     style={{
-                                                      padding: "6px 12px",
-                                                      borderRadius: "5px",
+                                                      height: "36px",
+                                                      padding: "0 14px",
+                                                      borderRadius: "7px",
                                                       background: "#2563eb",
                                                       color: "#ffffff",
-                                                      border: "none",
-                                                      fontSize: "12px",
+                                                      border: "1px solid rgba(255,255,255,0.1)",
+                                                      fontSize: "12.5px",
                                                       fontWeight: 700,
                                                       cursor: (actionLoadingId === order.id || !reassignAgentIdMap[order.id]) ? "not-allowed" : "pointer",
                                                       opacity: !reassignAgentIdMap[order.id] ? 0.6 : 1,
+                                                      display: "inline-flex",
+                                                      alignItems: "center",
+                                                      justifyContent: "center",
+                                                      gap: "6px",
                                                     }}
                                                   >
-                                                    {actionLoadingId === order.id ? "Reassigning..." : "Confirm Replacement Rider"}
+                                                    <span>{actionLoadingId === order.id ? "Reassigning..." : "Confirm Replacement Rider"}</span>
                                                   </button>
                                                 </div>
 
                                                 <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "10px", marginTop: "4px" }}>
-                                                  <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", marginBottom: "8px" }}>
+                                                  <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "8px" }}>
                                                     Option 2: Switch to Manual Courier Partner
                                                   </div>
                                                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                                                     <input
                                                       value={shipmentDraft.deliveryPartnerName}
                                                       onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerName", e.target.value)}
-                                                      placeholder="Courier Name (e.g. BlueDart / DTDC / SpeedPost)"
-                                                      style={inputStyle}
+                                                      placeholder="Courier Name (e.g. BlueDart / DTDC / SpeedPost)" style={{ ...inputStyle, background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", color: tokens.textPrimary, colorScheme: isDark ? "dark" : "light", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}
                                                     />
                                                     <input
                                                       value={shipmentDraft.deliveryPartnerPhone}
                                                       onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerPhone", e.target.value)}
-                                                      placeholder="Tracking Number / AWB"
-                                                      style={inputStyle}
+                                                      placeholder="Tracking Number / AWB" style={{ ...inputStyle, background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", color: tokens.textPrimary, colorScheme: isDark ? "dark" : "light", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}
                                                     />
                                                     <div style={{ display: "flex", gap: "8px" }}>
                                                       <button
@@ -4476,9 +4587,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                         style={{
                                                           padding: "6px 10px",
                                                           borderRadius: "5px",
-                                                          background: "#ffffff",
-                                                          color: "#475569",
-                                                          border: "1px solid #cbd5e1",
+                                                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                                           fontSize: "12px",
                                                           fontWeight: 600,
                                                           cursor: "pointer",
@@ -4497,7 +4608,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                             {/* Mode Tabs: only rendered if more than 1 delivery mode is enabled */}
                                             {availableModes.length > 1 && (
-                                              <div style={{ display: "flex", gap: "4px", padding: "3px", background: "#f1f5f9", borderRadius: "6px" }}>
+                                              <div style={{ display: "flex", gap: "4px", padding: "3px", background: tokens.elevatedSurfaceBg, borderRadius: "6px" }}>
                                                 {availableModes.map((mode) => (
                                                   <button
                                                     key={mode.id}
@@ -4508,8 +4619,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                       padding: "6px 8px",
                                                       borderRadius: "4px",
                                                       border: "none",
-                                                      background: activeMode === mode.id ? "#ffffff" : "transparent",
-                                                      color: activeMode === mode.id ? "#2563eb" : "#64748b",
+                                                      background: activeMode === mode.id ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                                                       color: activeMode === mode.id ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
                                                       fontWeight: 700,
                                                       fontSize: "12px",
                                                       cursor: "pointer",
@@ -4527,20 +4638,38 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                                 <div>
                                                   <label style={labelStyle}>Assign Delivery Rider</label>
-                                                  <select
-                                                    value={selectedAgentMap[order.id] || ""}
-                                                    onChange={(e) => setSelectedAgentMap((p) => ({ ...p, [order.id]: e.target.value }))}
-                                                    style={{ ...inputStyle, cursor: "pointer" }}
-                                                  >
-                                                    <option value="">Auto-Assign (Least Busy Rider)</option>
-                                                    {deliveryAgents
-                                                      .filter((a) => a.is_active)
-                                                      .map((a) => (
-                                                        <option key={a.id} value={a.id}>
-                                                          {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
-                                                        </option>
-                                                      ))}
-                                                  </select>
+                                                  <div style={{ position: "relative" }}>
+                                                    <select
+                                                      value={selectedAgentMap[order.id] || ""}
+                                                      onChange={(e) => setSelectedAgentMap((p) => ({ ...p, [order.id]: e.target.value }))}
+                                                      style={{
+                                                        ...inputStyle,
+                                                        height: "38px",
+                                                        padding: "0 34px 0 12px",
+                                                        borderRadius: "8px",
+                                                        border: `1px solid ${tokens.border}`,
+                                                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                        color: tokens.textPrimary,
+                                                        colorScheme: isDark ? "dark" : "light",
+                                                        cursor: "pointer",
+                                                        appearance: "none",
+                                                        fontSize: "13px",
+                                                        fontWeight: 500,
+                                                      }}
+                                                    >
+                                                      <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Auto-Assign (Least Busy Rider)</option>
+                                                      {deliveryAgents
+                                                        .filter((a) => a.is_active)
+                                                        .map((a) => (
+                                                          <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>
+                                                            {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
+                                                          </option>
+                                                        ))}
+                                                    </select>
+                                                    <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: tokens.textSecondary, display: "grid", placeItems: "center" }}>
+                                                      <ChevronDownIcon />
+                                                    </div>
+                                                  </div>
                                                 </div>
 
                                                 <button
@@ -4548,17 +4677,29 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                   onClick={() => handleDispatchOrder(order.id, "own_agent")}
                                                   disabled={actionLoadingId === order.id}
                                                   style={{
-                                                    padding: "9px 14px",
-                                                    borderRadius: "6px",
+                                                    height: "38px",
+                                                    padding: "0 16px",
+                                                    borderRadius: "8px",
                                                     background: "#2563eb",
-                                                    border: "1px solid #2563eb",
+                                                    border: "1px solid rgba(255,255,255,0.1)",
                                                     color: "#ffffff",
                                                     fontWeight: 700,
                                                     fontSize: "13px",
                                                     cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    gap: "8px",
+                                                    boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
+                                                    transition: "all 0.15s ease",
                                                   }}
                                                 >
-                                                  {actionLoadingId === order.id ? "Assigning Rider..." : "Assign Rider & Confirm Order"}
+                                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                                    <circle cx="9" cy="7" r="4" />
+                                                    <polyline points="16 11 18 13 22 9" />
+                                                  </svg>
+                                                  <span>{actionLoadingId === order.id ? "Assigning Rider..." : "Assign Rider & Confirm Order"}</span>
                                                 </button>
                                               </div>
                                             )}
@@ -4569,7 +4710,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                const currentWeight = packageWeightMap[order.id] !== undefined ? packageWeightMap[order.id] : defaultWeight;
                                                return (
                                                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                                   <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                                                   <p style={{ fontSize: "12px", color: tokens.textSecondary, margin: 0 }}>
                                                      Auto-books courier pickup with Delhivery, BlueDart, DTDC, or Xpressbees and generates AWB tracking label.
                                                    </p>
 
@@ -4601,7 +4742,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                           </svg>
                                                           Auto-calculated from product details
                                                         </span>
-                                                       <span style={{ fontSize: "11px", color: "#64748b" }}>
+                                                       <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
                                                          (Editable before booking)
                                                        </span>
                                                      </div>
@@ -4691,7 +4832,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                 </div>
 
                                 {/* Card 2: Timeline & Notes */}
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                   <div
                                     style={{
                                       display: "flex",
@@ -4699,53 +4840,53 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                       alignItems: "center",
                                       marginBottom: "12px",
                                       paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
+                                      borderBottom: `1px solid ${tokens.border}`,
                                     }}
                                   >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                    <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                       Order Timeline & Notes
                                     </span>
                                   </div>
 
-                                  <div style={{ display: "grid", gap: "6px", fontSize: "13px", color: "#475569" }}>
+                                  <div style={{ display: "grid", gap: "6px", fontSize: "13px", color: tokens.textSecondary }}>
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ color: "#64748b" }}>Created:</span>
-                                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(order.created_at)}</span>
+                                      <span style={{ color: tokens.textSecondary }}>Created:</span>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(order.created_at)}</span>
                                     </div>
                                     {order.confirmed_at && (
                                       <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                        <span style={{ color: "#64748b" }}>Confirmed:</span>
-                                        <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(order.confirmed_at)}</span>
+                                        <span style={{ color: tokens.textSecondary }}>Confirmed:</span>
+                                        <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(order.confirmed_at)}</span>
                                       </div>
                                     )}
                                     {order.shipped_at && (
                                       <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                        <span style={{ color: "#64748b" }}>Shipped:</span>
-                                        <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(order.shipped_at)}</span>
+                                        <span style={{ color: tokens.textSecondary }}>Shipped:</span>
+                                        <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(order.shipped_at)}</span>
                                       </div>
                                     )}
                                     {order.delivered_at && (
                                       <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                        <span style={{ color: "#64748b" }}>Delivered:</span>
+                                        <span style={{ color: tokens.textSecondary }}>Delivered:</span>
                                         <span style={{ fontWeight: 600, color: "#15803d" }}>{formatDate(order.delivered_at)}</span>
                                       </div>
                                     )}
                                     {order.cancelled_at && (
                                       <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                        <span style={{ color: "#64748b" }}>Cancelled:</span>
+                                        <span style={{ color: tokens.textSecondary }}>Cancelled:</span>
                                         <span style={{ fontWeight: 600, color: "#b91c1c" }}>{formatDate(order.cancelled_at)}</span>
                                       </div>
                                     )}
                                   </div>
 
                                   {detail?.cancel_reason ? (
-                                    <div style={{ marginTop: "10px", padding: "8px 10px", background: "#fef2f2", borderRadius: "6px", border: "1px solid #fecaca", fontSize: "12.5px", color: "#991b1b" }}>
+                                    <div style={{ marginTop: "10px", padding: "8px 10px", background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2", borderRadius: "6px", border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`, fontSize: "12.5px", color: isDark ? "#fca5a5" : "#991b1b" }}>
                                       <strong>Cancel Reason:</strong> {detail.cancel_reason}
                                     </div>
                                   ) : null}
 
                                   {order.status !== "delivered" && order.status !== "cancelled" && order.status !== "returned" && canCancelOrders && (
-                                    <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
+                                    <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: `1px solid ${tokens.border}` }}>
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -4758,9 +4899,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           width: "100%",
                                           padding: "8px 12px",
                                           borderRadius: "6px",
-                                          background: "#fef2f2",
-                                          border: "1px solid #fecaca",
-                                          color: "#b91c1c",
+                                          background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                                          border: `1px solid ${isDark ? "rgba(239, 68, 68, 0.35)" : "#fecaca"}`,
+                                          color: isDark ? "#fca5a5" : "#b91c1c",
                                           fontSize: "12.5px",
                                           fontWeight: 700,
                                           cursor: "pointer",
@@ -4813,7 +4954,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   setPageSize(newSize);
                   setCurrentPage(1);
                 }}
-                accentColor="#2563eb"
+                accentColor={isDark ? tokens.accent : "#2563eb"}
+                theme={{ mode: isDark ? "dark" : "light" }}
                 style={{ padding: 0 }}
               />
             </div>
@@ -4827,7 +4969,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
               display: "flex",
               flexWrap: "wrap",
               gap: "4px",
-              borderBottom: "1px solid #e2e8f0",
+              borderBottom: `1px solid ${tokens.border}`,
               marginBottom: "16px",
             }}
           >
@@ -4847,9 +4989,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                     gap: "8px",
                     padding: "10px 14px",
                     border: "none",
-                    borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                    borderBottom: isActive ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : "2px solid transparent",
                     background: "transparent",
-                    color: isActive ? "#2563eb" : "#64748b",
+                    color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
                     fontSize: "13px",
                     fontWeight: isActive ? 700 : 500,
                     cursor: "pointer",
@@ -4865,9 +5007,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                       fontWeight: 700,
                       padding: "1px 6px",
                       borderRadius: "10px",
-                      background: isActive ? "#eff6ff" : "#f1f5f9",
-                      color: isActive ? "#2563eb" : "#64748b",
-                      border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
+                      background: isActive ? (isDark ? "rgba(59, 130, 246, 0.25)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                      color: isActive ? (isDark ? "#93c5fd" : "#2563eb") : tokens.textSecondary,
+                      border: `1px solid ${isActive ? (isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe") : tokens.border}`,
                     }}
                   >
                     {count}
@@ -4877,13 +5019,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
             })}
           </div>
 
-          <div style={{ ...plainCardStyle, overflow: "hidden" }}>
+          <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", overflow: "hidden" }}>
             {loading ? (
-              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: tokens.textSecondary }}>
                 Loading returns...
               </div>
             ) : !filteredReturns.length ? (
-              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: tokens.textSecondary }}>
                 {searchQuery ? "No returns match your search." : "No records in this tab."}
               </div>
             ) : (
@@ -4896,11 +5038,11 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                       "minmax(180px, 1.4fr) minmax(180px, 1.1fr) minmax(130px, 1fr) minmax(110px, 0.8fr) minmax(80px, auto) 28px",
                     gap: "12px",
                     padding: "10px 16px",
-                    background: "#f8fafc",
-                    borderBottom: "1px solid #e2e8f0",
+                    background: tokens.elevatedSurfaceBg,
+                    borderBottom: `1px solid ${tokens.border}`,
                     fontSize: "11px",
                     fontWeight: 700,
-                    color: "#64748b",
+                    color: tokens.textSecondary,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
                   }}
@@ -4915,7 +5057,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
                 {paginatedReturns.map((returnItem) => {
                   const isExpanded = expandedReturnId === returnItem.id;
-                  const tone = getStatusTone(returnItem.status);
+                  const tone = getStatusTone(returnItem.status, false, isDark);
                   const detail = getExpandedReturn(returnItem);
 
                   const reviewDraft: ReviewDraft =
@@ -4972,8 +5114,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                     <div
                       key={returnItem.id}
                       style={{
-                        borderBottom: "1px solid #e2e8f0",
-                        background: isExpanded ? "#f8fafc" : "#ffffff",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        background: isExpanded ? (isDark ? tokens.elevatedSurfaceBg : "#f8fafc") : (isDark ? tokens.surfaceBg : "#ffffff"),
                         transition: "background 0.15s ease",
                       }}
                     >
@@ -4987,8 +5129,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                           alignItems: "center",
                           padding: "12px 16px",
                           cursor: "pointer",
-                          background: isExpanded ? "#f1f5f9" : "transparent",
-                          borderBottom: isExpanded ? "1px solid #e2e8f0" : "none",
+                          background: isExpanded ? (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9") : "transparent",
+                            borderBottom: isExpanded ? `1px solid ${tokens.border}` : "none",
                           transition: "background 0.15s ease",
                         }}
                       >
@@ -4998,7 +5140,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                             style={{
                               fontSize: "13.5px",
                               fontWeight: 700,
-                              color: "#0f172a",
+                              color: tokens.textPrimary,
                               marginBottom: "2px",
                               display: "flex",
                               alignItems: "center",
@@ -5010,9 +5152,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                               style={{
                                 fontSize: "11px",
                                 fontWeight: 600,
-                                color: "#475569",
-                                background: "#f1f5f9",
-                                border: "1px solid #e2e8f0",
+                                color: tokens.textSecondary,
+                                background: tokens.elevatedSurfaceBg,
+                                border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                 padding: "1px 5px",
                                 borderRadius: "4px",
                               }}
@@ -5024,7 +5166,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                           <div
                             style={{
                               fontSize: "12px",
-                              color: "#64748b",
+                              color: tokens.textSecondary,
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
@@ -5052,7 +5194,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                         {/* Col 2: Amount & Date */}
                         <div style={{ minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span style={{ fontSize: "13.5px", color: "#0f172a", fontWeight: 700 }}>
+                            <span style={{ fontSize: "13.5px", color: tokens.textPrimary, fontWeight: 700 }}>
                               {formatPrice(detail?.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
                             </span>
                             {returnItem.refund_status && (
@@ -5064,22 +5206,22 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                   borderRadius: "4px",
                                   background:
                                     returnItem.refund_status === "completed"
-                                      ? "#dcfce7"
+                                      ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#dcfce7")
                                       : returnItem.refund_status === "pending"
-                                      ? "#fffbeb"
-                                      : "#f1f5f9",
+                                      ? (isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb")
+                                      : (isDark ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9"),
                                   color:
                                     returnItem.refund_status === "completed"
-                                      ? "#15803d"
+                                      ? (isDark ? "#4ade80" : "#15803d")
                                       : returnItem.refund_status === "pending"
-                                      ? "#b45309"
-                                      : "#475569",
+                                      ? (isDark ? "#fbbf24" : "#b45309")
+                                      : (isDark ? "#94a3b8" : "#475569"),
                                   border: `1px solid ${
                                     returnItem.refund_status === "completed"
-                                      ? "#bbf7d0"
+                                      ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0")
                                       : returnItem.refund_status === "pending"
-                                      ? "#fde68a"
-                                      : "#e2e8f0"
+                                      ? (isDark ? "rgba(251, 191, 36, 0.3)" : "#fde68a")
+                                      : (isDark ? "rgba(255, 255, 255, 0.1)" : "#e2e8f0")
                                   }`,
                                   textTransform: "uppercase",
                                 }}
@@ -5088,7 +5230,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                          <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "2px" }}>
                             {formatDate(returnItem.created_at)}
                           </div>
                         </div>
@@ -5114,14 +5256,14 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                 style={{
                                   fontSize: "12.5px",
                                   fontWeight: 600,
-                                  color: "#1e293b",
+                                  color: tokens.textPrimary,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
                                 }}
                               >
                                 {returnItem.pickup_details.agent_name}
-                                <span style={{ fontSize: "11px", color: "#64748b", marginLeft: "4px", fontWeight: 500 }}>
+                                <span style={{ fontSize: "11px", color: tokens.textSecondary, marginLeft: "4px", fontWeight: 500 }}>
                                   ({(returnItem.pickup_details.pickup_status || "assigned").replaceAll("_", " ")})
                                 </span>
                               </span>
@@ -5133,7 +5275,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                 style={{
                                   fontSize: "12.5px",
                                   fontWeight: 600,
-                                  color: "#1e293b",
+                                  color: tokens.textPrimary,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
@@ -5157,7 +5299,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                               </span>
                             </div>
                           ) : (
-                            <span style={{ fontSize: "12px", color: "#94a3b8" }}>—</span>
+                            <span style={{ fontSize: "12px", color: tokens.textMuted }}>—</span>
                           )}
                         </div>
 
@@ -5196,14 +5338,14 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                         </div>
 
                         {/* Col 6: Chevron */}
-                        <div style={{ color: "#94a3b8", display: "grid", placeItems: "center" }}>
+                        <div style={{ color: tokens.textMuted, display: "grid", placeItems: "center" }}>
                           {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
                         </div>
                       </div>
 
 
                       {isExpanded ? (
-                        <div style={{ padding: "16px 18px 20px", background: "#f8fafc" }}>
+                        <div style={{ padding: "16px 18px 20px", background: tokens.elevatedSurfaceBg }}>
                           <div
                             style={{
                               display: "grid",
@@ -5215,7 +5357,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                             {/* Left Column: Customer Details, Pickup Address & Return Items */}
                             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                               {/* Card 1: Customer & Original Order Information */}
-                              <div style={{ ...plainCardStyle, padding: "16px" }}>
+                              <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                 <div
                                   style={{
                                     display: "flex",
@@ -5223,24 +5365,24 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                     alignItems: "center",
                                     marginBottom: "12px",
                                     paddingBottom: "8px",
-                                    borderBottom: "1px solid #f1f5f9",
+                                    borderBottom: `1px solid ${tokens.border}`,
                                   }}
                                 >
-                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                     Customer & Pickup Address
                                   </span>
-                                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px" }}>
+                                  <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, padding: "2px 6px", borderRadius: "4px" }}>
                                     Order #{returnItem.order_id.slice(0, 8).toUpperCase()}
                                   </span>
                                 </div>
 
                                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                  <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                                     {detail?.order?.shipping_address?.fullName || "Customer"}
                                   </div>
 
-                                  <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, background: "#f8fafc", padding: "10px 12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                                    <div style={{ fontWeight: 600, color: "#1e293b", marginBottom: "2px" }}>
+                                  <div style={{ fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.6, background: tokens.elevatedSurfaceBg, padding: "10px 12px", borderRadius: "6px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
+                                    <div style={{ fontWeight: 600, color: tokens.textPrimary, marginBottom: "2px" }}>
                                       Pickup Address:
                                     </div>
                                     <div>{detail?.order?.shipping_address?.addressLine1 || "—"}</div>
@@ -5277,7 +5419,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                     ) : null}
                                   </div>
 
-                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "13px", color: "#475569", marginTop: "2px" }}>
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "13px", color: tokens.textSecondary, marginTop: "2px" }}>
                                     {detail?.order?.shipping_address?.mobileNumber && (
                                       <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                                         <PhoneIcon />
@@ -5290,22 +5432,22 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                       </div>
                                     )}
                                     {detail?.order?.shipping_address?.email && (
-                                      <div style={{ color: "#64748b" }}>
+                                      <div style={{ color: tokens.textSecondary }}>
                                         {detail.order.shipping_address.email}
                                       </div>
                                     )}
                                   </div>
 
                                   {returnItem.request_note && (
-                                    <div style={{ marginTop: "6px", padding: "8px 10px", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "12.5px", color: "#334155" }}>
-                                      <span style={{ fontWeight: 600, color: "#0f172a" }}>Customer Reason Note:</span> "{returnItem.request_note}"
+                                    <div style={{ marginTop: "6px", padding: "8px 10px", background: tokens.elevatedSurfaceBg, borderRadius: "6px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", fontSize: "12.5px", color: tokens.textSecondary }}>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary }}>Customer Reason Note:</span> "{returnItem.request_note}"
                                     </div>
                                   )}
                                 </div>
                               </div>
 
                               {/* Card 2: Return Items & Refund Account */}
-                              <div style={{ ...plainCardStyle, padding: "16px" }}>
+                              <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                 <div
                                   style={{
                                     display: "flex",
@@ -5313,13 +5455,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                     alignItems: "center",
                                     marginBottom: "12px",
                                     paddingBottom: "8px",
-                                    borderBottom: "1px solid #f1f5f9",
+                                    borderBottom: `1px solid ${tokens.border}`,
                                   }}
                                 >
-                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                     Return Items ({detail?.items?.length || returnItem.item_count || 1})
                                   </span>
-                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                                     Refund: {formatPrice(detail?.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
                                   </span>
                                 </div>
@@ -5335,23 +5477,23 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         gap: "12px",
                                         padding: "10px 12px",
                                         borderRadius: "6px",
-                                        background: "#f8fafc",
-                                        border: "1px solid #e2e8f0",
+                                        background: tokens.elevatedSurfaceBg,
+                                        border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                       }}
                                     >
                                       <div style={{ minWidth: 0, flex: 1 }}>
-                                        <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>
+                                        <div style={{ fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary }}>
                                           {item.product_name}
                                         </div>
                                         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap" }}>
-                                          <span style={{ fontSize: "11px", fontWeight: 600, color: "#475569", background: "#f1f5f9", padding: "1px 6px", borderRadius: "4px" }}>
+                                          <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, padding: "1px 6px", borderRadius: "4px" }}>
                                             Req: {item.quantity_requested}
                                           </span>
-                                          <span style={{ fontSize: "11px", fontWeight: 700, color: "#166534", background: "#dcfce7", padding: "1px 6px", borderRadius: "4px" }}>
+                                          <span style={{ fontSize: "11px", fontWeight: 700, color: isDark ? "#4ade80" : "#166534", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#dcfce7", padding: "1px 6px", borderRadius: "4px" }}>
                                             Appr: {item.quantity_approved}
                                           </span>
                                           {item.quantity_received !== undefined && item.quantity_received !== null && (
-                                            <span style={{ fontSize: "11px", fontWeight: 700, color: item.quantity_received >= item.quantity_approved ? "#15803d" : "#b45309", background: item.quantity_received >= item.quantity_approved ? "#ecfdf5" : "#fffbeb", padding: "1px 6px", borderRadius: "4px", border: `1px solid ${item.quantity_received >= item.quantity_approved ? "#a7f3d0" : "#fde68a"}` }}>
+                                            <span style={{ fontSize: "11px", fontWeight: 700, color: item.quantity_received >= item.quantity_approved ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#fde047" : "#b45309"), background: item.quantity_received >= item.quantity_approved ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#ecfdf5") : (isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb"), padding: "1px 6px", borderRadius: "4px", border: `1px solid ${item.quantity_received >= item.quantity_approved ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#a7f3d0") : (isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a")}` }}>
                                               Rider Picked: {item.quantity_received}
                                             </span>
                                           )}
@@ -5360,9 +5502,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                               style={{
                                                 fontSize: "11px",
                                                 fontWeight: 600,
-                                                color: "#7c3aed",
-                                                background: "#f5f3ff",
-                                                border: "1px solid #e9d5ff",
+                                                color: isDark ? "#c084fc" : "#7c3aed",
+                                                background: isDark ? "rgba(168, 85, 247, 0.15)" : "#f5f3ff",
+                                                border: `1px solid ${isDark ? "rgba(192, 132, 252, 0.3)" : "#e9d5ff"}`,
                                                 padding: "1px 6px",
                                                 borderRadius: "4px",
                                               }}
@@ -5370,28 +5512,28 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                               {item.selected_variant_value}
                                             </span>
                                           )}
-                                          <span style={{ fontSize: "11px", color: "#64748b" }}>
+                                          <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
                                             • Reason: {item.reason_code.replaceAll("_", " ")}
                                           </span>
                                         </div>
                                       </div>
-                                      <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
+                                      <div style={{ fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap" }}>
                                         {formatPrice(item.line_refund_final)}
                                       </div>
                                     </div>
                                   ))}
                                   {/* Customer Refund Account: For COD orders, show Bank/UPI info */}
                                   {(detail?.order?.payment_method === "cod" || detail?.order?.payment_method === "cash_on_delivery") && (detail?.customer_refund_account || returnItem.customer_refund_account) && (
-                                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #f1f5f9" }}>
-                                      <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", marginBottom: "6px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}` }}>
+                                      <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "6px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                         <span>Customer Refund Destination (COD Payout):</span>
                                         <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", background: "#ecfdf5", color: "#059669", fontWeight: 800, textTransform: "uppercase" }}>
                                           {(detail?.customer_refund_account || returnItem.customer_refund_account).type || "UPI"}
                                         </span>
                                       </div>
                                       {(detail?.customer_refund_account || returnItem.customer_refund_account).type === "upi" ? (
-                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "#f8fafc", padding: "6px 10px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                                          <code style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: tokens.elevatedSurfaceBg, padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
+                                          <code style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>
                                             {(detail?.customer_refund_account || returnItem.customer_refund_account).upi_id}
                                           </code>
                                           <button
@@ -5400,13 +5542,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                               navigator.clipboard.writeText((detail?.customer_refund_account || returnItem.customer_refund_account).upi_id);
                                               alert("Copied UPI ID to clipboard!");
                                             }}
-                                            style={{ border: "1px solid #cbd5e1", background: "#ffffff", padding: "3px 8px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", color: "#2563eb", fontWeight: 700 }}
+                                            style={{ border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", background: tokens.surfaceBg, padding: "3px 8px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", color: "#2563eb", fontWeight: 700 }}
                                           >
                                             Copy UPI
                                           </button>
                                         </div>
                                       ) : (
-                                        <div style={{ fontSize: "12px", color: "#334155", background: "#f8fafc", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e2e8f0", lineHeight: 1.6 }}>
+                                        <div style={{ fontSize: "12px", color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, padding: "8px 10px", borderRadius: "6px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", lineHeight: 1.6 }}>
                                           <div><strong>Name:</strong> {(detail?.customer_refund_account || returnItem.customer_refund_account).account_holder || "—"}</div>
                                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                             <div><strong>A/C:</strong> {(detail?.customer_refund_account || returnItem.customer_refund_account).account_number}</div>
@@ -5416,7 +5558,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                 navigator.clipboard.writeText((detail?.customer_refund_account || returnItem.customer_refund_account).account_number);
                                                 alert("Copied Account Number to clipboard!");
                                               }}
-                                              style={{ border: "1px solid #cbd5e1", background: "#ffffff", padding: "2px 6px", borderRadius: "4px", cursor: "pointer", fontSize: "10px", color: "#2563eb", fontWeight: 700 }}
+                                              style={{ border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", background: tokens.surfaceBg, padding: "2px 6px", borderRadius: "4px", cursor: "pointer", fontSize: "10px", color: "#2563eb", fontWeight: 700 }}
                                             >
                                               Copy A/C
                                             </button>
@@ -5428,8 +5570,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                   )}
 
                                   {detail?.order?.payment_method && detail.order.payment_method !== "cod" && detail.order.payment_method !== "cash_on_delivery" && (
-                                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #f1f5f9" }}>
-                                      <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "8px 10px", borderRadius: "6px", fontSize: "12px", color: "#166534" }}>
+                                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}` }}>
+                                      <div style={{ display: "flex", alignItems: "center", gap: "8px", background: isDark ? "rgba(34, 197, 94, 0.12)" : "#f0fdf4", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, padding: "8px 10px", borderRadius: "6px", fontSize: "12px", color: isDark ? "#86efac" : "#166534" }}>
                                         <span><strong>Online Payment ({detail.order.payment_method}):</strong> Refund is automatically credited back to customer's original payment source via Razorpay.</span>
                                       </div>
                                     </div>
@@ -5441,8 +5583,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         marginTop: "12px",
                                         padding: "10px 12px",
                                         borderRadius: "6px",
-                                        background: "#f8fafc",
-                                        border: "1px solid #e2e8f0",
+                                        background: tokens.elevatedSurfaceBg,
+                                        border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                         fontSize: "12px",
                                       }}
                                     >
@@ -5454,54 +5596,54 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           marginBottom: "8px",
                                           fontSize: "11px",
                                           fontWeight: 700,
-                                          color: "#64748b",
+                                          color: tokens.textSecondary,
                                           textTransform: "uppercase",
                                           letterSpacing: "0.04em",
                                         }}
                                       >
                                         <span>Refund Breakdown</span>
-                                        <span style={{ fontSize: "10px", color: "#64748b", background: "#f1f5f9", padding: "1px 6px", borderRadius: "4px" }}>
+                                        <span style={{ fontSize: "10px", color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, padding: "1px 6px", borderRadius: "4px" }}>
                                           Prorated
                                         </span>
                                       </div>
                                       <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
                                           <span>Items Subtotal</span>
-                                          <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.items_subtotal)}</span>
+                                          <span style={{ fontWeight: 600, color: tokens.textPrimary }}>+{formatPrice(detail.refund_breakdown.items_subtotal)}</span>
                                         </div>
                                         {detail.refund_breakdown.discounts_prorated > 0 && (
-                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
                                             <span>Discount</span>
                                             <span style={{ fontWeight: 600, color: "#dc2626" }}>-{formatPrice(detail.refund_breakdown.discounts_prorated)}</span>
                                           </div>
                                         )}
                                         {detail.refund_breakdown.tax_refund > 0 && (
-                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
                                             <span>Tax (GST)</span>
-                                            <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.tax_refund)}</span>
+                                            <span style={{ fontWeight: 600, color: tokens.textPrimary }}>+{formatPrice(detail.refund_breakdown.tax_refund)}</span>
                                           </div>
                                         )}
                                         {detail.refund_breakdown.refundable_charges_added > 0 && (
-                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
                                             <span>Refundable Charges</span>
-                                            <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.refundable_charges_added)}</span>
+                                            <span style={{ fontWeight: 600, color: tokens.textPrimary }}>+{formatPrice(detail.refund_breakdown.refundable_charges_added)}</span>
                                           </div>
                                         )}
                                         {detail.refund_breakdown.non_refundable_charges_retained > 0 && (
-                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
                                             <span>Non-Refundable Retained</span>
                                             <span style={{ fontWeight: 600, color: "#dc2626" }}>-{formatPrice(detail.refund_breakdown.non_refundable_charges_retained)}</span>
                                           </div>
                                         )}
                                         {(detail.refund_breakdown.exception_refund_added || 0) > 0 && (
-                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#15803d", fontWeight: 600, background: "#f0fdf4", padding: "4px 6px", borderRadius: "4px" }}>
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: isDark ? "#4ade80" : "#15803d", fontWeight: 600, background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4", padding: "4px 6px", borderRadius: "4px" }}>
                                             <span>Retained Charges Refunded (Exception)</span>
                                             <span style={{ fontWeight: 700 }}>+{formatPrice(detail.refund_breakdown.exception_refund_added || 0)}</span>
                                           </div>
                                         )}
-                                        <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #e2e8f0", paddingTop: "6px", marginTop: "2px", fontWeight: 700, fontSize: "12.5px" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", borderTop: `1px solid ${tokens.border}`, paddingTop: "6px", marginTop: "2px", fontWeight: 700, fontSize: "12.5px" }}>
                                           <span>Total Refund</span>
-                                          <span style={{ color: "#15803d" }}>
+                                          <span style={{ color: isDark ? "#4ade80" : "#15803d" }}>
                                             {formatPrice(detail.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
                                           </span>
                                         </div>
@@ -5516,7 +5658,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                             {/* Right Column: Reverse Logistics Control & Admin Action Center */}
                             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                               {/* Card 1: Reverse Pickup & Fleet Dispatch Center (NEW) */}
-                              <div style={{ ...plainCardStyle, padding: "16px" }}>
+                              <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                 <div
                                   style={{
                                     display: "flex",
@@ -5524,10 +5666,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                     alignItems: "center",
                                     marginBottom: "12px",
                                     paddingBottom: "8px",
-                                    borderBottom: "1px solid #f1f5f9",
+                                    borderBottom: `1px solid ${tokens.border}`,
                                   }}
                                 >
-                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                     Reverse Logistics & Pickup
                                   </span>
                                   {(detail?.pickup_details || returnItem.pickup_details) ? (
@@ -5537,9 +5679,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         fontWeight: 700,
                                         padding: "3px 8px",
                                         borderRadius: "4px",
-                                        background: "#eff6ff",
-                                        color: "#1d4ed8",
-                                        border: "1px solid #bfdbfe",
+                                        background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                                         textTransform: "capitalize",
                                       }}
                                     >
@@ -5600,10 +5742,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
                                           if (isManualReturn) {
                                             return (
-                                              <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                                              <div style={{ padding: "12px", background: tokens.elevatedSurfaceBg, borderRadius: "8px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
                                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                                                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                                    <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                    <span style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                                                       Manual Return Courier Partner
                                                     </span>
                                                     <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "999px", background: "#e0f2fe", color: "#0369a1" }}>
@@ -5643,7 +5785,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                 {isEditingReturnCourier ? (
                                                   <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
                                                     <div>
-                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>Return Courier Name</label>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>Return Courier Name</label>
                                                       <input
                                                         value={returnManualCourierMap[returnItem.id]?.courierName ?? (currentPickup.courier_name || "")}
                                                         onChange={(e) =>
@@ -5661,7 +5803,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                       />
                                                     </div>
                                                     <div>
-                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>Tracking / AWB Number</label>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>Tracking / AWB Number</label>
                                                       <input
                                                         value={returnManualCourierMap[returnItem.id]?.trackingNumber ?? (currentPickup.tracking_number || "")}
                                                         onChange={(e) =>
@@ -5679,7 +5821,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                       />
                                                     </div>
                                                     <div>
-                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>Pickup / Handover Notes (Optional)</label>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>Pickup / Handover Notes (Optional)</label>
                                                       <input
                                                         value={returnManualCourierMap[returnItem.id]?.notes ?? (currentPickup.pickup_notes || "")}
                                                         onChange={(e) =>
@@ -5720,9 +5862,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                         style={{
                                                           padding: "7px 12px",
                                                           borderRadius: "6px",
-                                                          background: "#ffffff",
-                                                          color: "#475569",
-                                                          border: "1px solid #cbd5e1",
+                                                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                                           fontSize: "12px",
                                                           fontWeight: 600,
                                                           cursor: "pointer",
@@ -5734,20 +5876,20 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                   </div>
                                                 ) : (
                                                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                                    <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                                                       {currentPickup.courier_name || "Manual Courier / Self Ship"}
                                                     </div>
                                                     {currentPickup.tracking_number ? (
-                                                      <div style={{ fontSize: "12.5px", color: "#475569" }}>
-                                                        AWB / Tracking: <strong style={{ color: "#0f172a" }}>{currentPickup.tracking_number}</strong>
+                                                      <div style={{ fontSize: "12.5px", color: tokens.textSecondary }}>
+                                                        AWB / Tracking: <strong style={{ color: tokens.textPrimary }}>{currentPickup.tracking_number}</strong>
                                                       </div>
                                                     ) : (
-                                                      <div style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>
+                                                      <div style={{ fontSize: "12px", color: tokens.textMuted, fontStyle: "italic" }}>
                                                         No tracking number provided
                                                       </div>
                                                     )}
                                                     {currentPickup.pickup_notes && (
-                                                      <div style={{ marginTop: "4px", fontSize: "12px", color: "#92400e", background: "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: "1px solid #fde68a" }}>
+                                                      <div style={{ marginTop: "4px", fontSize: "12px", color: isDark ? "#fde047" : "#92400e", background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}` }}>
                                                         {currentPickup.pickup_notes}
                                                       </div>
                                                     )}
@@ -5759,9 +5901,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
                                           if (isFleetReturn) {
                                             return (
-                                              <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                                              <div style={{ padding: "12px", background: tokens.elevatedSurfaceBg, borderRadius: "8px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
                                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                                                  <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                  <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                                                     Store Delivery Partner (Own Fleet)
                                                   </div>
                                                   <button
@@ -5782,10 +5924,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                   </button>
                                                 </div>
 
-                                                <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                                <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                                                   {currentPickup.agent_name}
                                                   {currentPickup.agent_phone && (
-                                                    <div style={{ fontSize: "13px", color: "#475569", marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
+                                                    <div style={{ fontSize: "13px", color: tokens.textSecondary, marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
                                                       <PhoneIcon />
                                                       <a href={`tel:${currentPickup.agent_phone}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
                                                         {formatPhoneDisplay(currentPickup.agent_phone)}
@@ -5794,18 +5936,18 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                   )}
                                                   {/* Level 1 Doorstep Physical Inspection Result */}
                                                   {(currentPickup.inspection_result === "failed" || currentPickup.pickup_status === "doorstep_rejected") ? (
-                                                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#991b1b", background: "#fef2f2", padding: "8px 10px", borderRadius: "6px", border: "1px solid #fecaca", lineHeight: 1.4 }}>
+                                                    <div style={{ marginTop: "8px", fontSize: "12px", color: isDark ? "#fca5a5" : "#991b1b", background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2", padding: "8px 10px", borderRadius: "6px", border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`, lineHeight: 1.4 }}>
                                                       <div style={{ fontWeight: 700 }}>Doorstep Inspection Failed by Rider</div>
                                                       {currentPickup.inspection_failed_reason && <div>Reason: <strong>{currentPickup.inspection_failed_reason}</strong></div>}
                                                       {currentPickup.inspection_notes && <div>Rider Note: {currentPickup.inspection_notes}</div>}
                                                     </div>
                                                   ) : (currentPickup.pickup_status === "picked_up" || currentPickup.pickup_status === "delivered_to_hub") ? (
-                                                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#15803d", background: "#f0fdf4", padding: "6px 8px", borderRadius: "6px", border: "1px solid #bbf7d0", fontWeight: 600 }}>
+                                                    <div style={{ marginTop: "8px", fontSize: "12px", color: isDark ? "#4ade80" : "#15803d", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4", padding: "6px 8px", borderRadius: "6px", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, fontWeight: 600 }}>
                                                       Level 1 Doorstep Physical Inspection Passed
                                                     </div>
                                                   ) : null}
                                                   {currentPickup.pickup_notes && (
-                                                    <div style={{ marginTop: "6px", fontSize: "12px", color: "#92400e", background: "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: "1px solid #fde68a" }}>
+                                                    <div style={{ marginTop: "6px", fontSize: "12px", color: isDark ? "#fde047" : "#92400e", background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}` }}>
                                                       {currentPickup.pickup_notes}
                                                     </div>
                                                   )}
@@ -5813,10 +5955,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
                                                 {/* Reassign Return Rider / Switch to Manual Panel */}
                                                 {isReassigningReturn && (
-                                                  <div style={{ marginTop: "12px", padding: "12px", background: "#ffffff", borderRadius: "8px", border: "1px solid #cbd5e1", display: "flex", flexDirection: "column", gap: "12px" }}>
+                                                  <div style={{ marginTop: "12px", padding: "12px", background: tokens.surfaceBg, borderRadius: "8px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", display: "flex", flexDirection: "column", gap: "12px" }}>
                                                     {/* Option 1: In-House Rider Reassignment */}
                                                     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                                                      <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                                      <label style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>
                                                         Option 1: Choose Replacement Rider
                                                       </label>
                                                       <select
@@ -5824,9 +5966,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                         onChange={(e) => setReassignReturnAgentIdMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
                                                         style={{ ...inputStyle, fontSize: "13px" }}
                                                       >
-                                                        <option value="">-- Choose Rider --</option>
+                                                        <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>-- Choose Rider --</option>
                                                         {deliveryAgents.filter((a) => a.is_active).map((a) => (
-                                                          <option key={a.id} value={a.id}>
+                                                          <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
                                                             {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
                                                           </option>
                                                         ))}
@@ -5845,7 +5987,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
                                                     {/* Option 2: Switch to Manual Courier */}
                                                     <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                                                      <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                                      <label style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>
                                                         Option 2: Switch to Manual Return Courier
                                                       </label>
                                                       <input
@@ -5890,7 +6032,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                         <button
                                                           type="button"
                                                           onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: false }))}
-                                                          style={{ padding: "6px 10px", borderRadius: "5px", background: "#ffffff", color: "#475569", border: "1px solid #cbd5e1", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                                          style={{ padding: "6px 10px", borderRadius: "5px", background: tokens.surfaceBg, color: tokens.textSecondary, border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                                                         >
                                                           Cancel
                                                         </button>
@@ -5904,15 +6046,15 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
                                           if (isShiprocketReturn) {
                                             return (
-                                              <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                                                <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "4px" }}>
+                                              <div style={{ padding: "12px", background: tokens.elevatedSurfaceBg, borderRadius: "8px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
+                                                <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "4px" }}>
                                                   Shiprocket Reverse Logistics
                                                 </div>
-                                                <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                                <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                                                   {currentPickup.courier_name}
                                                 </div>
                                                 {currentPickup.tracking_number && (
-                                                  <div style={{ fontSize: "12.5px", color: "#475569", marginTop: "2px" }}>
+                                                  <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginTop: "2px" }}>
                                                     AWB: <strong>{currentPickup.tracking_number}</strong>
                                                   </div>
                                                 )}
@@ -5923,7 +6065,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           return null;
                                         })()
                                       ) : (returnItem.status === "rejected" || detail?.status === "rejected") ? (
-                                        <div style={{ padding: "10px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: "6px", fontSize: "12px", border: "1px solid #fecaca", fontWeight: 600 }}>
+                                        <div style={{ padding: "10px 12px", background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2", color: isDark ? "#fca5a5" : "#991b1b", borderRadius: "6px", fontSize: "12px", border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`, fontWeight: 600 }}>
                                           Return request is rejected. Reverse logistics is disabled.
                                         </div>
                                       ) : (
@@ -5931,7 +6073,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                           {/* Mode Tabs: only rendered if more than 1 delivery mode is enabled */}
                                           {availableReturnModes.length > 1 && (
-                                            <div style={{ display: "flex", gap: "4px", padding: "3px", background: "#f1f5f9", borderRadius: "6px" }}>
+                                            <div style={{ display: "flex", gap: "4px", padding: "3px", background: tokens.elevatedSurfaceBg, borderRadius: "6px" }}>
                                               {availableReturnModes.map((mode) => (
                                                 <button
                                                   key={mode.id}
@@ -5957,50 +6099,80 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           )}
 
                                           {/* Mode 1: In-House Rider Selection */}
-                                          {activeReturnMode === "own_agent" && (
-                                            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                              <div>
-                                                <label style={labelStyle}>Assign Delivery Fleet Rider for Pickup</label>
-                                                <select
-                                                  value={selectedReturnAgentMap[returnItem.id] || ""}
-                                                  onChange={(e) => setSelectedReturnAgentMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
-                                                  style={{ ...inputStyle, cursor: "pointer" }}
-                                                >
-                                                  <option value="">Auto-Assign (Least Busy Rider)</option>
-                                                  {deliveryAgents
-                                                    .filter((a) => a.is_active)
-                                                    .map((a) => (
-                                                      <option key={a.id} value={a.id}>
-                                                        {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
-                                                      </option>
-                                                    ))}
-                                                </select>
-                                              </div>
+                                           {activeReturnMode === "own_agent" && (
+                                             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                               <div>
+                                                 <label style={labelStyle}>Assign Delivery Fleet Rider for Pickup</label>
+                                                 <div style={{ position: "relative" }}>
+                                                   <select
+                                                     value={selectedReturnAgentMap[returnItem.id] || ""}
+                                                     onChange={(e) => setSelectedReturnAgentMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
+                                                     style={{
+                                                       ...inputStyle,
+                                                       height: "38px",
+                                                       padding: "0 34px 0 12px",
+                                                       borderRadius: "8px",
+                                                       border: `1px solid ${tokens.border}`,
+                                                       background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                       color: tokens.textPrimary,
+                                                       colorScheme: isDark ? "dark" : "light",
+                                                       cursor: "pointer",
+                                                       appearance: "none",
+                                                       fontSize: "13px",
+                                                       fontWeight: 500,
+                                                     }}
+                                                   >
+                                                     <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Auto-Assign (Least Busy Rider)</option>
+                                                     {deliveryAgents
+                                                       .filter((a) => a.is_active)
+                                                       .map((a) => (
+                                                         <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>
+                                                           {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
+                                                         </option>
+                                                       ))}
+                                                   </select>
+                                                   <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: tokens.textSecondary, display: "grid", placeItems: "center" }}>
+                                                     <ChevronDownIcon />
+                                                   </div>
+                                                 </div>
+                                               </div>
 
-                                              <button
-                                                type="button"
-                                                onClick={() => handleDispatchReturnPickup(returnItem.id, "own_agent")}
-                                                disabled={actionLoadingId === returnItem.id}
-                                                style={{
-                                                  padding: "9px 14px",
-                                                  borderRadius: "6px",
-                                                  background: "#2563eb",
-                                                  border: "1px solid #2563eb",
-                                                  color: "#ffffff",
-                                                  fontWeight: 700,
-                                                  fontSize: "13px",
-                                                  cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
-                                                }}
-                                              >
-                                                {actionLoadingId === returnItem.id ? "Assigning..." : "Assign Rider for Return Pickup & Inspection"}
-                                              </button>
-                                            </div>
-                                          )}
+                                               <button
+                                                 type="button"
+                                                 onClick={() => handleDispatchReturnPickup(returnItem.id, "own_agent")}
+                                                 disabled={actionLoadingId === returnItem.id}
+                                                 style={{
+                                                   height: "38px",
+                                                   padding: "0 16px",
+                                                   borderRadius: "8px",
+                                                   background: "#2563eb",
+                                                   border: "1px solid rgba(255,255,255,0.1)",
+                                                   color: "#ffffff",
+                                                   fontWeight: 700,
+                                                   fontSize: "13px",
+                                                   cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
+                                                   display: "inline-flex",
+                                                   alignItems: "center",
+                                                   justifyContent: "center",
+                                                   gap: "8px",
+                                                   boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
+                                                   transition: "all 0.15s ease",
+                                                 }}
+                                               >
+                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                   <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                                   <circle cx="9" cy="7" r="4" />
+                                                   <polyline points="16 11 18 13 22 9" />
+                                                 </svg>
+                                                 <span>{actionLoadingId === returnItem.id ? "Assigning..." : "Assign Rider for Return Pickup & Inspection"}</span>
+                                               </button>
+                                             </div>
+                                           )}
 
                                           {/* Mode 2: Shiprocket Reverse Pickup */}
                                           {activeReturnMode === "shiprocket" && (
                                             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                              <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                                              <p style={{ fontSize: "12px", color: tokens.textSecondary, margin: 0 }}>
                                                 Generates reverse courier pickup via Shiprocket (Delhivery, BlueDart, DTDC).
                                               </p>
                                               <button
@@ -6111,8 +6283,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
                               {/* Card 2: Return Lifecycle Admin Action */}
                               {returnItem.status === "requested" && canUpdateOrders ? (
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "12px", color: "#0f172a" }}>
+                                <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
+                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "12px", color: tokens.textPrimary }}>
                                     Review Return Request
                                   </div>
 
@@ -6129,9 +6301,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         flex: 1,
                                         padding: "8px 12px",
                                         borderRadius: "6px",
-                                        border: reviewDraft.action === "approve" ? "2px solid #16a34a" : "1px solid #cbd5e1",
-                                        background: reviewDraft.action === "approve" ? "#f0fdf4" : "#ffffff",
-                                        color: reviewDraft.action === "approve" ? "#15803d" : "#475569",
+                                        border: reviewDraft.action === "approve" ? "2px solid #16a34a" : `1px solid ${tokens.border}`,
+                                        background: reviewDraft.action === "approve" ? (isDark ? "rgba(34, 197, 94, 0.18)" : "#f0fdf4") : tokens.surfaceBg,
+                                        color: reviewDraft.action === "approve" ? (isDark ? "#4ade80" : "#15803d") : tokens.textSecondary,
                                         fontWeight: 700,
                                         fontSize: "13px",
                                         cursor: "pointer",
@@ -6152,9 +6324,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         flex: 1,
                                         padding: "8px 12px",
                                         borderRadius: "6px",
-                                        border: reviewDraft.action === "reject" ? "2px solid #dc2626" : "1px solid #cbd5e1",
-                                        background: reviewDraft.action === "reject" ? "#fef2f2" : "#ffffff",
-                                        color: reviewDraft.action === "reject" ? "#b91c1c" : "#475569",
+                                        border: reviewDraft.action === "reject" ? "2px solid #dc2626" : `1px solid ${tokens.border}`,
+                                        background: reviewDraft.action === "reject" ? (isDark ? "rgba(239, 68, 68, 0.18)" : "#fef2f2") : tokens.surfaceBg,
+                                        color: reviewDraft.action === "reject" ? (isDark ? "#fca5a5" : "#b91c1c") : tokens.textSecondary,
                                         fontWeight: 700,
                                         fontSize: "13px",
                                         cursor: "pointer",
@@ -6180,18 +6352,18 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                 alignItems: "center",
                                                 padding: "8px 10px",
                                                 borderRadius: "6px",
-                                                background: "#f8fafc",
-                                                border: "1px solid #e2e8f0",
+                                                background: tokens.elevatedSurfaceBg,
+                                                border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                               }}
                                             >
                                               <div style={{ fontSize: "13px", fontWeight: 600, minWidth: 0, paddingRight: "8px" }}>
                                                 {item.product_name}
-                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                <div style={{ fontSize: "11px", color: tokens.textSecondary }}>
                                                   Requested: {item.quantity_requested}
                                                 </div>
                                               </div>
                                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                                <span style={{ fontSize: "12px", color: "#475569" }}>Approve:</span>
+                                                <span style={{ fontSize: "12px", color: tokens.textSecondary }}>Approve:</span>
                                                 <input
                                                   type="number"
                                                   min={0}
@@ -6274,9 +6446,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
                                   if (isFleetRiderPickup) {
                                     return (
-                                      <div style={{ ...plainCardStyle, padding: "16px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                                      <div style={{ ...plainCardStyle, padding: "16px", background: tokens.elevatedSurfaceBg, border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
                                         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                                          <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", display: "grid", placeItems: "center" }}>
+                                          <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: isDark ? "rgba(37, 99, 235, 0.15)" : "#eff6ff", color: isDark ? "#60a5fa" : "#2563eb", display: "grid", placeItems: "center" }}>
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                               <rect x="1" y="3" width="15" height="13" />
                                               <polygon points="16 8 20 8 23 11 23 16 16 16 8" />
@@ -6285,15 +6457,15 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                             </svg>
                                           </div>
                                           <div>
-                                            <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                            <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                                               Reverse Pickup In Progress
                                             </div>
-                                            <div style={{ fontSize: "12px", color: "#64748b" }}>
+                                            <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
                                               Assigned to rider <strong>{pickupInfo.agent_name}</strong>.
                                             </div>
                                           </div>
                                         </div>
-                                        <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.5, background: "#ffffff", padding: "10px 12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                                        <div style={{ fontSize: "12px", color: tokens.textSecondary, lineHeight: 1.5, background: tokens.surfaceBg, padding: "10px 12px", borderRadius: "6px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
                                           The delivery rider will inspect and collect the items at the doorstep. Once handed over at the store/hub, <strong>Quality Inspection & Restock</strong> will activate automatically.
                                         </div>
                                       </div>
@@ -6303,11 +6475,11 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                   if (!canUpdateOrders) return null;
 
                                   return (
-                                    <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                      <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "4px", color: "#0f172a" }}>
+                                    <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
+                                      <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "4px", color: tokens.textPrimary }}>
                                         In-Store Package Receipt & Verification
                                       </div>
-                                      <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "14px" }}>
+                                      <div style={{ fontSize: "12px", color: tokens.textSecondary, marginBottom: "14px" }}>
                                         {pickupInfo?.courier_name
                                           ? `Package returned via ${pickupInfo.courier_name}. Verify received quantities to proceed to Quality Inspection & Restock.`
                                           : "Confirm physical arrival if customer returned item directly to the store/hub."}
@@ -6326,18 +6498,18 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                 alignItems: "center",
                                                 padding: "8px 10px",
                                                 borderRadius: "6px",
-                                                background: "#f8fafc",
-                                                border: "1px solid #e2e8f0",
+                                                background: tokens.elevatedSurfaceBg,
+                                                border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                               }}
                                             >
                                               <div style={{ fontSize: "13px", fontWeight: 600, minWidth: 0, paddingRight: "8px" }}>
                                                 {item.product_name}
-                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                <div style={{ fontSize: "11px", color: tokens.textSecondary }}>
                                                   Approved Qty: {item.quantity_approved}
                                                 </div>
                                               </div>
                                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                                <span style={{ fontSize: "12px", color: "#475569" }}>Received Qty:</span>
+                                                <span style={{ fontSize: "12px", color: tokens.textSecondary }}>Received Qty:</span>
                                                 <input
                                                   type="number"
                                                   min={0}
@@ -6399,11 +6571,11 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                               ) : null}
 
                               {returnItem.status === "received" && canUpdateOrders ? (
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
+                                <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
+                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: tokens.textPrimary }}>
                                     Product Quality Inspection & Stock Restock
                                   </div>
-                                  <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "14px" }}>
+                                  <div style={{ fontSize: "12px", color: tokens.textSecondary, marginBottom: "14px" }}>
                                     Inspect received items. Choosing <b>Restock</b> will automatically restore product inventory!
                                   </div>
 
@@ -6420,33 +6592,33 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                           style={{
                                             padding: "10px 12px",
                                             borderRadius: "6px",
-                                            background: isZeroReceived ? "#fef2f2" : "#f8fafc",
-                                            border: `1px solid ${isZeroReceived ? "#fecaca" : "#e2e8f0"}`,
+                                            background: isZeroReceived ? (isDark ? "rgba(239, 68, 68, 0.12)" : "#fef2f2") : tokens.elevatedSurfaceBg,
+                                            border: `1px solid ${isZeroReceived ? (isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca") : tokens.border}`,
                                             display: "grid",
                                             gap: "8px",
                                           }}
                                         >
                                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px", fontWeight: 700 }}>
-                                            <span style={{ color: "#0f172a" }}>{item.product_name}</span>
+                                            <span style={{ color: tokens.textPrimary }}>{item.product_name}</span>
                                             {isZeroReceived ? (
-                                              <span style={{ fontSize: "11px", fontWeight: 700, color: "#b91c1c", background: "#fee2e2", border: "1px solid #fca5a5", padding: "2px 7px", borderRadius: "4px" }}>
+                                              <span style={{ fontSize: "11px", fontWeight: 700, color: isDark ? "#fca5a5" : "#b91c1c", background: isDark ? "rgba(239, 68, 68, 0.2)" : "#fee2e2", border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fca5a5"}`, padding: "2px 7px", borderRadius: "4px" }}>
                                                 Unreturned at Doorstep (0 Recv)
                                               </span>
                                             ) : (
-                                              <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#166534", background: "#dcfce7", border: "1px solid #bbf7d0", padding: "2px 7px", borderRadius: "4px" }}>
+                                              <span style={{ fontSize: "11.5px", fontWeight: 700, color: isDark ? "#4ade80" : "#166534", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#dcfce7", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, padding: "2px 7px", borderRadius: "4px" }}>
                                                 Received at Hub: {item.quantity_received}
                                               </span>
                                             )}
                                           </div>
 
                                           {isZeroReceived ? (
-                                            <div style={{ fontSize: "12px", color: "#7f1d1d", background: "#ffffff", padding: "7px 10px", borderRadius: "4px", border: "1px solid #fecaca", lineHeight: 1.4 }}>
+                                            <div style={{ fontSize: "12px", color: isDark ? "#fca5a5" : "#7f1d1d", background: tokens.surfaceBg, padding: "7px 10px", borderRadius: "4px", border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`, lineHeight: 1.4 }}>
                                               Rider verified <strong>0 units</strong> received at customer doorstep (missing or rejected). Marked as <strong>Discard (0 Restock)</strong>.
                                             </div>
                                           ) : (
                                             <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "8px", alignItems: "center" }}>
                                               <div>
-                                                <div style={{ fontSize: "11px", color: "#475569", fontWeight: 600 }}>Decision</div>
+                                                <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 600 }}>Decision</div>
                                                 <select
                                                   value={currentDecision}
                                                   onChange={(e) => {
@@ -6471,7 +6643,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                               </div>
 
                                               <div>
-                                                <div style={{ fontSize: "11px", color: "#475569", fontWeight: 600 }}>
+                                                <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 600 }}>
                                                   {currentDecision === "restock" ? "Restock Qty (+Stock)" : "Qty Processed"}
                                                 </div>
                                                 <input
@@ -6536,7 +6708,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                               ) : null}
 
                               {returnItem.status === "inspected" ? (
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                   <div
                                     style={{
                                       display: "flex",
@@ -6544,10 +6716,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                       alignItems: "center",
                                       marginBottom: "12px",
                                       paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
+                                      borderBottom: `1px solid ${tokens.border}`,
                                     }}
                                   >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                    <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                       Process Customer Refund
                                     </span>
                                     <span style={{ fontSize: "12px", fontWeight: 700, color: "#166534", background: "#dcfce7", border: "1px solid #bbf7d0", padding: "2px 7px", borderRadius: "4px" }}>
@@ -6559,25 +6731,25 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                   {detail?.refund_breakdown ? (
                                     <div
                                       style={{
-                                        background: "#f8fafc",
-                                        border: "1px solid #e2e8f0",
+                                        background: tokens.elevatedSurfaceBg,
+                                        border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                         borderRadius: "8px",
                                         padding: "12px 14px",
                                         marginBottom: "14px",
                                         fontSize: "12.5px",
                                       }}
                                     >
-                                      <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                        <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#475569" }}>
+                                      <div style={{ fontWeight: 700, color: tokens.textPrimary, marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textSecondary }}>
                                           Refund Breakdown
                                         </span>
-                                        <span style={{ fontSize: "11px", fontWeight: 500, color: "#64748b" }}>Prorated</span>
+                                        <span style={{ fontSize: "11px", fontWeight: 500, color: tokens.textSecondary }}>Prorated</span>
                                       </div>
 
-                                      <div style={{ display: "grid", gap: "6px", color: "#475569" }}>
+                                      <div style={{ display: "grid", gap: "6px", color: tokens.textSecondary }}>
                                         <div style={{ display: "flex", justifyContent: "space-between" }}>
                                           <span>Items Subtotal</span>
-                                          <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.items_subtotal)}</span>
+                                          <span style={{ fontWeight: 600, color: tokens.textPrimary }}>+{formatPrice(detail.refund_breakdown.items_subtotal)}</span>
                                         </div>
 
                                         {detail.refund_breakdown.discounts_prorated > 0 && (
@@ -6590,7 +6762,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         {detail.refund_breakdown.tax_refund > 0 && (
                                           <div style={{ display: "flex", justifyContent: "space-between" }}>
                                             <span>Tax (GST)</span>
-                                            <span style={{ fontWeight: 600, color: "#0f172a" }}>+{formatPrice(detail.refund_breakdown.tax_refund)}</span>
+                                            <span style={{ fontWeight: 600, color: tokens.textPrimary }}>+{formatPrice(detail.refund_breakdown.tax_refund)}</span>
                                           </div>
                                         )}
 
@@ -6613,12 +6785,12 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                             display: "flex",
                                             justifyContent: "space-between",
                                             alignItems: "center",
-                                            borderTop: "1px solid #e2e8f0",
+                                            borderTop: `1px solid ${tokens.border}`,
                                             paddingTop: "8px",
                                             marginTop: "4px",
                                             fontWeight: 700,
                                             fontSize: "13px",
-                                            color: "#0f172a",
+                                            color: tokens.textPrimary,
                                           }}
                                         >
                                           <span>Suggested Refund</span>
@@ -6628,8 +6800,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
                                       {/* Non-Refundable Exception Checkboxes */}
                                       {detail.refund_breakdown.charge_allocations?.some((c) => !c.refundable && c.allocated_amount > 0) && (
-                                        <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #e2e8f0" }}>
-                                          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b", marginBottom: "6px" }}>
+                                        <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}` }}>
+                                          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textSecondary, marginBottom: "6px" }}>
                                             Refund Retained Charges
                                           </div>
 
@@ -6647,8 +6819,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                       justifyContent: "space-between",
                                                       padding: "7px 10px",
                                                       borderRadius: "6px",
-                                                      background: isChecked ? "#f0fdf4" : "#ffffff",
-                                                      border: isChecked ? "1px solid #86efac" : "1px solid #e2e8f0",
+                                                      background: isChecked ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : tokens.surfaceBg,
+                                                      border: isChecked ? `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#86efac"}` : `1px solid ${tokens.border}`,
                                                       cursor: canRefundOrders ? "pointer" : "not-allowed",
                                                       fontSize: "12px",
                                                       transition: "all 0.15s ease",
@@ -6669,7 +6841,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                         }
                                                         style={{ cursor: canRefundOrders ? "pointer" : "not-allowed", accentColor: "#16a34a" }}
                                                       />
-                                                      <span style={{ fontWeight: 500, color: "#0f172a" }}>{charge.label}</span>
+                                                      <span style={{ fontWeight: 500, color: tokens.textPrimary }}>{charge.label}</span>
                                                     </div>
                                                     <span style={{ color: isChecked ? "#16a34a" : "#64748b", fontWeight: 600 }}>
                                                       +{formatPrice(charge.allocated_amount)}
@@ -6689,8 +6861,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                       style={{
                                         padding: "10px 12px",
                                         borderRadius: "6px",
-                                        background: "#f0fdf4",
-                                        border: "1px solid #bbf7d0",
+                                        background: isDark ? "rgba(34, 197, 94, 0.12)" : "#f0fdf4",
+                                        border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`,
                                         marginBottom: "14px",
                                         display: "flex",
                                         justifyContent: "space-between",
@@ -6700,14 +6872,14 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                       }}
                                     >
                                       <div>
-                                        <div style={{ fontSize: "12.5px", fontWeight: 700, color: "#166534" }}>
+                                        <div style={{ fontSize: "12.5px", fontWeight: 700, color: isDark ? "#86efac" : "#166534" }}>
                                           Payment Source: Online ({formatPaymentMethodName(detail?.order?.payment_method)})
                                         </div>
-                                        <div style={{ fontSize: "11px", color: "#15803d", marginTop: "2px" }}>
+                                        <div style={{ fontSize: "11px", color: isDark ? "#4ade80" : "#15803d", marginTop: "2px" }}>
                                           {detail?.order?.razorpay_payment_id ? `Razorpay Payment ID: ${detail.order.razorpay_payment_id}` : "Gateway Reversal Enabled"}
                                         </div>
                                       </div>
-                                      <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#15803d", background: "#ffffff", border: "1px solid #86efac", padding: "2px 6px", borderRadius: "4px" }}>
+                                      <span style={{ fontSize: "10.5px", fontWeight: 700, color: isDark ? "#4ade80" : "#15803d", background: tokens.surfaceBg, border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#86efac"}`, padding: "2px 6px", borderRadius: "4px" }}>
                                         Auto-Reversal
                                       </span>
                                     </div>
@@ -6716,24 +6888,24 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                       style={{
                                         padding: "10px 12px",
                                         borderRadius: "6px",
-                                        background: "#fffbeb",
-                                        border: "1px solid #fde68a",
+                                        background: isDark ? "rgba(245, 158, 11, 0.12)" : "#fffbeb",
+                                        border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
                                         marginBottom: "14px",
                                       }}
                                     >
                                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                                        <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#92400e" }}>
+                                        <span style={{ fontSize: "12.5px", fontWeight: 700, color: isDark ? "#fde047" : "#92400e" }}>
                                           Payment Source: Cash on Delivery (COD)
                                         </span>
                                         {(detail?.customer_refund_account || returnItem.customer_refund_account) && (
-                                          <span style={{ fontSize: "10px", fontWeight: 800, color: "#92400e", background: "#fef3c7", border: "1px solid #fde68a", padding: "1px 6px", borderRadius: "4px", textTransform: "uppercase" }}>
+                                          <span style={{ fontSize: "10px", fontWeight: 800, color: isDark ? "#fde047" : "#92400e", background: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7", border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.35)" : "#fde68a"}`, padding: "1px 6px", borderRadius: "4px", textTransform: "uppercase" }}>
                                             {(detail?.customer_refund_account || returnItem.customer_refund_account).type || "UPI"}
                                           </span>
                                         )}
                                       </div>
 
                                       {(detail?.customer_refund_account || returnItem.customer_refund_account) ? (
-                                        <div style={{ fontSize: "12px", color: "#78350f", background: "#ffffff", padding: "8px 10px", borderRadius: "4px", border: "1px solid #fef3c7", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginTop: "6px" }}>
+                                        <div style={{ fontSize: "12px", color: isDark ? "#fcd34d" : "#78350f", background: tokens.surfaceBg, padding: "8px 10px", borderRadius: "4px", border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.25)" : "#fef3c7"}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginTop: "6px" }}>
                                           <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                             {(detail?.customer_refund_account || returnItem.customer_refund_account).type === "upi" ? (
                                               <span><strong>UPI ID:</strong> {(detail?.customer_refund_account || returnItem.customer_refund_account).upi_id}</span>
@@ -6788,7 +6960,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         )}
                                       </select>
 
-                                      <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "4px", fontStyle: "italic" }}>
+                                      <div style={{ fontSize: "11.5px", color: tokens.textSecondary, marginTop: "4px", fontStyle: "italic" }}>
                                         {refundDraft.refundMethod === "original_payment"
                                           ? "Money is automatically reversed back to the customer's original card, UPI, or netbanking account via Razorpay API."
                                           : refundDraft.refundMethod === "cod_refund"
@@ -6871,7 +7043,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                               ) : null}
 
                               {/* Timeline Card */}
-                              <div style={{ ...plainCardStyle, padding: "16px" }}>
+                              <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                 <div
                                   style={{
                                     display: "flex",
@@ -6879,40 +7051,40 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                     alignItems: "center",
                                     marginBottom: "12px",
                                     paddingBottom: "8px",
-                                    borderBottom: "1px solid #f1f5f9",
+                                    borderBottom: `1px solid ${tokens.border}`,
                                   }}
                                 >
-                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                     Return Timeline
                                   </span>
                                 </div>
 
-                                <div style={{ display: "grid", gap: "6px", fontSize: "13px", color: "#475569" }}>
+                                <div style={{ display: "grid", gap: "6px", fontSize: "13px", color: tokens.textSecondary }}>
                                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                    <span style={{ color: "#64748b" }}>Requested:</span>
-                                    <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(returnItem.created_at)}</span>
+                                    <span style={{ color: tokens.textSecondary }}>Requested:</span>
+                                    <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(returnItem.created_at)}</span>
                                   </div>
                                   {(detail?.approved_at || returnItem.approved_at) && (
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ color: "#64748b" }}>Approved:</span>
-                                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(detail?.approved_at || returnItem.approved_at)}</span>
+                                      <span style={{ color: tokens.textSecondary }}>Approved:</span>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(detail?.approved_at || returnItem.approved_at)}</span>
                                     </div>
                                   )}
                                   {(detail?.received_at || returnItem.received_at) && (
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ color: "#64748b" }}>Received:</span>
-                                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(detail?.received_at || returnItem.received_at)}</span>
+                                      <span style={{ color: tokens.textSecondary }}>Received:</span>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(detail?.received_at || returnItem.received_at)}</span>
                                     </div>
                                   )}
                                   {(detail?.inspected_at || returnItem.inspected_at) && (
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ color: "#64748b" }}>Inspected:</span>
-                                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(detail?.inspected_at || returnItem.inspected_at)}</span>
+                                      <span style={{ color: tokens.textSecondary }}>Inspected:</span>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(detail?.inspected_at || returnItem.inspected_at)}</span>
                                     </div>
                                   )}
                                   {(detail?.refunded_at || returnItem.refunded_at) && (
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ color: "#64748b" }}>Refunded:</span>
+                                      <span style={{ color: tokens.textSecondary }}>Refunded:</span>
                                       <span style={{ fontWeight: 600, color: "#15803d" }}>{formatDate(detail?.refunded_at || returnItem.refunded_at)}</span>
                                     </div>
                                   )}
@@ -6955,7 +7127,8 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   setPageSize(newSize);
                   setCurrentPage(1);
                 }}
-                accentColor="#2563eb"
+                accentColor={isDark ? tokens.accent : "#2563eb"}
+                theme={{ mode: isDark ? "dark" : "light" }}
                 style={{ padding: 0 }}
               />
             </div>
@@ -6984,7 +7157,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
             style={{
               width: "100%",
               maxWidth: "520px",
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "16px",
               padding: "24px",
               boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
@@ -6997,7 +7170,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                 <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: "#991b1b" }}>
                   Cancel Order #{adminCancelOrder.id.slice(0, 8).toUpperCase()}
                 </h3>
-                <p style={{ margin: "3px 0 0", fontSize: "12.5px", color: "#64748b" }}>
+                <p style={{ margin: "3px 0 0", fontSize: "12.5px", color: tokens.textSecondary }}>
                   Customer: {adminCancelOrder.customer_name || "Store Customer"} • Status: {adminCancelOrder.status}
                 </p>
               </div>
@@ -7005,7 +7178,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                 type="button"
                 onClick={() => setAdminCancelOrder(null)}
                 style={{
-                  background: "#f1f5f9",
+                  background: tokens.elevatedSurfaceBg,
                   border: "none",
                   borderRadius: "50%",
                   width: "32px",
@@ -7013,7 +7186,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#64748b",
+                  color: tokens.textSecondary,
                   cursor: "pointer",
                 }}
               >
@@ -7023,13 +7196,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
             <div
               style={{
-                background: "#fef2f2",
+                background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
                 borderRadius: "8px",
-                border: "1px solid #fecaca",
+                border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
                 padding: "12px",
                 marginBottom: "16px",
                 fontSize: "12.5px",
-                color: "#991b1b",
+                color: isDark ? "#fca5a5" : "#991b1b",
                 lineHeight: 1.45,
               }}
             >
@@ -7049,7 +7222,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
               style={{ display: "flex", flexDirection: "column", gap: "14px" }}
             >
               <div>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                   Cancellation Reason Preset
                 </label>
                 <select
@@ -7059,10 +7232,10 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                     width: "100%",
                     padding: "10px 12px",
                     borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
+                    border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                     fontSize: "13px",
-                    color: "#0f172a",
-                    background: "#ffffff",
+                    color: tokens.textPrimary,
+                    background: tokens.surfaceBg,
                   }}
                   required
                 >
@@ -7075,7 +7248,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                   Custom Admin Note / Attempt Details
                 </label>
                 <textarea
@@ -7087,9 +7260,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                     width: "100%",
                     padding: "10px 12px",
                     borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
+                    border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                     fontSize: "13px",
-                    color: "#0f172a",
+                    color: tokens.textPrimary,
                     resize: "none",
                     fontFamily: "inherit",
                     boxSizing: "border-box",
@@ -7105,9 +7278,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                     flex: 1,
                     padding: "12px",
                     borderRadius: "8px",
-                    background: "#f1f5f9",
-                    border: "1px solid #cbd5e1",
-                    color: "#475569",
+                    background: tokens.elevatedSurfaceBg,
+                    border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                    color: tokens.textSecondary,
                     fontSize: "13px",
                     fontWeight: 700,
                     cursor: "pointer",

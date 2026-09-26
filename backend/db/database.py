@@ -46,6 +46,7 @@ def create_db_and_tables():
                 ALTER TABLE admins ADD COLUMN IF NOT EXISTS additional_permissions JSONB;
                 ALTER TABLE admins ADD COLUMN IF NOT EXISTS website_access_type VARCHAR(20) DEFAULT 'all';
                 ALTER TABLE admins ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
+                ALTER TABLE admins ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(20) DEFAULT 'light';
                 ALTER TABLE admins ADD COLUMN IF NOT EXISTS invitation_token VARCHAR(128);
                 ALTER TABLE admins ADD COLUMN IF NOT EXISTS invitation_expires_at TIMESTAMPTZ;
                 ALTER TABLE admins ADD COLUMN IF NOT EXISTS invited_by_admin_id UUID;

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import { GlassToast } from "./GlassToast";
 import { AdminFaqFullView } from "./AdminFaqFullView";
 import { AdminLegalFullView, LegalDocType } from "./AdminLegalFullView";
@@ -182,6 +183,7 @@ const SUPPORT_CATEGORIES = [
 // ---------------------------------------------------------------------------
 
 export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overview" | "faq" }> = ({ siteId, initialView }) => {
+  const { isDark, tokens } = useAdminTheme();
   const navigate = useNavigate();
   const { siteId: paramSiteId } = useParams<{ siteId?: string }>();
   const storedActiveSiteId = typeof window !== "undefined" ? (localStorage.getItem("last_active_site_id") || sessionStorage.getItem("last_active_site_id")) : null;
@@ -393,15 +395,13 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
     <div
       style={{
         width: "100%",
-        color: "#0f172a",
+        color: tokens.textPrimary,
         position: "relative",
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         boxSizing: "border-box",
       }}
     >
       <style>{`
-        .wc-faq-card { transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
-        .wc-faq-card:hover { border-color: #cbd5e1 !important; }
         .wc-legal-grid {
           display: grid;
           grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -423,20 +423,19 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
           justify-content: space-between;
           padding: 10px 12px;
           border-radius: 8px;
-          border: 1px solid #f1f5f9;
-          background: #fafafa;
+          border: 1px solid ${tokens.border};
+          background: ${isDark ? tokens.elevatedSurfaceBg : "#fafafa"};
           text-decoration: none;
-          color: #1e293b;
+          color: ${tokens.textPrimary};
           font-size: 12.5px;
           font-weight: 500;
-          transition: all 0.15s ease;
           min-width: 0;
           box-sizing: border-box;
         }
         .wc-legal-card-item:hover {
-          border-color: #cbd5e1 !important;
-          background: #f1f5f9 !important;
-          color: #0f172a !important;
+          border-color: ${tokens.accent || "#2563eb"} !important;
+          background: ${isDark ? tokens.surfaceBg : "#f1f5f9"} !important;
+          color: ${tokens.textPrimary} !important;
         }
       `}</style>
 
@@ -448,12 +447,12 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
       {/* ========================================================================= */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
-          padding: "8px 12px",
-          marginBottom: "8px",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          padding: "10px 14px",
+          marginBottom: "16px",
+          boxShadow: isDark ? "0 1px 2px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
           flexDirection: "column",
           gap: "8px",
@@ -473,19 +472,19 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
             <span
               style={{
                 borderRadius: "6px",
                 padding: "6px 16px",
-                background: "#ffffff",
-                color: "#0f172a",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+                background: isDark ? tokens.surfaceBg : "#ffffff",
+                color: tokens.textPrimary,
+                boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.06)",
                 fontSize: "13px",
                 fontWeight: 700,
                 display: "inline-block",
@@ -504,12 +503,12 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
       <div
         className="wc-faq-card"
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "12px",
           padding: "18px 22px",
           marginBottom: "12px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+          boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.03)",
         }}
       >
         <div
@@ -519,7 +518,7 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
             alignItems: "flex-start",
             paddingBottom: "14px",
             marginBottom: "14px",
-            borderBottom: "1px solid #f1f5f9",
+            borderBottom: `1px solid ${tokens.border}`,
             flexWrap: "wrap",
             gap: "8px",
           }}
@@ -529,14 +528,14 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
               style={{
                 fontSize: "15px",
                 fontWeight: 700,
-                color: "#0f172a",
+                color: tokens.textPrimary,
                 margin: "0 0 3px 0",
                 letterSpacing: "-0.01em",
               }}
             >
               Popular Questions
             </h2>
-            <p style={{ margin: 0, fontSize: "12.5px", color: "#64748b" }}>
+            <p style={{ margin: 0, fontSize: "12.5px", color: tokens.textSecondary }}>
               Find quick answers to common questions about WebCreon.
             </p>
           </div>
@@ -549,7 +548,7 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
               alignItems: "center",
               background: "transparent",
               border: "none",
-              color: "#2563eb",
+              color: isDark ? "#60a5fa" : "#2563eb",
               fontSize: "13px",
               fontWeight: 600,
               cursor: "pointer",
@@ -568,7 +567,7 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                 key={i}
                 style={{
                   height: "38px",
-                  background: "#f8fafc",
+                  background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
                   borderRadius: "8px",
                 }}
               />
@@ -582,7 +581,7 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                 <div
                   key={faq.id}
                   style={{
-                    borderTop: index > 0 ? "1px solid #f1f5f9" : "none",
+                    borderTop: index > 0 ? `1px solid ${tokens.border}` : "none",
                     paddingTop: index > 0 ? "12px" : "4px",
                     paddingBottom: "12px",
                   }}
@@ -602,7 +601,7 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                       padding: "2px 0",
                       cursor: "pointer",
                       textAlign: "left",
-                      color: isOpen ? "#0f172a" : "#1e293b",
+                      color: isOpen ? (tokens.accent || "#3b82f6") : tokens.textPrimary,
                       fontSize: "13.5px",
                       fontWeight: 600,
                       lineHeight: "1.4",
@@ -618,12 +617,12 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                       style={{
                         marginTop: "10px",
                         padding: "10px 14px",
-                        background: "#f8fafc",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
                         borderRadius: "8px",
-                        borderLeft: "3px solid #3b82f6",
+                        borderLeft: `3px solid ${tokens.accent || "#3b82f6"}`,
                         fontSize: "13px",
                         lineHeight: 1.55,
-                        color: "#334155",
+                        color: tokens.textPrimary,
                       }}
                     >
                       <p style={{ margin: 0 }}>{faq.answer_rich_text}</p>
@@ -643,12 +642,12 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
       <div
         className="wc-faq-card"
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "14px",
           padding: "24px 28px",
           marginBottom: "16px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.02), 0 6px 16px rgba(0,0,0,0.02)",
+          boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.02), 0 6px 16px rgba(0,0,0,0.02)",
         }}
       >
         {/* Header with Title */}
@@ -659,7 +658,7 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
             gap: "12px",
             paddingBottom: "16px",
             marginBottom: "18px",
-            borderBottom: "1px solid #f1f5f9",
+            borderBottom: `1px solid ${tokens.border}`,
           }}
         >
           <div
@@ -667,12 +666,12 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
               width: "36px",
               height: "36px",
               borderRadius: "10px",
-              background: "#eff6ff",
-              border: "1px solid #dbeafe",
+              background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+              border: `1px solid ${tokens.border}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#2563eb",
+              color: tokens.accent,
               flexShrink: 0,
             }}
           >
@@ -683,14 +682,14 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
               style={{
                 fontSize: "16px",
                 fontWeight: 700,
-                color: "#0f172a",
+                color: tokens.textPrimary,
                 margin: "0 0 2px 0",
                 letterSpacing: "-0.01em",
               }}
             >
               Contact Support
             </h2>
-            <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+            <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
               Have a specific question or need help? Send us a message and our team will get back to you.
             </p>
           </div>
@@ -714,13 +713,13 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                 width: "44px",
                 height: "44px",
                 borderRadius: "50%",
-                background: "#f0fdf4",
-                border: "1px solid #dcfce7",
+                background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4",
+                border: isDark ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid #dcfce7",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 marginBottom: "12px",
-                color: "#16a34a",
+                color: isDark ? "#4ade80" : "#166534",
               }}
             >
               <svg
@@ -741,7 +740,7 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
               style={{
                 fontSize: "16px",
                 fontWeight: 700,
-                color: "#0f172a",
+                color: tokens.textPrimary,
                 margin: "0 0 6px 0",
                 letterSpacing: "-0.01em",
               }}
@@ -752,14 +751,14 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
             <p
               style={{
                 fontSize: "13px",
-                color: "#64748b",
+                color: tokens.textSecondary,
                 maxWidth: "460px",
                 margin: "0 0 18px 0",
                 lineHeight: 1.55,
               }}
             >
               We have received your message. A confirmation has been sent to{" "}
-              <strong style={{ color: "#0f172a" }}>{admin?.email || "your registered email"}</strong>.
+              <strong style={{ color: tokens.textPrimary }}>{admin?.email || "your registered email"}</strong>.
             </p>
 
             {/* Ticket Details Box */}
@@ -767,8 +766,8 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
               style={{
                 width: "100%",
                 maxWidth: "420px",
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
+                background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
+                border: `1px solid ${tokens.border}`,
                 borderRadius: "10px",
                 padding: "12px 18px",
                 display: "flex",
@@ -778,20 +777,20 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
               }}
             >
               <div>
-                <div style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "2px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "2px" }}>
                   Ticket Reference
                 </div>
-                <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", fontFamily: "monospace" }}>
+                <div style={{ fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary, fontFamily: "monospace" }}>
                   #{submittedTicket.ticket_number}
                 </div>
               </div>
 
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "2px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "2px" }}>
                   Status
                 </div>
-                <div style={{ fontSize: "12.5px", fontWeight: 600, color: "#2563eb", display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#2563eb" }} />
+                <div style={{ fontSize: "12.5px", fontWeight: 600, color: isDark ? "#60a5fa" : "#2563eb", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: tokens.accent || "#2563eb" }} />
                   Queued
                 </div>
               </div>
@@ -801,26 +800,15 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
               type="button"
               onClick={handleResetForm}
               style={{
-                background: "#ffffff",
-                color: "#334155",
-                border: "1px solid #cbd5e1",
+                background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                color: tokens.textPrimary,
+                border: `1px solid ${tokens.border}`,
                 borderRadius: "8px",
                 padding: "8px 18px",
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: "pointer",
                 boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#f8fafc";
-                e.currentTarget.style.borderColor = "#94a3b8";
-                e.currentTarget.style.color = "#0f172a";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#ffffff";
-                e.currentTarget.style.borderColor = "#cbd5e1";
-                e.currentTarget.style.color = "#334155";
               }}
             >
               + Submit Another Inquiry
@@ -832,9 +820,9 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
             {formErrors.general && (
               <div
                 style={{
-                  background: "#fef2f2",
-                  border: "1px solid #fecaca",
-                  color: "#991b1b",
+                  background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                  border: isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca",
+                  color: isDark ? "#fca5a5" : "#991b1b",
                   padding: "10px 14px",
                   borderRadius: "8px",
                   fontSize: "13px",
@@ -851,11 +839,11 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
             {/* Field 1: Theme-Aligned Custom Category Dropdown */}
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }} ref={categoryDropdownRef}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <label style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>
+                <label style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary }}>
                   Category <span style={{ color: "#dc2626" }}>*</span>
                 </label>
                 {formErrors.category && (
-                  <span style={{ fontSize: "12px", color: "#dc2626", fontWeight: 500 }}>{formErrors.category}</span>
+                  <span style={{ fontSize: "12px", color: isDark ? "#fca5a5" : "#dc2626", fontWeight: 500 }}>{formErrors.category}</span>
                 )}
               </div>
 
@@ -875,15 +863,14 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                     border: formErrors.category
                       ? "1px solid #dc2626"
                       : isCategoryDropdownOpen
-                      ? "1px solid #2563eb"
-                      : "1px solid #cbd5e1",
-                    background: "#ffffff",
+                      ? `1px solid ${tokens.accent || "#2563eb"}`
+                      : `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                     fontSize: "13.5px",
-                    color: category ? "#0f172a" : "#94a3b8",
+                    color: category ? tokens.textPrimary : tokens.textMuted,
                     cursor: formLoading ? "not-allowed" : "pointer",
                     boxSizing: "border-box",
-                    boxShadow: isCategoryDropdownOpen ? "0 0 0 3px rgba(37, 99, 235, 0.08)" : "none",
-                    transition: "all 0.15s ease",
+                    boxShadow: isCategoryDropdownOpen ? `0 0 0 3px ${tokens.accent}18` : "none",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", overflow: "hidden" }}>
@@ -898,16 +885,16 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                                 width: "24px",
                                 height: "24px",
                                 borderRadius: "6px",
-                                background: "#eff6ff",
+                                background: isDark ? "rgba(59, 130, 246, 0.25)" : "#eff6ff",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
                                 flexShrink: 0,
                               }}
                             >
-                              <SelectedIcon size={14} color="#2563eb" />
+                              <SelectedIcon size={14} color={tokens.accent || "#2563eb"} />
                             </div>
-                            <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                            <span style={{ fontWeight: 600, color: tokens.textPrimary }}>
                               {selectedCat?.label || category}
                             </span>
                           </>
@@ -929,11 +916,11 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                       left: 0,
                       right: 0,
                       zIndex: 50,
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
+                      background: isDark ? tokens.surfaceBg : "#ffffff",
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "10px",
                       padding: "6px",
-                      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)",
+                      boxShadow: isDark ? "0 10px 30px rgba(0,0,0,0.5)" : "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)",
                       display: "flex",
                       flexDirection: "column",
                       gap: "2px",
@@ -958,15 +945,8 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                             justifyContent: "space-between",
                             padding: "9px 12px",
                             borderRadius: "7px",
-                            background: isSelected ? "#eff6ff" : "transparent",
+                            background: isSelected ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff") : "transparent",
                             cursor: "pointer",
-                            transition: "background 0.12s ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!isSelected) e.currentTarget.style.background = "#f8fafc";
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isSelected) e.currentTarget.style.background = "transparent";
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -975,26 +955,28 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                                 width: "26px",
                                 height: "26px",
                                 borderRadius: "6px",
-                                background: isSelected ? "#dbeafe" : "#f1f5f9",
+                                background: isSelected
+                                  ? (isDark ? "rgba(59, 130, 246, 0.25)" : "#dbeafe")
+                                  : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
                                 flexShrink: 0,
                               }}
                             >
-                              <IconComponent size={14} color={isSelected ? "#1d4ed8" : "#475569"} />
+                              <IconComponent size={14} color={isSelected ? (tokens.accent || "#2563eb") : tokens.textSecondary} />
                             </div>
                             <div>
                               <div
                                 style={{
                                   fontSize: "13px",
                                   fontWeight: isSelected ? 600 : 500,
-                                  color: isSelected ? "#1d4ed8" : "#0f172a",
+                                  color: isSelected ? (tokens.accent || "#2563eb") : tokens.textPrimary,
                                 }}
                               >
                                 {item.label}
                               </div>
-                              <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                              <div style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
                                 {item.desc}
                               </div>
                             </div>
@@ -1006,7 +988,7 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                               height="16"
                               viewBox="0 0 24 24"
                               fill="none"
-                              stroke="#2563eb"
+                              stroke={tokens.accent || "#2563eb"}
                               strokeWidth="2.5"
                               strokeLinecap="round"
                               strokeLinejoin="round"
@@ -1025,11 +1007,11 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
             {/* Field 2: Subject */}
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <label style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>
+                <label style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary }}>
                   Subject <span style={{ color: "#dc2626" }}>*</span>
                 </label>
                 {formErrors.subject && (
-                  <span style={{ fontSize: "12px", color: "#dc2626", fontWeight: 500 }}>{formErrors.subject}</span>
+                  <span style={{ fontSize: "12px", color: isDark ? "#fca5a5" : "#dc2626", fontWeight: 500 }}>{formErrors.subject}</span>
                 )}
               </div>
               <input
@@ -1043,20 +1025,13 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                   width: "100%",
                   padding: "10px 14px",
                   borderRadius: "8px",
-                  border: formErrors.subject ? "1px solid #dc2626" : "1px solid #cbd5e1",
+                  border: formErrors.subject ? "1px solid #dc2626" : `1px solid ${tokens.border}`,
+                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                   fontSize: "13.5px",
-                  color: "#0f172a",
+                  color: tokens.textPrimary,
+                  colorScheme: isDark ? "dark" : "light",
                   outline: "none",
                   boxSizing: "border-box",
-                  transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "#2563eb";
-                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(37, 99, 235, 0.08)";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = formErrors.subject ? "#dc2626" : "#cbd5e1";
-                  e.currentTarget.style.boxShadow = "none";
                 }}
               />
             </div>
@@ -1064,14 +1039,14 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
             {/* Field 3: Message */}
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <label style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>
+                <label style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary }}>
                   Message Details <span style={{ color: "#dc2626" }}>*</span>
                 </label>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   {formErrors.message && (
-                    <span style={{ fontSize: "12px", color: "#dc2626", fontWeight: 500 }}>{formErrors.message}</span>
+                    <span style={{ fontSize: "12px", color: isDark ? "#fca5a5" : "#dc2626", fontWeight: 500 }}>{formErrors.message}</span>
                   )}
-                  <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>
+                  <span style={{ fontSize: "11.5px", color: tokens.textMuted }}>
                     {message.length} / 5000
                   </span>
                 </div>
@@ -1087,24 +1062,17 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                   width: "100%",
                   padding: "10px 14px",
                   borderRadius: "8px",
-                  border: formErrors.message ? "1px solid #dc2626" : "1px solid #cbd5e1",
+                  border: formErrors.message ? "1px solid #dc2626" : `1px solid ${tokens.border}`,
+                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                   fontSize: "13.5px",
-                  color: "#0f172a",
+                  color: tokens.textPrimary,
+                  colorScheme: isDark ? "dark" : "light",
                   outline: "none",
                   boxSizing: "border-box",
                   resize: "vertical",
                   fontFamily: "inherit",
                   lineHeight: 1.55,
                   minHeight: "100px",
-                  transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "#2563eb";
-                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(37, 99, 235, 0.08)";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = formErrors.message ? "#dc2626" : "#cbd5e1";
-                  e.currentTarget.style.boxShadow = "none";
                 }}
               />
             </div>
@@ -1120,16 +1088,16 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                 paddingTop: "4px",
               }}
             >
-              <div style={{ fontSize: "12.5px", color: "#64748b", display: "flex", alignItems: "center", gap: "6px" }}>
+              <div style={{ fontSize: "12.5px", color: tokens.textSecondary, display: "flex", alignItems: "center", gap: "6px" }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <span>Logged in as <strong style={{ color: "#334155" }}>{admin?.email || "Admin"}</strong></span>
+                <span>Logged in as <strong style={{ color: tokens.textPrimary }}>{admin?.email || "Admin"}</strong></span>
               </div>
 
               <button
                 type="submit"
                 disabled={formLoading}
                 style={{
-                  background: formLoading ? "#94a3b8" : "#0f172a",
+                  background: formLoading ? tokens.textMuted : (tokens.accent || "#2563eb"),
                   color: "#ffffff",
                   border: "none",
                   borderRadius: "8px",
@@ -1140,14 +1108,7 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                  transition: "all 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  if (!formLoading) e.currentTarget.style.background = "#1e293b";
-                }}
-                onMouseLeave={(e) => {
-                  if (!formLoading) e.currentTarget.style.background = "#0f172a";
+                  boxShadow: `0 2px 8px ${tokens.accent || "#2563eb"}40`,
                 }}
               >
                 {formLoading ? (
@@ -1194,26 +1155,26 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
       <div
         className="wc-faq-card"
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "12px",
           padding: "16px 20px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+          boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.03)",
         }}
       >
-        <div style={{ paddingBottom: "12px", marginBottom: "14px", borderBottom: "1px solid #f1f5f9" }}>
+        <div style={{ paddingBottom: "12px", marginBottom: "14px", borderBottom: `1px solid ${tokens.border}` }}>
           <h2
             style={{
               fontSize: "14px",
               fontWeight: 700,
-              color: "#0f172a",
+              color: tokens.textPrimary,
               margin: "0 0 2px 0",
               letterSpacing: "-0.01em",
             }}
           >
             Legal & Company
           </h2>
-          <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>
+          <p style={{ margin: 0, fontSize: "12px", color: tokens.textSecondary }}>
             Important links and company information.
           </p>
         </div>
@@ -1298,3 +1259,5 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
     </div>
   );
 };
+
+

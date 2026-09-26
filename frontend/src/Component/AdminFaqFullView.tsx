@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useAdminTheme } from "../context/ThemeContext";
 import { useNavigate, useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { GlassToast } from "./GlassToast";
@@ -131,6 +132,7 @@ function ChevronDownIcon({ open }: { open?: boolean }) {
 }
 
 export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }> = ({ siteId, onBack }) => {
+  const { isDark, tokens } = useAdminTheme();
   const navigate = useNavigate();
   const { siteId: paramSiteId } = useParams<{ siteId?: string }>();
   const storedActiveSiteId = typeof window !== "undefined" ? (localStorage.getItem("last_active_site_id") || sessionStorage.getItem("last_active_site_id")) : null;
@@ -212,18 +214,16 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
     <div
       style={{
         width: "100%",
-        color: "#0f172a",
+        color: tokens.textPrimary,
         position: "relative",
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         boxSizing: "border-box",
       }}
     >
       <style>{`
-        .wc-faq-card { transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
-        .wc-faq-card:hover { border-color: #cbd5e1 !important; }
         .wc-filter-option:hover {
-          background-color: #f1f5f9 !important;
-          color: #0f172a !important;
+          background-color: ${isDark ? tokens.surfaceBg : "#f1f5f9"} !important;
+          color: ${tokens.textPrimary} !important;
         }
       `}</style>
 
@@ -235,12 +235,12 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
       {/* ========================================================================= */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
-          padding: "8px 12px",
-          marginBottom: "12px",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          padding: "10px 14px",
+          marginBottom: "16px",
+          boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -253,19 +253,19 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
         <div
           style={{
             display: "inline-flex",
-            background: "#f1f5f9",
+            background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
             padding: "3px",
             borderRadius: "8px",
-            border: "1px solid #e2e8f0",
+            border: `1px solid ${tokens.border}`,
           }}
         >
           <span
             style={{
               borderRadius: "6px",
               padding: "6px 16px",
-              background: "#ffffff",
-              color: "#0f172a",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+              background: isDark ? tokens.surfaceBg : "#ffffff",
+              color: tokens.textPrimary,
+              boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.06)",
               fontSize: "13px",
               fontWeight: 700,
               display: "inline-block",
@@ -288,9 +288,15 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
               height: "36px",
               padding: "0 12px",
               borderRadius: "7px",
-              border: isFiltered ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-              background: isFiltered ? "#eff6ff" : "#ffffff",
-              color: isFiltered ? "#1d4ed8" : "#334155",
+              border: isFiltered
+                ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}`
+                : `1px solid ${tokens.border}`,
+              background: isFiltered
+                ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                : tokens.surfaceBg,
+              color: isFiltered
+                ? (isDark ? "#93c5fd" : "#1d4ed8")
+                : tokens.textPrimary,
               fontSize: "13px",
               fontWeight: 600,
               cursor: "pointer",
@@ -306,7 +312,7 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
                 style={{
                   fontSize: "11px",
                   fontWeight: 700,
-                  background: "#2563eb",
+                  background: tokens.accent || "#2563eb",
                   color: "#ffffff",
                   borderRadius: "10px",
                   padding: "0 6px",
@@ -323,18 +329,20 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
             <div
               style={{
                 position: "absolute",
-                top: "44px",
+                top: "40px",
                 right: "0",
                 width: "260px",
-                background: "#ffffff",
+                background: isDark ? tokens.surfaceBg : "#ffffff",
                 borderRadius: "10px",
-                border: "1px solid #e2e8f0",
-                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
+                border: `1px solid ${tokens.border}`,
+                boxShadow: isDark
+                  ? "0 10px 30px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.1)"
+                  : "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
                 padding: "8px",
                 zIndex: 100,
                 display: "flex",
                 flexDirection: "column",
-                gap: "2px",
+                gap: "3px",
               }}
             >
               <button
@@ -351,12 +359,17 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
                   padding: "8px 10px",
                   borderRadius: "6px",
                   border: "none",
-                  background: selectedCategorySlug === "all" ? "#f1f5f9" : "transparent",
-                  color: selectedCategorySlug === "all" ? "#0f172a" : "#475569",
+                  background: selectedCategorySlug === "all"
+                    ? (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9")
+                    : "transparent",
+                  color: selectedCategorySlug === "all"
+                    ? tokens.textPrimary
+                    : tokens.textSecondary,
                   fontSize: "12.5px",
                   fontWeight: selectedCategorySlug === "all" ? 700 : 500,
                   cursor: "pointer",
                   textAlign: "left",
+                  transition: "background 0.12s ease",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -368,7 +381,7 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
                   </svg>
                   All Categories
                 </div>
-                {selectedCategorySlug === "all" && <span style={{ color: "#0f62ab", fontSize: "13px", fontWeight: 700 }}>✓</span>}
+                {selectedCategorySlug === "all" && <span style={{ color: tokens.accent, fontSize: "13px", fontWeight: 700 }}>✓</span>}
               </button>
 
               {categories.map((cat) => {
@@ -389,19 +402,24 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
                       padding: "8px 10px",
                       borderRadius: "6px",
                       border: "none",
-                      background: isSelected ? "#f1f5f9" : "transparent",
-                      color: isSelected ? "#0f172a" : "#475569",
+                      background: isSelected
+                        ? (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9")
+                        : "transparent",
+                      color: isSelected
+                        ? tokens.textPrimary
+                        : tokens.textSecondary,
                       fontSize: "12.5px",
                       fontWeight: isSelected ? 700 : 500,
                       cursor: "pointer",
                       textAlign: "left",
+                      transition: "background 0.12s ease",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <CategoryIcon slug={cat.slug} size={13} />
                       {cat.name}
                     </div>
-                    {isSelected && <span style={{ color: "#0f62ab", fontSize: "13px", fontWeight: 700 }}>✓</span>}
+                    {isSelected && <span style={{ color: tokens.accent, fontSize: "13px", fontWeight: 700 }}>✓</span>}
                   </button>
                 );
               })}
@@ -411,26 +429,33 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. BACK BUTTON (DOWN AFTER NAVBAR - BLACK COLOR)                          */}
+      {/* 2. BACK BUTTON (DOWN AFTER NAVBAR)                                        */}
       {/* ========================================================================= */}
-      <div style={{ marginBottom: "10px" }}>
+      <div style={{ marginBottom: "12px" }}>
         <button
           type="button"
           onClick={handleBack}
           style={{
             background: "transparent",
             border: "none",
-            color: "#0f172a",
+            color: tokens.textPrimary,
             fontSize: "13px",
-            fontWeight: 700,
+            fontWeight: 600,
             cursor: "pointer",
             padding: "4px 2px",
             display: "inline-flex",
             alignItems: "center",
-            gap: "5px",
+            gap: "6px",
+            transition: "opacity 0.15s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = tokens.accent;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = tokens.textPrimary;
           }}
         >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#0f172a" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
             <line x1="19" y1="12" x2="5" y2="12" />
             <polyline points="12 19 5 12 12 5" />
           </svg>
@@ -444,12 +469,12 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
       <div
         className="wc-faq-card"
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "12px",
           padding: "18px 22px",
           marginBottom: "12px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+          boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.03)",
         }}
       >
         {/* Card Header: Title & Subtitle */}
@@ -457,21 +482,21 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
           style={{
             paddingBottom: "14px",
             marginBottom: "14px",
-            borderBottom: "1px solid #f1f5f9",
+            borderBottom: `1px solid ${tokens.border}`,
           }}
         >
           <h2
             style={{
               fontSize: "15px",
               fontWeight: 700,
-              color: "#0f172a",
+              color: tokens.textPrimary,
               margin: "0 0 3px 0",
               letterSpacing: "-0.01em",
             }}
           >
             Frequently Asked Questions
           </h2>
-          <p style={{ margin: 0, fontSize: "12.5px", color: "#64748b" }}>
+          <p style={{ margin: 0, fontSize: "12.5px", color: tokens.textSecondary }}>
             Find quick answers and setup guides for your store.
           </p>
         </div>
@@ -484,7 +509,7 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
                 key={i}
                 style={{
                   height: "38px",
-                  background: "#f8fafc",
+                  background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
                   borderRadius: "8px",
                 }}
               />
@@ -492,17 +517,17 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
           </div>
         ) : items.length === 0 ? (
           <div style={{ padding: "32px 16px", textAlign: "center" }}>
-            <h3 style={{ margin: "0 0 4px 0", fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+            <h3 style={{ margin: "0 0 4px 0", fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
               No articles found in this category
             </h3>
-            <p style={{ margin: "0 0 14px 0", fontSize: "12px", color: "#64748b" }}>
+            <p style={{ margin: "0 0 14px 0", fontSize: "12px", color: tokens.textSecondary }}>
               Need help with custom setup? Submit an inquiry directly to our support team.
             </p>
             <button
               type="button"
               onClick={handleBack}
               style={{
-                background: "#0f62ab",
+                background: tokens.accent || "#2563eb",
                 color: "#ffffff",
                 border: "none",
                 borderRadius: "6px",
@@ -530,14 +555,14 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
                       paddingBottom: "8px",
                     }}
                   >
-                    <div style={{ color: "#0f62ab", display: "flex", alignItems: "center" }}>
+                    <div style={{ color: tokens.accent, display: "flex", alignItems: "center" }}>
                       <CategoryIcon slug={slug} size={13} />
                     </div>
                     <span
                       style={{
                         fontSize: "11.5px",
                         fontWeight: 700,
-                        color: "#475569",
+                        color: tokens.textSecondary,
                         textTransform: "uppercase",
                         letterSpacing: "0.04em",
                       }}
@@ -556,7 +581,7 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
                     <div
                       key={faq.id}
                       style={{
-                        borderTop: isFirstItemInList ? "none" : "1px solid #f1f5f9",
+                        borderTop: isFirstItemInList ? "none" : `1px solid ${tokens.border}`,
                         paddingTop: "12px",
                         paddingBottom: "12px",
                       }}
@@ -575,11 +600,12 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
                           padding: "2px 0",
                           cursor: "pointer",
                           textAlign: "left",
-                          color: isOpen ? "#0f62ab" : "#0f172a",
+                          color: isOpen ? (tokens.accent || "#3b82f6") : tokens.textPrimary,
                           fontSize: "13.5px",
                           fontWeight: 600,
                           lineHeight: "1.4",
                           gap: "12px",
+                          transition: "color 0.15s ease",
                         }}
                       >
                         <span>{faq.question}</span>
@@ -590,12 +616,13 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
                         <div
                           style={{
                             marginTop: "10px",
-                            padding: "10px 14px",
-                            background: "#f8fafc",
+                            padding: "12px 16px",
+                            background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
+                            border: `1px solid ${tokens.border}`,
                             borderRadius: "8px",
                             fontSize: "13px",
-                            lineHeight: 1.55,
-                            color: "#334155",
+                            lineHeight: 1.6,
+                            color: tokens.textPrimary,
                           }}
                         >
                           <p style={{ margin: 0 }}>{faq.answer_rich_text}</p>
@@ -612,6 +639,8 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
     </div>
   );
 };
+
+
 
 
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useAdminTheme } from "../context/ThemeContext";
 import { useParams, Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
@@ -138,13 +139,14 @@ function InfoTooltip({
   text: string;
   align?: "left" | "right" | "center";
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [hovered, setHovered] = useState(false);
 
   const getPopupStyle = (): React.CSSProperties => {
     const base: React.CSSProperties = {
       position: "absolute",
       bottom: "calc(100% + 8px)",
-      background: "#0f172a",
+      background: isDark ? "#1e293b" : "#0f172a",
       color: "#ffffff",
       fontSize: "11.5px",
       fontWeight: 500,
@@ -179,7 +181,7 @@ function InfoTooltip({
       height: 0,
       borderLeft: "5px solid transparent",
       borderRight: "5px solid transparent",
-      borderTop: "5px solid #0f172a",
+      borderTop: `5px solid ${isDark ? "#1e293b" : "#0f172a"}`,
     };
 
     if (align === "left") {
@@ -235,6 +237,7 @@ function EscrowReleaseIconButton({
   active: boolean;
   loading: boolean;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [hovered, setHovered] = useState(false);
   return (
     <div style={{ position: "relative", display: "inline-flex" }}>
@@ -249,9 +252,9 @@ function EscrowReleaseIconButton({
           height: "24px",
           borderRadius: "5px",
           border: "1px solid",
-          borderColor: active ? "#fde68a" : "#e2e8f0",
-          background: active ? "#fef3c7" : "#f8fafc",
-          color: active ? "#b45309" : "#94a3b8",
+          borderColor: active ? (isDark ? "rgba(245, 158, 11, 0.4)" : "#fde68a") : tokens.border,
+          background: active ? (isDark ? "rgba(245, 158, 11, 0.18)" : "#fef3c7") : (isDark ? tokens.surfaceBg : "#f8fafc"),
+          color: active ? (isDark ? "#fbbf24" : "#b45309") : tokens.textSecondary,
           cursor: disabled ? "default" : "pointer",
           display: "inline-flex",
           alignItems: "center",
@@ -304,7 +307,7 @@ function EscrowReleaseIconButton({
               height: 0,
               borderLeft: "5px solid transparent",
               borderRight: "5px solid transparent",
-              borderTop: "5px solid #0f172a",
+              borderTop: `5px solid ${isDark ? "#1e293b" : "#0f172a"}`,
             }}
           />
         </div>
@@ -324,6 +327,7 @@ const getCachedEarnings = (id?: string): EarningsSummaryData | null => {
 };
 
 export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: string } = {}) {
+  const { isDark, tokens } = useAdminTheme();
   const { siteId: paramSiteId } = useParams<{ siteId: string }>();
   const siteId = propSiteId || paramSiteId || (typeof window !== "undefined" ? localStorage.getItem("last_active_site_id") || "" : "");
   const initialData = getCachedEarnings(siteId);
@@ -555,26 +559,27 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
 
   // Design Tokens
   const plainCardStyle: React.CSSProperties = {
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
+    background: isDark ? tokens.surfaceBg : "#ffffff",
+    border: `1px solid ${tokens.border}`,
     borderRadius: "8px",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
+    boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
   };
 
   const inputStyle: React.CSSProperties = {
     padding: "8px 12px",
     borderRadius: "6px",
-    border: "1px solid #cbd5e1",
+    border: `1px solid ${tokens.border}`,
     fontSize: "13px",
-    color: "#0f172a",
-    background: "#ffffff",
+    color: tokens.textPrimary,
+    background: isDark ? tokens.surfaceBg : "#ffffff",
     outline: "none",
     boxSizing: "border-box",
+    colorScheme: isDark ? "dark" : "light",
   };
 
   if (loading && !data) {
     return (
-      <div style={{ padding: "48px 24px", textAlign: "center", color: "#64748b", fontSize: "14px" }}>
+      <div style={{ padding: "48px 24px", textAlign: "center", color: tokens.textSecondary, fontSize: "14px" }}>
         Loading earnings & ledger...
       </div>
     );
@@ -599,7 +604,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
   const feePercent = data?.platform_commission_percent || 3.0;
 
   return (
-    <div style={{ width: "100%", maxWidth: "100%", color: "#0f172a", boxSizing: "border-box" }}>
+    <div style={{ width: "100%", maxWidth: "100%", color: tokens.textPrimary, boxSizing: "border-box" }}>
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -645,10 +650,10 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
             <div
               style={{
                 display: "inline-flex",
-                background: "#f1f5f9",
+                background: tokens.elevatedSurfaceBg,
                 padding: "3px",
                 borderRadius: "8px",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${tokens.border}`,
               }}
             >
               <button
@@ -657,9 +662,9 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                   borderRadius: "6px",
                   padding: "6px 16px",
                   border: "none",
-                  background: "#ffffff",
-                  color: "#0f172a",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+                  background: tokens.surfaceBg,
+                  color: tokens.textPrimary,
+                  boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
                   fontSize: "13px",
                   fontWeight: 700,
                   cursor: "default",
@@ -712,8 +717,9 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                   fontSize: "13px",
                   height: "36px",
                   borderRadius: "7px",
-                  border: "1px solid #cbd5e1",
-                  background: "#f8fafc",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.elevatedSurfaceBg,
+                  color: tokens.textPrimary,
                   width: "100%",
                 }}
               />
@@ -756,9 +762,9 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                   height: "36px",
                   padding: "0 12px",
                   borderRadius: "7px",
-                  border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                  background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                  color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
+                  border: activeFilterCount > 0 ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}` : `1px solid ${tokens.border}`,
+                  background: activeFilterCount > 0 ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
+                  color: activeFilterCount > 0 ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -794,10 +800,10 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                     top: "42px",
                     right: 0,
                     width: "300px",
-                    background: "#ffffff",
-                    border: "1px solid #cbd5e1",
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    border: `1px solid ${tokens.border}`,
                     borderRadius: "8px",
-                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+                    boxShadow: isDark ? "0 10px 30px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0,0,0,0.4)" : "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
                     padding: "14px",
                     zIndex: 50,
                     display: "flex",
@@ -806,11 +812,11 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Filter Transactions</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>Filter Transactions</div>
                     <button
                       type="button"
                       onClick={() => setIsFilterOpen(false)}
-                      style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", padding: "2px" }}
+                      style={{ background: "none", border: "none", color: tokens.textSecondary, cursor: "pointer", padding: "2px" }}
                     >
                       <XMarkIcon />
                     </button>
@@ -818,7 +824,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
 
                   {/* Date Range */}
                   <div>
-                    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#475569", marginBottom: "4px", textTransform: "uppercase" }}>
+                    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "4px", textTransform: "uppercase" }}>
                       Date Range
                     </label>
                     <select
@@ -863,7 +869,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
 
                   {/* Settlement Status */}
                   <div>
-                    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#475569", marginBottom: "4px", textTransform: "uppercase" }}>
+                    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "4px", textTransform: "uppercase" }}>
                       Settlement Status
                     </label>
                     <select
@@ -885,7 +891,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
 
                   {/* Sort Order */}
                   <div>
-                    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#475569", marginBottom: "4px", textTransform: "uppercase" }}>
+                    <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "4px", textTransform: "uppercase" }}>
                       Sort By
                     </label>
                     <select
@@ -910,7 +916,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                       justifyContent: "space-between",
                       alignItems: "center",
                       paddingTop: "8px",
-                      borderTop: "1px solid #f1f5f9",
+                      borderTop: `1px solid ${tokens.border}`,
                     }}
                   >
                     <button
@@ -922,7 +928,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                       style={{
                         background: "none",
                         border: "none",
-                        color: "#dc2626",
+                        color: isDark ? "#f87171" : "#dc2626",
                         fontSize: "12px",
                         fontWeight: 600,
                         cursor: "pointer",
@@ -935,7 +941,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                       type="button"
                       onClick={() => setIsFilterOpen(false)}
                       style={{
-                        background: "#0f172a",
+                        background: tokens.accent || "#2563eb",
                         border: "none",
                         color: "#ffffff",
                         fontSize: "12px",
@@ -963,10 +969,10 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
               flexWrap: "wrap",
               gap: "6px",
               paddingTop: "4px",
-              borderTop: "1px solid #f1f5f9",
+              borderTop: `1px solid ${tokens.border}`,
             }}
           >
-            <span style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 600, marginRight: "2px" }}>
+            <span style={{ fontSize: "11.5px", color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>
               Active:
             </span>
 
@@ -980,9 +986,9 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(37,99,235,0.18)" : "#eff6ff",
+                  color: isDark ? "#93c5fa" : "#1d4ed8",
+                  border: isDark ? "1px solid rgba(59,130,246,0.4)" : "1px solid #bfdbfe",
                 }}
               >
                 <span>Search: "{searchQuery.trim()}"</span>
@@ -1006,9 +1012,9 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(37,99,235,0.18)" : "#eff6ff",
+                  color: isDark ? "#93c5fa" : "#1d4ed8",
+                  border: isDark ? "1px solid rgba(59,130,246,0.4)" : "1px solid #bfdbfe",
                 }}
               >
                 <span>Date: {dateFilter === "all" ? "All Time" : dateFilter.replace(/_/g, " ")}</span>
@@ -1035,9 +1041,9 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(37,99,235,0.18)" : "#eff6ff",
+                  color: isDark ? "#93c5fa" : "#1d4ed8",
+                  border: isDark ? "1px solid rgba(59,130,246,0.4)" : "1px solid #bfdbfe",
                 }}
               >
                 <span>Status: {statusFilter}</span>
@@ -1057,7 +1063,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
               style={{
                 background: "none",
                 border: "none",
-                color: "#dc2626",
+                color: isDark ? "#f87171" : "#dc2626",
                 fontSize: "11.5px",
                 fontWeight: 600,
                 cursor: "pointer",
@@ -1074,8 +1080,8 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
       {data && !data.bank_configured && (
         <div
           style={{
-            background: "#fafaf9",
-            border: "1px solid #e7e5e4",
+            background: isDark ? "rgba(245, 158, 11, 0.1)" : "#fafaf9",
+            border: isDark ? "1px solid rgba(245, 158, 11, 0.3)" : "1px solid #e7e5e4",
             borderRadius: "8px",
             padding: "9px 14px",
             marginBottom: "12px",
@@ -1087,10 +1093,10 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
             boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#44403c" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: tokens.textSecondary }}>
             <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#f59e0b", flexShrink: 0 }} />
             <span>
-              <strong style={{ fontWeight: 600, color: "#1c1917" }}>Bank account not linked.</strong> Add your account details to receive automatic 48-hour order payouts.
+              <strong style={{ fontWeight: 600, color: tokens.textPrimary }}>Bank account not linked.</strong> Add your account details to receive automatic 48-hour order payouts.
             </span>
           </div>
           <Link
@@ -1098,13 +1104,14 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
             style={{
               padding: "5px 12px",
               borderRadius: "6px",
-              background: "#0f172a",
+              background: isDark ? tokens.elevatedSurfaceBg : "#0f172a",
+              border: isDark ? `1px solid ${tokens.border}` : "none",
               color: "#ffffff",
               fontSize: "12px",
               fontWeight: 600,
               textDecoration: "none",
               whiteSpace: "nowrap",
-              transition: "background 0.15s ease",
+              transition: "all 0.15s ease",
             }}
           >
             Configure Bank →
@@ -1124,11 +1131,11 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
       >
         {/* Card 1: Online Sales (Prepaid) */}
         <div style={{ ...plainCardStyle, padding: "10px 12px", minWidth: 0, overflow: "visible", position: "relative", display: "flex", flexDirection: "column", gap: "6px" }}>
-          <div style={{ fontSize: "clamp(15px, 1.35vw, 19px)", fontWeight: 700, color: "#334155", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "clamp(15px, 1.35vw, 19px)", fontWeight: 700, color: isDark ? "#f1f5f9" : "#334155", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             {formatCurrency(onlineNet)}
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "2px" }}>
-            <span style={{ fontSize: "11.5px", fontWeight: 600, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            <span style={{ fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
               Online Sales (Prepaid)
             </span>
             <InfoTooltip
@@ -1141,7 +1148,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
         {/* Card 2: In Escrow (Cooling) */}
         <div style={{ ...plainCardStyle, padding: "10px 12px", minWidth: 0, overflow: "visible", position: "relative", display: "flex", flexDirection: "column", gap: "6px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px" }}>
-            <div style={{ fontSize: "clamp(15px, 1.35vw, 19px)", fontWeight: 700, color: "#d97706", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            <div style={{ fontSize: "clamp(15px, 1.35vw, 19px)", fontWeight: 700, color: isDark ? "#fbbf24" : "#d97706", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
               {formatCurrency(escrowBalance)}
             </div>
             <EscrowReleaseIconButton
@@ -1152,7 +1159,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
             />
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "2px" }}>
-            <span style={{ fontSize: "11.5px", fontWeight: 600, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            <span style={{ fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
               In Escrow (Cooling)
             </span>
             <InfoTooltip
@@ -1164,11 +1171,11 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
 
         {/* Card 3: Settled to Bank */}
         <div style={{ ...plainCardStyle, padding: "10px 12px", minWidth: 0, overflow: "visible", position: "relative", display: "flex", flexDirection: "column", gap: "6px" }}>
-          <div style={{ fontSize: "clamp(15px, 1.35vw, 19px)", fontWeight: 700, color: "#059669", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "clamp(15px, 1.35vw, 19px)", fontWeight: 700, color: isDark ? "#34d399" : "#059669", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             {formatCurrency(settledPayouts)}
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "2px" }}>
-            <span style={{ fontSize: "11.5px", fontWeight: 600, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            <span style={{ fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
               Settled to Bank
             </span>
             <InfoTooltip
@@ -1180,11 +1187,11 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
 
         {/* Card 4: Cash on Delivery (COD) */}
         <div style={{ ...plainCardStyle, padding: "10px 12px", minWidth: 0, overflow: "visible", position: "relative", display: "flex", flexDirection: "column", gap: "6px" }}>
-          <div style={{ fontSize: "clamp(15px, 1.35vw, 19px)", fontWeight: 700, color: "#0284c7", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "clamp(15px, 1.35vw, 19px)", fontWeight: 700, color: isDark ? "#38bdf8" : "#0284c7", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             {formatCurrency(codNet)}
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "2px" }}>
-            <span style={{ fontSize: "11.5px", fontWeight: 600, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            <span style={{ fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
               COD Sales (Cash)
             </span>
             <InfoTooltip
@@ -1196,11 +1203,11 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
 
         {/* Card 5: Dues Owed to WebCreon */}
         <div style={{ ...plainCardStyle, padding: "10px 12px", minWidth: 0, overflow: "visible", position: "relative", display: "flex", flexDirection: "column", gap: "6px" }}>
-          <div style={{ fontSize: "clamp(15px, 1.35vw, 19px)", fontWeight: 700, color: totalDuesOwed > 0 ? "#dc2626" : "#475569", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "clamp(15px, 1.35vw, 19px)", fontWeight: 700, color: totalDuesOwed > 0 ? (isDark ? "#f87171" : "#dc2626") : (isDark ? "#94a3b8" : "#475569"), lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             {formatCurrency(totalDuesOwed)}
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "2px" }}>
-            <span style={{ fontSize: "11.5px", fontWeight: 600, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            <span style={{ fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
               Dues to WebCreon
             </span>
             <InfoTooltip
@@ -1214,11 +1221,11 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
       {/* Main Ledger Table Card */}
       <div style={{ ...plainCardStyle, overflow: "hidden" }}>
         {filteredEntries.length === 0 ? (
-          <div style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+          <div style={{ padding: "40px 20px", textAlign: "center", color: tokens.textSecondary }}>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "4px" }}>
               {activeFilterCount > 0 ? "No matching ledger records" : "No records in this tab."}
             </div>
-            <p style={{ margin: 0, fontSize: "12.5px", color: "#64748b" }}>
+            <p style={{ margin: 0, fontSize: "12.5px", color: tokens.textSecondary }}>
               {activeFilterCount > 0
                 ? "Try adjusting your search query, status filters, or date range."
                 : "Completed customer orders will automatically record financial ledger entries here."}
@@ -1247,7 +1254,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
               <thead>
-                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b" }}>
+                <tr style={{ background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", borderBottom: `1px solid ${tokens.border}`, color: tokens.textSecondary }}>
                   <th style={{ padding: "10px 16px", fontWeight: 700, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em" }}>Date & Time</th>
                   <th style={{ padding: "10px 16px", fontWeight: 700, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em" }}>Order</th>
                   <th style={{ padding: "10px 16px", fontWeight: 700, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em" }}>Gross (GMV)</th>
@@ -1271,9 +1278,9 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                           height: "22px",
                           padding: 0,
                           borderRadius: "5px",
-                          border: "1px solid #cbd5e1",
-                          background: "#ffffff",
-                          color: "#64748b",
+                          border: `1px solid ${tokens.border}`,
+                          background: isDark ? tokens.surfaceBg : "#ffffff",
+                          color: tokens.textSecondary,
                           cursor: isExportingCsv || loading || filteredEntries.length === 0 ? "not-allowed" : "pointer",
                           opacity: isExportingCsv || loading || filteredEntries.length === 0 ? 0.45 : 1,
                           transition: "all 0.15s ease",
@@ -1309,14 +1316,14 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                       <tr
                         onClick={() => setExpandedId(isExpanded ? null : entry.id)}
                         style={{
-                          borderBottom: "1px solid #f1f5f9",
-                          background: isExpanded ? "#f8fafc" : "#ffffff",
+                          borderBottom: `1px solid ${tokens.border}`,
+                          background: isExpanded ? (isDark ? tokens.elevatedSurfaceBg : "#f8fafc") : (isDark ? tokens.surfaceBg : "#ffffff"),
                           cursor: "pointer",
                           transition: "background 0.15s ease",
                         }}
                       >
                         {/* Date */}
-                        <td style={{ padding: "12px 16px", color: "#64748b", whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "12px 16px", color: tokens.textSecondary, whiteSpace: "nowrap" }}>
                           {formatDate(entry.created_at)}
                         </td>
 
@@ -1327,7 +1334,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                             onClick={(e) => e.stopPropagation()}
                             style={{
                               fontWeight: 700,
-                              color: "#0f172a",
+                              color: tokens.textPrimary,
                               textDecoration: "none",
                               display: "inline-flex",
                               alignItems: "center",
@@ -1341,17 +1348,17 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                         </td>
 
                         {/* Gross */}
-                        <td style={{ padding: "12px 16px", fontWeight: 600, color: "#0f172a" }}>
+                        <td style={{ padding: "12px 16px", fontWeight: 600, color: tokens.textPrimary }}>
                           {formatCurrency(entry.gross_amount)}
                         </td>
 
                         {/* Fee */}
-                        <td style={{ padding: "12px 16px", color: "#dc2626", fontWeight: 500 }}>
+                        <td style={{ padding: "12px 16px", color: isDark ? "#f87171" : "#dc2626", fontWeight: 500 }}>
                           -{formatCurrency(entry.platform_fee)}
                         </td>
 
                         {/* Net */}
-                        <td style={{ padding: "12px 16px", fontWeight: 700, color: "#16a34a" }}>
+                        <td style={{ padding: "12px 16px", fontWeight: 700, color: isDark ? "#4ade80" : "#16a34a" }}>
                           {formatCurrency(entry.tenant_share)}
                         </td>
 
@@ -1386,7 +1393,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                         </td>
 
                         {/* Transfer Ref & Expand Indicator */}
-                        <td style={{ padding: "12px 16px", color: "#64748b", fontSize: "12px" }}>
+                        <td style={{ padding: "12px 16px", color: tokens.textSecondary, fontSize: "12px" }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
                             <span style={{ fontFamily: "monospace", fontSize: "11.5px" }}>{entry.razorpay_transfer_id || "—"}</span>
                             <span style={{ fontSize: "10px", color: "#94a3b8", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s ease" }}>
@@ -1398,7 +1405,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
 
                       {/* Expandable Accordion: Simple, Minimal, Neutral Slate Theme */}
                       {isExpanded && (
-                        <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                        <tr style={{ background: isDark ? tokens.surfaceBg : "#f8fafc", borderBottom: `1px solid ${tokens.border}` }}>
                           <td colSpan={7} style={{ padding: "14px 20px" }}>
                             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                               {/* Top Banner inside Accordion */}
@@ -1407,9 +1414,13 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                   padding: "10px 14px",
                                   borderRadius: "6px",
                                   background: entry.is_cod 
-                                    ? (entry.cod_fee_status === "deducted" ? "#f0fdf4" : entry.cod_fee_status === "waived_returned" ? "#f8fafc" : "#eff6ff")
-                                    : "#ffffff",
-                                  border: `1px solid ${entry.is_cod ? (entry.cod_fee_status === "deducted" ? "#bbf7d0" : entry.cod_fee_status === "waived_returned" ? "#e2e8f0" : "#bfdbfe") : "#e2e8f0"}`,
+                                    ? (entry.cod_fee_status === "deducted" 
+                                        ? (isDark ? "rgba(22, 163, 74, 0.15)" : "#f0fdf4") 
+                                        : entry.cod_fee_status === "waived_returned" 
+                                        ? (isDark ? tokens.elevatedSurfaceBg : "#f8fafc") 
+                                        : (isDark ? "rgba(37, 99, 235, 0.15)" : "#eff6ff"))
+                                    : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
+                                  border: `1px solid ${entry.is_cod ? (entry.cod_fee_status === "deducted" ? (isDark ? "rgba(34, 197, 94, 0.4)" : "#bbf7d0") : entry.cod_fee_status === "waived_returned" ? tokens.border : (isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe")) : tokens.border}`,
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "space-between",
@@ -1419,7 +1430,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                 }}
                               >
                                 {entry.is_cod ? (
-                                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#334155" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: tokens.textPrimary }}>
                                     <span style={{ fontWeight: 700, color: entry.cod_fee_status === "deducted" ? "#15803d" : entry.cod_fee_status === "waived_returned" ? "#475569" : "#1d4ed8" }}>
                                       {entry.cod_fee_status === "deducted" ? "✅ COD Fee Settled" : entry.cod_fee_status === "waived_returned" ? "🔄 Fee Waived (Returned)" : "🛡️ COD Safety Buffer"}:
                                     </span>
@@ -1427,12 +1438,12 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                   </div>
                                 ) : (
                                   <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#334155" }}>
-                                    <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                                    <span style={{ fontWeight: 600, color: tokens.textPrimary }}>
                                       {isSettled ? "Payout Settled" : isRefunded ? "Payment Refunded" : "Escrow Status"}:
                                     </span>
                                     <span>{entry.hold_reason_detail || (isSettled ? "Transferred to bank account." : isRefunded ? "Reversed to customer." : "Funds held in escrow.")}</span>
                                     {entry.blocking_reference && (
-                                      <span style={{ fontSize: "11px", fontWeight: 600, padding: "1px 6px", borderRadius: "4px", background: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1" }}>
+                                      <span style={{ fontSize: "11px", fontWeight: 600, padding: "1px 6px", borderRadius: "4px", background: isDark ? tokens.surfaceBg : "#f1f5f9", color: tokens.textSecondary, border: `1px solid ${tokens.border}` }}>
                                         {entry.blocking_reference}
                                       </span>
                                     )}
@@ -1440,7 +1451,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                 )}
 
                                 {entry.is_cod && entry.cod_fee_deduction_due_at && entry.cod_fee_status === "cooling" && (
-                                  <div style={{ fontSize: "11.5px", color: "#1e40af" }}>
+                                  <div style={{ fontSize: "11.5px", color: isDark ? "#93c5fd" : "#1e40af" }}>
                                     <span>Deduction Date: </span>
                                     <strong>{formatDate(entry.cod_fee_deduction_due_at)}</strong>
                                   </div>
@@ -1448,7 +1459,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
 
                                 {!entry.is_cod && entry.return_window_closes_at && isEscrowHeld && (
                                   <div style={{ fontSize: "11.5px", color: "#475569" }}>
-                                    <span style={{ color: "#64748b" }}>Release Date: </span>
+                                    <span style={{ color: tokens.textSecondary }}>Release Date: </span>
                                     <strong style={{ color: "#0f172a" }}>{formatDate(entry.return_window_closes_at)}</strong>
                                   </div>
                                 )}
@@ -1466,9 +1477,9 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                 <div
                                   style={{
                                     padding: "12px 14px",
-                                    background: "#ffffff",
+                                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                                     borderRadius: "6px",
-                                    border: "1px solid #e2e8f0",
+                                    border: `1px solid ${tokens.border}`,
                                     fontSize: "12px",
                                     display: "flex",
                                     flexDirection: "column",
@@ -1477,11 +1488,11 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                   }}
                                 >
                                   <div>
-                                    <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#64748b", marginBottom: "8px" }}>
+                                    <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: tokens.textSecondary, marginBottom: "8px" }}>
                                       Order & Settlement Summary
                                     </div>
                                     <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", rowGap: "6px", columnGap: "8px" }}>
-                                      <span style={{ color: "#64748b" }}>Order:</span>
+                                      <span style={{ color: tokens.textSecondary }}>Order:</span>
                                       <Link
                                         to={`/builder/${siteId}/admin/orders?orderId=${entry.order_id}`}
                                         style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600 }}
@@ -1489,19 +1500,19 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                         #{entry.order_number} →
                                       </Link>
 
-                                      <span style={{ color: "#64748b" }}>Payment Mode:</span>
-                                      <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                                      <span style={{ color: tokens.textSecondary }}>Payment Mode:</span>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary }}>
                                         {entry.is_cod || (entry.payment_method && entry.payment_method.toLowerCase().includes("cod"))
                                           ? "Cash on Delivery (Doorstep Cash)"
                                           : "Prepaid (Online Gateway)"}
                                       </span>
 
-                                      <span style={{ color: "#64748b" }}>Order Status:</span>
-                                      <span style={{ fontWeight: 600, color: "#0f172a", textTransform: "capitalize" }}>
+                                      <span style={{ color: tokens.textSecondary }}>Order Status:</span>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary, textTransform: "capitalize" }}>
                                         {entry.order_status || "Delivered"}
                                       </span>
 
-                                      <span style={{ color: "#64748b" }}>Settlement:</span>
+                                      <span style={{ color: tokens.textSecondary }}>Settlement:</span>
                                       <span style={{ fontWeight: 600, color: entry.is_cod ? (entry.cod_fee_status === "deducted" ? "#059669" : "#0284c7") : (isSettled ? "#059669" : isEscrowHeld ? "#d97706" : "#0f172a") }}>
                                         {entry.is_cod
                                           ? (entry.cod_fee_status === "deducted"
@@ -1513,7 +1524,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                       </span>
                                     </div>
 
-                                    <div style={{ paddingTop: "8px", borderTop: "1px solid #f1f5f9", display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
+                                    <div style={{ paddingTop: "8px", borderTop: `1px solid ${tokens.border}`, display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
                                       <button
                                         type="button"
                                         onClick={() => window.open(`${API_BASE_URL}/orders/${entry.order_id}/platform-invoice/pdf`, "_blank")}
@@ -1523,9 +1534,9 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                           gap: "6px",
                                           padding: "6px 12px",
                                           borderRadius: "6px",
-                                          border: "1px solid #0284c7",
-                                          background: "#f0f9ff",
-                                          color: "#0369a1",
+                                          border: `1px solid ${isDark ? "rgba(2, 132, 199, 0.4)" : "#0284c7"}`,
+                                          background: isDark ? "rgba(2, 132, 199, 0.15)" : "#f0f9ff",
+                                          color: isDark ? "#38bdf8" : "#0369a1",
                                           fontSize: "11.5px",
                                           fontWeight: 600,
                                           cursor: "pointer",
@@ -1552,9 +1563,9 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                           gap: "6px",
                                           padding: "6px 10px",
                                           borderRadius: "6px",
-                                          border: "1px solid #cbd5e1",
-                                          background: "#f8fafc",
-                                          color: "#475569",
+                                          border: `1px solid ${tokens.border}`,
+                                          background: isDark ? tokens.surfaceBg : "#f8fafc",
+                                          color: tokens.textPrimary,
                                           fontSize: "11.5px",
                                           fontWeight: 500,
                                           cursor: "pointer",
@@ -1577,34 +1588,34 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                 <div
                                   style={{
                                     padding: "12px 14px",
-                                    background: "#ffffff",
+                                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                                     borderRadius: "6px",
-                                    border: "1px solid #e2e8f0",
+                                    border: `1px solid ${tokens.border}`,
                                     fontSize: "12px",
                                   }}
                                 >
-                                  <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#64748b", marginBottom: "8px" }}>
+                                  <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: tokens.textSecondary, marginBottom: "8px" }}>
                                     Financial & Fee Itemization
                                   </div>
 
                                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", color: "#334155" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textPrimary }}>
                                       <span>{entry.is_cod ? "Gross Cash Collected (Doorstep):" : "Gross Order Value:"}</span>
                                       <span style={{ fontWeight: 600 }}>{formatCurrency(entry.gross_amount)}</span>
                                     </div>
 
-                                    <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
                                       <span>─ WebCreon Platform Fee ({entry.platform_fee_percent || 3}%):</span>
-                                      <span style={{ color: entry.cod_fee_status === "waived_returned" ? "#059669" : "#dc2626" }}>
+                                      <span style={{ color: entry.cod_fee_status === "waived_returned" ? (isDark ? "#4ade80" : "#059669") : (isDark ? "#f87171" : "#dc2626") }}>
                                         {entry.cod_fee_status === "waived_returned"
                                           ? "Waived (₹0.00)"
                                           : `-${formatCurrency(entry.platform_commission_base || entry.gross_amount * ((entry.platform_fee_percent || 3) / 100))}`}
                                       </span>
                                     </div>
 
-                                    <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
                                       <span>─ GST on Platform Fee (18% SAC 9983):</span>
-                                      <span style={{ color: entry.cod_fee_status === "waived_returned" ? "#059669" : "#dc2626" }}>
+                                      <span style={{ color: entry.cod_fee_status === "waived_returned" ? (isDark ? "#4ade80" : "#059669") : (isDark ? "#f87171" : "#dc2626") }}>
                                         {entry.cod_fee_status === "waived_returned"
                                           ? "Waived (₹0.00)"
                                           : `-${formatCurrency(entry.platform_fee_gst || 0)}`}
@@ -1612,23 +1623,23 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                     </div>
 
                                     {!entry.is_cod && ((entry.gateway_fee || 0) > 0 || (entry.gateway_fee_gst || 0) > 0) && (
-                                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
                                         <span>─ Payment Gateway Fee (Razorpay incl. 18% GST):</span>
-                                        <span style={{ color: "#dc2626" }}>-{formatCurrency((entry.gateway_fee || 0) + (entry.gateway_fee_gst || 0))}</span>
+                                        <span style={{ color: isDark ? "#f87171" : "#dc2626" }}>-{formatCurrency((entry.gateway_fee || 0) + (entry.gateway_fee_gst || 0))}</span>
                                       </div>
                                     )}
 
                                     {(entry.gst_tcs || 0) > 0 && (
-                                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
                                         <span>─ GST TCS (Section 52 - 0.50%):</span>
-                                        <span style={{ color: "#dc2626" }}>-{formatCurrency(entry.gst_tcs || 0)}</span>
+                                        <span style={{ color: isDark ? "#f87171" : "#dc2626" }}>-{formatCurrency(entry.gst_tcs || 0)}</span>
                                       </div>
                                     )}
 
                                     {(entry.tds_194o || 0) > 0 && (
-                                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
                                         <span>─ Income Tax TDS (Section 194-O {entry.tds_rate_applied ? `@ ${entry.tds_rate_applied}%` : ""}):</span>
-                                        <span style={{ color: "#dc2626" }}>-{formatCurrency(entry.tds_194o || 0)}</span>
+                                        <span style={{ color: isDark ? "#f87171" : "#dc2626" }}>-{formatCurrency(entry.tds_194o || 0)}</span>
                                       </div>
                                     )}
 
@@ -1638,12 +1649,12 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                                         justifyContent: "space-between",
                                         marginTop: "4px",
                                         paddingTop: "6px",
-                                        borderTop: "1px solid #e2e8f0",
+                                        borderTop: `1px solid ${tokens.border}`,
                                         fontWeight: 700,
                                         fontSize: "13px",
                                       }}
                                     >
-                                      <span style={{ color: "#0f172a" }}>
+                                      <span style={{ color: tokens.textPrimary }}>
                                         {entry.is_cod ? "Net Cash Kept by Merchant:" : "Net Merchant Share:"}
                                       </span>
                                       <span style={{ color: "#059669" }}>{formatCurrency(entry.tenant_share)}</span>
@@ -1690,7 +1701,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
               setPageSize(newSize);
               setCurrentPage(1);
             }}
-            accentColor="#2563eb"
+            accentColor={tokens.accent || "#2563eb"}
             style={{ padding: 0 }}
           />
         </div>

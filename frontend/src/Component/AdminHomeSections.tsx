@@ -6,6 +6,8 @@ import GlassToast from "./GlassToast";
 import { generateSectionFilterUrl } from "./ProductCarousel";
 import { optimizeImageUrl, getThumbnailUrl, compressImageFile } from "../utils/imageOptimizer";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
+import { AdminCheckbox } from "./AdminProducts";
 import AccessDeniedView from "./AccessDeniedView";
 
 export interface SectionGroupTileItem {
@@ -63,8 +65,8 @@ interface CollectionOption {
 }
 
 const plainCardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
+  background: "var(--admin-surface, #ffffff)",
+  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   borderRadius: "8px",
   boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
 };
@@ -72,19 +74,20 @@ const plainCardStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   fontSize: "12px",
   fontWeight: 600,
-  color: "#475569",
+  color: "var(--admin-text-secondary, #64748b)",
   marginBottom: "4px",
   display: "block",
 };
 
 const inputStyle: React.CSSProperties = {
-  padding: "7px 10px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
-  fontSize: "13px",
   width: "100%",
+  padding: "8px 10px",
+  borderRadius: "6px",
+  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+  fontSize: "12.5px",
+  color: "var(--admin-text-primary, #0f172a)",
+  background: "var(--admin-elevated-surface, #f8fafc)",
+  outline: "none",
   boxSizing: "border-box",
 };
 
@@ -95,25 +98,23 @@ const thStyle: React.CSSProperties = {
   fontWeight: 700,
   letterSpacing: "0.04em",
   textTransform: "uppercase",
-  color: "#64748b",
-  borderBottom: "1px solid #e2e8f0",
+  color: "var(--admin-text-secondary, #64748b)",
+  borderBottom: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   whiteSpace: "nowrap",
 };
 
 const tdStyle: React.CSSProperties = {
   padding: "10px 12px",
-  borderTop: "1px solid #f1f5f9",
+  borderTop: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   fontSize: "13px",
-  color: "#0f172a",
-  verticalAlign: "middle",
 };
 
 const ghostButtonStyle: React.CSSProperties = {
   padding: "8px 12px",
   borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
+  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+  background: "var(--admin-surface, #ffffff)",
+  color: "var(--admin-text-primary, #0f172a)",
   fontWeight: 600,
   fontSize: "12.5px",
   cursor: "pointer",
@@ -190,37 +191,43 @@ const UploadIcon = () => (
   </svg>
 );
 
-const GripIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: "grab", color: "#94a3b8", flexShrink: 0 }}>
-    <circle cx="9" cy="5" r="1" fill="#94a3b8" />
-    <circle cx="9" cy="12" r="1" fill="#94a3b8" />
-    <circle cx="9" cy="19" r="1" fill="#94a3b8" />
-    <circle cx="15" cy="5" r="1" fill="#94a3b8" />
-    <circle cx="15" cy="12" r="1" fill="#94a3b8" />
-    <circle cx="15" cy="19" r="1" fill="#94a3b8" />
-  </svg>
-);
+const GripIcon = () => {
+  const { tokens } = useAdminTheme();
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: "grab", color: tokens.textMuted, flexShrink: 0 }}>
+      <circle cx="9" cy="5" r="1" fill="#94a3b8" />
+      <circle cx="9" cy="12" r="1" fill="#94a3b8" />
+      <circle cx="9" cy="19" r="1" fill="#94a3b8" />
+      <circle cx="15" cy="5" r="1" fill="#94a3b8" />
+      <circle cx="15" cy="12" r="1" fill="#94a3b8" />
+      <circle cx="15" cy="19" r="1" fill="#94a3b8" />
+    </svg>
+  );
+};
 
-const ChevronDownIcon = ({ open }: { open: boolean }) => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={{
-      transform: open ? "rotate(180deg)" : "rotate(0deg)",
-      transition: "transform 0.2s ease",
-      color: "#64748b",
-      flexShrink: 0,
-    }}
-  >
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
+const ChevronDownIcon = ({ open }: { open: boolean }) => {
+  const { tokens } = useAdminTheme();
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{
+        transform: open ? "rotate(180deg)" : "rotate(0deg)",
+        transition: "transform 0.2s ease",
+        color: tokens.textSecondary,
+        flexShrink: 0,
+      }}
+    >
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+};
 
 const PlusIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -238,6 +245,7 @@ const ToggleSwitch = ({
   onChange: (val: boolean) => void;
   disabled?: boolean;
 }) => {
+  const { isDark } = useAdminTheme();
   return (
     <div
       role="switch"
@@ -249,7 +257,7 @@ const ToggleSwitch = ({
         width: "32px",
         height: "18px",
         borderRadius: "999px",
-        backgroundColor: checked ? "#16a34a" : "#cbd5e1",
+        backgroundColor: checked ? "#16a34a" : (isDark ? "rgba(255, 255, 255, 0.18)" : "#cbd5e1"),
         position: "relative",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.6 : 1,
@@ -278,6 +286,7 @@ const ToggleSwitch = ({
 
 export const AdminHomeSections: React.FC = () => {
   const { hasPermission, isOwner } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
   const canView = isOwner || hasPermission("home_sections:view");
   const canEdit = isOwner || hasPermission("home_sections:edit");
 
@@ -1033,7 +1042,7 @@ export const AdminHomeSections: React.FC = () => {
     <div
       style={{
         width: "100%",
-        color: "#0f172a",
+        color: tokens.textPrimary,
         display: "flex",
         flexDirection: "column",
         gap: "10px",
@@ -1069,8 +1078,8 @@ export const AdminHomeSections: React.FC = () => {
       {/* 1. Top Header Card */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: tokens.surfaceBg,
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
           padding: "10px 14px",
           boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
@@ -1094,10 +1103,10 @@ export const AdminHomeSections: React.FC = () => {
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: tokens.elevatedSurfaceBg,
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
             <button
@@ -1106,8 +1115,8 @@ export const AdminHomeSections: React.FC = () => {
                 borderRadius: "6px",
                 padding: "6px 16px",
                 border: "none",
-                background: "#ffffff",
-                color: "#0f172a",
+                background: tokens.surfaceBg,
+                color: tokens.textPrimary,
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
                 fontSize: "13px",
                 fontWeight: 700,
@@ -1138,7 +1147,7 @@ export const AdminHomeSections: React.FC = () => {
                   left: "11px",
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   display: "grid",
                   placeItems: "center",
                 }}
@@ -1157,8 +1166,8 @@ export const AdminHomeSections: React.FC = () => {
                   fontSize: "13px",
                   height: "36px",
                   borderRadius: "7px",
-                  border: "1px solid #cbd5e1",
-                  background: "#f8fafc",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.elevatedSurfaceBg,
                   width: "100%",
                   boxSizing: "border-box",
                 }}
@@ -1175,7 +1184,7 @@ export const AdminHomeSections: React.FC = () => {
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "#94a3b8",
+                    color: tokens.textMuted,
                     padding: "2px",
                     display: "grid",
                     placeItems: "center",
@@ -1199,9 +1208,9 @@ export const AdminHomeSections: React.FC = () => {
                   height: "36px",
                   padding: "0 12px",
                   borderRadius: "7px",
-                  border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                  background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                  color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
+                  border: activeFilterCount > 0 ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}` : `1px solid ${tokens.border}`,
+                  background: activeFilterCount > 0 ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
+                  color: activeFilterCount > 0 ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -1237,8 +1246,8 @@ export const AdminHomeSections: React.FC = () => {
                     top: "44px",
                     right: 0,
                     width: "320px",
-                    background: "#ffffff",
-                    border: "1px solid #cbd5e1",
+                    background: tokens.surfaceBg,
+                    border: `1px solid ${tokens.border}`,
                     borderRadius: "10px",
                     boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
                     padding: "16px",
@@ -1250,8 +1259,8 @@ export const AdminHomeSections: React.FC = () => {
                     overflowY: "auto",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Filter Home Sections</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "8px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>Filter Home Sections</span>
                     {activeFilterCount > 0 && (
                       <button
                         type="button"
@@ -1273,7 +1282,7 @@ export const AdminHomeSections: React.FC = () => {
 
                   {/* Filter by Section Type */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Section Type</label>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Section Type</label>
                     <select
                       value={filterType}
                       onChange={(e) => setFilterType(e.target.value as any)}
@@ -1287,7 +1296,7 @@ export const AdminHomeSections: React.FC = () => {
 
                   {/* Filter by Status */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Status</label>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Status</label>
                     <select
                       value={filterStatus}
                       onChange={(e) => setFilterStatus(e.target.value as any)}
@@ -1301,7 +1310,7 @@ export const AdminHomeSections: React.FC = () => {
 
                   {/* Filter by Category */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Category</label>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Category</label>
                     <select
                       value={filterCategory}
                       onChange={(e) => setFilterCategory(e.target.value)}
@@ -1319,7 +1328,7 @@ export const AdminHomeSections: React.FC = () => {
                   {/* Filter by Brand */}
                   {uniqueBrands.length > 0 && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Brand</label>
+                      <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Brand</label>
                       <select
                         value={filterBrand}
                         onChange={(e) => setFilterBrand(e.target.value)}
@@ -1338,7 +1347,7 @@ export const AdminHomeSections: React.FC = () => {
                   {/* Filter by Collection */}
                   {collections.length > 0 && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Collection</label>
+                      <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Collection</label>
                       <select
                         value={filterCollection}
                         onChange={(e) => setFilterCollection(e.target.value)}
@@ -1356,7 +1365,7 @@ export const AdminHomeSections: React.FC = () => {
 
                   {/* Card Visual Style */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Card Style</label>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Card Style</label>
                     <select
                       value={filterCardShape}
                       onChange={(e) => setFilterCardShape(e.target.value)}
@@ -1373,7 +1382,7 @@ export const AdminHomeSections: React.FC = () => {
 
                   {/* Display Layout */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Display Layout</label>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Display Layout</label>
                     <select
                       value={filterLayout}
                       onChange={(e) => setFilterLayout(e.target.value)}
@@ -1419,51 +1428,51 @@ export const AdminHomeSections: React.FC = () => {
         }}
       >
         {/* Total Sections */}
-        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 600, color: "#334155", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+        <div style={{ ...plainCardStyle, background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 700, color: tokens.textPrimary, lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {totalSectionsCount}
           </div>
-          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             Total Sections
           </div>
         </div>
 
         {/* Active on Store */}
-        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 600, color: "#334155", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+        <div style={{ ...plainCardStyle, background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 700, color: isDark ? "#4ade80" : "#16a34a", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {activeCount}
           </div>
-          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             Active on Store
           </div>
         </div>
 
         {/* Products Rows */}
-        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 600, color: "#16a34a", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+        <div style={{ ...plainCardStyle, background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 700, color: isDark ? "#93c5fd" : "#2563eb", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {productCarouselCount}
           </div>
-          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             Products Rows
           </div>
         </div>
 
         {/* Visual Collection Cards */}
-        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 600, color: "#d97706", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+        <div style={{ ...plainCardStyle, background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 700, color: isDark ? "#f0abfc" : "#d97706", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {categoryCarouselCount}
           </div>
-          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             Collection Cards
           </div>
         </div>
 
         {/* Hidden / Inactive */}
-        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 600, color: "#ef4444", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+        <div style={{ ...plainCardStyle, background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 700, color: isDark ? "#fca5a5" : "#ef4444", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {hiddenCount}
           </div>
-          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             Hidden / Inactive
           </div>
         </div>
@@ -1475,7 +1484,7 @@ export const AdminHomeSections: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: `1px solid ${tokens.border}`,
           gap: "16px",
           marginTop: "6px",
           flexWrap: "nowrap",
@@ -1512,9 +1521,9 @@ export const AdminHomeSections: React.FC = () => {
                   gap: "6px",
                   padding: "8px 12px",
                   border: "none",
-                  borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                  borderBottom: isActive ? `2px solid ${tokens.accent}` : "2px solid transparent",
                   background: "transparent",
-                  color: isActive ? "#2563eb" : "#64748b",
+                  color: isActive ? (isDark ? "#93c5fd" : "#2563eb") : tokens.textSecondary,
                   fontSize: "13px",
                   fontWeight: isActive ? 700 : 500,
                   cursor: "pointer",
@@ -1531,8 +1540,9 @@ export const AdminHomeSections: React.FC = () => {
                     fontWeight: 700,
                     padding: "1px 6px",
                     borderRadius: "10px",
-                    background: isActive ? "#dbeafe" : "#f1f5f9",
-                    color: isActive ? "#1e40af" : "#64748b",
+                    background: isActive ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#dbeafe") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                    color: isActive ? (isDark ? "#93c5fd" : "#1e40af") : tokens.textSecondary,
+                    border: `1px solid ${isActive ? (isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe") : (isDark ? tokens.border : "#e2e8f0")}`,
                   }}
                 >
                   {tab.count}
@@ -1550,8 +1560,8 @@ export const AdminHomeSections: React.FC = () => {
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              background: "#ffffff",
-              border: "1px solid #cbd5e1",
+              background: tokens.surfaceBg,
+              border: `1px solid ${tokens.border}`,
               borderRadius: "6px",
               padding: "4px 10px",
               height: "32px",
@@ -1560,7 +1570,7 @@ export const AdminHomeSections: React.FC = () => {
             }}
             title="Toggle Hero Banner on the Home Page"
           >
-            <span style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>
+            <span style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>
               Hero Banner:
             </span>
             <ToggleSwitch
@@ -1588,19 +1598,19 @@ export const AdminHomeSections: React.FC = () => {
               type="button"
               onClick={handleAddNew}
               style={{
-                background: "#2563eb",
+                background: isDark ? "linear-gradient(135deg, #2563eb, #1d4ed8)" : "linear-gradient(135deg, #3b82f6, #2563eb)",
                 color: "#ffffff",
                 border: "none",
-                borderRadius: "6px",
-                padding: "5px 13px",
+                borderRadius: "7px",
+                padding: "6px 14px",
                 height: "32px",
                 fontSize: "12.5px",
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "5px",
-                boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
+                gap: "6px",
+                boxShadow: "0 2px 8px rgba(37,99,235,0.25)",
                 transition: "all 0.15s ease",
                 whiteSpace: "nowrap",
                 boxSizing: "border-box",
@@ -1616,7 +1626,7 @@ export const AdminHomeSections: React.FC = () => {
       {/* 4. Table of Home Sections (Fully drag-and-drop enabled) */}
       <div style={{ ...plainCardStyle, overflow: "hidden", width: "100%" }}>
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+          <div style={{ padding: "40px", textAlign: "center", color: tokens.textMuted, fontSize: "13px" }}>
             Loading home sections...
           </div>
         ) : displayedSections.length === 0 ? (
@@ -1624,12 +1634,12 @@ export const AdminHomeSections: React.FC = () => {
             <div style={{ display: "grid", placeItems: "center", marginBottom: "8px" }}>
               <LayersIcon />
             </div>
-            <h3 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+            <h3 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
               {searchQuery || activeFilterCount > 0 || statusFilter !== "all"
                 ? "No matching home sections found"
                 : "No Home Sections Created"}
             </h3>
-            <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#64748b" }}>
+            <p style={{ margin: "0 0 16px", fontSize: "13px", color: tokens.textSecondary }}>
               {searchQuery || activeFilterCount > 0 || statusFilter !== "all"
                 ? "Try clearing search or filters to see all sections."
                 : canEdit
@@ -1670,7 +1680,7 @@ export const AdminHomeSections: React.FC = () => {
           <div style={{ overflowX: "auto", width: "100%" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "680px" }}>
               <thead>
-                <tr style={{ background: "#f8fafc" }}>
+                <tr style={{ background: tokens.elevatedSurfaceBg }}>
                   <th style={{ ...thStyle, width: "65px" }}>ORDER</th>
                   <th style={{ ...thStyle, minWidth: "150px" }}>SECTION TITLE</th>
                   <th style={{ ...thStyle, width: "130px" }}>TYPE</th>
@@ -1716,7 +1726,7 @@ export const AdminHomeSections: React.FC = () => {
                       onDragOver={(e) => handleSectionDragOver(e, index)}
                       onDrop={() => handleSectionDrop(index)}
                       style={{
-                        background: isDragOverThis ? "#eff6ff" : sec.isActive ? "#ffffff" : "#fafafa",
+                        background: isDragOverThis ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : sec.isActive ? tokens.surfaceBg : (isDark ? "rgba(255, 255, 255, 0.02)" : "#fafafa"),
                         borderTop: isDragOverThis ? "2px solid #2563eb" : undefined,
                         opacity: isDraggingThis ? 0.35 : sec.isActive ? 1 : 0.75,
                         transition: "background 0.15s ease",
@@ -1739,7 +1749,7 @@ export const AdminHomeSections: React.FC = () => {
                           >
                             <GripIcon />
                           </div>
-                          <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#64748b", minWidth: "16px" }}>
+                          <span style={{ fontSize: "11.5px", fontWeight: 700, color: tokens.textSecondary, minWidth: "16px" }}>
                             #{sec.order}
                           </span>
                         </div>
@@ -1747,11 +1757,11 @@ export const AdminHomeSections: React.FC = () => {
 
                       {/* 2. Section Title */}
                       <td style={{ ...tdStyle, minWidth: "150px" }}>
-                        <div style={{ fontWeight: 700, fontSize: "13px", color: sec.title ? "#0f172a" : "#64748b", lineHeight: 1.3, fontStyle: sec.title ? "normal" : "italic" }}>
+                        <div style={{ fontWeight: 700, fontSize: "13px", color: sec.title ? tokens.textPrimary : tokens.textSecondary, lineHeight: 1.3, fontStyle: sec.title ? "normal" : "italic" }}>
                           {sec.title || (sec.type === "section_group_carousel" ? "No Title (Collection Cards)" : "Untitled Section")}
                         </div>
                         {sec.subtitle && (
-                          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "1px" }}>
+                          <div style={{ fontSize: "11px", color: tokens.textSecondary, marginTop: "1px" }}>
                             {sec.subtitle}
                           </div>
                         )}
@@ -1764,11 +1774,11 @@ export const AdminHomeSections: React.FC = () => {
                             display: "inline-block",
                             padding: "2px 7px",
                             borderRadius: "4px",
-                            background: sec.type === "section_group_carousel" ? "#fdf4ff" : "#f1f5f9",
-                            border: sec.type === "section_group_carousel" ? "1px solid #f0abfc" : "1px solid #e2e8f0",
+                            background: sec.type === "section_group_carousel" ? (isDark ? "rgba(217, 70, 239, 0.15)" : "#fdf4ff") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                            border: `1px solid ${sec.type === "section_group_carousel" ? (isDark ? "rgba(217, 70, 239, 0.35)" : "#f0abfc") : (isDark ? tokens.border : "#e2e8f0")}`,
                             fontSize: "11px",
                             fontWeight: 600,
-                            color: sec.type === "section_group_carousel" ? "#a21caf" : "#334155",
+                            color: sec.type === "section_group_carousel" ? (isDark ? "#f0abfc" : "#a21caf") : tokens.textSecondary,
                             whiteSpace: "nowrap",
                           }}
                         >
@@ -1786,9 +1796,9 @@ export const AdminHomeSections: React.FC = () => {
                           style={{
                             fontSize: "11.5px",
                             fontWeight: 600,
-                            color: sec.type === "section_group_carousel" ? "#a21caf" : "#1d4ed8",
-                            background: sec.type === "section_group_carousel" ? "#fdf4ff" : "#eff6ff",
-                            border: sec.type === "section_group_carousel" ? "1px solid #f5d0fe" : "1px solid #bfdbfe",
+                            color: sec.type === "section_group_carousel" ? (isDark ? "#f0abfc" : "#a21caf") : (isDark ? "#93c5fd" : "#1d4ed8"),
+                            background: sec.type === "section_group_carousel" ? (isDark ? "rgba(217, 70, 239, 0.15)" : "#fdf4ff") : (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff"),
+                            border: `1px solid ${sec.type === "section_group_carousel" ? (isDark ? "rgba(217, 70, 239, 0.35)" : "#f5d0fe") : (isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe")}`,
                             padding: "2px 7px",
                             borderRadius: "4px",
                             display: "inline-block",
@@ -1805,7 +1815,7 @@ export const AdminHomeSections: React.FC = () => {
                           style={{
                             fontSize: "11.5px",
                             fontWeight: 700,
-                            color: matchCount > 0 ? "#16a34a" : "#dc2626",
+                            color: matchCount > 0 ? (isDark ? "#86efac" : "#16a34a") : (isDark ? "#fca5a5" : "#dc2626"),
                             whiteSpace: "nowrap",
                           }}
                         >
@@ -1825,7 +1835,7 @@ export const AdminHomeSections: React.FC = () => {
                             style={{
                               fontSize: "11.5px",
                               fontWeight: 600,
-                              color: sec.isActive ? "#15803d" : "#64748b",
+                              color: sec.isActive ? (isDark ? "#4ade80" : "#15803d") : tokens.textSecondary,
                               width: "44px",
                               display: "inline-block",
                               textAlign: "left",
@@ -1854,9 +1864,9 @@ export const AdminHomeSections: React.FC = () => {
                               width: "28px",
                               height: "28px",
                               borderRadius: "5px",
-                              border: "1px solid #cbd5e1",
-                              background: "#ffffff",
-                              color: "#475569",
+                              border: `1px solid ${tokens.border}`,
+                              background: tokens.surfaceBg,
+                              color: tokens.textSecondary,
                               cursor: "pointer",
                               transition: "all 0.15s ease",
                               padding: 0,
@@ -1877,9 +1887,9 @@ export const AdminHomeSections: React.FC = () => {
                               padding: "0 8px",
                               height: "28px",
                               borderRadius: "5px",
-                              border: "1px solid #cbd5e1",
-                              background: "#ffffff",
-                              color: "#334155",
+                              border: `1px solid ${tokens.border}`,
+                              background: tokens.surfaceBg,
+                              color: tokens.textSecondary,
                               fontSize: "11.5px",
                               fontWeight: 600,
                               cursor: "pointer",
@@ -1904,8 +1914,8 @@ export const AdminHomeSections: React.FC = () => {
                                 height: "28px",
                                 borderRadius: "5px",
                                 border: "1px solid #fecaca",
-                                background: "#fef2f2",
-                                color: "#dc2626",
+                                background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+            color: isDark ? "#fca5a5" : "#dc2626",
                                 cursor: "pointer",
                                 transition: "all 0.15s ease",
                                 padding: 0,
@@ -1952,14 +1962,14 @@ export const AdminHomeSections: React.FC = () => {
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "12px",
               width: "100%",
               maxWidth: "1040px",
               boxShadow: "0 24px 48px rgba(0,0,0,0.25)",
               marginBottom: "32px",
               overflow: "hidden",
-              border: "1px solid #cbd5e1",
+              border: `1px solid ${tokens.border}`,
               display: "flex",
               flexDirection: "column",
             }}
@@ -1974,8 +1984,8 @@ export const AdminHomeSections: React.FC = () => {
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "12px 20px",
-                borderBottom: "1px solid #e2e8f0",
-                background: "#ffffff",
+                borderBottom: `1px solid ${tokens.border}`,
+                background: tokens.surfaceBg,
                 boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
               }}
             >
@@ -1984,7 +1994,7 @@ export const AdminHomeSections: React.FC = () => {
                   style={{
                     margin: 0,
                     fontSize: "16px",
-                    color: "#0f172a",
+                    color: tokens.textPrimary,
                     fontWeight: 700,
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -2004,10 +2014,10 @@ export const AdminHomeSections: React.FC = () => {
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
-                    background: "#f8fafc",
+                    background: tokens.elevatedSurfaceBg,
                     padding: "4px 10px",
                     borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
+                    border: `1px solid ${tokens.border}`,
                   }}
                 >
                   <span
@@ -2039,7 +2049,7 @@ export const AdminHomeSections: React.FC = () => {
                     border: "none",
                     fontSize: "18px",
                     cursor: "pointer",
-                    color: "#64748b",
+                    color: tokens.textSecondary,
                     padding: "4px",
                     lineHeight: 1,
                     display: "grid",
@@ -2059,7 +2069,7 @@ export const AdminHomeSections: React.FC = () => {
                 gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
                 gap: "16px",
                 padding: "16px 20px",
-                background: "#f8fafc",
+                background: tokens.elevatedSurfaceBg,
                 maxHeight: "calc(100vh - 180px)",
                 overflowY: "auto",
               }}
@@ -2069,9 +2079,9 @@ export const AdminHomeSections: React.FC = () => {
                 {/* Card 1: Section Type Visual Selector */}
                 <div
                   style={{
-                    background: "#ffffff",
+                    background: tokens.surfaceBg,
                     borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
+                    border: `1px solid ${tokens.border}`,
                     padding: "14px 16px",
                     display: "flex",
                     flexDirection: "column",
@@ -2083,10 +2093,10 @@ export const AdminHomeSections: React.FC = () => {
                     style={{
                       fontSize: "12.5px",
                       fontWeight: 700,
-                      color: "#0f172a",
+                      color: tokens.textPrimary,
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
-                      borderBottom: "1px solid #f1f5f9",
+                      borderBottom: `1px solid ${tokens.border}`,
                       paddingBottom: "6px",
                     }}
                   >
@@ -2099,8 +2109,8 @@ export const AdminHomeSections: React.FC = () => {
                     <div
                       onClick={() => setActiveSection({ ...activeSection, type: "product_carousel" })}
                       style={{
-                        border: activeSection.type === "product_carousel" ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                        background: activeSection.type === "product_carousel" ? "#eff6ff" : "#ffffff",
+                        border: activeSection.type === "product_carousel" ? `2px solid ${tokens.accent}` : `1px solid ${tokens.border}`,
+                        background: activeSection.type === "product_carousel" ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
                         borderRadius: "8px",
                         padding: "10px 12px",
                         cursor: "pointer",
@@ -2111,7 +2121,7 @@ export const AdminHomeSections: React.FC = () => {
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: "12.5px", fontWeight: 700, color: activeSection.type === "product_carousel" ? "#1d4ed8" : "#0f172a" }}>
+                        <span style={{ fontSize: "12.5px", fontWeight: 700, color: activeSection.type === "product_carousel" ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary }}>
                           Products Row
                         </span>
                         <input
@@ -2121,7 +2131,7 @@ export const AdminHomeSections: React.FC = () => {
                           style={{ cursor: "pointer", accentColor: "#2563eb" }}
                         />
                       </div>
-                      <span style={{ fontSize: "11px", color: "#64748b", lineHeight: 1.3 }}>
+                      <span style={{ fontSize: "11px", color: tokens.textSecondary, lineHeight: 1.3 }}>
                         Display products on your homepage (e.g. Bestsellers, New Drops, Summer Sale).
                       </span>
                     </div>
@@ -2130,8 +2140,8 @@ export const AdminHomeSections: React.FC = () => {
                     <div
                       onClick={() => setActiveSection({ ...activeSection, type: "section_group_carousel" })}
                       style={{
-                        border: activeSection.type === "section_group_carousel" ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                        background: activeSection.type === "section_group_carousel" ? "#eff6ff" : "#ffffff",
+                        border: activeSection.type === "section_group_carousel" ? `2px solid ${tokens.accent}` : `1px solid ${tokens.border}`,
+                        background: activeSection.type === "section_group_carousel" ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
                         borderRadius: "8px",
                         padding: "10px 12px",
                         cursor: "pointer",
@@ -2142,7 +2152,7 @@ export const AdminHomeSections: React.FC = () => {
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: "12.5px", fontWeight: 700, color: activeSection.type === "section_group_carousel" ? "#1d4ed8" : "#0f172a" }}>
+                        <span style={{ fontSize: "12.5px", fontWeight: 700, color: activeSection.type === "section_group_carousel" ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary }}>
                           Collection Cards
                         </span>
                         <input
@@ -2152,7 +2162,7 @@ export const AdminHomeSections: React.FC = () => {
                           style={{ cursor: "pointer", accentColor: "#2563eb" }}
                         />
                       </div>
-                      <span style={{ fontSize: "11px", color: "#64748b", lineHeight: 1.3 }}>
+                      <span style={{ fontSize: "11px", color: tokens.textSecondary, lineHeight: 1.3 }}>
                         Clickable custom photo cards linking to categories, brands, or collections (e.g. Men, Nike, Footwear).
                       </span>
                     </div>
@@ -2162,9 +2172,9 @@ export const AdminHomeSections: React.FC = () => {
                 {/* Card 2: Section Info & Appearance */}
                 <div
                   style={{
-                    background: "#ffffff",
+                    background: tokens.surfaceBg,
                     borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
+                    border: `1px solid ${tokens.border}`,
                     padding: "14px 16px",
                     display: "flex",
                     flexDirection: "column",
@@ -2176,10 +2186,10 @@ export const AdminHomeSections: React.FC = () => {
                     style={{
                       fontSize: "12.5px",
                       fontWeight: 700,
-                      color: "#0f172a",
+                      color: tokens.textPrimary,
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
-                      borderBottom: "1px solid #f1f5f9",
+                      borderBottom: `1px solid ${tokens.border}`,
                       paddingBottom: "6px",
                     }}
                   >
@@ -2189,7 +2199,7 @@ export const AdminHomeSections: React.FC = () => {
                   {/* Section Title */}
                   <div>
                     <label style={labelStyle}>
-                      Section Title {activeSection.type === "product_carousel" ? <span style={{ color: "#ef4444" }}>*</span> : <span style={{ fontSize: "11px", fontWeight: 500, color: "#64748b" }}>(Optional)</span>}
+                      Section Title {activeSection.type === "product_carousel" ? <span style={{ color: "#ef4444" }}>*</span> : <span style={{ fontSize: "11px", fontWeight: 500, color: tokens.textSecondary }}>(Optional)</span>}
                     </label>
                     <input
                       type="text"
@@ -2270,9 +2280,9 @@ export const AdminHomeSections: React.FC = () => {
                 {/* Card 3: Direct Filter Link Info */}
                 <div
                   style={{
-                    background: "#ffffff",
+                    background: tokens.surfaceBg,
                     borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
+                    border: `1px solid ${tokens.border}`,
                     padding: "14px 16px",
                     display: "flex",
                     flexDirection: "column",
@@ -2298,13 +2308,13 @@ export const AdminHomeSections: React.FC = () => {
                         setToastType("success");
                       }}
                       style={{
-                        background: "#ffffff",
-                        border: "1px solid #cbd5e1",
+                        background: tokens.surfaceBg,
+                        border: `1px solid ${tokens.border}`,
                         borderRadius: "5px",
                         padding: "3px 8px",
                         fontSize: "11px",
                         fontWeight: 600,
-                        color: "#334155",
+                        color: tokens.textSecondary,
                         cursor: "pointer",
                         display: "inline-flex",
                         alignItems: "center",
@@ -2319,9 +2329,9 @@ export const AdminHomeSections: React.FC = () => {
                     style={{
                       fontFamily: "monospace",
                       fontSize: "11.5px",
-                      color: "#0f172a",
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
+                      color: tokens.textPrimary,
+                      background: tokens.elevatedSurfaceBg,
+                      border: `1px solid ${tokens.border}`,
                       padding: "6px 10px",
                       borderRadius: "5px",
                       overflow: "hidden",
@@ -2336,7 +2346,7 @@ export const AdminHomeSections: React.FC = () => {
                       activeSection.id
                     ) || "/ (All Products)"}
                   </div>
-                  <span style={{ fontSize: "11px", color: "#64748b" }}>
+                  <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
                     Use this URL in Hero Banner CTA buttons or promo links to direct shoppers to this exact filtered view.
                   </span>
                 </div>
@@ -2348,9 +2358,9 @@ export const AdminHomeSections: React.FC = () => {
                 {activeSection.type === "product_carousel" && (
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "14px 16px",
                       display: "flex",
                       flexDirection: "column",
@@ -2363,7 +2373,7 @@ export const AdminHomeSections: React.FC = () => {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        borderBottom: "1px solid #f1f5f9",
+                        borderBottom: `1px solid ${tokens.border}`,
                         paddingBottom: "8px",
                       }}
                     >
@@ -2371,7 +2381,7 @@ export const AdminHomeSections: React.FC = () => {
                         style={{
                           fontSize: "12.5px",
                           fontWeight: 700,
-                          color: "#0f172a",
+                          color: tokens.textPrimary,
                           textTransform: "uppercase",
                           letterSpacing: "0.04em",
                         }}
@@ -2384,9 +2394,9 @@ export const AdminHomeSections: React.FC = () => {
                           fontWeight: 700,
                           padding: "2px 7px",
                           borderRadius: "4px",
-                          background: "#f0fdf4",
-                          color: "#15803d",
-                          border: "1px solid #bbf7d0",
+                          background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4",
+                          color: isDark ? "#86efac" : "#15803d",
+                          border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`,
                         }}
                       >
                         {countMatchingProducts(activeSection.rules)} matching items
@@ -2538,9 +2548,8 @@ export const AdminHomeSections: React.FC = () => {
                       </div>
                     </div>
 
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#334155", cursor: "pointer", marginTop: "2px" }}>
-                      <input
-                        type="checkbox"
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: tokens.textSecondary, cursor: "pointer", marginTop: "2px" }}>
+                      <AdminCheckbox
                         checked={activeSection.rules.in_stock_only || false}
                         onChange={(e) =>
                           setActiveSection({
@@ -2558,9 +2567,9 @@ export const AdminHomeSections: React.FC = () => {
                 {activeSection.type === "section_group_carousel" && (
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "14px 16px",
                       display: "flex",
                       flexDirection: "column",
@@ -2573,7 +2582,7 @@ export const AdminHomeSections: React.FC = () => {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        borderBottom: "1px solid #f1f5f9",
+                        borderBottom: `1px solid ${tokens.border}`,
                         paddingBottom: "8px",
                       }}
                     >
@@ -2582,14 +2591,14 @@ export const AdminHomeSections: React.FC = () => {
                           style={{
                             fontSize: "12.5px",
                             fontWeight: 700,
-                            color: "#0f172a",
+                            color: tokens.textPrimary,
                             textTransform: "uppercase",
                             letterSpacing: "0.04em",
                           }}
                         >
                           Collection Cards ({(activeSection.items || []).length})
                         </span>
-                        <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                        <div style={{ fontSize: "11px", color: tokens.textSecondary, marginTop: "2px" }}>
                           Drag handle icon to reorder. Click card to edit details.
                         </div>
                       </div>
@@ -2638,10 +2647,10 @@ export const AdminHomeSections: React.FC = () => {
                         style={{
                           padding: "30px 16px",
                           textAlign: "center",
-                          background: "#f8fafc",
+                          background: tokens.elevatedSurfaceBg,
                           borderRadius: "8px",
                           border: "1px dashed #cbd5e1",
-                          color: "#64748b",
+                          color: tokens.textSecondary,
                           fontSize: "12.5px",
                         }}
                       >
@@ -2676,8 +2685,8 @@ export const AdminHomeSections: React.FC = () => {
                                 flexShrink: 0,
                                 width: "100%",
                                 boxSizing: "border-box",
-                                background: "#ffffff",
-                                border: isOpen ? "1.5px solid #3b82f6" : "1px solid #e2e8f0",
+                                background: tokens.surfaceBg,
+                                border: isOpen ? `1.5px solid ${tokens.accent}` : `1px solid ${tokens.border}`,
                                 borderRadius: "8px",
                                 overflow: "hidden",
                                 boxShadow: isOpen ? "0 3px 10px rgba(37,99,235,0.1)" : "0 1px 2px rgba(0,0,0,0.02)",
@@ -2692,7 +2701,7 @@ export const AdminHomeSections: React.FC = () => {
                                   alignItems: "center",
                                   justifyContent: "space-between",
                                   padding: "10px 12px",
-                                  background: isOpen ? "#eff6ff" : "#f8fafc",
+                                  background: isOpen ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
                                   cursor: "pointer",
                                   userSelect: "none",
                                   gap: "8px",
@@ -2714,7 +2723,7 @@ export const AdminHomeSections: React.FC = () => {
                                       cursor: "grab",
                                       padding: "4px",
                                       borderRadius: "4px",
-                                      color: "#94a3b8",
+                                      color: tokens.textMuted,
                                     }}
                                     title="Drag to rearrange"
                                     onClick={(e) => e.stopPropagation()}
@@ -2727,7 +2736,7 @@ export const AdminHomeSections: React.FC = () => {
                                     <img
                                       src={getThumbnailUrl(tile.imageUrl, 80, 80)}
                                       alt="thumb"
-                                      style={{ width: "28px", height: "28px", objectFit: "cover", borderRadius: "4px", border: "1px solid #cbd5e1", flexShrink: 0 }}
+                                      style={{ width: "28px", height: "28px", objectFit: "cover", borderRadius: "4px", border: `1px solid ${tokens.border}`, flexShrink: 0 }}
                                     />
                                   ) : (
                                     <div
@@ -2736,11 +2745,11 @@ export const AdminHomeSections: React.FC = () => {
                                         height: "28px",
                                         borderRadius: "4px",
                                         border: "1px dashed #cbd5e1",
-                                        background: "#ffffff",
+                                        background: tokens.surfaceBg,
                                         display: "grid",
                                         placeItems: "center",
                                         fontSize: "9px",
-                                        color: "#94a3b8",
+                                        color: tokens.textMuted,
                                         flexShrink: 0,
                                       }}
                                     >
@@ -2749,7 +2758,7 @@ export const AdminHomeSections: React.FC = () => {
                                   )}
 
                                   {/* Title & Badge */}
-                                  <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  <span style={{ fontSize: "12.5px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                     {tile.title || `Card #${tIdx + 1}`}
                                   </span>
 
@@ -2760,8 +2769,8 @@ export const AdminHomeSections: React.FC = () => {
                                         fontWeight: 600,
                                         padding: "1px 6px",
                                         borderRadius: "4px",
-                                        background: "#f1f5f9",
-                                        color: "#475569",
+                                        background: tokens.elevatedSurfaceBg,
+                                        color: tokens.textSecondary,
                                         whiteSpace: "nowrap",
                                         flexShrink: 0,
                                       }}
@@ -2776,9 +2785,9 @@ export const AdminHomeSections: React.FC = () => {
                                       fontWeight: 600,
                                       padding: "1px 6px",
                                       borderRadius: "4px",
-                                      background: tileMatches > 0 ? "#f0fdf4" : "#fef2f2",
-                                      color: tileMatches > 0 ? "#15803d" : "#b91c1c",
-                                      border: tileMatches > 0 ? "1px solid #bbf7d0" : "1px solid #fecaca",
+                                      background: tileMatches > 0 ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"),
+                                      color: tileMatches > 0 ? (isDark ? "#86efac" : "#15803d") : (isDark ? "#fca5a5" : "#b91c1c"),
+                                      border: `1px solid ${tileMatches > 0 ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0") : (isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca")}`,
                                       whiteSpace: "nowrap",
                                       flexShrink: 0,
                                     }}
@@ -2801,8 +2810,8 @@ export const AdminHomeSections: React.FC = () => {
                                       fontSize: "11px",
                                       fontWeight: 600,
                                       border: "1px solid #fecaca",
-                                      background: "#fef2f2",
-                                      color: "#dc2626",
+                                      background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+            color: isDark ? "#fca5a5" : "#dc2626",
                                       borderRadius: "4px",
                                       cursor: "pointer",
                                     }}
@@ -2822,8 +2831,8 @@ export const AdminHomeSections: React.FC = () => {
                                 <div
                                   style={{
                                     padding: "14px 16px",
-                                    borderTop: "1px solid #e2e8f0",
-                                    background: "#fafafa",
+                                    borderTop: `1px solid ${tokens.border}`,
+                                    background: tokens.surfaceBg,
                                     display: "flex",
                                     flexDirection: "column",
                                     gap: "12px",
@@ -2839,7 +2848,7 @@ export const AdminHomeSections: React.FC = () => {
                                           <img
                                             src={getThumbnailUrl(tile.imageUrl, 120, 120)}
                                             alt="tile"
-                                            style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                                            style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "6px", border: `1px solid ${tokens.border}` }}
                                           />
                                         </div>
                                       ) : (
@@ -2849,11 +2858,11 @@ export const AdminHomeSections: React.FC = () => {
                                             height: "48px",
                                             borderRadius: "6px",
                                             border: "1px dashed #cbd5e1",
-                                            background: "#f8fafc",
+                                            background: tokens.elevatedSurfaceBg,
                                             display: "grid",
                                             placeItems: "center",
                                             flexShrink: 0,
-                                            color: "#94a3b8",
+                                            color: tokens.textMuted,
                                             fontSize: "10px",
                                           }}
                                         >
@@ -2868,10 +2877,10 @@ export const AdminHomeSections: React.FC = () => {
                                             alignItems: "center",
                                             gap: "6px",
                                             padding: "5px 12px",
-                                            background: "#ffffff",
-                                            border: "1px solid #cbd5e1",
+                                            background: tokens.surfaceBg,
+                                            border: `1px solid ${tokens.border}`,
                                             borderRadius: "6px",
-                                            color: "#334155",
+                                            color: tokens.textSecondary,
                                             fontSize: "12px",
                                             fontWeight: 600,
                                             cursor: uploadingTileIndex === tIdx ? "not-allowed" : "pointer",
@@ -2897,7 +2906,7 @@ export const AdminHomeSections: React.FC = () => {
                                             }}
                                           />
                                         </label>
-                                        <span style={{ fontSize: "10.5px", color: "#64748b" }}>
+                                        <span style={{ fontSize: "10.5px", color: tokens.textSecondary }}>
                                           Auto-compressed to WebP for fast store loading.
                                         </span>
                                       </div>
@@ -3032,8 +3041,8 @@ export const AdminHomeSections: React.FC = () => {
               style={{
                 position: "sticky",
                 bottom: 0,
-                background: "#ffffff",
-                borderTop: "1px solid #e2e8f0",
+                background: tokens.surfaceBg,
+                borderTop: `1px solid ${tokens.border}`,
                 padding: "12px 20px",
                 display: "flex",
                 justifyContent: "flex-end",

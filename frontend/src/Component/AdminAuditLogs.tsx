@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import { AccessDeniedView } from "./AccessDeniedView";
 import { GlassToast } from "./GlassToast";
 import { Pagination } from "./Pagination";
@@ -163,31 +164,6 @@ const StoreIcon = () => (
   </svg>
 );
 
-
-
-const chipStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "4px",
-  fontSize: "11.5px",
-  fontWeight: 600,
-  padding: "2px 8px",
-  borderRadius: "4px",
-  background: "#eff6ff",
-  color: "#1d4ed8",
-  border: "1px solid #bfdbfe",
-};
-
-const chipCloseStyle: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  color: "#1d4ed8",
-  padding: 0,
-  display: "grid",
-  placeItems: "center",
-};
-
 // ---------------------------------------------------------------------------
 // HELPER FUNCTIONS
 // ---------------------------------------------------------------------------
@@ -224,47 +200,47 @@ function formatActivityDate(isoString: string): { formatted: string; relative: s
   }
 }
 
-function getCategoryTheme(category: string) {
+function getCategoryTheme(category: string, isDark?: boolean) {
   const cat = (category || "").toLowerCase();
   switch (cat) {
     case "user_access":
     case "auth":
-      return { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe", label: "Users & Roles" };
+      return { bg: isDark ? "rgba(59, 130, 246, 0.18)" : "#eff6ff", color: isDark ? "#93c5fd" : "#1d4ed8", border: isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe", label: "Users & Roles" };
     case "product":
     case "products":
-      return { bg: "#faf5ff", color: "#7e22ce", border: "#e9d5ff", label: "Products" };
+      return { bg: isDark ? "rgba(168, 85, 247, 0.18)" : "#faf5ff", color: isDark ? "#d8b4fe" : "#7e22ce", border: isDark ? "rgba(168, 85, 247, 0.3)" : "#e9d5ff", label: "Products" };
     case "order":
     case "orders":
-      return { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", label: "Orders & Returns" };
+      return { bg: isDark ? "rgba(34, 197, 94, 0.18)" : "#f0fdf4", color: isDark ? "#86efac" : "#15803d", border: isDark ? "rgba(34, 197, 94, 0.3)" : "#bbf7d0", label: "Orders & Returns" };
     case "discounts":
     case "coupons":
     case "promo":
-      return { bg: "#fdf2f8", color: "#be185d", border: "#fbcfe8", label: "Discounts & Promo" };
+      return { bg: isDark ? "rgba(236, 72, 153, 0.18)" : "#fdf2f8", color: isDark ? "#f472b6" : "#be185d", border: isDark ? "rgba(236, 72, 153, 0.3)" : "#fbcfe8", label: "Discounts & Promo" };
     case "support":
     case "tickets":
-      return { bg: "#f0fdfa", color: "#0f766e", border: "#99f6e4", label: "Support & CRM" };
+      return { bg: isDark ? "rgba(20, 184, 166, 0.18)" : "#f0fdfa", color: isDark ? "#5eead4" : "#0f766e", border: isDark ? "rgba(20, 184, 166, 0.3)" : "#99f6e4", label: "Support & CRM" };
     case "delivery":
     case "shipping":
     case "riders":
-      return { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa", label: "Delivery & Shipping" };
+      return { bg: isDark ? "rgba(249, 115, 22, 0.18)" : "#fff7ed", color: isDark ? "#fdba74" : "#c2410c", border: isDark ? "rgba(249, 115, 22, 0.3)" : "#fed7aa", label: "Delivery & Shipping" };
     case "website":
     case "pages":
     case "sections":
-      return { bg: "#f0f9ff", color: "#0284c7", border: "#bae6fd", label: "Pages & Sections" };
+      return { bg: isDark ? "rgba(14, 165, 233, 0.18)" : "#f0f9ff", color: isDark ? "#7dd3fc" : "#0284c7", border: isDark ? "rgba(14, 165, 233, 0.3)" : "#bae6fd", label: "Pages & Sections" };
     case "settings":
     case "checkout_charges":
     case "taxes_and_surcharges":
-      return { bg: "#fffbeb", color: "#b45309", border: "#fde68a", label: "Taxes & Surcharges" };
+      return { bg: isDark ? "rgba(245, 158, 11, 0.18)" : "#fffbeb", color: isDark ? "#fcd34d" : "#b45309", border: isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a", label: "Taxes & Surcharges" };
     case "financial":
     case "earnings_ledger":
     case "payouts":
     case "ledger":
-      return { bg: "#ecfdf5", color: "#047857", border: "#a7f3d0", label: "Earnings & Ledger" };
+      return { bg: isDark ? "rgba(16, 185, 129, 0.18)" : "#ecfdf5", color: isDark ? "#6ee7b7" : "#047857", border: isDark ? "rgba(16, 185, 129, 0.3)" : "#a7f3d0", label: "Earnings & Ledger" };
     default:
       return {
-        bg: "#f8fafc",
-        color: "#475569",
-        border: "#e2e8f0",
+        bg: isDark ? "rgba(255, 255, 255, 0.08)" : "#f8fafc",
+        color: isDark ? "#cbd5e1" : "#475569",
+        border: isDark ? "rgba(255, 255, 255, 0.12)" : "#e2e8f0",
         label: category
           ? category
               .replace(/[_.]+/g, " ")
@@ -276,12 +252,12 @@ function getCategoryTheme(category: string) {
   }
 }
 
-function getRoleBadge(role: string) {
+function getRoleBadge(role: string, isDark?: boolean) {
   const r = (role || "").toLowerCase();
-  if (r.includes("owner")) return { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe", text: "Owner" };
-  if (r.includes("manager")) return { bg: "#f5f3ff", color: "#6d28d9", border: "#ddd6fe", text: "Store Manager" };
-  if (r.includes("support")) return { bg: "#ecfdf5", color: "#047857", border: "#a7f3d0", text: "Support Staff" };
-  return { bg: "#f1f5f9", color: "#475569", border: "#e2e8f0", text: role || "Staff" };
+  if (r.includes("owner")) return { bg: isDark ? "rgba(59, 130, 246, 0.18)" : "#eff6ff", color: isDark ? "#93c5fd" : "#1d4ed8", border: isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe", text: "Owner" };
+  if (r.includes("manager")) return { bg: isDark ? "rgba(168, 85, 247, 0.18)" : "#f5f3ff", color: isDark ? "#d8b4fe" : "#6d28d9", border: isDark ? "rgba(168, 85, 247, 0.3)" : "#ddd6fe", text: "Store Manager" };
+  if (r.includes("support")) return { bg: isDark ? "rgba(16, 185, 129, 0.18)" : "#ecfdf5", color: isDark ? "#6ee7b7" : "#047857", border: isDark ? "rgba(16, 185, 129, 0.3)" : "#a7f3d0", text: "Support Staff" };
+  return { bg: isDark ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9", color: isDark ? "#cbd5e1" : "#475569", border: isDark ? "rgba(255, 255, 255, 0.12)" : "#e2e8f0", text: role || "Staff" };
 }
 
 // ---------------------------------------------------------------------------
@@ -289,6 +265,7 @@ function getRoleBadge(role: string) {
 // ---------------------------------------------------------------------------
 
 export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string } = {}) {
+  const { isDark, tokens } = useAdminTheme();
   const { isOwner, hasPermission, admin } = useAdminAuth();
   const canView = isOwner || hasPermission("audit_logs:view") || !admin;
 
@@ -343,6 +320,31 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
   // Accordion & Copy State
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const chipStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "5px",
+    fontSize: "11.5px",
+    fontWeight: 600,
+    padding: "3px 9px",
+    borderRadius: "6px",
+    background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+    color: isDark ? "#93c5fd" : "#1d4ed8",
+    border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
+    lineHeight: 1.3,
+  };
+
+  const chipCloseStyle: React.CSSProperties = {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    color: isDark ? "#93c5fd" : "#1d4ed8",
+    padding: 0,
+    display: "grid",
+    placeItems: "center",
+    opacity: 0.85,
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -565,7 +567,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
     <div
       style={{
         width: "100%",
-        color: "#0f172a",
+        color: tokens.textPrimary,
         position: "relative",
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
@@ -576,12 +578,12 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
       {/* TOP HEADER CARD (Segmented Mode Pill + Search + Filters) */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
-          padding: "8px 12px",
-          marginBottom: "12px",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          padding: "10px 14px",
+          marginBottom: "16px",
+          boxShadow: isDark ? "0 1px 2px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
           flexDirection: "column",
           gap: "8px",
@@ -602,19 +604,19 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
             <span
               style={{
                 borderRadius: "6px",
                 padding: "6px 16px",
-                background: "#ffffff",
-                color: "#0f172a",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+                background: isDark ? tokens.surfaceBg : "#ffffff",
+                color: tokens.textPrimary,
+                boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.06)",
                 fontSize: "13px",
                 fontWeight: 700,
                 display: "inline-block",
@@ -644,7 +646,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   left: "11px",
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   display: "grid",
                   placeItems: "center",
                 }}
@@ -660,12 +662,12 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   width: "100%",
                   paddingLeft: "34px",
                   paddingRight: searchQuery ? "28px" : "12px",
-                  fontSize: "12.5px",
-                  height: "34px",
+                  fontSize: "13px",
+                  height: "36px",
                   borderRadius: "7px",
-                  border: "1px solid #cbd5e1",
-                  background: "#f8fafc",
-                  color: "#0f172a",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.elevatedSurfaceBg,
+                  color: tokens.textPrimary,
                   outline: "none",
                   boxSizing: "border-box",
                 }}
@@ -682,7 +684,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "#94a3b8",
+                    color: tokens.textMuted,
                     padding: "2px",
                     display: "grid",
                     placeItems: "center",
@@ -703,13 +705,19 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "6px",
-                  height: "34px",
+                  height: "36px",
                   padding: "0 12px",
                   borderRadius: "7px",
-                  border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                  background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                  color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
-                  fontSize: "12.5px",
+                  border: activeFilterCount > 0
+                    ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}`
+                    : `1px solid ${tokens.border}`,
+                  background: activeFilterCount > 0
+                    ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                    : tokens.surfaceBg,
+                  color: activeFilterCount > 0
+                    ? (isDark ? "#93c5fd" : "#1d4ed8")
+                    : tokens.textPrimary,
+                  fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
                   whiteSpace: "nowrap",
@@ -745,10 +753,12 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                     top: "40px",
                     right: "0",
                     width: "300px",
-                    background: "#ffffff",
+                    background: isDark ? tokens.surfaceBg : "#ffffff",
                     borderRadius: "10px",
-                    border: "1px solid #e2e8f0",
-                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
+                    border: `1px solid ${tokens.border}`,
+                    boxShadow: isDark
+                      ? "0 10px 30px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.1)"
+                      : "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
                     padding: "16px",
                     zIndex: 100,
                     display: "flex",
@@ -757,7 +767,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   }}
                 >
                   <div>
-                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Category
                     </label>
                     <select
@@ -768,14 +778,15 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                         height: "34px",
                         padding: "0 8px",
                         borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
+                        border: `1px solid ${tokens.border}`,
                         fontSize: "13px",
-                        background: "#ffffff",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
                         outline: "none",
                       }}
                     >
                       {CATEGORIES.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
+                        <option key={cat.id} value={cat.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
                           {cat.label}
                         </option>
                       ))}
@@ -783,7 +794,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Source / Origin
                     </label>
                     <select
@@ -794,14 +805,15 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                         height: "34px",
                         padding: "0 8px",
                         borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
+                        border: `1px solid ${tokens.border}`,
                         fontSize: "13px",
-                        background: "#ffffff",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
                         outline: "none",
                       }}
                     >
                       {SOURCES.map((src) => (
-                        <option key={src.id} value={src.id}>
+                        <option key={src.id} value={src.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
                           {src.label}
                         </option>
                       ))}
@@ -809,7 +821,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Status / Outcome
                     </label>
                     <select
@@ -820,14 +832,15 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                         height: "34px",
                         padding: "0 8px",
                         borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
+                        border: `1px solid ${tokens.border}`,
                         fontSize: "13px",
-                        background: "#ffffff",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
                         outline: "none",
                       }}
                     >
                       {STATUS_OPTIONS.map((st) => (
-                        <option key={st.id} value={st.id}>
+                        <option key={st.id} value={st.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
                           {st.label}
                         </option>
                       ))}
@@ -835,7 +848,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       User / Actor
                     </label>
                     <select
@@ -846,15 +859,16 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                         height: "34px",
                         padding: "0 8px",
                         borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
+                        border: `1px solid ${tokens.border}`,
                         fontSize: "13px",
-                        background: "#ffffff",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
                         outline: "none",
                       }}
                     >
-                      <option value="all">All Team Members</option>
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Team Members</option>
                       {availableUsers.map((u: any) => (
-                        <option key={u.id} value={u.id}>
+                        <option key={u.id} value={u.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
                           {u.name || u.email} {u.role ? `(${u.role})` : ""}
                         </option>
                       ))}
@@ -863,7 +877,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
 
                   {!effectiveSiteId && (
                     <div>
-                      <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                         Website / Store
                       </label>
                       <select
@@ -874,15 +888,16 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                           height: "34px",
                           padding: "0 8px",
                           borderRadius: "6px",
-                          border: "1px solid #cbd5e1",
+                          border: `1px solid ${tokens.border}`,
                           fontSize: "13px",
-                          background: "#ffffff",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          color: tokens.textPrimary,
                           outline: "none",
                         }}
                       >
-                        <option value="all">All Websites</option>
+                        <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Websites</option>
                         {availableSites.map((site) => (
-                          <option key={site.id} value={site.id}>
+                          <option key={site.id} value={site.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
                             {site.name || site.slug}
                           </option>
                         ))}
@@ -891,7 +906,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   )}
 
                   <div>
-                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Date Range
                     </label>
                     <select
@@ -902,14 +917,15 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                         height: "34px",
                         padding: "0 8px",
                         borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
+                        border: `1px solid ${tokens.border}`,
                         fontSize: "13px",
-                        background: "#ffffff",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
                         outline: "none",
                       }}
                     >
                       {DATE_RANGES.map((dr) => (
-                        <option key={dr.id} value={dr.id}>
+                        <option key={dr.id} value={dr.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
                           {dr.label}
                         </option>
                       ))}
@@ -918,7 +934,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                     {dateRange === "custom" && (
                       <div style={{ marginTop: "10px", display: "grid", gap: "8px" }}>
                         <div>
-                          <span style={{ fontSize: "11px", color: "#64748b" }}>From:</span>
+                          <span style={{ fontSize: "11px", color: tokens.textSecondary }}>From:</span>
                           <input
                             type="date"
                             value={startDate}
@@ -928,15 +944,18 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                               height: "30px",
                               padding: "0 8px",
                               borderRadius: "5px",
-                              border: "1px solid #cbd5e1",
+                              border: `1px solid ${tokens.border}`,
                               fontSize: "12px",
+                              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                              color: tokens.textPrimary,
+                              colorScheme: isDark ? "dark" : "light",
                               boxSizing: "border-box",
                               marginTop: "2px",
                             }}
                           />
                         </div>
                         <div>
-                          <span style={{ fontSize: "11px", color: "#64748b" }}>To:</span>
+                          <span style={{ fontSize: "11px", color: tokens.textSecondary }}>To:</span>
                           <input
                             type="date"
                             value={endDate}
@@ -946,8 +965,11 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                               height: "30px",
                               padding: "0 8px",
                               borderRadius: "5px",
-                              border: "1px solid #cbd5e1",
+                              border: `1px solid ${tokens.border}`,
                               fontSize: "12px",
+                              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                              color: tokens.textPrimary,
+                              colorScheme: isDark ? "dark" : "light",
                               boxSizing: "border-box",
                               marginTop: "2px",
                             }}
@@ -957,14 +979,14 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                     )}
                   </div>
 
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: "1px solid #f1f5f9" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: `1px solid ${tokens.border}` }}>
                     <button
                       type="button"
                       onClick={handleClearFilters}
                       style={{
                         background: "none",
                         border: "none",
-                        color: "#64748b",
+                        color: tokens.textSecondary,
                         fontSize: "12px",
                         fontWeight: 600,
                         cursor: "pointer",
@@ -977,12 +999,12 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                       type="button"
                       onClick={() => setIsFilterOpen(false)}
                       style={{
-                        background: "#2563eb",
+                        background: tokens.accent || "#2563eb",
                         border: "none",
                         color: "#ffffff",
                         fontSize: "12.5px",
                         fontWeight: 600,
-                        padding: "5px 12px",
+                        padding: "5px 14px",
                         borderRadius: "6px",
                         cursor: "pointer",
                       }}
@@ -1005,11 +1027,11 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
               alignItems: "center",
               flexWrap: "wrap",
               gap: "6px",
-              paddingTop: "6px",
-              borderTop: "1px solid #f1f5f9",
+              paddingTop: "8px",
+              borderTop: `1px solid ${tokens.border}`,
             }}
           >
-            <span style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 600, marginRight: "2px" }}>
+            <span style={{ fontSize: "11.5px", color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>
               Active:
             </span>
 
@@ -1139,7 +1161,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
               style={{
                 background: "none",
                 border: "none",
-                color: "#dc2626",
+                color: isDark ? "#f87171" : "#dc2626",
                 fontSize: "11.5px",
                 fontWeight: 600,
                 cursor: "pointer",
@@ -1181,7 +1203,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
               padding: "6px 14px",
               borderRadius: "6px",
               border: "1px solid #b91c1c",
-              background: "#ffffff",
+              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
               color: "#991b1b",
               fontSize: "12.5px",
               fontWeight: 600,
@@ -1198,9 +1220,9 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
       {/* ----------------------------------------------------------------- */}
       <div
         style={{
-          background: "#ffffff",
+          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
           borderRadius: "10px",
-          border: "1px solid #e2e8f0",
+          border: `1px solid ${tokens.border}`,
           overflow: "hidden",
           boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
         }}
@@ -1212,11 +1234,11 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
             alignItems: "center",
             gap: "12px",
             padding: "9px 16px",
-            background: "#f8fafc",
-            borderBottom: "1px solid #e2e8f0",
+            background: isDark ? tokens.surfaceBg : "#f8fafc",
+            borderBottom: `1px solid ${tokens.border}`,
             fontSize: "11px",
             fontWeight: 700,
-            color: "#64748b",
+            color: tokens.textSecondary,
             textTransform: "uppercase",
             letterSpacing: "0.05em",
             userSelect: "none",
@@ -1249,9 +1271,9 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                 height: "22px",
                 padding: 0,
                 borderRadius: "5px",
-                border: "1px solid #cbd5e1",
-                background: "#ffffff",
-                color: "#64748b",
+                border: `1px solid ${tokens.border}`,
+                background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                color: tokens.textSecondary,
                 cursor: loading || totalCount === 0 ? "not-allowed" : "pointer",
                 opacity: loading || totalCount === 0 ? 0.45 : 1,
                 transition: "all 0.15s ease",
@@ -1281,32 +1303,32 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
               key={idx}
               style={{
                 padding: "10px 16px",
-                borderBottom: "1px solid #f1f5f9",
+                borderBottom: `1px solid ${tokens.border}`,
                 display: "flex",
                 alignItems: "center",
                 gap: "12px",
               }}
             >
               <div style={{ width: effectiveSiteId ? "170px" : "160px", flexShrink: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-                <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#f1f5f9" }} />
-                <div style={{ width: "120px", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
+                <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: isDark ? tokens.surfaceBg : "#f1f5f9" }} />
+                <div style={{ width: "120px", height: "13px", borderRadius: "4px", background: isDark ? tokens.surfaceBg : "#f1f5f9" }} />
               </div>
               {!effectiveSiteId && (
                 <div style={{ width: "140px", flexShrink: 0 }}>
-                  <div style={{ width: "95px", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
+                  <div style={{ width: "95px", height: "13px", borderRadius: "4px", background: isDark ? tokens.surfaceBg : "#f1f5f9" }} />
                 </div>
               )}
               <div style={{ width: effectiveSiteId ? "160px" : "140px", flexShrink: 0 }}>
-                <div style={{ width: "100px", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
+                <div style={{ width: "100px", height: "13px", borderRadius: "4px", background: isDark ? tokens.surfaceBg : "#f1f5f9" }} />
               </div>
               <div style={{ width: effectiveSiteId ? "180px" : "170px", flexShrink: 0, display: "flex", alignItems: "center", gap: "7px" }}>
-                <div style={{ width: "110px", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
+                <div style={{ width: "110px", height: "13px", borderRadius: "4px", background: isDark ? tokens.surfaceBg : "#f1f5f9" }} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ width: "70%", height: "13px", borderRadius: "4px", background: "#f1f5f9" }} />
+                <div style={{ width: "70%", height: "13px", borderRadius: "4px", background: isDark ? tokens.surfaceBg : "#f1f5f9" }} />
               </div>
               <div style={{ width: "24px", flexShrink: 0 }}>
-                <div style={{ width: "14px", height: "14px", borderRadius: "3px", background: "#f1f5f9", marginLeft: "auto" }} />
+                <div style={{ width: "14px", height: "14px", borderRadius: "3px", background: isDark ? tokens.surfaceBg : "#f1f5f9", marginLeft: "auto" }} />
               </div>
             </div>
           ))
@@ -1319,8 +1341,8 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   width: "48px",
                   height: "48px",
                   borderRadius: "50%",
-                  background: "#f1f5f9",
-                  color: "#64748b",
+                  background: isDark ? tokens.surfaceBg : "#f1f5f9",
+                  color: tokens.textSecondary,
                   display: "inline-grid",
                   placeItems: "center",
                   marginBottom: "14px",
@@ -1330,10 +1352,10 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                 </svg>
               </div>
-              <h3 style={{ margin: "0 0 6px 0", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+              <h3 style={{ margin: "0 0 6px 0", fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
                 {isFiltered ? "No matching events found" : "No activity recorded yet"}
               </h3>
-              <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "#64748b", lineHeight: 1.5 }}>
+              <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.5 }}>
                 {isFiltered
                   ? "Try adjusting your search query, filter criteria, or date range."
                   : "Important changes, user actions, and system executions will appear here in chronological order."}
@@ -1345,9 +1367,9 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   style={{
                     padding: "7px 16px",
                     borderRadius: "7px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#0f172a",
+                    border: `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
                     fontSize: "13px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -1362,8 +1384,8 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
           logs.map((log, index) => {
             const isExpanded = expandedIds.has(log.id);
             const dateInfo = formatActivityDate(log.created_at);
-            const catTheme = getCategoryTheme(log.category);
-            const roleBadge = getRoleBadge(log.actor_role);
+            const catTheme = getCategoryTheme(log.category, isDark);
+            const roleBadge = getRoleBadge(log.actor_role, isDark);
             const summaryText = log.summary || log.description;
             const isLast = index === logs.length - 1;
 
@@ -1371,7 +1393,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
               <div
                 key={log.id}
                 style={{
-                  borderBottom: isLast && !isExpanded ? "none" : "1px solid #f1f5f9",
+                  borderBottom: isLast && !isExpanded ? "none" : `1px solid ${tokens.border}`,
                   transition: "background 0.12s ease",
                 }}
               >
@@ -1384,16 +1406,18 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                     alignItems: "center",
                     gap: "12px",
                     cursor: "pointer",
-                    background: isExpanded ? "#f8fafc" : "#ffffff",
+                    background: isExpanded
+                      ? (isDark ? tokens.elevatedSurfaceBg : "#f8fafc")
+                      : (isDark ? tokens.surfaceBg : "#ffffff"),
                     userSelect: "none",
                     whiteSpace: "nowrap",
                     transition: "background 0.12s ease",
                   }}
                   onMouseEnter={(e) => {
-                    if (!isExpanded) e.currentTarget.style.background = "#fbfcfd";
+                    if (!isExpanded) e.currentTarget.style.background = isDark ? tokens.elevatedSurfaceBg : "#fbfcfd";
                   }}
                   onMouseLeave={(e) => {
-                    if (!isExpanded) e.currentTarget.style.background = "#ffffff";
+                    if (!isExpanded) e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#ffffff";
                   }}
                 >
                   {/* 1. Timestamp Column */}
@@ -1422,7 +1446,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                       }}
                       title={`Status: ${log.status}`}
                     />
-                    <span style={{ fontSize: "12px", fontWeight: 600, color: "#334155" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: tokens.textPrimary }}>
                       {dateInfo.formatted}
                     </span>
                   </div>
@@ -1445,7 +1469,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                           style={{
                             fontSize: "12px",
                             fontWeight: 600,
-                            color: "#1e293b",
+                            color: tokens.textPrimary,
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
@@ -1464,11 +1488,11 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                           style={{
                             fontSize: "10.5px",
                             fontWeight: 600,
-                            color: "#64748b",
-                            background: "#f1f5f9",
+                            color: tokens.textSecondary,
+                            background: isDark ? tokens.surfaceBg : "#f1f5f9",
                             padding: "1px 6px",
                             borderRadius: "4px",
-                            border: "1px solid #e2e8f0",
+                            border: `1px solid ${tokens.border}`,
                           }}
                         >
                           Account-wide
@@ -1484,7 +1508,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                       flexShrink: 0,
                       fontSize: "12px",
                       fontWeight: 500,
-                      color: "#475569",
+                      color: tokens.textSecondary,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -1510,7 +1534,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                       style={{
                         fontSize: "12.5px",
                         fontWeight: 600,
-                        color: "#0f172a",
+                        color: tokens.textPrimary,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -1544,7 +1568,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
                       fontSize: "13px",
-                      color: "#334155",
+                      color: tokens.textPrimary,
                       fontWeight: 500,
                     }}
                     title={summaryText}
@@ -1570,15 +1594,15 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                   <div
                     style={{
                       padding: "8px 16px 12px 16px",
-                      background: "#f8fafc",
-                      borderTop: "1px solid #f1f5f9",
-                      borderBottom: "1px solid #e2e8f0",
+                      background: isDark ? tokens.surfaceBg : "#f8fafc",
+                      borderTop: `1px solid ${tokens.border}`,
+                      borderBottom: `1px solid ${tokens.border}`,
                     }}
                   >
                     <div
                       style={{
-                        background: "#ffffff",
-                        border: "1px solid #e2e8f0",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        border: `1px solid ${tokens.border}`,
                         borderRadius: "6px",
                         padding: "10px 14px",
                         display: "flex",
@@ -1593,7 +1617,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                             fontSize: "11px",
                             fontWeight: 700,
                             textTransform: "uppercase",
-                            color: "#64748b",
+                            color: tokens.textSecondary,
                             letterSpacing: "0.04em",
                             flexShrink: 0,
                             paddingTop: "2px",
@@ -1605,7 +1629,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                           style={{
                             fontSize: "13px",
                             fontWeight: 600,
-                            color: "#0f172a",
+                            color: tokens.textPrimary,
                             lineHeight: 1.45,
                             wordBreak: "break-word",
                             flex: 1,
@@ -1652,52 +1676,52 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                           flexWrap: "wrap",
                           gap: "8px 16px",
                           padding: "6px 10px",
-                          background: "#f8fafc",
+                          background: isDark ? tokens.surfaceBg : "#f8fafc",
                           borderRadius: "5px",
-                          border: "1px solid #f1f5f9",
+                          border: `1px solid ${tokens.border}`,
                           fontSize: "11.5px",
                         }}
                       >
                         {log.action && (
                           <div>
-                            <span style={{ color: "#64748b", marginRight: "4px" }}>Action:</span>
-                            <code style={{ background: "#ffffff", padding: "1px 5px", borderRadius: "3px", border: "1px solid #e2e8f0", color: "#1e293b", fontWeight: 600 }}>
+                            <span style={{ color: tokens.textSecondary, marginRight: "4px" }}>Action:</span>
+                            <code style={{ background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", padding: "1px 5px", borderRadius: "3px", border: `1px solid ${tokens.border}`, color: tokens.textPrimary, fontWeight: 600 }}>
                               {log.action}
                             </code>
                           </div>
                         )}
                         {(log.resource_name || log.resource_id) && (
                           <div>
-                            <span style={{ color: "#64748b", marginRight: "4px" }}>Target:</span>
-                            <span style={{ color: "#0f172a", fontWeight: 600 }}>{log.resource_name || log.resource_id}</span>
-                            {log.resource_type && <span style={{ color: "#94a3b8", marginLeft: "3px" }}>({log.resource_type})</span>}
+                            <span style={{ color: tokens.textSecondary, marginRight: "4px" }}>Target:</span>
+                            <span style={{ color: tokens.textPrimary, fontWeight: 600 }}>{log.resource_name || log.resource_id}</span>
+                            {log.resource_type && <span style={{ color: tokens.textMuted, marginLeft: "3px" }}>({log.resource_type})</span>}
                           </div>
                         )}
                         {log.ip_address && (
                           <div>
-                            <span style={{ color: "#64748b", marginRight: "4px" }}>IP:</span>
-                            <span style={{ color: "#475569", fontFamily: "monospace" }}>{log.ip_address}</span>
+                            <span style={{ color: tokens.textSecondary, marginRight: "4px" }}>IP:</span>
+                            <span style={{ color: tokens.textSecondary, fontFamily: "monospace" }}>{log.ip_address}</span>
                           </div>
                         )}
                         <div>
-                          <span style={{ color: "#64748b", marginRight: "4px" }}>Exact Time:</span>
-                          <span style={{ color: "#475569" }}>{new Date(log.created_at).toUTCString()}</span>
+                          <span style={{ color: tokens.textSecondary, marginRight: "4px" }}>Exact Time:</span>
+                          <span style={{ color: tokens.textSecondary }}>{new Date(log.created_at).toUTCString()}</span>
                         </div>
                       </div>
 
                       {/* Event Attributes (if any) */}
                       {log.details?.metadata && typeof log.details.metadata === "object" && Object.keys(log.details.metadata).length > 0 && (
                         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", fontSize: "11.5px" }}>
-                          <span style={{ color: "#64748b", fontWeight: 600, marginRight: "2px" }}>Attributes:</span>
+                          <span style={{ color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>Attributes:</span>
                           {Object.entries(log.details.metadata).map(([mKey, mVal]) => (
                             <span
                               key={mKey}
                               style={{
-                                background: "#f8fafc",
-                                border: "1px solid #e2e8f0",
+                                background: isDark ? tokens.surfaceBg : "#f8fafc",
+                                border: `1px solid ${tokens.border}`,
                                 borderRadius: "4px",
                                 padding: "1px 6px",
-                                color: "#334155",
+                                color: tokens.textPrimary,
                               }}
                             >
                               <strong style={{ textTransform: "capitalize" }}>{mKey.replace(/_/g, " ")}:</strong> {typeof mVal === "boolean" ? (mVal ? "true" : "false") : String(mVal)}
@@ -1709,7 +1733,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                       {/* Changes Made (Diffs) */}
                       {log.details && (log.details.before || log.details.after) && (
                         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px", fontSize: "11.5px" }}>
-                          <span style={{ color: "#64748b", fontWeight: 600, marginRight: "2px" }}>Changes:</span>
+                          <span style={{ color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>Changes:</span>
                           {Object.keys(log.details.after || {}).map((key) => {
                             const beforeVal = log.details?.before?.[key];
                             const afterVal = log.details?.after?.[key];
@@ -1724,15 +1748,15 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                                 key={key}
                                 style={{
                                   fontSize: "11.5px",
-                                  background: "#f8fafc",
-                                  border: "1px solid #e2e8f0",
+                                  background: isDark ? tokens.surfaceBg : "#f8fafc",
+                                  border: `1px solid ${tokens.border}`,
                                   borderRadius: "4px",
                                   padding: "2px 7px",
                                 }}
                               >
-                                <strong style={{ color: "#334155" }}>{key.replace(/_/g, " ")}:</strong>{" "}
+                                <strong style={{ color: tokens.textPrimary }}>{key.replace(/_/g, " ")}:</strong>{" "}
                                 {beforeVal !== undefined && (
-                                  <span style={{ color: "#94a3b8", textDecoration: "line-through", marginRight: "4px" }}>
+                                  <span style={{ color: tokens.textMuted, textDecoration: "line-through", marginRight: "4px" }}>
                                     {formatVal(beforeVal)}
                                   </span>
                                 )}
@@ -1772,7 +1796,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                       {/* Raw JSON toggle */}
                       {log.details && Object.keys(log.details).length > 0 && (
                         <div style={{ borderTop: "1px solid #f8fafc", paddingTop: "4px" }}>
-                          <details style={{ fontSize: "11px", color: "#64748b" }}>
+                          <details style={{ fontSize: "11px", color: tokens.textSecondary }}>
                             <summary style={{ cursor: "pointer", userSelect: "none", fontWeight: 500 }}>
                               View Raw Payload
                             </summary>
@@ -1809,14 +1833,16 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
             fetchActivity(1, newSize);
           }}
           showRangeText={true}
-          accentColor="#2563eb"
+          accentColor={tokens.accent}
         />
       )}
 
       {/* Retention notice */}
-      <div style={{ marginTop: "12px", textAlign: "right", fontSize: "11.5px", color: "#94a3b8" }}>
+      <div style={{ marginTop: "12px", textAlign: "right", fontSize: "11.5px", color: tokens.textMuted }}>
         Activities are automatically and securely retained for 90 days.
       </div>
     </div>
   );
 }
+
+

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import { AccessDeniedView } from "./AccessDeniedView";
 import { GlassToast } from "./GlassToast";
 
@@ -158,6 +159,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
   const effectiveSiteId = propSiteId || paramSiteId || storedActiveSiteId || null;
 
   const { hasPermission, isOwner } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
   const canView = isOwner || hasPermission("domain_settings:view");
   const canEdit = isOwner || hasPermission("domain_settings:edit");
 
@@ -442,7 +444,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
     <div
       style={{
         width: "100%",
-        color: "#0f172a",
+        color: tokens.textPrimary,
         position: "relative",
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         boxSizing: "border-box",
@@ -451,8 +453,8 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .wc-store-card { transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
-        .wc-store-card:hover { border-color: #93c5fd !important; box-shadow: 0 6px 16px rgba(37,99,235,0.08) !important; transform: translateY(-2px); }
-        .wc-input-focus:focus { border-color: #2563eb !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.12) !important; }
+        .wc-store-card:hover { border-color: ${tokens.accent} !important; box-shadow: 0 6px 16px rgba(0,0,0,0.3) !important; transform: translateY(-2px); }
+        .wc-input-focus:focus { border-color: ${tokens.accent} !important; box-shadow: 0 0 0 3px ${tokens.accent}25 !important; }
         .wc-code-box { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
       `}</style>
 
@@ -460,16 +462,16 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
       {toast && <GlassToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* ========================================================================= */}
-      {/* 1. TOP NAVBAR / HEADER CARD (MATCHING BILLING & PLANS EXACTLY)             */}
+      {/* 1. TOP NAVBAR / HEADER CARD                                               */}
       {/* ========================================================================= */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
-          padding: "8px 12px",
-          marginBottom: "12px",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          padding: "10px 14px",
+          marginBottom: "16px",
+          boxShadow: isDark ? "0 1px 2px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
           flexDirection: "column",
           gap: "8px",
@@ -489,19 +491,19 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
             <span
               style={{
                 borderRadius: "6px",
                 padding: "6px 16px",
-                background: "#ffffff",
-                color: "#0f172a",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+                background: isDark ? tokens.surfaceBg : "#ffffff",
+                color: tokens.textPrimary,
+                boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.06)",
                 fontSize: "13px",
                 fontWeight: 700,
                 display: "inline-block",
@@ -530,7 +532,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                     left: "11px",
                     top: "50%",
                     transform: "translateY(-50%)",
-                    color: "#94a3b8",
+                    color: tokens.textMuted,
                     display: "grid",
                     placeItems: "center",
                   }}
@@ -548,9 +550,10 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                     padding: "7px 28px 7px 32px",
                     fontSize: "12.5px",
                     borderRadius: "7px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#0f172a",
+                    border: `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
+                    colorScheme: isDark ? "dark" : "light",
                     outline: "none",
                     boxSizing: "border-box",
                   }}
@@ -559,7 +562,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                   <button
                     type="button"
                     onClick={() => setSearchQuery("")}
-                    style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: 0 }}
+                    style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: tokens.textMuted, padding: 0 }}
                   >
                     <XMarkIcon />
                   </button>
@@ -578,9 +581,9 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                     height: "34px",
                     padding: "0 12px",
                     borderRadius: "7px",
-                    border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                    background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                    color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
+                    border: activeFilterCount > 0 ? `1px solid ${tokens.accent || "#2563eb"}` : `1px solid ${tokens.border}`,
+                    background: activeFilterCount > 0 ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
+                    color: activeFilterCount > 0 ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
                     fontSize: "12.5px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -594,7 +597,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                       style={{
                         fontSize: "11px",
                         fontWeight: 700,
-                        background: "#2563eb",
+                        background: tokens.accent || "#2563eb",
                         color: "#ffffff",
                         borderRadius: "10px",
                         padding: "0 6px",
@@ -615,15 +618,15 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                       top: "42px",
                       right: 0,
                       width: "220px",
-                      background: "#ffffff",
+                      background: isDark ? tokens.surfaceBg : "#ffffff",
                       borderRadius: "10px",
-                      border: "1px solid #e2e8f0",
-                      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
+                      border: `1px solid ${tokens.border}`,
+                      boxShadow: isDark ? "0 10px 30px rgba(0, 0, 0, 0.5)" : "0 10px 25px -5px rgba(0, 0, 0, 0.15)",
                       padding: "14px",
                       zIndex: 100,
                     }}
                   >
-                    <label style={{ display: "block", fontSize: "11.5px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                    <label style={{ display: "block", fontSize: "11.5px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Plan Tier
                     </label>
                     <select
@@ -637,16 +640,18 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                         height: "32px",
                         padding: "0 8px",
                         borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
+                        border: `1px solid ${tokens.border}`,
                         fontSize: "12.5px",
-                        background: "#ffffff",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        colorScheme: isDark ? "dark" : "light",
                         outline: "none",
                       }}
                     >
-                      <option value="all">All Plans</option>
-                      <option value="FREE">Free Tier</option>
-                      <option value="STARTER">Starter Tier</option>
-                      <option value="PRO">Growth Pro Tier</option>
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Plans</option>
+                      <option value="FREE" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Free Tier</option>
+                      <option value="STARTER" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Starter Tier</option>
+                      <option value="PRO" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Growth Pro Tier</option>
                     </select>
                   </div>
                 )}
@@ -657,19 +662,19 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
 
         {/* Filter Chips Bar */}
         {!selectedSiteId && activeFilterCount > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", paddingTop: "4px", borderTop: "1px solid #f1f5f9" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", paddingTop: "4px", borderTop: `1px solid ${tokens.border}` }}>
             {searchQuery && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, padding: "2px 8px", borderRadius: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, padding: "2px 8px", borderRadius: "4px", background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff", color: isDark ? "#60a5fa" : "#1d4ed8", border: `1px solid ${tokens.border}` }}>
                 <span>Search: "{searchQuery}"</span>
-                <button type="button" onClick={() => setSearchQuery("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}>
+                <button type="button" onClick={() => setSearchQuery("")} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}>
                   <XMarkIcon />
                 </button>
               </span>
             )}
             {planFilter !== "all" && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, padding: "2px 8px", borderRadius: "4px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, padding: "2px 8px", borderRadius: "4px", background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff", color: isDark ? "#60a5fa" : "#1d4ed8", border: `1px solid ${tokens.border}` }}>
                 <span>Plan: {planFilter}</span>
-                <button type="button" onClick={() => setPlanFilter("all")} style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}>
+                <button type="button" onClick={() => setPlanFilter("all")} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}>
                   <XMarkIcon />
                 </button>
               </span>
@@ -680,7 +685,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                 setSearchQuery("");
                 setPlanFilter("all");
               }}
-              style={{ background: "none", border: "none", color: "#dc2626", fontSize: "11.5px", fontWeight: 600, cursor: "pointer", marginLeft: "4px" }}
+              style={{ background: "none", border: "none", color: "#ef4444", fontSize: "11.5px", fontWeight: 600, cursor: "pointer", marginLeft: "4px" }}
             >
               Clear All
             </button>
@@ -692,7 +697,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
       {/* 2. MAIN CONTENT VIEW                                                      */}
       {/* ========================================================================= */}
       {loading ? (
-        <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "48px 20px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+        <div style={{ background: isDark ? tokens.surfaceBg : "#ffffff", border: `1px solid ${tokens.border}`, borderRadius: "10px", padding: "48px 20px", textAlign: "center", color: tokens.textSecondary, fontSize: "13px" }}>
           <RefreshIcon spin />
           <div style={{ marginTop: "8px" }}>Loading domain settings...</div>
         </div>
@@ -701,7 +706,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
         /* VIEW A: DIRECT STORE DOMAIN CONFIGURATION                               */
         /* ----------------------------------------------------------------------- */
         <div>
-          {/* Back button below navbar (Identical to Billing & Plans) */}
+          {/* Back button below navbar */}
           {!effectiveSiteId && (
             <button
               type="button"
@@ -712,7 +717,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                 gap: "6px",
                 background: "none",
                 border: "none",
-                color: "#1e293b",
+                color: tokens.textPrimary,
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: "pointer",
@@ -720,10 +725,10 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                 transition: "color 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = "#0f172a";
+                e.currentTarget.style.color = tokens.accent;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = "#1e293b";
+                e.currentTarget.style.color = tokens.textPrimary;
               }}
             >
               <ChevronLeftIcon /> Back to All Stores
@@ -734,11 +739,11 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
             {/* TOP STORE BANNER CARD */}
             <div
               style={{
-                background: "#ffffff",
+                background: isDark ? tokens.surfaceBg : "#ffffff",
                 borderRadius: "10px",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${tokens.border}`,
                 padding: "16px 20px",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                boxShadow: isDark ? "0 1px 2px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.02)",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
@@ -748,7 +753,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
             >
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                  <h2 style={{ margin: 0, fontSize: "16.5px", fontWeight: 700, color: "#0f172a", letterSpacing: "-0.01em" }}>
+                  <h2 style={{ margin: 0, fontSize: "16.5px", fontWeight: 700, color: tokens.textPrimary, letterSpacing: "-0.01em" }}>
                     {activeCleanName}
                   </h2>
                   {activeCustomDomain && activeCustomDomain.is_primary && (
@@ -760,9 +765,9 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                         gap: "4px",
                         fontSize: "11px",
                         fontWeight: 600,
-                        color: "#059669",
-                        background: "#ecfdf5",
-                        border: "1px solid #a7f3d0",
+                        color: isDark ? "#34d399" : "#059669",
+                        background: isDark ? "rgba(16, 185, 129, 0.2)" : "#ecfdf5",
+                        border: isDark ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid #a7f3d0",
                         padding: "2px 7px",
                         borderRadius: "5px",
                       }}
@@ -778,8 +783,8 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "6px",
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
+                      background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "6px",
                       padding: "4px 8px 4px 10px",
                     }}
@@ -792,7 +797,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                       style={{
                         fontSize: "12.5px",
                         fontFamily: "monospace",
-                        color: "#2563eb",
+                        color: tokens.accent,
                         textDecoration: "none",
                         fontWeight: 600,
                         display: "inline-flex",
@@ -817,7 +822,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                       style={{
                         border: "none",
                         background: "transparent",
-                        color: "#64748b",
+                        color: tokens.textSecondary,
                         cursor: "pointer",
                         padding: "2px 4px",
                         borderRadius: "4px",
@@ -826,11 +831,11 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                         transition: "color 0.15s, background 0.15s",
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.color = "#0f172a";
-                        e.currentTarget.style.background = "#e2e8f0";
+                        e.currentTarget.style.color = tokens.textPrimary;
+                        e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#e2e8f0";
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.color = "#64748b";
+                        e.currentTarget.style.color = tokens.textSecondary;
                         e.currentTarget.style.background = "transparent";
                       }}
                     >
@@ -847,9 +852,9 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                     fontWeight: 700,
                     padding: "4px 10px",
                     borderRadius: "6px",
-                    background: (activeStore.plan || "").toUpperCase() === "PRO" ? "#f3e8ff" : (activeStore.plan || "").toUpperCase() === "STARTER" ? "#eff6ff" : "#f1f5f9",
-                    color: (activeStore.plan || "").toUpperCase() === "PRO" ? "#7e22ce" : (activeStore.plan || "").toUpperCase() === "STARTER" ? "#1d4ed8" : "#475569",
-                    border: `1px solid ${(activeStore.plan || "").toUpperCase() === "PRO" ? "#d8b4fe" : (activeStore.plan || "").toUpperCase() === "STARTER" ? "#bfdbfe" : "#cbd5e1"}`,
+                    background: (activeStore.plan || "").toUpperCase() === "PRO" ? (isDark ? "rgba(168, 85, 247, 0.2)" : "#f3e8ff") : (activeStore.plan || "").toUpperCase() === "STARTER" ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                    color: (activeStore.plan || "").toUpperCase() === "PRO" ? (isDark ? "#c084fc" : "#7e22ce") : (activeStore.plan || "").toUpperCase() === "STARTER" ? (isDark ? "#60a5fa" : "#1d4ed8") : tokens.textSecondary,
+                    border: `1px solid ${tokens.border}`,
                     textTransform: "uppercase",
                     letterSpacing: "0.04em",
                   }}
@@ -863,9 +868,9 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                     fontWeight: 700,
                     padding: "4px 10px",
                     borderRadius: "12px",
-                    background: activeStore.is_published ? "#ecfdf5" : "#f8fafc",
-                    color: activeStore.is_published ? "#059669" : "#64748b",
-                    border: `1px solid ${activeStore.is_published ? "#a7f3d0" : "#e2e8f0"}`,
+                    background: activeStore.is_published ? (isDark ? "rgba(16, 185, 129, 0.2)" : "#ecfdf5") : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
+                    color: activeStore.is_published ? (isDark ? "#34d399" : "#059669") : tokens.textSecondary,
+                    border: `1px solid ${activeStore.is_published ? (isDark ? "rgba(16, 185, 129, 0.4)" : "#a7f3d0") : tokens.border}`,
                   }}
                 >
                   {activeStore.is_published ? "● Published" : "○ Draft"}
@@ -876,27 +881,27 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
             {/* CARD 1: WEBCREON SUBDOMAIN */}
             <div
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
+                background: isDark ? tokens.surfaceBg : "#ffffff",
+                border: `1px solid ${tokens.border}`,
                 borderRadius: "10px",
                 padding: "18px 20px",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                boxShadow: isDark ? "0 1px 2px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.02)",
                 display: "flex",
                 flexDirection: "column",
                 gap: "14px",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "10px" }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                  <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                     1. Webcreon Subdomain
                   </h3>
-                  <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "#64748b" }}>
+                  <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: tokens.textSecondary }}>
                     Built-in permanent storefront web address with automated SSL encryption.
                   </p>
                 </div>
 
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11.5px", fontWeight: 700, color: "#059669", background: "#ecfdf5", padding: "3px 9px", borderRadius: "12px", border: "1px solid #a7f3d0" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11.5px", fontWeight: 700, color: isDark ? "#34d399" : "#059669", background: isDark ? "rgba(16, 185, 129, 0.2)" : "#ecfdf5", padding: "3px 9px", borderRadius: "12px", border: isDark ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid #a7f3d0" }}>
                   <ShieldCheckIcon />
                   <span>SSL Active</span>
                 </span>
@@ -904,11 +909,11 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
 
               <form onSubmit={handleSaveSubdomain} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>
                     Store Subdomain Prefix
                   </label>
-                  <div style={{ display: "flex", alignItems: "center", flexWrap: "nowrap", borderRadius: "7px", border: "1px solid #cbd5e1", overflow: "hidden", background: "#ffffff", maxWidth: "520px" }}>
-                    <div style={{ padding: "0 10px", color: "#94a3b8", display: "grid", placeItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", flexWrap: "nowrap", borderRadius: "7px", border: `1px solid ${tokens.border}`, overflow: "hidden", background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", maxWidth: "520px" }}>
+                    <div style={{ padding: "0 10px", color: tokens.textMuted, display: "grid", placeItems: "center" }}>
                       <GlobeIcon />
                     </div>
                     <input
@@ -926,17 +931,19 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                         outline: "none",
                         fontSize: "13.5px",
                         fontFamily: "monospace",
-                        color: "#0f172a",
+                        color: tokens.textPrimary,
+                        colorScheme: isDark ? "dark" : "light",
+                        background: "transparent",
                       }}
                     />
-                    <span style={{ padding: "8px 12px", background: "#f8fafc", color: "#64748b", fontSize: "13px", fontWeight: 600, borderLeft: "1px solid #cbd5e1", userSelect: "none", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    <span style={{ padding: "8px 12px", background: isDark ? tokens.surfaceBg : "#f8fafc", color: tokens.textSecondary, fontSize: "13px", fontWeight: 600, borderLeft: `1px solid ${tokens.border}`, userSelect: "none", whiteSpace: "nowrap", flexShrink: 0 }}>
                       .{platformBaseDomain}
                     </span>
                   </div>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
-                  <span style={{ fontSize: "11.5px", color: "#64748b" }}>
+                  <span style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
                     🛡️ Previous slugs remain protected for 90 days to prevent domain hijacking.
                   </span>
                   {canEdit && subdomainInput.trim() !== activeStore.slug && (
@@ -946,13 +953,13 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                       style={{
                         padding: "7px 16px",
                         borderRadius: "6px",
-                        background: "#2563eb",
+                        background: tokens.accent || "#2563eb",
                         color: "#ffffff",
                         border: "none",
                         fontSize: "12.5px",
                         fontWeight: 600,
                         cursor: subdomainSubmitting ? "not-allowed" : "pointer",
-                        boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
+                        boxShadow: `0 1px 2px ${(tokens.accent || "#2563eb")}40`,
                       }}
                     >
                       {subdomainSubmitting ? "Saving..." : "Save Subdomain"}
@@ -965,22 +972,22 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
             {/* CARD 2: CUSTOM DOMAIN */}
             <div
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
+                background: isDark ? tokens.surfaceBg : "#ffffff",
+                border: `1px solid ${tokens.border}`,
                 borderRadius: "10px",
                 padding: "18px 20px",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                boxShadow: isDark ? "0 1px 2px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.02)",
                 display: "flex",
                 flexDirection: "column",
                 gap: "14px",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "10px" }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                  <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                     2. Custom Domain
                   </h3>
-                  <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "#64748b" }}>
+                  <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: tokens.textSecondary }}>
                     Connect your custom brand domain (such as shop.yourbrand.com or www.yourbrand.com).
                   </p>
                 </div>
@@ -995,9 +1002,9 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                       fontWeight: 700,
                       padding: "3px 9px",
                       borderRadius: "12px",
-                      background: activeCustomDomain.status === "connected" ? "#ecfdf5" : activeCustomDomain.status === "inactive" ? "#fee2e2" : "#fef3c7",
-                      color: activeCustomDomain.status === "connected" ? "#059669" : activeCustomDomain.status === "inactive" ? "#dc2626" : "#b45309",
-                      border: `1px solid ${activeCustomDomain.status === "connected" ? "#a7f3d0" : activeCustomDomain.status === "inactive" ? "#fca5a5" : "#fde68a"}`,
+                      background: activeCustomDomain.status === "connected" ? (isDark ? "rgba(16, 185, 129, 0.2)" : "#ecfdf5") : activeCustomDomain.status === "inactive" ? (isDark ? "rgba(239, 68, 68, 0.2)" : "#fee2e2") : (isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7"),
+                      color: activeCustomDomain.status === "connected" ? (isDark ? "#34d399" : "#059669") : activeCustomDomain.status === "inactive" ? (isDark ? "#f87171" : "#dc2626") : (isDark ? "#fbbf24" : "#b45309"),
+                      border: `1px solid ${activeCustomDomain.status === "connected" ? (isDark ? "rgba(16, 185, 129, 0.4)" : "#a7f3d0") : activeCustomDomain.status === "inactive" ? (isDark ? "rgba(239, 68, 68, 0.4)" : "#fca5a5") : (isDark ? "rgba(245, 158, 11, 0.4)" : "#fde68a")}`,
                     }}
                   >
                     <span
@@ -1019,13 +1026,13 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
 
               {/* Free Tier Info */}
               {!isCustomDomainAllowed ? (
-                <div style={{ background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0", padding: "14px 16px" }}>
+                <div style={{ background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", borderRadius: "8px", border: `1px solid ${tokens.border}`, padding: "14px 16px" }}>
                   {activeCustomDomain ? (
-                    <div style={{ fontSize: "13px", color: "#475569" }}>
-                      Linked domain: <strong style={{ color: "#0f172a" }}>{activeCustomDomain.domain}</strong> is inactive while on the Free tier. Store traffic is routed via your Webcreon subdomain.
+                    <div style={{ fontSize: "13px", color: tokens.textSecondary }}>
+                      Linked domain: <strong style={{ color: tokens.textPrimary }}>{activeCustomDomain.domain}</strong> is inactive while on the Free tier. Store traffic is routed via your Webcreon subdomain.
                     </div>
                   ) : (
-                    <div style={{ fontSize: "13px", color: "#64748b" }}>
+                    <div style={{ fontSize: "13px", color: tokens.textSecondary }}>
                       Custom domain edge routing is available on Starter (₹199/mo) and Pro (₹499/mo) plans. Store traffic is active on your Webcreon subdomain.
                     </div>
                   )}
@@ -1036,8 +1043,8 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                   {/* Domain Header Strip */}
                   <div
                     style={{
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
+                      background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "8px",
                       padding: "12px 16px",
                       display: "flex",
@@ -1048,11 +1055,11 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <span style={{ fontSize: "14.5px", fontWeight: 700, fontFamily: "monospace", color: "#0f172a" }}>
+                      <span style={{ fontSize: "14.5px", fontWeight: 700, fontFamily: "monospace", color: tokens.textPrimary }}>
                         {activeCustomDomain.domain}
                       </span>
                       {activeCustomDomain.status === "connected" && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 700, color: "#059669" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 700, color: isDark ? "#34d399" : "#059669" }}>
                           <ShieldCheckIcon />
                           <span>TLS 1.3 Active</span>
                         </span>
@@ -1067,9 +1074,9 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                           style={{
                             padding: "5px 12px",
                             borderRadius: "6px",
-                            background: "#ffffff",
-                            border: "1px solid #cbd5e1",
-                            color: "#334155",
+                            background: isDark ? tokens.surfaceBg : "#ffffff",
+                            border: `1px solid ${tokens.border}`,
+                            color: tokens.textPrimary,
                             fontSize: "12px",
                             fontWeight: 600,
                             cursor: "pointer",
@@ -1086,9 +1093,9 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                           style={{
                             padding: "5px 12px",
                             borderRadius: "6px",
-                            background: "#ffffff",
-                            border: "1px solid #fee2e2",
-                            color: "#dc2626",
+                            background: isDark ? "rgba(239, 68, 68, 0.15)" : "#ffffff",
+                            border: isDark ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid #fee2e2",
+                            color: isDark ? "#fca5a5" : "#ef4444",
                             fontSize: "12px",
                             fontWeight: 600,
                             cursor: "pointer",
@@ -1103,14 +1110,14 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                   {/* DNS Records Table (If DNS Verification Required) */}
                   {activeCustomDomain.status !== "connected" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "2px" }}>
-                      <div style={{ fontSize: "12.5px", fontWeight: 600, color: "#334155" }}>
+                      <div style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textSecondary }}>
                         Add these records in your domain registrar (GoDaddy, Namecheap, Cloudflare, etc.):
                       </div>
 
-                      <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", overflowX: "auto" }}>
+                      <div style={{ border: `1px solid ${tokens.border}`, borderRadius: "8px", overflowX: "auto" }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", textAlign: "left" }}>
                           <thead>
-                            <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>
+                            <tr style={{ background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", borderBottom: `1px solid ${tokens.border}`, color: tokens.textSecondary, fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>
                               <th style={{ padding: "8px 12px" }}>Type</th>
                               <th style={{ padding: "8px 12px" }}>Name / Host</th>
                               <th style={{ padding: "8px 12px" }}>Value / Points To</th>
@@ -1118,19 +1125,19 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                             </tr>
                           </thead>
                           <tbody>
-                            <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
-                              <td style={{ padding: "9px 12px", fontWeight: 700, color: "#2563eb" }}>CNAME</td>
-                              <td style={{ padding: "9px 12px", fontFamily: "monospace", color: "#0f172a" }}>
+                            <tr style={{ borderBottom: `1px solid ${tokens.border}` }}>
+                              <td style={{ padding: "9px 12px", fontWeight: 700, color: isDark ? "#60a5fa" : tokens.accent }}>CNAME</td>
+                              <td style={{ padding: "9px 12px", fontFamily: "monospace", color: tokens.textPrimary }}>
                                 {activeCustomDomain.domain.split(".")[0]}
                               </td>
-                              <td style={{ padding: "9px 12px", fontFamily: "monospace", color: "#0f172a" }}>
+                              <td style={{ padding: "9px 12px", fontFamily: "monospace", color: tokens.textPrimary }}>
                                 {routingTarget}
                               </td>
                               <td style={{ padding: "9px 12px", textAlign: "right" }}>
                                 <button
                                   type="button"
                                   onClick={() => copyText(routingTarget, "CNAME Target")}
-                                  style={{ padding: "3px 8px", borderRadius: "4px", border: "1px solid #cbd5e1", background: "#ffffff", color: "#475569", cursor: "pointer" }}
+                                  style={{ padding: "3px 8px", borderRadius: "4px", border: `1px solid ${tokens.border}`, background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", color: tokens.textPrimary, cursor: "pointer" }}
                                 >
                                   <CopyIcon />
                                 </button>
@@ -1138,18 +1145,18 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                             </tr>
                             {activeCustomDomain.verification_token && (
                               <tr>
-                                <td style={{ padding: "9px 12px", fontWeight: 700, color: "#059669" }}>TXT</td>
-                                <td style={{ padding: "9px 12px", fontFamily: "monospace", color: "#0f172a" }}>
+                                <td style={{ padding: "9px 12px", fontWeight: 700, color: isDark ? "#34d399" : "#059669" }}>TXT</td>
+                                <td style={{ padding: "9px 12px", fontFamily: "monospace", color: tokens.textPrimary }}>
                                   _webcreon-challenge.{activeCustomDomain.domain.split(".")[0]}
                                 </td>
-                                <td style={{ padding: "9px 12px", fontFamily: "monospace", color: "#0f172a", maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <td style={{ padding: "9px 12px", fontFamily: "monospace", color: tokens.textPrimary, maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {activeCustomDomain.verification_token}
                                 </td>
                                 <td style={{ padding: "9px 12px", textAlign: "right" }}>
                                   <button
                                     type="button"
                                     onClick={() => copyText(activeCustomDomain.verification_token, "TXT Token")}
-                                    style={{ padding: "3px 8px", borderRadius: "4px", border: "1px solid #cbd5e1", background: "#ffffff", color: "#475569", cursor: "pointer" }}
+                                    style={{ padding: "3px 8px", borderRadius: "4px", border: `1px solid ${tokens.border}`, background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", color: tokens.textPrimary, cursor: "pointer" }}
                                   >
                                     <CopyIcon />
                                   </button>
@@ -1161,7 +1168,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                       </div>
 
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginTop: "4px" }}>
-                        <span style={{ fontSize: "11.5px", color: "#64748b" }}>
+                        <span style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
                           DNS propagation may take a few moments. Click verify once your records are added.
                         </span>
                         {canEdit && (
@@ -1175,13 +1182,13 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                               gap: "6px",
                               padding: "7px 16px",
                               borderRadius: "6px",
-                              background: "#2563eb",
+                              background: tokens.accent || "#2563eb",
                               color: "#ffffff",
                               border: "none",
                               fontSize: "12.5px",
                               fontWeight: 600,
                               cursor: verifyingId === activeCustomDomain.id ? "not-allowed" : "pointer",
-                              boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
+                              boxShadow: `0 1px 2px ${(tokens.accent || "#2563eb")}40`,
                             }}
                           >
                             <RefreshIcon spin={verifyingId === activeCustomDomain.id} />
@@ -1196,7 +1203,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                 /* Connect New Custom Domain Input */
                 <form onSubmit={handleConnectCustomDomain} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <div>
-                    <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Connect a Custom Domain
                     </label>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", maxWidth: "520px" }}>
@@ -1211,10 +1218,12 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                           flex: 1,
                           padding: "8px 12px",
                           borderRadius: "7px",
-                          border: "1px solid #cbd5e1",
+                          border: `1px solid ${tokens.border}`,
                           fontSize: "13.5px",
                           fontFamily: "monospace",
-                          color: "#0f172a",
+                          color: tokens.textPrimary,
+                          colorScheme: isDark ? "dark" : "light",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                           outline: "none",
                         }}
                       />
@@ -1225,14 +1234,14 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                           style={{
                             padding: "8px 16px",
                             borderRadius: "7px",
-                            background: "#2563eb",
+                            background: tokens.accent || "#2563eb",
                             color: "#ffffff",
                             border: "none",
                             fontSize: "12.5px",
                             fontWeight: 600,
                             whiteSpace: "nowrap",
                             cursor: customDomainSubmitting || !customDomainAnalysis.clean || customDomainAnalysis.isApex ? "not-allowed" : "pointer",
-                            boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
+                            boxShadow: `0 1px 2px ${(tokens.accent || "#2563eb")}40`,
                           }}
                         >
                           {customDomainSubmitting ? "Connecting..." : "Connect Domain"}
@@ -1242,7 +1251,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                   </div>
 
                   {customDomainAnalysis.isApex && (
-                    <div style={{ fontSize: "11.5px", color: "#dc2626" }}>
+                    <div style={{ fontSize: "11.5px", color: isDark ? "#fca5a5" : "#ef4444" }}>
                       Apex root domains (e.g. <code>brand.com</code>) must use a subdomain like <code>www.brand.com</code> or <code>shop.brand.com</code> for CNAME routing.
                     </div>
                   )}
@@ -1253,11 +1262,11 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
         </div>
       ) : (
         /* ----------------------------------------------------------------------- */
-        /* VIEW B: OVERVIEW GRID OF ALL STORES (MATCHING BILLING & PLANS UI)       */
+        /* VIEW B: OVERVIEW GRID OF ALL STORES                                     */
         /* ----------------------------------------------------------------------- */
         <div>
           {filteredStores.length === 0 ? (
-            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "48px 20px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+            <div style={{ background: isDark ? tokens.surfaceBg : "#ffffff", border: `1px solid ${tokens.border}`, borderRadius: "10px", padding: "48px 20px", textAlign: "center", color: tokens.textSecondary, fontSize: "13px" }}>
               No stores found matching your filters.
             </div>
           ) : (
@@ -1278,25 +1287,25 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                     className="wc-store-card"
                     onClick={() => setSelectedSiteId(s.site_id)}
                     style={{
-                      background: "#ffffff",
+                      background: isDark ? tokens.surfaceBg : "#ffffff",
                       borderRadius: "10px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "16px 18px",
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
                       cursor: "pointer",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                      boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.02)",
                     }}
                   >
                     <div>
                       {/* Top: Name & Plan Badge */}
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", gap: "10px" }}>
                         <div>
-                          <div style={{ fontSize: "14.5px", fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
+                          <div style={{ fontSize: "14.5px", fontWeight: 700, color: tokens.textPrimary, lineHeight: 1.2 }}>
                             {cleanName}
                           </div>
-                          <div style={{ fontSize: "11.5px", fontFamily: "monospace", color: "#64748b", marginTop: "3px" }}>
+                          <div style={{ fontSize: "11.5px", fontFamily: "monospace", color: tokens.textSecondary, marginTop: "3px" }}>
                             {s.slug}.{platformBaseDomain}
                           </div>
                         </div>
@@ -1307,9 +1316,9 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                             fontWeight: 700,
                             padding: "3px 8px",
                             borderRadius: "6px",
-                            background: (s.plan || "").toUpperCase() === "PRO" ? "#f3e8ff" : (s.plan || "").toUpperCase() === "STARTER" ? "#eff6ff" : "#f1f5f9",
-                            color: (s.plan || "").toUpperCase() === "PRO" ? "#7e22ce" : (s.plan || "").toUpperCase() === "STARTER" ? "#1d4ed8" : "#475569",
-                            border: `1px solid ${(s.plan || "").toUpperCase() === "PRO" ? "#d8b4fe" : (s.plan || "").toUpperCase() === "STARTER" ? "#bfdbfe" : "#cbd5e1"}`,
+                            background: (s.plan || "").toUpperCase() === "PRO" ? (isDark ? "rgba(168, 85, 247, 0.2)" : "#f3e8ff") : (s.plan || "").toUpperCase() === "STARTER" ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                            color: (s.plan || "").toUpperCase() === "PRO" ? (isDark ? "#c084fc" : "#7e22ce") : (s.plan || "").toUpperCase() === "STARTER" ? (isDark ? "#60a5fa" : "#1d4ed8") : tokens.textSecondary,
+                            border: `1px solid ${tokens.border}`,
                             letterSpacing: "0.04em",
                             textTransform: "uppercase",
                             flexShrink: 0,
@@ -1322,7 +1331,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                       {/* Middle: Domain Details Strip */}
                       <div
                         style={{
-                          background: "#f8fafc",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
                           borderRadius: "6px",
                           padding: "8px 10px",
                           marginBottom: "12px",
@@ -1332,8 +1341,8 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                           fontSize: "12px",
                         }}
                       >
-                        <span style={{ color: "#64748b", fontWeight: 500 }}>Custom Domain:</span>
-                        <span style={{ fontWeight: 600, color: customDom ? "#0f172a" : "#94a3b8", fontFamily: customDom ? "monospace" : "inherit" }}>
+                        <span style={{ color: tokens.textSecondary, fontWeight: 500 }}>Custom Domain:</span>
+                        <span style={{ fontWeight: 600, color: customDom ? tokens.textPrimary : tokens.textMuted, fontFamily: customDom ? "monospace" : "inherit" }}>
                           {customDom ? customDom.domain : "Not Connected"}
                         </span>
                       </div>
@@ -1346,23 +1355,23 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                         justifyContent: "space-between",
                         alignItems: "center",
                         paddingTop: "6px",
-                        borderTop: "1px solid #f8fafc",
+                        borderTop: `1px solid ${tokens.border}`,
                       }}
                     >
                       <div>
                         {customDom ? (
                           customDom.status === "connected" ? (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 700, color: "#059669" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 700, color: isDark ? "#34d399" : "#059669" }}>
                               <ShieldCheckIcon />
                               <span>Connected & SSL Active</span>
                             </span>
                           ) : customDom.status === "inactive" ? (
-                            <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#dc2626" }}>Inactive (Free Plan)</span>
+                            <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#ef4444" }}>Inactive (Free Plan)</span>
                           ) : (
-                            <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#b45309" }}>DNS Verification Pending</span>
+                            <span style={{ fontSize: "11.5px", fontWeight: 700, color: isDark ? "#fbbf24" : "#b45309" }}>DNS Verification Pending</span>
                           )
                         ) : (
-                          <span style={{ fontSize: "11.5px", fontWeight: 600, color: "#64748b" }}>Subdomain Live</span>
+                          <span style={{ fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary }}>Subdomain Live</span>
                         )}
                       </div>
 
@@ -1371,8 +1380,8 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                           width: "24px",
                           height: "24px",
                           borderRadius: "50%",
-                          background: "#eff6ff",
-                          color: "#2563eb",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#eff6ff",
+                          color: tokens.accent,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -1393,17 +1402,17 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
       {/* 3. CONFIRMATION MODAL: DISCONNECT CUSTOM DOMAIN                           */}
       {/* ========================================================================= */}
       {disconnectConfirmOpen && activeCustomDomain && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.5)", backdropFilter: "blur(2px)", zIndex: 10001, display: "grid", placeItems: "center", padding: "16px" }}>
-          <div style={{ background: "#ffffff", borderRadius: "12px", maxWidth: "420px", width: "100%", padding: "20px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", border: "1px solid #e2e8f0" }}>
-            <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#dc2626" }}>Disconnect Custom Domain?</h3>
-            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "#475569", lineHeight: 1.45 }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.65)", backdropFilter: "blur(3px)", zIndex: 10001, display: "grid", placeItems: "center", padding: "16px" }}>
+          <div style={{ background: isDark ? tokens.surfaceBg : "#ffffff", borderRadius: "12px", maxWidth: "420px", width: "100%", padding: "20px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.5)", border: `1px solid ${tokens.border}` }}>
+            <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#ef4444" }}>Disconnect Custom Domain?</h3>
+            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.45 }}>
               Are you sure you want to disconnect <strong>{activeCustomDomain.domain}</strong>? Storefront traffic will immediately fall back to your Webcreon subdomain.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
               <button
                 type="button"
                 onClick={() => setDisconnectConfirmOpen(false)}
-                style={{ padding: "7px 14px", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#ffffff", color: "#334155", fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}
+                style={{ padding: "7px 14px", borderRadius: "6px", border: `1px solid ${tokens.border}`, background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", color: tokens.textPrimary, fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}
               >
                 Cancel
               </button>

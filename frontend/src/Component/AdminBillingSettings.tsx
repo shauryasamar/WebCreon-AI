@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import { AccessDeniedView } from "./AccessDeniedView";
 import { GlassToast } from "./GlassToast";
 import { useRazorpay } from "../hooks/useRazorpay";
@@ -355,6 +356,7 @@ function generateIdempotencyKey(): string {
 // ---------------------------------------------------------------------------
 
 export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) => {
+  const { isDark, tokens } = useAdminTheme();
   const { siteId: paramSiteId } = useParams<{ siteId?: string }>();
   const storedActiveSiteId = typeof window !== "undefined" ? (localStorage.getItem("last_active_site_id") || sessionStorage.getItem("last_active_site_id")) : null;
   const effectiveSiteId = siteId || paramSiteId || storedActiveSiteId || null;
@@ -733,7 +735,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
     <div
       style={{
         width: "100%",
-        color: "#0f172a",
+        color: tokens.textPrimary,
         position: "relative",
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         boxSizing: "border-box",
@@ -741,7 +743,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
     >
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .wc-card-hover:hover { border-color: #cbd5e1 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important; transform: translateY(-1px); }
+        .wc-card-hover:hover { border-color: ${tokens.accent} !important; box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important; transform: translateY(-1px); }
       `}</style>
 
       {/* Toast Notification */}
@@ -752,12 +754,12 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
       {/* ========================================================================= */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
-          padding: "8px 12px",
-          marginBottom: "8px",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          padding: "10px 14px",
+          marginBottom: "16px",
+          boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
           flexDirection: "column",
           gap: "8px",
@@ -777,19 +779,19 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
             <div
               style={{
                 display: "inline-flex",
-                background: "#f1f5f9",
+                background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
                 padding: "3px",
                 borderRadius: "8px",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${tokens.border}`,
               }}
             >
               <span
                 style={{
                   borderRadius: "6px",
                   padding: "6px 16px",
-                  background: "#ffffff",
-                  color: "#0f172a",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+                  background: isDark ? tokens.surfaceBg : "#ffffff",
+                  color: tokens.textPrimary,
+                  boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
                   fontSize: "13px",
                   fontWeight: 700,
                   display: "inline-block",
@@ -808,12 +810,12 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
       {/* ========================================================================= */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "12px",
           padding: "16px 20px",
           marginBottom: "12px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+          boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.03)",
         }}
       >
         <div
@@ -832,23 +834,23 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                 width: "38px",
                 height: "38px",
                 borderRadius: "10px",
-                background: "#eff6ff",
+                background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#2563eb",
+                color: isDark ? "#60a5fa" : "#2563eb",
                 flexShrink: 0,
-                border: "1px solid #dbeafe",
+                border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.35)" : "#dbeafe"}`,
               }}
             >
               <SparklesIcon />
             </div>
 
             <div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", letterSpacing: "-0.01em" }}>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary, letterSpacing: "-0.01em" }}>
                 Account AI Credits
               </div>
-              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+              <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "2px" }}>
                 Shared across all websites under your account
               </div>
             </div>
@@ -856,10 +858,10 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
 
           <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
             <div style={{ textAlign: "right" }}>
-              <span style={{ fontSize: "16px", fontWeight: 800, color: aiCounterTextColor }}>
+              <span style={{ fontSize: "16px", fontWeight: 800, color: aiUsagePct >= 100 ? "#ef4444" : aiUsagePct >= 90 ? "#f59e0b" : tokens.textPrimary }}>
                 {aiUsed.toLocaleString()} / {aiTotal.toLocaleString()}
               </span>
-              <span style={{ fontSize: "12.5px", color: "#64748b", marginLeft: "6px" }}>
+              <span style={{ fontSize: "12.5px", color: tokens.textSecondary, marginLeft: "6px" }}>
                 credits used ({aiRemaining.toLocaleString()} left)
               </span>
             </div>
@@ -870,19 +872,19 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
               style={{
                 fontSize: "12px",
                 fontWeight: 600,
-                color: "#2563eb",
-                background: "#eff6ff",
-                border: "1px solid #bfdbfe",
+                color: isDark ? "#60a5fa" : "#2563eb",
+                background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 borderRadius: "7px",
                 padding: "6px 12px",
                 cursor: "pointer",
                 transition: "all 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#dbeafe";
+                e.currentTarget.style.background = isDark ? "rgba(59, 130, 246, 0.25)" : "#dbeafe";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#eff6ff";
+                e.currentTarget.style.background = isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff";
               }}
             >
               {showBatchDrawer ? "Hide Batches ▲" : "View Batches ▼"}
@@ -894,7 +896,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
           style={{
             width: "100%",
             height: "7px",
-            background: "#f1f5f9",
+            background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
             borderRadius: "4px",
             overflow: "hidden",
           }}
@@ -918,8 +920,8 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
             });
 
             return (
-              <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
-                <div style={{ fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "8px" }}>
+              <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: `1px solid ${tokens.border}` }}>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "8px" }}>
                   Active Credit Batches (FIFO Order):
                 </div>
                 {activeBatches.length > 0 ? (
@@ -931,26 +933,26 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "center",
-                          background: "#f8fafc",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
                           padding: "8px 12px",
                           borderRadius: "7px",
                           fontSize: "12px",
-                          border: "1px solid #f1f5f9",
+                          border: `1px solid ${tokens.border}`,
                         }}
                       >
                         <div>
-                          <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                          <span style={{ fontWeight: 600, color: tokens.textPrimary }}>
                             {b.is_free_base ? "Base Free Batch" : `${b.batch_type.replace("PAID_", "")} Website Batch`}
                           </span>
-                          <span style={{ color: "#64748b", marginLeft: "8px" }}>
+                          <span style={{ color: tokens.textSecondary, marginLeft: "8px" }}>
                             ({b.allocated.toLocaleString()} credits)
                           </span>
                         </div>
                         <div style={{ textAlign: "right" }}>
-                          <span style={{ fontWeight: 700, color: b.remaining === 0 ? "#ef4444" : "#2563eb" }}>
+                          <span style={{ fontWeight: 700, color: b.remaining === 0 ? "#ef4444" : (isDark ? "#60a5fa" : "#2563eb") }}>
                             {b.remaining.toLocaleString()} left
                           </span>
-                          <span style={{ fontSize: "11px", color: "#64748b", marginLeft: "10px" }}>
+                          <span style={{ fontSize: "11px", color: tokens.textMuted, marginLeft: "10px" }}>
                             Expires {formatRenewalDate(b.expiry_date)}
                           </span>
                         </div>
@@ -958,7 +960,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                     ))}
                   </div>
                 ) : (
-                  <div style={{ fontSize: "12px", color: "#64748b" }}>No active credit batches found.</div>
+                  <div style={{ fontSize: "12px", color: tokens.textSecondary }}>No active credit batches found.</div>
                 )}
               </div>
             );
@@ -971,12 +973,12 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
       {!selectedWebsiteId ? (
         <div>
           {loading ? (
-            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "48px 20px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+            <div style={{ background: isDark ? tokens.surfaceBg : "#ffffff", border: `1px solid ${tokens.border}`, borderRadius: "10px", padding: "48px 20px", textAlign: "center", color: tokens.textSecondary, fontSize: "13px" }}>
               <RefreshIcon spin />
               <div style={{ marginTop: "8px" }}>Loading websites and subscriptions...</div>
             </div>
           ) : filteredWebsites.length === 0 ? (
-            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "48px 20px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+            <div style={{ background: isDark ? tokens.surfaceBg : "#ffffff", border: `1px solid ${tokens.border}`, borderRadius: "10px", padding: "48px 20px", textAlign: "center", color: tokens.textSecondary, fontSize: "13px" }}>
               No websites found matching your filters.
             </div>
           ) : (
@@ -1004,20 +1006,20 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                     className="wc-card-hover"
                     onClick={() => setSelectedWebsiteId(w.website_id)}
                     style={{
-                      background: "#ffffff",
+                      background: isDark ? tokens.surfaceBg : "#ffffff",
                       borderRadius: "10px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "16px 18px",
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
                       cursor: "pointer",
                       transition: "all 0.15s ease",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                      boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.02)",
                     }}
                   >
                     <div>
-                      {/* Card Top: Avatar, Clean Store Name & Plan Badge (NO URL) */}
+                      {/* Card Top: Clean Store Name & Plan Badge (NO initial avatar or URL) */}
                       <div
                         style={{
                           display: "flex",
@@ -1026,35 +1028,15 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           marginBottom: "12px",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <div
-                            style={{
-                              width: "36px",
-                              height: "36px",
-                              borderRadius: "8px",
-                              background: palette.bg,
-                              color: palette.color,
-                              fontSize: "15px",
-                              fontWeight: 700,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {initial}
-                          </div>
-
-                          <div
-                            style={{
-                              fontSize: "14.5px",
-                              fontWeight: 700,
-                              color: "#0f172a",
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            {cleanName}
-                          </div>
+                        <div
+                          style={{
+                            fontSize: "15px",
+                            fontWeight: 700,
+                            color: tokens.textPrimary,
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {cleanName}
                         </div>
 
                         <span
@@ -1063,10 +1045,11 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                             fontWeight: 700,
                             padding: "3px 8px",
                             borderRadius: "6px",
-                            background: "#f1f5f9",
-                            color: "#475569",
+                            background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+                            color: tokens.textSecondary,
                             letterSpacing: "0.04em",
                             textTransform: "uppercase",
+                            border: `1px solid ${tokens.border}`,
                           }}
                         >
                           {w.current_plan}
@@ -1080,12 +1063,12 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           justifyContent: "space-between",
                           alignItems: "baseline",
                           fontSize: "12px",
-                          color: "#334155",
+                          color: tokens.textSecondary,
                           marginBottom: "5px",
                         }}
                       >
                         <div>
-                          <span style={{ fontWeight: 700, color: isOverLimit ? "#dc2626" : "#0f172a" }}>
+                          <span style={{ fontWeight: 700, color: isOverLimit ? "#dc2626" : tokens.textPrimary }}>
                             {used.toLocaleString()}
                           </span>{" "}
                           / {limit ? `${limit.toLocaleString()} products` : "Unlimited products"}
@@ -1094,7 +1077,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           style={{
                             fontSize: "11.5px",
                             fontWeight: isOverLimit ? 700 : 500,
-                            color: isOverLimit ? "#ef4444" : "#64748b",
+                            color: isOverLimit ? "#ef4444" : tokens.textSecondary,
                           }}
                         >
                           {pct}%
@@ -1106,7 +1089,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         style={{
                           width: "100%",
                           height: "5px",
-                          background: "#f1f5f9",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
                           borderRadius: "9999px",
                           overflow: "hidden",
                           marginBottom: "12px",
@@ -1131,7 +1114,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         justifyContent: "space-between",
                         alignItems: "center",
                         paddingTop: "6px",
-                        borderTop: "1px solid #f8fafc",
+                        borderTop: `1px solid ${tokens.border}`,
                       }}
                     >
                       <div
@@ -1140,7 +1123,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           alignItems: "center",
                           gap: "5px",
                           fontSize: "11.5px",
-                          color: "#64748b",
+                          color: tokens.textSecondary,
                         }}
                       >
                         <CalendarIcon />
@@ -1152,8 +1135,8 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           width: "24px",
                           height: "24px",
                           borderRadius: "50%",
-                          background: "#eff6ff",
-                          color: "#2563eb",
+                          background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                          color: isDark ? "#60a5fa" : "#2563eb",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -1169,9 +1152,9 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           marginTop: "10px",
                           padding: "6px 8px",
                           borderRadius: "6px",
-                          background: "#fffbeb",
-                          border: "1px solid #fef3c7",
-                          color: "#b45309",
+                          background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
+                          border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fef3c7"}`,
+                          color: isDark ? "#fbbf24" : "#b45309",
                           fontSize: "11px",
                           display: "flex",
                           alignItems: "center",
@@ -1219,7 +1202,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                     gap: "6px",
                     background: "none",
                     border: "none",
-                    color: "#1e293b",
+                    color: tokens.textSecondary,
                     fontSize: "13px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -1227,31 +1210,29 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                     transition: "color 0.15s ease",
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "#0f172a";
+                    e.currentTarget.style.color = tokens.textPrimary;
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "#1e293b";
+                    e.currentTarget.style.color = tokens.textSecondary;
                   }}
                 >
                   <ChevronLeftIcon />
                   <span>Back to Billing & Plans</span>
                 </button>
 
-                <div style={{ fontSize: "12.5px", color: "#64748b" }}>
-                  Store: <strong style={{ color: "#0f172a" }}>{currentSiteCleanName}</strong>
+                <div style={{ fontSize: "12.5px", color: tokens.textSecondary }}>
+                  Store: <strong style={{ color: tokens.textPrimary }}>{currentSiteCleanName}</strong>
                 </div>
               </div>
-
-
 
               {/* All Invoices Card */}
               <div
                 style={{
-                  background: "#ffffff",
+                  background: isDark ? tokens.surfaceBg : "#ffffff",
                   borderRadius: "12px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "20px 24px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                  boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.02)",
                 }}
               >
                 <div
@@ -1270,18 +1251,19 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         width: "40px",
                         height: "40px",
                         borderRadius: "10px",
-                        background: "#eff6ff",
-                        color: "#2563eb",
+                        background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                        color: isDark ? "#60a5fa" : "#2563eb",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
+                        border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.35)" : "#dbeafe"}`,
                       }}
                     >
                       <InvoiceFileIcon />
                     </div>
                     <div>
-                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
                         All Invoices & Statutory Tax Bills
                       </div>
                     </div>
@@ -1295,7 +1277,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         left: "10px",
                         top: "50%",
                         transform: "translateY(-50%)",
-                        color: "#94a3b8",
+                        color: tokens.textMuted,
                         display: "grid",
                         placeItems: "center",
                       }}
@@ -1317,9 +1299,9 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         fontSize: "12.5px",
                         height: "34px",
                         borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
-                        background: "#f8fafc",
-                        color: "#0f172a",
+                        border: `1px solid ${tokens.border}`,
+                        background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
+                        color: tokens.textPrimary,
                         outline: "none",
                         boxSizing: "border-box",
                       }}
@@ -1339,7 +1321,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           background: "none",
                           border: "none",
                           cursor: "pointer",
-                          color: "#94a3b8",
+                          color: tokens.textMuted,
                           padding: "2px",
                           display: "grid",
                           placeItems: "center",
@@ -1353,55 +1335,55 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
 
                 {/* Full Invoices Table */}
                 {invoicesLoading ? (
-                  <div style={{ textAlign: "center", padding: "36px 0", color: "#64748b", fontSize: "13px" }}>
+                  <div style={{ textAlign: "center", padding: "36px 0", color: tokens.textSecondary, fontSize: "13px" }}>
                     <RefreshIcon spin /> Loading invoices...
                   </div>
                 ) : invoices.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "36px 0", color: "#64748b", fontSize: "13px" }}>
+                  <div style={{ textAlign: "center", padding: "36px 0", color: tokens.textSecondary, fontSize: "13px" }}>
                     {invoiceSearchQuery ? "No invoices found matching your search." : "No billing invoices recorded yet for this website."}
                   </div>
                 ) : (
                   <>
-                    <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                    <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: "8px", border: `1px solid ${tokens.border}` }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
                         <thead>
-                          <tr style={{ background: "#f8fafc", color: "#475569", fontSize: "12px", fontWeight: 700 }}>
-                            <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Invoice #</th>
-                            <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Date</th>
-                            <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Description</th>
-                            <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Subtotal</th>
-                            <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>GST (18%)</th>
-                            <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Total</th>
-                            <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Status</th>
-                            <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", textAlign: "right", whiteSpace: "nowrap", width: "50px" }}></th>
+                          <tr style={{ background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", color: tokens.textSecondary, fontSize: "12px", fontWeight: 700 }}>
+                            <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Invoice #</th>
+                            <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Date</th>
+                            <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Description</th>
+                            <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Subtotal</th>
+                            <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>GST (18%)</th>
+                            <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Total</th>
+                            <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Status</th>
+                            <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, textAlign: "right", whiteSpace: "nowrap", width: "50px" }}></th>
                           </tr>
                         </thead>
                         <tbody>
                           {invoices.map((inv) => (
-                            <tr key={inv.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                              <td style={{ padding: "11px 14px", color: "#0f172a", fontWeight: 700, fontFamily: "monospace", fontSize: "12px", whiteSpace: "nowrap" }}>
+                            <tr key={inv.id} style={{ borderBottom: `1px solid ${tokens.border}` }}>
+                              <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 700, fontFamily: "monospace", fontSize: "12px", whiteSpace: "nowrap" }}>
                                 {inv.invoice_number}
                               </td>
-                              <td style={{ padding: "11px 14px", color: "#334155", fontWeight: 500, whiteSpace: "nowrap" }}>
+                              <td style={{ padding: "11px 14px", color: tokens.textSecondary, fontWeight: 500, whiteSpace: "nowrap" }}>
                                 {formatRenewalDate(inv.invoice_date)}
                               </td>
-                              <td style={{ padding: "11px 14px", color: "#0f172a", fontWeight: 600, whiteSpace: "nowrap" }}>
+                              <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 600, whiteSpace: "nowrap" }}>
                                 {cleanPlanDescription(inv.plan_name, inv.plan, inv.billing_interval)}
                               </td>
-                              <td style={{ padding: "11px 14px", color: "#334155", fontWeight: 500, whiteSpace: "nowrap" }}>
+                              <td style={{ padding: "11px 14px", color: tokens.textSecondary, fontWeight: 500, whiteSpace: "nowrap" }}>
                                 ₹{inv.subtotal.toFixed(2)}
                               </td>
-                              <td style={{ padding: "11px 14px", color: "#64748b", fontSize: "12px", whiteSpace: "nowrap" }}>
+                              <td style={{ padding: "11px 14px", color: tokens.textMuted, fontSize: "12px", whiteSpace: "nowrap" }}>
                                 ₹{inv.total_tax.toFixed(2)}
                               </td>
-                              <td style={{ padding: "11px 14px", color: "#0f172a", fontWeight: 800, whiteSpace: "nowrap" }}>
+                              <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 800, whiteSpace: "nowrap" }}>
                                 ₹{inv.total_amount.toFixed(2)}
                               </td>
                               <td style={{ padding: "11px 14px", whiteSpace: "nowrap" }}>
                                 <span
                                   style={{
-                                    background: "#ecfdf5",
-                                    color: "#059669",
+                                    background: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5",
+                                    color: isDark ? "#4ade80" : "#059669",
                                     fontSize: "11.5px",
                                     fontWeight: 700,
                                     padding: "3px 10px",
@@ -1409,7 +1391,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "5px",
-                                    border: "1px solid #d1fae5",
+                                    border: `1px solid ${isDark ? "rgba(16, 185, 129, 0.3)" : "#d1fae5"}`,
                                     whiteSpace: "nowrap",
                                   }}
                                 >
@@ -1427,21 +1409,21 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                                     display: "inline-flex",
                                     alignItems: "center",
                                     justifyContent: "center",
-                                    background: "#f8fafc",
-                                    border: "1px solid #e2e8f0",
-                                    color: "#2563eb",
+                                    background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
+                                    border: `1px solid ${tokens.border}`,
+                                    color: isDark ? "#60a5fa" : "#2563eb",
                                     cursor: "pointer",
                                     transition: "all 0.15s ease",
                                     padding: 0,
                                     flexShrink: 0,
                                   }}
                                   onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = "#eff6ff";
-                                    e.currentTarget.style.borderColor = "#bfdbfe";
+                                    e.currentTarget.style.background = isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff";
+                                    e.currentTarget.style.borderColor = tokens.accent;
                                   }}
                                   onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = "#f8fafc";
-                                    e.currentTarget.style.borderColor = "#e2e8f0";
+                                    e.currentTarget.style.background = isDark ? tokens.elevatedSurfaceBg : "#f8fafc";
+                                    e.currentTarget.style.borderColor = tokens.border;
                                   }}
                                   title={`Download Invoice ${inv.invoice_number}`}
                                 >
@@ -1463,6 +1445,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         pageSize={invoicePageSize}
                         pageSizeOptions={[10, 20, 50, 100]}
                         showRangeText={true}
+                        accentColor={tokens.accent}
                         onPageChange={(p) => setInvoicePage(p)}
                         onPageSizeChange={(newSize) => {
                           setInvoicePageSize(newSize);
@@ -1487,7 +1470,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                     gap: "6px",
                     background: "none",
                     border: "none",
-                    color: "#1e293b",
+                    color: tokens.textSecondary,
                     fontSize: "13px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -1495,10 +1478,10 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                     transition: "color 0.15s ease",
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "#0f172a";
+                    e.currentTarget.style.color = tokens.textPrimary;
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "#1e293b";
+                    e.currentTarget.style.color = tokens.textSecondary;
                   }}
                 >
                   <ChevronLeftIcon /> Back to All Stores
@@ -1508,12 +1491,12 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
               {detailsLoading || !selectedDetails ? (
                 <div
                   style={{
-                    background: "#ffffff",
+                    background: isDark ? tokens.surfaceBg : "#ffffff",
                     borderRadius: "10px",
-                    border: "1px solid #e2e8f0",
+                    border: `1px solid ${tokens.border}`,
                     padding: "32px",
                     textAlign: "center",
-                    color: "#64748b",
+                    color: tokens.textSecondary,
                     fontSize: "13px",
                   }}
                 >
@@ -1524,11 +1507,11 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
               {/* TOP STORE CARD */}
               <div
                 style={{
-                  background: "#ffffff",
+                  background: isDark ? tokens.surfaceBg : "#ffffff",
                   borderRadius: "10px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "10px 16px",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                  boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.02)",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
@@ -1542,13 +1525,13 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                     style={{
                       fontSize: "16px",
                       fontWeight: 700,
-                      color: "#0f172a",
+                      color: tokens.textPrimary,
                       letterSpacing: "-0.01em",
                     }}
                   >
                     {currentSiteCleanName}
                   </span>
-                  <span style={{ fontSize: "12px", color: "#64748b" }}>
+                  <span style={{ fontSize: "12px", color: tokens.textSecondary }}>
                     30-Day Cycle • Next renewal on {formatRenewalDate(selectedDetails.billing_cycle_end_date)}
                   </span>
                 </div>
@@ -1561,11 +1544,11 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                       fontWeight: 700,
                       padding: "4px 10px",
                       borderRadius: "6px",
-                      background: "#f1f5f9",
-                      color: "#475569",
+                      background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+                      color: tokens.textSecondary,
                       textTransform: "uppercase",
                       letterSpacing: "0.05em",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                     }}
                   >
                     {selectedDetails.current_plan} PLAN
@@ -1577,9 +1560,9 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
               {selectedDetails.is_grace_period && (
                 <div
                   style={{
-                    background: "#fffbeb",
+                    background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
                     borderRadius: "10px",
-                    border: "1px solid #fde68a",
+                    border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
                     padding: "10px 14px",
                     display: "flex",
                     justifyContent: "space-between",
@@ -1591,10 +1574,10 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <AlertTriangleIcon />
                     <div>
-                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#92400e" }}>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: isDark ? "#fbbf24" : "#92400e" }}>
                         Payment issue detected — {selectedDetails.grace_days_left} days left in grace period
                       </div>
-                      <div style={{ fontSize: "12px", color: "#b45309" }}>
+                      <div style={{ fontSize: "12px", color: isDark ? "#fcd34d" : "#b45309" }}>
                         Resolve before {formatRenewalDate(selectedDetails.grace_period_ends_at)} or website will revert to Free.
                       </div>
                     </div>
@@ -1622,9 +1605,9 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
               {/* SELECT SUBSCRIPTION PLAN CARD */}
               <div
                 style={{
-                  background: "#ffffff",
+                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                   borderRadius: "12px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "16px 20px",
                   boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
                 }}
@@ -1641,10 +1624,10 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                   }}
                 >
                   <div>
-                    <h3 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: "#0f172a" }}>
+                    <h3 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>
                       Select Subscription Plan
                     </h3>
-                    <p style={{ margin: 0, fontSize: "12.5px", color: "#64748b" }}>
+                    <p style={{ margin: 0, fontSize: "12.5px", color: tokens.textSecondary }}>
                       Choose the plan that fits your business needs. You can upgrade or downgrade anytime.
                     </p>
                   </div>
@@ -1654,8 +1637,8 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
+                      background: isDark ? tokens.surfaceBg : "#f8fafc",
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "8px",
                       padding: "3px",
                       gap: "2px",
@@ -1669,11 +1652,12 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         borderRadius: "6px",
                         fontSize: "12px",
                         fontWeight: billingInterval === "monthly" ? 700 : 500,
-                        background: billingInterval === "monthly" ? "#ffffff" : "transparent",
-                        color: billingInterval === "monthly" ? "#0f172a" : "#64748b",
-                        boxShadow: billingInterval === "monthly" ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
+                        background: billingInterval === "monthly" ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
+                        color: billingInterval === "monthly" ? tokens.textPrimary : tokens.textSecondary,
+                        boxShadow: billingInterval === "monthly" ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06)") : "none",
                         border: "none",
                         cursor: "pointer",
+                        transition: "all 0.15s ease",
                       }}
                     >
                       Monthly
@@ -1686,11 +1670,12 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         borderRadius: "6px",
                         fontSize: "12px",
                         fontWeight: billingInterval === "3months" ? 700 : 500,
-                        background: billingInterval === "3months" ? "#ffffff" : "transparent",
-                        color: billingInterval === "3months" ? "#0f172a" : "#64748b",
-                        boxShadow: billingInterval === "3months" ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
+                        background: billingInterval === "3months" ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
+                        color: billingInterval === "3months" ? tokens.textPrimary : tokens.textSecondary,
+                        boxShadow: billingInterval === "3months" ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06)") : "none",
                         border: "none",
                         cursor: "pointer",
+                        transition: "all 0.15s ease",
                       }}
                     >
                       3 Months
@@ -1703,11 +1688,12 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         borderRadius: "6px",
                         fontSize: "12px",
                         fontWeight: billingInterval === "yearly" ? 700 : 500,
-                        background: billingInterval === "yearly" ? "#ffffff" : "transparent",
-                        color: billingInterval === "yearly" ? "#0f172a" : "#64748b",
-                        boxShadow: billingInterval === "yearly" ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
+                        background: billingInterval === "yearly" ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
+                        color: billingInterval === "yearly" ? tokens.textPrimary : tokens.textSecondary,
+                        boxShadow: billingInterval === "yearly" ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06)") : "none",
                         border: "none",
                         cursor: "pointer",
+                        transition: "all 0.15s ease",
                       }}
                     >
                       Yearly
@@ -1729,7 +1715,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                       border: selectedDetails.current_plan === "FREE" ? "2px solid #3b82f6" : "1px solid #e2e8f0",
                       borderRadius: "14px",
                       padding: "20px",
-                      background: "#ffffff",
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
@@ -1758,8 +1744,8 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                             style={{
                               fontSize: "11px",
                               fontWeight: 700,
-                              color: "#2563eb",
-                              background: "#eff6ff",
+                              color: isDark ? "#93c5fd" : "#2563eb",
+                              background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
                               padding: "3px 8px",
                               borderRadius: "5px",
                               letterSpacing: "0.03em",
@@ -1770,17 +1756,17 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         )}
                       </div>
 
-                      <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: "#0f172a" }}>Free</h4>
-                      <div style={{ fontSize: "12.5px", color: "#64748b", marginBottom: "14px" }}>
+                      <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>Free</h4>
+                      <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginBottom: "14px" }}>
                         Forever free base cycle
                       </div>
 
-                      <div style={{ fontSize: "28px", fontWeight: 800, color: "#0f172a", marginBottom: "18px" }}>
+                      <div style={{ fontSize: "28px", fontWeight: 800, color: tokens.textPrimary, marginBottom: "18px" }}>
                         ₹0
                       </div>
 
                       {/* Feature checklist */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: "#334155" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: tokens.textPrimary }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
                           <CheckIcon /> <span>200 products (shared pool)</span>
                         </div>
@@ -1791,10 +1777,10 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           <CheckIcon /> <span>5% Platform fee</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CrossIcon /> <span style={{ color: "#64748b" }}>Custom domain</span>
+                          <CrossIcon /> <span style={{ color: tokens.textSecondary }}>Custom domain</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CrossIcon /> <span style={{ color: "#64748b" }}>Team & roles</span>
+                          <CrossIcon /> <span style={{ color: tokens.textSecondary }}>Team & roles</span>
                         </div>
                       </div>
                     </div>
@@ -1807,8 +1793,8 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                             width: "100%",
                             padding: "10px",
                             borderRadius: "8px",
-                            background: "#e8edf5",
-                            color: "#475569",
+                            background: isDark ? "rgba(255, 255, 255, 0.06)" : "#e8edf5",
+                            color: tokens.textSecondary,
                             border: "none",
                             fontSize: "13px",
                             fontWeight: 700,
@@ -1829,7 +1815,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                             width: "100%",
                             padding: "10px",
                             borderRadius: "8px",
-                            background: "#ffffff",
+                            background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                             color: "#dc2626",
                             border: "1px solid #fca5a5",
                             fontSize: "13px",
@@ -1846,15 +1832,15 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                   {/* STARTER PLAN */}
                   <div
                     style={{
-                      border: selectedDetails.current_plan === "STARTER" ? "2px solid #2563eb" : "1px solid #e2e8f0",
+                      border: selectedDetails.current_plan === "STARTER" ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : `1px solid ${tokens.border}`, 
+                      boxShadow: selectedDetails.current_plan === "STARTER" ? (isDark ? "0 4px 14px rgba(59, 130, 246, 0.2)" : "0 4px 14px rgba(37, 99, 235, 0.08)") : "none",
                       borderRadius: "14px",
                       padding: "20px",
-                      background: "#ffffff",
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
-                      boxShadow: selectedDetails.current_plan === "STARTER" ? "0 4px 14px rgba(37,99,235,0.08)" : "none",
-                      transition: "all 0.15s ease",
+                      
                     }}
                   >
                     <div>
@@ -1865,7 +1851,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                             width: "40px",
                             height: "40px",
                             borderRadius: "50%",
-                            background: "#eff6ff",
+                            background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -1878,8 +1864,8 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                             style={{
                               fontSize: "11px",
                               fontWeight: 700,
-                              color: "#2563eb",
-                              background: "#eff6ff",
+                              color: isDark ? "#93c5fd" : "#2563eb",
+                              background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
                               padding: "3px 8px",
                               borderRadius: "5px",
                               letterSpacing: "0.03em",
@@ -1890,16 +1876,16 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         )}
                       </div>
 
-                      <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: "#0f172a" }}>Starter</h4>
-                      <div style={{ fontSize: "12.5px", color: "#64748b", marginBottom: "14px" }}>
+                      <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>Starter</h4>
+                      <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginBottom: "14px" }}>
                         Best for small businesses
                       </div>
 
                       <div style={{ marginBottom: "18px" }}>
-                        <div style={{ fontSize: "28px", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>
+                        <div style={{ fontSize: "28px", fontWeight: 800, color: tokens.textPrimary, lineHeight: 1 }}>
                           {billingInterval === "yearly" ? "₹1,999" : billingInterval === "3months" ? "₹549" : "₹199"}
                         </div>
-                        <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
+                        <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "4px" }}>
                           {billingInterval === "yearly"
                             ? "₹166 / mo • billed annually"
                             : billingInterval === "3months"
@@ -1909,7 +1895,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                       </div>
 
                       {/* Feature checklist */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: "#334155" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: tokens.textPrimary }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
                           <CheckIcon /> <span>1,000 dedicated products</span>
                         </div>
@@ -1923,7 +1909,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           <CheckIcon /> <span>1 custom domain</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CrossIcon /> <span style={{ color: "#64748b" }}>Team & roles</span>
+                          <CrossIcon /> <span style={{ color: tokens.textSecondary }}>Team & roles</span>
                         </div>
                       </div>
                     </div>
@@ -1936,8 +1922,8 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                             width: "100%",
                             padding: "10px",
                             borderRadius: "8px",
-                            background: "#e8edf5",
-                            color: "#475569",
+                            background: isDark ? "rgba(255, 255, 255, 0.06)" : "#e8edf5",
+                            color: tokens.textSecondary,
                             border: "none",
                             fontSize: "13px",
                             fontWeight: 700,
@@ -1958,7 +1944,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                             width: "100%",
                             padding: "10px",
                             borderRadius: "8px",
-                            background: "#ffffff",
+                            background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                             color: "#dc2626",
                             border: "1px solid #fca5a5",
                             fontSize: "13px",
@@ -2005,7 +1991,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                       border: selectedDetails.current_plan === "PRO" ? "2px solid #0f62ab" : "1px solid #e2e8f0",
                       borderRadius: "14px",
                       padding: "20px",
-                      background: "#ffffff",
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
@@ -2021,7 +2007,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                             width: "40px",
                             height: "40px",
                             borderRadius: "50%",
-                            background: "#fffbeb",
+                            background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -2047,16 +2033,16 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                         )}
                       </div>
 
-                      <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: "#0f172a" }}>Pro</h4>
-                      <div style={{ fontSize: "12.5px", color: "#64748b", marginBottom: "14px" }}>
+                      <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>Pro</h4>
+                      <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginBottom: "14px" }}>
                         For growing businesses
                       </div>
 
                       <div style={{ marginBottom: "18px" }}>
-                        <div style={{ fontSize: "28px", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>
+                        <div style={{ fontSize: "28px", fontWeight: 800, color: tokens.textPrimary, lineHeight: 1 }}>
                           {billingInterval === "yearly" ? "₹4,999" : billingInterval === "3months" ? "₹1,299" : "₹499"}
                         </div>
-                        <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
+                        <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "4px" }}>
                           {billingInterval === "yearly"
                             ? "₹416 / mo • billed annually"
                             : billingInterval === "3months"
@@ -2066,7 +2052,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                       </div>
 
                       {/* Feature checklist */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: "#334155" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: tokens.textPrimary }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
                           <CheckIcon /> <span>Unlimited products</span>
                         </div>
@@ -2093,8 +2079,8 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                             width: "100%",
                             padding: "10px",
                             borderRadius: "8px",
-                            background: "#e8edf5",
-                            color: "#475569",
+                            background: isDark ? "rgba(255, 255, 255, 0.06)" : "#e8edf5",
+                            color: tokens.textSecondary,
                             border: "none",
                             fontSize: "13px",
                             fontWeight: 700,
@@ -2139,9 +2125,9 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
               {/* BILLING & PAYMENT HISTORY CARD (LAST 3 BILLS) */}
               <div
                 style={{
-                  background: "#ffffff",
+                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                   borderRadius: "16px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "24px 28px",
                   boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
                 }}
@@ -2173,10 +2159,10 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                       <InvoiceFileIcon />
                     </div>
                     <div>
-                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
                         Billing & Payment History
                       </div>
-                      <div style={{ fontSize: "13px", color: "#64748b" }}>
+                      <div style={{ fontSize: "13px", color: tokens.textSecondary }}>
                         View your past payments and download invoices.
                       </div>
                     </div>
@@ -2186,13 +2172,13 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                     type="button"
                     onClick={() => setShowAllInvoices(true)}
                     style={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "10px",
                       padding: "8px 16px",
                       fontSize: "13px",
                       fontWeight: 600,
-                      color: "#1e293b",
+                      color: tokens.textPrimary,
                       cursor: "pointer",
                       display: "inline-flex",
                       alignItems: "center",
@@ -2214,39 +2200,39 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
 
                 {/* History Table */}
                 {invoicesLoading ? (
-                  <div style={{ textAlign: "center", padding: "32px 0", color: "#64748b", fontSize: "13px" }}>
+                  <div style={{ textAlign: "center", padding: "32px 0", color: tokens.textSecondary, fontSize: "13px" }}>
                     <RefreshIcon spin /> Loading invoices...
                   </div>
                 ) : invoices.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "32px 0", color: "#64748b", fontSize: "13px" }}>
+                  <div style={{ textAlign: "center", padding: "32px 0", color: tokens.textSecondary, fontSize: "13px" }}>
                     No past bills found for this website yet.
                   </div>
                 ) : (
-                  <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                  <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: "8px", border: `1px solid ${tokens.border}` }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
                       <thead>
-                        <tr style={{ background: "#f8fafc", color: "#475569", fontSize: "12px", fontWeight: 700 }}>
-                          <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Invoice #</th>
-                          <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Date</th>
-                          <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Description</th>
-                          <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Amount</th>
-                          <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Status</th>
-                          <th style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", textAlign: "right", whiteSpace: "nowrap", width: "50px" }}></th>
+                        <tr style={{ background: isDark ? tokens.surfaceBg : "#f8fafc", color: tokens.textSecondary, fontSize: "12px", fontWeight: 700 }}>
+                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Invoice #</th>
+                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Date</th>
+                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Description</th>
+                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Amount</th>
+                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Status</th>
+                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, textAlign: "right", whiteSpace: "nowrap", width: "50px" }}></th>
                         </tr>
                       </thead>
                       <tbody>
                         {invoices.slice(0, 3).map((inv) => (
-                          <tr key={inv.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                            <td style={{ padding: "11px 14px", color: "#0f172a", fontWeight: 700, fontFamily: "monospace", fontSize: "12px", whiteSpace: "nowrap" }}>
+                          <tr key={inv.id} style={{ borderBottom: `1px solid ${tokens.border}` }}>
+                            <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 700, fontFamily: "monospace", fontSize: "12px", whiteSpace: "nowrap" }}>
                               {inv.invoice_number}
                             </td>
-                            <td style={{ padding: "11px 14px", color: "#334155", fontWeight: 500, whiteSpace: "nowrap" }}>
+                            <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 500, whiteSpace: "nowrap" }}>
                               {formatRenewalDate(inv.invoice_date)}
                             </td>
-                            <td style={{ padding: "11px 14px", color: "#0f172a", fontWeight: 600, whiteSpace: "nowrap" }}>
+                            <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 600, whiteSpace: "nowrap" }}>
                               {cleanPlanDescription(inv.plan_name, inv.plan, inv.billing_interval)}
                             </td>
-                            <td style={{ padding: "11px 14px", color: "#0f172a", fontWeight: 700, whiteSpace: "nowrap" }}>
+                            <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 700, whiteSpace: "nowrap" }}>
                               ₹{inv.total_amount.toFixed(2)}
                             </td>
                             <td style={{ padding: "11px 14px", whiteSpace: "nowrap" }}>
@@ -2279,8 +2265,8 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                                   display: "inline-flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  background: "#f8fafc",
-                                  border: "1px solid #e2e8f0",
+                                  background: isDark ? tokens.surfaceBg : "#f8fafc",
+                                  border: `1px solid ${tokens.border}`,
                                   color: "#2563eb",
                                   cursor: "pointer",
                                   transition: "all 0.15s ease",
@@ -2312,19 +2298,19 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
               {selectedDetails.current_plan === "FREE" && selectedDetails.product_usage?.pool_detail && (
                 <div
                   style={{
-                    background: "#ffffff",
+                    background: isDark ? tokens.surfaceBg : "#ffffff",
                     borderRadius: "16px",
-                    border: "1px solid #e2e8f0",
+                    border: `1px solid ${tokens.border}`,
                     padding: "20px 24px",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                    boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.02)",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                     <div>
-                      <div style={{ fontSize: "14.5px", fontWeight: 700, color: "#0f172a" }}>Shared Free Product Pool</div>
-                      <div style={{ fontSize: "12px", color: "#64748b" }}>200 active products shared across all Free websites under your account</div>
+                      <div style={{ fontSize: "14.5px", fontWeight: 700, color: tokens.textPrimary }}>Shared Free Product Pool</div>
+                      <div style={{ fontSize: "12px", color: tokens.textSecondary }}>200 active products shared across all Free websites under your account</div>
                     </div>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#2563eb" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: isDark ? "#60a5fa" : "#2563eb" }}>
                       {selectedDetails.product_usage.pool_detail.total_used} / 200 Products
                     </span>
                   </div>
@@ -2337,16 +2323,20 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                           display: "flex",
                           justifyContent: "space-between",
                           padding: "9px 12px",
-                          background: sibling.website_id === selectedWebsiteId ? "#eff6ff" : "#f8fafc",
+                          background: sibling.website_id === selectedWebsiteId
+                            ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                            : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
                           borderRadius: "8px",
                           fontSize: "12.5px",
-                          border: sibling.website_id === selectedWebsiteId ? "1px solid #bfdbfe" : "none",
+                          border: sibling.website_id === selectedWebsiteId
+                            ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe"}`
+                            : `1px solid ${tokens.border}`,
                         }}
                       >
-                        <span style={{ fontWeight: sibling.website_id === selectedWebsiteId ? 700 : 500, color: "#0f172a" }}>
+                        <span style={{ fontWeight: sibling.website_id === selectedWebsiteId ? 700 : 500, color: tokens.textPrimary }}>
                           {formatSiteName(sibling.website_name)} {sibling.website_id === selectedWebsiteId && "(This Website)"}
                         </span>
-                        <span style={{ fontWeight: 600, color: "#475569" }}>
+                        <span style={{ fontWeight: 600, color: tokens.textSecondary }}>
                           {sibling.active_products_count} active products
                         </span>
                       </div>
@@ -2380,23 +2370,23 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
         >
           <div
             style={{
-              background: "#ffffff",
+              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
               borderRadius: "14px",
               padding: "22px",
               maxWidth: "440px",
               width: "100%",
               boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#dc2626", marginBottom: "10px" }}>
               <AlertTriangleIcon />
               <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>Confirm Plan Downgrade</h3>
             </div>
-            <p style={{ fontSize: "13px", color: "#334155", lineHeight: 1.5, margin: "0 0 14px 0" }}>
+            <p style={{ fontSize: "13px", color: tokens.textPrimary, lineHeight: 1.5, margin: "0 0 14px 0" }}>
               Downgrading to <strong>{downgradeTargetPlan}</strong> will immediately move excess products to <strong>Draft</strong> status with reason <code>SYSTEM_LIMIT_EXCEEDED</code>.
             </p>
-            <div style={{ background: "#fef2f2", borderRadius: "6px", padding: "10px", border: "1px solid #fee2e2", fontSize: "11.5px", color: "#991b1b", marginBottom: "16px" }}>
+            <div style={{ background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2", borderRadius: "6px", padding: "10px", border: isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fee2e2", fontSize: "11.5px", color: isDark ? "#fca5a5" : "#991b1b", marginBottom: "16px" }}>
               • Custom domain will be unlinked.<br />
               {selectedDetails?.current_plan === "PRO" && "• Team members will lose access immediately.\n"}
               • This change takes effect immediately.
@@ -2409,8 +2399,8 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                 style={{
                   padding: "8px 14px",
                   borderRadius: "6px",
-                  background: "#f1f5f9",
-                  color: "#475569",
+                  background: isDark ? tokens.surfaceBg : "#f1f5f9",
+                  color: tokens.textSecondary,
                   border: "none",
                   fontSize: "12.5px",
                   fontWeight: 600,
@@ -2443,3 +2433,5 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
     </div>
   );
 };
+
+

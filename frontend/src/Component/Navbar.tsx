@@ -281,6 +281,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchActive, setSearchActive] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsUnreadCount, setNotificationsUnreadCount] = useState(0);
   const handleUnreadCountChange = useCallback((cnt: number) => {
@@ -1625,10 +1626,12 @@ const Navbar: React.FC<NavbarProps> = (props) => {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        zIndex: accountMenuOpen || mobileMenuOpen ? 99999 : 1000,
+        zIndex: accountMenuOpen || mobileMenuOpen ? 99999 : isSelected ? 100000 : (editMode && isHovered) ? 99990 : 1000,
         cursor: editMode ? "pointer" : undefined,
         overflow: "visible",
       }}
+      onMouseEnter={() => editMode && setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <style key="navbar-placeholder-style">{`
         #storefront-navbar input::placeholder {
@@ -1643,13 +1646,19 @@ const Navbar: React.FC<NavbarProps> = (props) => {
             style={{
               position: "absolute",
               inset: 0,
-              border: isSelected ? "2px solid #2563eb" : "1.5px dashed transparent",
+              border: isSelected
+                ? "2px solid #2563eb"
+                : isHovered
+                  ? "1.5px dashed #3b82f6"
+                  : "1.5px dashed transparent",
               pointerEvents: "none",
               zIndex: 100001,
               transition: "all 0.15s ease",
               boxShadow: isSelected
                 ? "inset 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(37, 99, 235, 0.22)"
-                : "none",
+                : isHovered
+                  ? "inset 0 0 0 2px rgba(59, 130, 246, 0.1)"
+                  : "none",
             }}
           />
           {isSelected && (
@@ -1793,14 +1802,20 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 style={{
                   position: "absolute",
                   inset: "-2px",
-                  border: isSelected ? "2px solid #2563eb" : "1.5px dashed transparent",
+                  border: isSelected
+                    ? "2px solid #2563eb"
+                    : isHovered
+                      ? "1.5px dashed #3b82f6"
+                      : "1.5px dashed transparent",
                   borderRadius: `calc(${shellRadius} + 2px)`,
                   pointerEvents: "none",
                   zIndex: 100001,
                   transition: "all 0.15s ease",
                   boxShadow: isSelected
                     ? "0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(37, 99, 235, 0.22)"
-                    : "none",
+                    : isHovered
+                      ? "0 0 0 2px rgba(59, 130, 246, 0.1)"
+                      : "none",
                 }}
               />
               {isSelected && (

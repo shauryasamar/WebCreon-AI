@@ -1,11 +1,14 @@
 import React, { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
+import { useAdminTheme } from "../context/ThemeContext";
 import WebCreonAnimatedLogo from "../Component/WebCreonAnimatedLogo";
+import AdminThemeToggle from "../Component/AdminThemeToggle";
 
 export default function AdminResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { isDark, tokens } = useAdminTheme();
 
   const initialEmail = searchParams.get("email") || "";
   const initialToken = searchParams.get("token") || "";
@@ -85,10 +88,13 @@ export default function AdminResetPasswordPage() {
         width: "100vw",
         display: "flex",
         overflow: "hidden",
-        background: "#ffffff",
+        background: tokens.workspaceBg,
+        color: tokens.textPrimary,
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        position: "relative",
       }}
     >
+      <AdminThemeToggle style={{ position: "fixed", top: "16px", right: "16px", zIndex: 100 }} />
       <style>{`
         @media (max-width: 860px) {
           .wn-reset-split-container {
@@ -100,7 +106,7 @@ export default function AdminResetPasswordPage() {
             width: 100% !important;
             padding: 24px 16px 12px 16px !important;
             border-right: none !important;
-            border-bottom: 1px solid #e2e8f0 !important;
+            border-bottom: 1px solid ${tokens.border} !important;
           }
           .wn-reset-right-panel {
             flex: 1 1 auto !important;
@@ -124,12 +130,11 @@ export default function AdminResetPasswordPage() {
           className="wn-reset-left-panel"
           style={{
             flex: "1 1 58%",
-            background: "#f8fafc",
-            backgroundImage: `
-              radial-gradient(at 50% 0%, rgba(37, 99, 235, 0.04) 0px, transparent 50%),
-              radial-gradient(at 100% 100%, rgba(249, 128, 18, 0.03) 0px, transparent 50%)
-            `,
-            borderRight: "1px solid #e2e8f0",
+            background: tokens.elevatedSurfaceBg,
+            backgroundImage: isDark
+              ? `radial-gradient(at 50% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(249, 115, 22, 0.05) 0px, transparent 50%)`
+              : `radial-gradient(at 50% 0%, rgba(37, 99, 235, 0.04) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(249, 128, 18, 0.03) 0px, transparent 50%)`,
+            borderRight: `1px solid ${tokens.border}`,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -156,7 +161,7 @@ export default function AdminResetPasswordPage() {
             justifyContent: "center",
             alignItems: "center",
             padding: "32px 40px",
-            background: "#ffffff",
+            background: tokens.surfaceBg,
             boxSizing: "border-box",
           }}
         >
@@ -174,13 +179,13 @@ export default function AdminResetPasswordPage() {
                   margin: 0,
                   fontSize: "20px",
                   fontWeight: 700,
-                  color: "#0f172a",
+                  color: tokens.textPrimary,
                   letterSpacing: "-0.01em",
                 }}
               >
                 Reset Password
               </h2>
-              <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#64748b" }}>
+              <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: tokens.textSecondary }}>
                 Set a new password for your WebCreon AI admin workspace
               </p>
             </div>
@@ -191,9 +196,9 @@ export default function AdminResetPasswordPage() {
                   style={{
                     padding: "14px",
                     borderRadius: "8px",
-                    background: "#f0fdf4",
-                    border: "1px solid #bbf7d0",
-                    color: "#166534",
+                    background: isDark ? "rgba(16, 185, 129, 0.15)" : "#f0fdf4",
+                    border: `1px solid ${isDark ? "rgba(16, 185, 129, 0.35)" : "#bbf7d0"}`,
+                    color: isDark ? "#86efac" : "#166534",
                     fontSize: "13px",
                     fontWeight: 600,
                     textAlign: "center",
@@ -208,7 +213,7 @@ export default function AdminResetPasswordPage() {
                     height: "40px",
                     borderRadius: "8px",
                     border: "none",
-                    background: "#2563eb",
+                    background: tokens.accent,
                     color: "#ffffff",
                     fontSize: "13px",
                     fontWeight: 700,
@@ -221,7 +226,7 @@ export default function AdminResetPasswordPage() {
             ) : (
               <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#334155" }}>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>
                     Admin Email Address
                   </label>
                   <input
@@ -233,16 +238,18 @@ export default function AdminResetPasswordPage() {
                     style={{
                       height: "36px",
                       borderRadius: "6px",
-                      border: "1px solid #cbd5e1",
+                      border: `1px solid ${tokens.border}`,
                       padding: "0 10px",
                       fontSize: "12px",
+                      color: tokens.textPrimary,
+                      background: tokens.elevatedSurfaceBg,
                       outline: "none",
                     }}
                   />
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#334155" }}>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>
                     Reset Token or 6-Digit OTP
                   </label>
                   <input
@@ -254,10 +261,12 @@ export default function AdminResetPasswordPage() {
                     style={{
                       height: "36px",
                       borderRadius: "6px",
-                      border: "1px solid #cbd5e1",
+                      border: `1px solid ${tokens.border}`,
                       padding: "0 10px",
                       fontSize: "12px",
                       fontFamily: "monospace",
+                      color: tokens.textPrimary,
+                      background: tokens.elevatedSurfaceBg,
                       outline: "none",
                     }}
                   />
@@ -265,7 +274,7 @@ export default function AdminResetPasswordPage() {
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label style={{ fontSize: "11px", fontWeight: 600, color: "#334155" }}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>
                       New Password
                     </label>
                     <div style={{ position: "relative" }}>
@@ -279,9 +288,11 @@ export default function AdminResetPasswordPage() {
                           width: "100%",
                           height: "36px",
                           borderRadius: "6px",
-                          border: "1px solid #cbd5e1",
+                          border: `1px solid ${tokens.border}`,
                           padding: "0 28px 0 8px",
                           fontSize: "12px",
+                          color: tokens.textPrimary,
+                          background: tokens.elevatedSurfaceBg,
                           outline: "none",
                           boxSizing: "border-box",
                         }}
@@ -296,7 +307,7 @@ export default function AdminResetPasswordPage() {
                           transform: "translateY(-50%)",
                           background: "none",
                           border: "none",
-                          color: "#64748b",
+                          color: tokens.textMuted,
                           fontSize: "10px",
                           cursor: "pointer",
                         }}
@@ -307,7 +318,7 @@ export default function AdminResetPasswordPage() {
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label style={{ fontSize: "11px", fontWeight: 600, color: "#334155" }}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>
                       Confirm Password
                     </label>
                     <input
@@ -319,9 +330,11 @@ export default function AdminResetPasswordPage() {
                       style={{
                         height: "36px",
                         borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
+                        border: `1px solid ${tokens.border}`,
                         padding: "0 8px",
                         fontSize: "12px",
+                        color: tokens.textPrimary,
+                        background: tokens.elevatedSurfaceBg,
                         outline: "none",
                       }}
                     />
@@ -333,9 +346,9 @@ export default function AdminResetPasswordPage() {
                     style={{
                       borderRadius: "6px",
                       padding: "6px 8px",
-                      background: "#fef2f2",
-                      border: "1px solid #fecaca",
-                      color: "#991b1b",
+                      background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                      border: `1px solid ${isDark ? "rgba(239, 68, 68, 0.35)" : "#fecaca"}`,
+                      color: isDark ? "#fca5a5" : "#991b1b",
                       fontSize: "11px",
                     }}
                   >
@@ -351,11 +364,12 @@ export default function AdminResetPasswordPage() {
                     height: "38px",
                     borderRadius: "6px",
                     border: "none",
-                    background: submitting ? "#93c5fd" : "#2563eb",
+                    background: submitting ? (isDark ? "#3b82f6aa" : "#93c5fd") : tokens.accent,
                     color: "#ffffff",
                     fontSize: "12px",
                     fontWeight: 700,
                     cursor: submitting ? "not-allowed" : "pointer",
+                    boxShadow: "0 1px 3px rgba(37,99,235,0.2)",
                   }}
                 >
                   {submitting ? "Updating Password..." : "Update Password"}
@@ -367,14 +381,14 @@ export default function AdminResetPasswordPage() {
               style={{
                 marginTop: "16px",
                 paddingTop: "12px",
-                borderTop: "1px solid #f1f5f9",
+                borderTop: `1px solid ${tokens.border}`,
                 textAlign: "center",
                 fontSize: "12px",
-                color: "#64748b",
+                color: tokens.textSecondary,
               }}
             >
               Remembered your password?{" "}
-              <Link to="/admin/login" style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
+              <Link to="/admin/login" style={{ color: tokens.accent, fontWeight: 600, textDecoration: "none" }}>
                 Back to Sign In
               </Link>
             </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useAdminTheme } from "../context/ThemeContext";
 import {
   AnalyticsData,
   DATE_RANGE_OPTIONS,
@@ -98,7 +99,7 @@ const IconTrendingDown = () => (
 );
 
 const IconPackage = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="16.5" y1="9.4" x2="7.5" y2="4.21" />
     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
     <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
@@ -143,6 +144,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
   const params = useParams<{ siteId?: string }>();
   const navigate = useNavigate();
   const siteId = propSiteId || params.siteId || "";
+  const { isDark, tokens } = useAdminTheme();
 
   const [dateRange, setDateRange] = useState<DateRangeKey>("30d");
   const [metricTab, setMetricTab] = useState<"revenue" | "orders">("revenue");
@@ -338,8 +340,8 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
   }, [data]);
 
   const cardStyle: React.CSSProperties = {
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
+    background: tokens.surfaceBg,
+    border: `1px solid ${tokens.border}`,
     borderRadius: "10px",
     boxShadow: "0 1px 3px rgba(0,0,0,0.03), 0 1px 2px rgba(0,0,0,0.02)",
     padding: "16px 14px",
@@ -356,7 +358,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
     <div
       style={{
         width: "100%",
-        color: "#0f172a",
+        color: tokens.textPrimary,
         display: "flex",
         flexDirection: "column",
         gap: "10px",
@@ -393,8 +395,8 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
       {/* 1. TOP HEADER CARD (Segmented Mode Pill on Left + Header Action Controls on Right) */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: tokens.surfaceBg,
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
           padding: "10px 14px",
           boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
@@ -412,10 +414,10 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: tokens.elevatedSurfaceBg,
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
             <button
@@ -424,8 +426,8 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 borderRadius: "6px",
                 padding: "6px 16px",
                 border: "none",
-                background: "#ffffff",
-                color: "#0f172a",
+                background: tokens.surfaceBg,
+                color: tokens.textPrimary,
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
                 fontSize: "13px",
                 fontWeight: 700,
@@ -451,22 +453,22 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
               width: "36px",
               display: "grid",
               placeItems: "center",
-              border: "1px solid #cbd5e1",
+              border: `1px solid ${tokens.border}`,
               borderRadius: "7px",
-              background: "#ffffff",
-              color: "#334155",
+              background: tokens.surfaceBg,
+              color: tokens.textSecondary,
               cursor: "pointer",
               transition: "all 0.15s ease",
               flexShrink: 0,
               boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#f8fafc";
+              e.currentTarget.style.background = tokens.elevatedSurfaceBg;
               e.currentTarget.style.borderColor = "#94a3b8";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#ffffff";
-              e.currentTarget.style.borderColor = "#cbd5e1";
+              e.currentTarget.style.background = tokens.surfaceBg;
+              e.currentTarget.style.borderColor = tokens.border;
             }}
           >
             <IconRefresh spin={loading} />
@@ -484,23 +486,23 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 alignItems: "center",
                 gap: "7px",
                 borderRadius: "7px",
-                border: "1px solid #cbd5e1",
-                background: "#ffffff",
+                border: `1px solid ${tokens.border}`,
+                background: tokens.surfaceBg,
                 fontSize: "13px",
                 fontWeight: 600,
-                color: "#334155",
+                color: tokens.textSecondary,
                 cursor: "pointer",
                 boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                 whiteSpace: "nowrap",
                 transition: "all 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#f8fafc";
+                e.currentTarget.style.background = tokens.elevatedSurfaceBg;
                 e.currentTarget.style.borderColor = "#94a3b8";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#ffffff";
-                e.currentTarget.style.borderColor = "#cbd5e1";
+                e.currentTarget.style.background = tokens.surfaceBg;
+                e.currentTarget.style.borderColor = tokens.border;
               }}
             >
               <IconCalendar />
@@ -515,9 +517,9 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   top: "calc(100% + 4px)",
                   right: 0,
                   width: "175px",
-                  background: "#ffffff",
+                  background: tokens.surfaceBg,
                   borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
                   zIndex: 100,
                   overflow: "hidden",
@@ -536,7 +538,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                       borderRadius: "5px",
                       border: "none",
                       background: dateRange === opt.key ? "#eff6ff" : "transparent",
-                      color: dateRange === opt.key ? "#2563eb" : "#1e293b",
+                      color: dateRange === opt.key ? "#2563eb" : tokens.textPrimary,
                       fontSize: "12.5px",
                       fontWeight: dateRange === opt.key ? 600 : 500,
                       cursor: "pointer",
@@ -545,7 +547,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                       justifyContent: "space-between",
                     }}
                     onMouseEnter={(e) => {
-                      if (dateRange !== opt.key) e.currentTarget.style.background = "#f8fafc";
+                      if (dateRange !== opt.key) e.currentTarget.style.background = tokens.elevatedSurfaceBg;
                     }}
                     onMouseLeave={(e) => {
                       if (dateRange !== opt.key) e.currentTarget.style.background = "transparent";
@@ -571,23 +573,23 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 alignItems: "center",
                 gap: "7px",
                 borderRadius: "7px",
-                border: "1px solid #cbd5e1",
-                background: "#ffffff",
+                border: `1px solid ${tokens.border}`,
+                background: tokens.surfaceBg,
                 fontSize: "13px",
                 fontWeight: 600,
-                color: "#334155",
+                color: tokens.textSecondary,
                 cursor: "pointer",
                 boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                 whiteSpace: "nowrap",
                 transition: "all 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#f8fafc";
+                e.currentTarget.style.background = tokens.elevatedSurfaceBg;
                 e.currentTarget.style.borderColor = "#94a3b8";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#ffffff";
-                e.currentTarget.style.borderColor = "#cbd5e1";
+                e.currentTarget.style.background = tokens.surfaceBg;
+                e.currentTarget.style.borderColor = tokens.border;
               }}
             >
               <IconDownload />
@@ -602,9 +604,9 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   top: "calc(100% + 4px)",
                   right: 0,
                   width: "195px",
-                  background: "#ffffff",
+                  background: tokens.surfaceBg,
                   borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
                   zIndex: 100,
                   overflow: "hidden",
@@ -621,14 +623,14 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                     borderRadius: "5px",
                     border: "none",
                     background: "transparent",
-                    color: "#1e293b",
+                    color: tokens.textPrimary,
                     fontSize: "12.5px",
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = tokens.elevatedSurfaceBg)}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <IconFileText />
@@ -645,14 +647,14 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                     borderRadius: "5px",
                     border: "none",
                     background: "transparent",
-                    color: "#1e293b",
+                    color: tokens.textPrimary,
                     fontSize: "12.5px",
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = tokens.elevatedSurfaceBg)}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <IconFilePdf />
@@ -679,19 +681,19 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "10px",
               padding: "20px",
               width: "340px",
               maxWidth: "90%",
               boxShadow: "0 20px 35px rgba(0,0,0,0.15)",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
             <h3 style={{ margin: "0 0 14px", fontSize: "15px", fontWeight: 700 }}>Select Custom Date Range</h3>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               <div>
-                <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: "#64748b", marginBottom: "4px" }}>
+                <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "4px" }}>
                   Start Date
                 </label>
                 <input
@@ -702,7 +704,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                     width: "100%",
                     padding: "7px 10px",
                     borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
+                    border: `1px solid ${tokens.border}`,
                     fontSize: "12.5px",
                     boxSizing: "border-box",
                   }}
@@ -710,7 +712,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: "#64748b", marginBottom: "4px" }}>
+                <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "4px" }}>
                   End Date
                 </label>
                 <input
@@ -721,7 +723,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                     width: "100%",
                     padding: "7px 10px",
                     borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
+                    border: `1px solid ${tokens.border}`,
                     fontSize: "12.5px",
                     boxSizing: "border-box",
                   }}
@@ -735,12 +737,12 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   style={{
                     padding: "7px 12px",
                     borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
-                    background: "#ffffff",
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.surfaceBg,
                     fontSize: "12.5px",
                     fontWeight: 600,
                     cursor: "pointer",
-                    color: "#64748b",
+                    color: tokens.textSecondary,
                   }}
                 >
                   Cancel
@@ -822,15 +824,16 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 width: "32px",
                 height: "32px",
                 borderRadius: "8px",
-                background: "#eff6ff",
+                background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                border: isDark ? "1px solid rgba(59, 130, 246, 0.25)" : "none",
                 display: "grid",
                 placeItems: "center",
                 flexShrink: 0,
               }}
             >
-              <IconUsers color="#2563eb" />
+              <IconUsers color={isDark ? "#60a5fa" : "#2563eb"} />
             </div>
-            <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               Visitors
             </span>
           </div>
@@ -839,7 +842,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
             style={{
               fontSize: "clamp(18px, 1.8vw, 24px)",
               fontWeight: 700,
-              color: "#0f172a",
+              color: tokens.textPrimary,
               marginBottom: "4px",
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -869,7 +872,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 {Math.abs(data.overview.visitors_change)}%
               </span>
             ) : null}
-            <span style={{ color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ color: tokens.textMuted, overflow: "hidden", textOverflow: "ellipsis" }}>
               {data && data.overview.visitors > 0 && data.overview.comparison_text ? data.overview.comparison_text : "No prior period data"}
             </span>
           </div>
@@ -883,15 +886,16 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 width: "32px",
                 height: "32px",
                 borderRadius: "8px",
-                background: "#ecfdf5",
+                background: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5",
+                border: isDark ? "1px solid rgba(16, 185, 129, 0.25)" : "none",
                 display: "grid",
                 placeItems: "center",
                 flexShrink: 0,
               }}
             >
-              <IconCart color="#10b981" />
+              <IconCart color={isDark ? "#34d399" : "#10b981"} />
             </div>
-            <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               Orders
             </span>
           </div>
@@ -900,7 +904,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
             style={{
               fontSize: "clamp(18px, 1.8vw, 24px)",
               fontWeight: 700,
-              color: "#0f172a",
+              color: tokens.textPrimary,
               marginBottom: "4px",
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -930,7 +934,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 {Math.abs(data.overview.orders_change)}%
               </span>
             ) : null}
-            <span style={{ color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ color: tokens.textMuted, overflow: "hidden", textOverflow: "ellipsis" }}>
               {data && data.overview.orders > 0 && data.overview.comparison_text ? data.overview.comparison_text : "No prior period data"}
             </span>
           </div>
@@ -944,15 +948,16 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 width: "32px",
                 height: "32px",
                 borderRadius: "8px",
-                background: "#f5f3ff",
+                background: isDark ? "rgba(168, 85, 247, 0.15)" : "#f5f3ff",
+                border: isDark ? "1px solid rgba(168, 85, 247, 0.25)" : "none",
                 display: "grid",
                 placeItems: "center",
                 flexShrink: 0,
               }}
             >
-              <IconTag color="#7c3aed" />
+              <IconTag color={isDark ? "#c084fc" : "#7c3aed"} />
             </div>
-            <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               Revenue
             </span>
           </div>
@@ -961,7 +966,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
             style={{
               fontSize: "clamp(18px, 1.8vw, 24px)",
               fontWeight: 700,
-              color: "#0f172a",
+              color: tokens.textPrimary,
               marginBottom: "4px",
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -991,7 +996,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 {Math.abs(data.overview.revenue_change)}%
               </span>
             ) : null}
-            <span style={{ color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ color: tokens.textMuted, overflow: "hidden", textOverflow: "ellipsis" }}>
               {data && data.overview.revenue > 0 && data.overview.comparison_text ? data.overview.comparison_text : "No prior period data"}
             </span>
           </div>
@@ -1005,15 +1010,16 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 width: "32px",
                 height: "32px",
                 borderRadius: "8px",
-                background: "#fff7ed",
+                background: isDark ? "rgba(249, 115, 22, 0.15)" : "#fff7ed",
+                border: isDark ? "1px solid rgba(249, 115, 22, 0.25)" : "none",
                 display: "grid",
                 placeItems: "center",
                 flexShrink: 0,
               }}
             >
-              <IconPercent color="#ea580c" />
+              <IconPercent color={isDark ? "#fb923c" : "#ea580c"} />
             </div>
-            <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               Conversion Rate
             </span>
           </div>
@@ -1022,7 +1028,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
             style={{
               fontSize: "clamp(18px, 1.8vw, 24px)",
               fontWeight: 700,
-              color: "#0f172a",
+              color: tokens.textPrimary,
               marginBottom: "4px",
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -1052,7 +1058,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 {Math.abs(data.overview.conversion_rate_change)}%
               </span>
             ) : null}
-            <span style={{ color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ color: tokens.textMuted, overflow: "hidden", textOverflow: "ellipsis" }}>
               {data && data.overview.conversion_rate > 0 && data.overview.comparison_text ? data.overview.comparison_text : "No prior period data"}
             </span>
           </div>
@@ -1083,7 +1089,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
               gap: "8px",
             }}
           >
-            <span style={{ fontSize: "14.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: "14.5px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap" }}>
               Revenue & Orders
             </span>
 
@@ -1091,7 +1097,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
             <div
               style={{
                 display: "inline-flex",
-                background: "#f1f5f9",
+                background: tokens.elevatedSurfaceBg,
                 borderRadius: "7px",
                 padding: "2.5px",
                 flexShrink: 0,
@@ -1105,7 +1111,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   borderRadius: "5px",
                   border: "none",
                   background: metricTab === "revenue" ? "#2563eb" : "transparent",
-                  color: metricTab === "revenue" ? "#ffffff" : "#64748b",
+                  color: metricTab === "revenue" ? "#ffffff" : tokens.textSecondary,
                   fontSize: "12px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -1123,7 +1129,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   borderRadius: "5px",
                   border: "none",
                   background: metricTab === "orders" ? "#2563eb" : "transparent",
-                  color: metricTab === "orders" ? "#ffffff" : "#64748b",
+                  color: metricTab === "orders" ? "#ffffff" : tokens.textSecondary,
                   fontSize: "12px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -1169,7 +1175,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                         y1={y}
                         x2={paddingLeft + innerWidth}
                         y2={y}
-                        stroke="#f1f5f9"
+                        stroke={isDark ? "rgba(255,255,255,0.08)" : "#f1f5f9"}
                         strokeWidth="1"
                       />
                       <text
@@ -1177,7 +1183,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                         y={y + 4}
                         textAnchor="end"
                         fontSize="10.5"
-                        fill="#94a3b8"
+                        fill={tokens.textMuted}
                         fontFamily="inherit"
                       >
                         {formattedTick}
@@ -1199,14 +1205,14 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                       y1={paddingTop + innerHeight}
                       x2={paddingLeft + innerWidth}
                       y2={paddingTop + innerHeight}
-                      stroke="#e2e8f0"
+                      stroke={isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"}
                       strokeWidth="1.5"
                     />
                     <text
                       x={paddingLeft + innerWidth / 2}
                       y={paddingTop + innerHeight / 2}
                       textAnchor="middle"
-                      fill="#94a3b8"
+                      fill={tokens.textMuted}
                       fontSize="12.5"
                       fontWeight="500"
                     >
@@ -1255,7 +1261,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                           y={paddingTop + innerHeight + 16}
                           textAnchor="middle"
                           fontSize="10.5"
-                          fill="#94a3b8"
+                          fill={tokens.textMuted}
                           fontFamily="inherit"
                         >
                           {pt.point.date}
@@ -1284,7 +1290,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   fontSize: "13px",
                 }}
               >
@@ -1300,8 +1306,8 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   left: `${(coordinates[hoveredPointIndex].x / chartWidth) * 100}%`,
                   top: `${(coordinates[hoveredPointIndex].y / chartHeight) * 100}%`,
                   transform: "translate(-50%, -120%)",
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
+                  background: tokens.surfaceBg,
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "7px",
                   padding: "5px 10px",
                   boxShadow: "0 6px 16px rgba(0,0,0,0.08)",
@@ -1312,10 +1318,10 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   textAlign: "center",
                 }}
               >
-                <div style={{ fontSize: "10px", color: "#64748b", marginBottom: "2px" }}>
+                <div style={{ fontSize: "10px", color: tokens.textSecondary, marginBottom: "2px" }}>
                   {coordinates[hoveredPointIndex].point.full_date}
                 </div>
-                <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>
+                <div style={{ fontWeight: 700, color: tokens.textPrimary, fontSize: "13px" }}>
                   {metricTab === "revenue"
                     ? formatINR(coordinates[hoveredPointIndex].point.revenue)
                     : `${coordinates[hoveredPointIndex].point.orders} Orders`}
@@ -1327,7 +1333,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
 
         {/* TRAFFIC SOURCES CARD */}
         <div style={{ ...cardStyle, display: "flex", flexDirection: "column" }}>
-          <div style={{ fontSize: "14.5px", fontWeight: 700, color: "#0f172a", marginBottom: "14px" }}>
+          <div style={{ fontSize: "14.5px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "14px" }}>
             Traffic Sources
           </div>
 
@@ -1345,7 +1351,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
               {/* SVG Donut */}
               <div style={{ position: "relative", width: "120px", height: "120px", flexShrink: 0 }}>
                 <svg width="120" height="120" viewBox="0 0 150 150" style={{ transform: "rotate(-90deg)" }}>
-                  <circle cx="75" cy="75" r="58" fill="transparent" stroke="#f1f5f9" strokeWidth="20" />
+                  <circle cx="75" cy="75" r="58" fill="transparent" stroke={isDark ? "rgba(255,255,255,0.08)" : "#f1f5f9"} strokeWidth="20" />
                   {donutSegments.map((seg, i) => (
                     <circle
                       key={i}
@@ -1375,10 +1381,10 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                     textAlign: "center",
                   }}
                 >
-                  <span style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", lineHeight: 1.1 }}>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, lineHeight: 1.1 }}>
                     {data?.overview.visitors.toLocaleString("en-IN") || "0"}
                   </span>
-                  <span style={{ fontSize: "10.5px", color: "#64748b" }}>Visitors</span>
+                  <span style={{ fontSize: "10.5px", color: tokens.textSecondary }}>Visitors</span>
                 </div>
               </div>
 
@@ -1405,17 +1411,17 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                           flexShrink: 0,
                         }}
                       />
-                      <span style={{ color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span style={{ color: tokens.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {source.label}
                       </span>
                     </div>
-                    <span style={{ fontWeight: 600, color: "#0f172a", marginLeft: "6px" }}>{source.percentage}%</span>
+                    <span style={{ fontWeight: 600, color: tokens.textPrimary, marginLeft: "6px" }}>{source.percentage}%</span>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            <div style={{ height: "130px", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: "13px" }}>
+            <div style={{ height: "130px", display: "flex", alignItems: "center", justifyContent: "center", color: tokens.textMuted, fontSize: "13px" }}>
               —
             </div>
           )}
@@ -1437,7 +1443,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
         <div style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-              <span style={{ fontSize: "14.5px", fontWeight: 700, color: "#0f172a" }}>Customers</span>
+              <span style={{ fontSize: "14.5px", fontWeight: 700, color: tokens.textPrimary }}>Customers</span>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
@@ -1446,19 +1452,20 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   width: "36px",
                   height: "36px",
                   borderRadius: "8px",
-                  background: "#eff6ff",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  border: isDark ? "1px solid rgba(59, 130, 246, 0.25)" : "none",
                   display: "grid",
                   placeItems: "center",
                   flexShrink: 0,
                 }}
               >
-                <IconUsers color="#2563eb" />
+                <IconUsers color={isDark ? "#60a5fa" : "#2563eb"} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: "clamp(18px, 1.7vw, 24px)", fontWeight: 700, color: "#0f172a", lineHeight: 1.1 }}>
+                <div style={{ fontSize: "clamp(18px, 1.7vw, 24px)", fontWeight: 700, color: tokens.textPrimary, lineHeight: 1.1 }}>
                   {data?.customers.total.toLocaleString("en-IN") || "0"}
                 </div>
-                <div style={{ fontSize: "11.5px", color: "#64748b" }}>Total Customers</div>
+                <div style={{ fontSize: "11.5px", color: tokens.textSecondary }}>Total Customers</div>
               </div>
             </div>
           </div>
@@ -1466,7 +1473,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
           <div
             style={{
               paddingTop: "12px",
-              borderTop: "1px solid #f1f5f9",
+              borderTop: `1px solid ${tokens.border}`,
               display: "flex",
               flexDirection: "column",
               gap: "8px",
@@ -1475,11 +1482,11 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
                 <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", flexShrink: 0 }} />
-                <span style={{ color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ color: tokens.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   New Customers
                 </span>
               </div>
-              <span style={{ fontWeight: 600, color: "#0f172a" }}>
+              <span style={{ fontWeight: 600, color: tokens.textPrimary }}>
                 {data?.customers.new.toLocaleString("en-IN") || "0"}
               </span>
             </div>
@@ -1487,11 +1494,11 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
                 <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#3b82f6", flexShrink: 0 }} />
-                <span style={{ color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ color: tokens.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   Returning Customers
                 </span>
               </div>
-              <span style={{ fontWeight: 600, color: "#0f172a" }}>
+              <span style={{ fontWeight: 600, color: tokens.textPrimary }}>
                 {data?.customers.returning.toLocaleString("en-IN") || "0"}
               </span>
             </div>
@@ -1508,7 +1515,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
               marginBottom: "10px",
             }}
           >
-            <span style={{ fontSize: "14.5px", fontWeight: 700, color: "#0f172a" }}>Top Products</span>
+            <span style={{ fontSize: "14.5px", fontWeight: 700, color: tokens.textPrimary }}>Top Products</span>
             {data && data.top_products && data.top_products.length > 5 && (
               <button
                 type="button"
@@ -1531,11 +1538,11 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
           <div style={{ width: "100%", overflowX: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", tableLayout: "fixed" }}>
               <thead>
-                <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
-                  <th style={{ textAlign: "left", padding: "6px 2px", color: "#94a3b8", fontWeight: 600, width: "20px" }}>#</th>
-                  <th style={{ textAlign: "left", padding: "6px 6px", color: "#94a3b8", fontWeight: 600 }}>PRODUCT</th>
-                  <th style={{ textAlign: "right", padding: "6px 4px", color: "#94a3b8", fontWeight: 600, width: "60px" }}>ORDERS</th>
-                  <th style={{ textAlign: "right", padding: "6px 2px", color: "#94a3b8", fontWeight: 600, width: "80px" }}>REVENUE</th>
+                <tr style={{ borderBottom: `1px solid ${tokens.border}` }}>
+                  <th style={{ textAlign: "left", padding: "6px 2px", color: tokens.textMuted, fontWeight: 600, width: "20px" }}>#</th>
+                  <th style={{ textAlign: "left", padding: "6px 6px", color: tokens.textMuted, fontWeight: 600 }}>PRODUCT</th>
+                  <th style={{ textAlign: "right", padding: "6px 4px", color: tokens.textMuted, fontWeight: 600, width: "60px" }}>ORDERS</th>
+                  <th style={{ textAlign: "right", padding: "6px 2px", color: tokens.textMuted, fontWeight: 600, width: "80px" }}>REVENUE</th>
                 </tr>
               </thead>
               <tbody>
@@ -1543,11 +1550,11 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   (showAllProducts ? data.top_products : data.top_products.slice(0, 5)).map((prod) => (
                     <tr
                       key={prod.rank}
-                      style={{ borderBottom: "1px solid #f8fafc", transition: "background 0.15s ease" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                      style={{ borderBottom: `1px solid ${tokens.border}`, transition: "background 0.15s ease" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = tokens.elevatedSurfaceBg)}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <td style={{ padding: "7px 2px", color: "#64748b", fontWeight: 600 }}>{prod.rank}</td>
+                      <td style={{ padding: "7px 2px", color: tokens.textSecondary, fontWeight: 600 }}>{prod.rank}</td>
                       <td style={{ padding: "7px 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
                           <div
@@ -1555,7 +1562,8 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                               width: "20px",
                               height: "20px",
                               borderRadius: "5px",
-                              background: "#f1f5f9",
+                              background: tokens.elevatedSurfaceBg,
+                              color: tokens.textSecondary,
                               display: "grid",
                               placeItems: "center",
                               flexShrink: 0,
@@ -1563,22 +1571,22 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                           >
                             <IconPackage />
                           </div>
-                          <span style={{ fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <span style={{ fontWeight: 600, color: tokens.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {prod.name}
                           </span>
                         </div>
                       </td>
-                      <td style={{ padding: "7px 4px", textAlign: "right", color: "#64748b" }}>
+                      <td style={{ padding: "7px 4px", textAlign: "right", color: tokens.textSecondary }}>
                         {prod.orders.toLocaleString("en-IN")}
                       </td>
-                      <td style={{ padding: "7px 2px", textAlign: "right", fontWeight: 600, color: "#0f172a" }}>
+                      <td style={{ padding: "7px 2px", textAlign: "right", fontWeight: 600, color: tokens.textPrimary }}>
                         {formatINR(prod.revenue)}
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={4} style={{ padding: "32px 8px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+                    <td colSpan={4} style={{ padding: "32px 8px", textAlign: "center", color: tokens.textMuted, fontSize: "13px" }}>
                       —
                     </td>
                   </tr>
@@ -1590,7 +1598,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
 
         {/* CARD 3: DEVICES */}
         <div style={{ ...cardStyle, display: "flex", flexDirection: "column" }}>
-          <div style={{ fontSize: "14.5px", fontWeight: 700, color: "#0f172a", marginBottom: "14px" }}>
+          <div style={{ fontSize: "14.5px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "14px" }}>
             Devices
           </div>
 
@@ -1607,8 +1615,8 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                       marginBottom: "5px",
                     }}
                   >
-                    <span style={{ color: "#475569", fontWeight: 500 }}>{dev.device}</span>
-                    <span style={{ fontWeight: 600, color: "#0f172a" }}>{dev.percentage}%</span>
+                    <span style={{ color: tokens.textSecondary, fontWeight: 500 }}>{dev.device}</span>
+                    <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{dev.percentage}%</span>
                   </div>
 
                   {/* Horizontal Progress Bar */}
@@ -1617,7 +1625,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                       width: "100%",
                       height: "7px",
                       borderRadius: "9999px",
-                      background: "#f1f5f9",
+                      background: tokens.elevatedSurfaceBg,
                       overflow: "hidden",
                     }}
                   >
@@ -1635,7 +1643,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
               ))}
             </div>
           ) : (
-            <div style={{ height: "130px", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: "13px" }}>
+            <div style={{ height: "130px", display: "flex", alignItems: "center", justifyContent: "center", color: tokens.textMuted, fontSize: "13px" }}>
               —
             </div>
           )}
@@ -1652,9 +1660,9 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
             marginBottom: "10px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "7px", color: tokens.textSecondary }}>
             <IconClock />
-            <span style={{ fontSize: "14.5px", fontWeight: 700, color: "#0f172a" }}>Recent Activity</span>
+            <span style={{ fontSize: "14.5px", fontWeight: 700, color: tokens.textPrimary }}>Recent Activity</span>
           </div>
           {data && data.recent_activity && data.recent_activity.length > 5 && (
             <button
@@ -1678,10 +1686,10 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
         <div style={{ overflowX: "auto", maxHeight: showAllActivity ? "400px" : "none", overflowY: showAllActivity ? "auto" : "visible" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
             <thead>
-              <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
-                <th style={{ textAlign: "left", padding: "7px 8px", color: "#94a3b8", fontWeight: 600, width: "160px" }}>DATE</th>
-                <th style={{ textAlign: "left", padding: "7px 8px", color: "#94a3b8", fontWeight: 600 }}>EVENT</th>
-                <th style={{ textAlign: "left", padding: "7px 8px", color: "#94a3b8", fontWeight: 600 }}>DETAILS</th>
+              <tr style={{ borderBottom: `1px solid ${tokens.border}` }}>
+                <th style={{ textAlign: "left", padding: "7px 8px", color: tokens.textMuted, fontWeight: 600, width: "160px" }}>DATE</th>
+                <th style={{ textAlign: "left", padding: "7px 8px", color: tokens.textMuted, fontWeight: 600 }}>EVENT</th>
+                <th style={{ textAlign: "left", padding: "7px 8px", color: tokens.textMuted, fontWeight: 600 }}>DETAILS</th>
               </tr>
             </thead>
             <tbody>
@@ -1689,18 +1697,18 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 (showAllActivity ? data.recent_activity : data.recent_activity.slice(0, 5)).map((act) => (
                   <tr
                     key={act.id}
-                    style={{ borderBottom: "1px solid #f8fafc", transition: "background 0.15s ease" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                    style={{ borderBottom: `1px solid ${tokens.border}`, transition: "background 0.15s ease" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = tokens.elevatedSurfaceBg)}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
-                    <td style={{ padding: "8px 8px", color: "#64748b" }}>{act.date}</td>
-                    <td style={{ padding: "8px 8px", fontWeight: 600, color: "#0f172a" }}>{act.event}</td>
-                    <td style={{ padding: "8px 8px", color: "#475569" }}>{act.details}</td>
+                    <td style={{ padding: "8px 8px", color: tokens.textSecondary }}>{act.date}</td>
+                    <td style={{ padding: "8px 8px", fontWeight: 600, color: tokens.textPrimary }}>{act.event}</td>
+                    <td style={{ padding: "8px 8px", color: tokens.textSecondary }}>{act.details}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={3} style={{ padding: "32px 8px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+                  <td colSpan={3} style={{ padding: "32px 8px", textAlign: "center", color: tokens.textMuted, fontSize: "13px" }}>
                     —
                   </td>
                 </tr>
@@ -1712,7 +1720,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
 
       <style>{`
         .shimmer-placeholder {
-          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background: ${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"};
           background-size: 200% 100%;
           animation: shimmer 1.5s infinite;
         }

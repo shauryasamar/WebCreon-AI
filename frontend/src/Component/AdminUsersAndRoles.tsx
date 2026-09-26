@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import { GlassToast } from "./GlassToast";
 import { AccessDeniedView } from "./AccessDeniedView";
+import { AdminCheckbox } from "./AdminProducts";
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -142,6 +144,7 @@ const PlusIcon = () => (
 
 export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: string } = {}) {
   const { admin, hasPermission, isOwner } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
   const canViewUsers = isOwner || hasPermission("users_roles:view");
   const canManageUsers = isOwner || hasPermission("users_roles:edit");
   const { siteId: routeSiteId } = useParams<{ siteId?: string }>();
@@ -776,7 +779,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
     <div
       style={{
         width: "100%",
-        color: "#0f172a",
+        color: tokens.textPrimary,
         position: "relative",
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
@@ -787,12 +790,12 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
       {/* TOP HEADER CARD (Segmented Mode Pill + Search + Filters + Action Button) */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: tokens.surfaceBg,
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
           padding: "8px 12px",
           marginBottom: "12px",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          boxShadow: isDark ? "0 1px 2px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
           flexDirection: "column",
           gap: "8px",
@@ -809,14 +812,14 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
             gap: "10px",
           }}
         >
-          {/* Mode Pill (Users vs Roles) - Identical to Orders/Returns */}
+          {/* Mode Pill (Users vs Roles) */}
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: tokens.elevatedSurfaceBg,
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
             {(["users", "roles"] as const).map((value) => {
@@ -833,10 +836,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     borderRadius: "6px",
                     padding: "6px 16px",
                     border: "none",
-                    background: isActive ? "#ffffff" : "transparent",
-                    color: isActive ? "#0f172a" : "#64748b",
+                    background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                    color: isActive ? tokens.textPrimary : tokens.textSecondary,
                     boxShadow: isActive
-                      ? "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.06)")
                       : "none",
                     fontSize: "13px",
                     fontWeight: isActive ? 700 : 500,
@@ -870,7 +873,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   left: "11px",
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   display: "grid",
                   placeItems: "center",
                 }}
@@ -893,9 +896,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   fontSize: "12.5px",
                   height: "34px",
                   borderRadius: "7px",
-                  border: "1px solid #cbd5e1",
-                  background: "#f8fafc",
-                  color: "#0f172a",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.elevatedSurfaceBg,
+                  color: tokens.textPrimary,
                   outline: "none",
                   boxSizing: "border-box",
                 }}
@@ -912,7 +915,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "#94a3b8",
+                    color: tokens.textMuted,
                     padding: "2px",
                     display: "grid",
                     placeItems: "center",
@@ -934,13 +937,13 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
-                    height: "34px",
+                    height: "36px",
                     padding: "0 12px",
                     borderRadius: "7px",
-                    border: activeUserFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                    background: activeUserFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                    color: activeUserFilterCount > 0 ? "#1d4ed8" : "#334155",
-                    fontSize: "12.5px",
+                    border: activeUserFilterCount > 0 ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}` : `1px solid ${tokens.border}`,
+                    background: activeUserFilterCount > 0 ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
+                    color: activeUserFilterCount > 0 ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
+                    fontSize: "13px",
                     fontWeight: 600,
                     cursor: "pointer",
                     whiteSpace: "nowrap",
@@ -955,7 +958,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       style={{
                         fontSize: "11px",
                         fontWeight: 700,
-                        background: "#2563eb",
+                        background: tokens.accent,
                         color: "#ffffff",
                         borderRadius: "10px",
                         padding: "0 6px",
@@ -976,10 +979,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       top: "40px",
                       right: "0",
                       width: "280px",
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "10px",
-                      border: "1px solid #e2e8f0",
-                      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
+                      border: `1px solid ${tokens.border}`,
+                      boxShadow: isDark ? "0 10px 25px -5px rgba(0, 0, 0, 0.5)" : "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
                       padding: "16px",
                       zIndex: 100,
                       display: "flex",
@@ -988,7 +991,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     }}
                   >
                     <div>
-                      <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                         Role
                       </label>
                       <select
@@ -999,22 +1002,23 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                           height: "34px",
                           padding: "0 8px",
                           borderRadius: "6px",
-                          border: "1px solid #cbd5e1",
+                          border: `1px solid ${tokens.border}`,
                           fontSize: "13px",
-                          background: "#ffffff",
+                          background: tokens.elevatedSurfaceBg,
+                          color: tokens.textPrimary,
                           outline: "none",
                         }}
                       >
-                        <option value="all">All Roles</option>
+                        <option value="all" style={{ background: tokens.surfaceBg, color: tokens.textPrimary }}>All Roles</option>
                         {roles.map((r) => (
-                          <option key={r.id} value={r.name}>
+                          <option key={r.id} value={r.name} style={{ background: tokens.surfaceBg, color: tokens.textPrimary }}>
                             {r.name}
                           </option>
                         ))}
                       </select>
                     </div>
 
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px", borderTop: "1px solid #f1f5f9" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px", borderTop: `1px solid ${tokens.border}` }}>
                       <button
                         type="button"
                         onClick={() => {
@@ -1023,7 +1027,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                         style={{
                           background: "none",
                           border: "none",
-                          color: "#64748b",
+                          color: tokens.textSecondary,
                           fontSize: "12px",
                           fontWeight: 600,
                           cursor: "pointer",
@@ -1036,7 +1040,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                         type="button"
                         onClick={() => setIsFilterOpen(false)}
                         style={{
-                          background: "#2563eb",
+                          background: tokens.accent,
                           border: "none",
                           color: "#ffffff",
                           fontSize: "12.5px",
@@ -1065,10 +1069,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
               flexWrap: "wrap",
               gap: "6px",
               paddingTop: "6px",
-              borderTop: "1px solid #f1f5f9",
+              borderTop: `1px solid ${tokens.border}`,
             }}
           >
-            <span style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 600, marginRight: "2px" }}>
+            <span style={{ fontSize: "11.5px", color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>
               Active:
             </span>
 
@@ -1082,16 +1086,16 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                  color: isDark ? "#60a5fa" : "#1d4ed8",
+                  border: `1px solid ${tokens.border}`,
                 }}
               >
                 <span>Search: "{searchQuery}"</span>
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -1108,22 +1112,21 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                  color: isDark ? "#60a5fa" : "#1d4ed8",
+                  border: `1px solid ${tokens.border}`,
                 }}
               >
                 <span>Role: {roleFilter}</span>
                 <button
                   type="button"
                   onClick={() => setRoleFilter("all")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
               </span>
             )}
-
 
             <button
               type="button"
@@ -1134,7 +1137,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
               style={{
                 background: "none",
                 border: "none",
-                color: "#dc2626",
+                color: "#ef4444",
                 fontSize: "11.5px",
                 fontWeight: 600,
                 cursor: "pointer",
@@ -1154,7 +1157,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            borderBottom: "1px solid #e2e8f0",
+            borderBottom: `1px solid ${tokens.border}`,
             marginBottom: "16px",
             gap: "12px",
             flexWrap: "wrap",
@@ -1186,9 +1189,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     gap: "8px",
                     padding: "10px 14px",
                     border: "none",
-                    borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                    borderBottom: isActive ? `2px solid ${tokens.accent}` : "2px solid transparent",
                     background: "transparent",
-                    color: isActive ? "#2563eb" : "#64748b",
+                    color: isActive ? tokens.accent : tokens.textSecondary,
                     fontSize: "13px",
                     fontWeight: isActive ? 700 : 500,
                     cursor: "pointer",
@@ -1204,9 +1207,11 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       fontWeight: 700,
                       padding: "1px 6px",
                       borderRadius: "10px",
-                      background: isActive ? "#eff6ff" : "#f1f5f9",
-                      color: isActive ? "#2563eb" : "#64748b",
-                      border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
+                      background: isActive
+                        ? (isDark ? "rgba(59, 130, 246, 0.25)" : "#eff6ff")
+                        : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                      color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
+                      border: `1px solid ${isActive ? (isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe") : tokens.border}`,
                     }}
                   >
                     {tab.count}
@@ -1222,7 +1227,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
               type="button"
               onClick={openAddUserDrawer}
               style={{
-                background: "#2563eb",
+                background: tokens.accent,
                 color: "#ffffff",
                 border: "none",
                 borderRadius: "6px",
@@ -1240,8 +1245,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 boxSizing: "border-box",
                 marginBottom: "4px",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
+              onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(1.1)")}
+              onMouseLeave={(e) => (e.currentTarget.style.filter = "none")}
             >
               <PlusIcon />
               <span>Add User</span>
@@ -1254,7 +1259,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            borderBottom: "1px solid #e2e8f0",
+            borderBottom: `1px solid ${tokens.border}`,
             marginBottom: "16px",
             gap: "12px",
             flexWrap: "wrap",
@@ -1285,9 +1290,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     gap: "8px",
                     padding: "10px 14px",
                     border: "none",
-                    borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                    borderBottom: isActive ? `2px solid ${tokens.accent}` : "2px solid transparent",
                     background: "transparent",
-                    color: isActive ? "#2563eb" : "#64748b",
+                    color: isActive ? tokens.accent : tokens.textSecondary,
                     fontSize: "13px",
                     fontWeight: isActive ? 700 : 500,
                     cursor: "pointer",
@@ -1303,9 +1308,11 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       fontWeight: 700,
                       padding: "1px 6px",
                       borderRadius: "10px",
-                      background: isActive ? "#eff6ff" : "#f1f5f9",
-                      color: isActive ? "#2563eb" : "#64748b",
-                      border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
+                      background: isActive
+                        ? (isDark ? "rgba(59, 130, 246, 0.25)" : "#eff6ff")
+                        : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                      color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
+                      border: `1px solid ${isActive ? (isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe") : tokens.border}`,
                     }}
                   >
                     {tab.count}
@@ -1321,7 +1328,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
               type="button"
               onClick={openCreateRoleDrawer}
               style={{
-                background: "#2563eb",
+                background: tokens.accent,
                 color: "#ffffff",
                 border: "none",
                 borderRadius: "6px",
@@ -1339,8 +1346,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 boxSizing: "border-box",
                 marginBottom: "4px",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
+              onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(1.1)")}
+              onMouseLeave={(e) => (e.currentTarget.style.filter = "none")}
             >
               <PlusIcon />
               <span>Create Role</span>
@@ -1353,17 +1360,17 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
       {activeTab === "users" && (
         <div
           style={{
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
+            background: tokens.surfaceBg,
+            border: `1px solid ${tokens.border}`,
             borderRadius: "10px",
             overflow: "hidden",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+            boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 2px rgba(0,0,0,0.02)",
           }}
         >
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
-              <thead style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                <tr style={{ color: "#64748b" }}>
+              <thead style={{ background: tokens.elevatedSurfaceBg, borderBottom: `1px solid ${tokens.border}` }}>
+                <tr style={{ color: tokens.textSecondary }}>
                   <th style={thStyle}>Name</th>
                   <th style={thStyle}>Email</th>
                   <th style={thStyle}>Role</th>
@@ -1378,13 +1385,13 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 {loading && users.length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ ...tdStyle, textAlign: "center", padding: "40px" }}>
-                      <div style={{ color: "#64748b" }}>Loading workspace members...</div>
+                      <div style={{ color: tokens.textSecondary }}>Loading workspace members...</div>
                     </td>
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ ...tdStyle, textAlign: "center", padding: "48px 16px" }}>
-                      <div style={{ color: "#64748b", fontSize: "13.5px" }}>No team members found matching your filters.</div>
+                      <div style={{ color: tokens.textSecondary, fontSize: "13.5px" }}>No team members found matching your filters.</div>
                     </td>
                   </tr>
                 ) : (
@@ -1397,10 +1404,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       <tr
                         key={u.id}
                         style={{
-                          borderBottom: "1px solid #f1f5f9",
+                          borderBottom: `1px solid ${tokens.border}`,
                           transition: "background 0.12s ease",
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#fafafa")}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.03)" : "#fafafa")}
                         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                       >
                         {/* Name */}
@@ -1411,22 +1418,24 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                                 width: "32px",
                                 height: "32px",
                                 borderRadius: "50%",
-                                background: isOwnerUser ? "#eff6ff" : "#f1f5f9",
-                                color: isOwnerUser ? "#2563eb" : "#475569",
+                                background: isOwnerUser
+                                  ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff")
+                                  : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                                color: isOwnerUser ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
                                 fontWeight: 700,
                                 fontSize: "12px",
-                                border: isOwnerUser ? "1px solid #bfdbfe" : "1px solid #e2e8f0",
+                                border: `1px solid ${isOwnerUser ? (isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe") : tokens.border}`,
                               }}
                             >
                               {u.name.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <div style={{ fontWeight: 600, color: "#0f172a" }}>{u.name}</div>
+                              <div style={{ fontWeight: 600, color: tokens.textPrimary }}>{u.name}</div>
                               {isOwnerUser && (
-                                <span style={{ fontSize: "10.5px", color: "#2563eb", fontWeight: 700 }}>
+                                <span style={{ fontSize: "10.5px", color: isDark ? "#60a5fa" : "#2563eb", fontWeight: 700 }}>
                                   Workspace Owner
                                 </span>
                               )}
@@ -1436,7 +1445,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
 
                         {/* Email */}
                         <td style={tdStyle}>
-                          <span style={{ color: "#475569", fontFamily: "monospace", fontSize: "12.5px" }}>
+                          <span style={{ color: tokens.textSecondary, fontFamily: "monospace", fontSize: "12.5px" }}>
                             {u.email}
                           </span>
                         </td>
@@ -1452,33 +1461,33 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                               fontSize: "12px",
                               fontWeight: 600,
                               background: isOwnerUser
-                                ? "#f1f5f9"
+                                ? (isDark ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9")
                                 : u.role === "Store Manager"
-                                ? "#eff6ff"
+                                ? (isDark ? "rgba(59, 130, 246, 0.18)" : "#eff6ff")
                                 : u.role === "Content Manager"
-                                ? "#faf5ff"
+                                ? (isDark ? "rgba(168, 85, 247, 0.18)" : "#faf5ff")
                                 : u.role === "Order Manager"
-                                ? "#f0fdf4"
-                                : "#f8fafc",
+                                ? (isDark ? "rgba(34, 197, 94, 0.18)" : "#f0fdf4")
+                                : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
                               color: isOwnerUser
-                                ? "#0f172a"
+                                ? tokens.textPrimary
                                 : u.role === "Store Manager"
-                                ? "#2563eb"
+                                ? (isDark ? "#60a5fa" : "#2563eb")
                                 : u.role === "Content Manager"
-                                ? "#7e22ce"
+                                ? (isDark ? "#c084fc" : "#7e22ce")
                                 : u.role === "Order Manager"
-                                ? "#15803d"
-                                : "#334155",
+                                ? (isDark ? "#4ade80" : "#15803d")
+                                : tokens.textSecondary,
                               border: `1px solid ${
                                 isOwnerUser
-                                  ? "#cbd5e1"
+                                  ? tokens.border
                                   : u.role === "Store Manager"
-                                  ? "#bfdbfe"
+                                  ? (isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe")
                                   : u.role === "Content Manager"
-                                  ? "#e9d5ff"
+                                  ? (isDark ? "rgba(168, 85, 247, 0.35)" : "#e9d5ff")
                                   : u.role === "Order Manager"
-                                  ? "#bbf7d0"
-                                  : "#e2e8f0"
+                                  ? (isDark ? "rgba(34, 197, 94, 0.35)" : "#bbf7d0")
+                                  : tokens.border
                               }`,
                             }}
                           >
@@ -1488,7 +1497,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
 
                         {/* Website Access */}
                         <td style={tdStyle}>
-                          <span style={{ color: "#334155", fontWeight: 500 }}>
+                          <span style={{ color: tokens.textSecondary, fontWeight: 500 }}>
                             {u.website_access_display}
                           </span>
                         </td>
@@ -1504,10 +1513,22 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                               borderRadius: "12px",
                               fontSize: "11.5px",
                               fontWeight: 600,
-                              background: isActive ? "#dcfce7" : isPending ? "#fef3c7" : "#f1f5f9",
-                              color: isActive ? "#15803d" : isPending ? "#b45309" : "#64748b",
+                              background: isActive
+                                ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#dcfce7")
+                                : isPending
+                                ? (isDark ? "rgba(245, 158, 11, 0.15)" : "#fef3c7")
+                                : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                              color: isActive
+                                ? (isDark ? "#4ade80" : "#15803d")
+                                : isPending
+                                ? (isDark ? "#fbbf24" : "#b45309")
+                                : tokens.textSecondary,
                               border: `1px solid ${
-                                isActive ? "#bbf7d0" : isPending ? "#fde68a" : "#e2e8f0"
+                                isActive
+                                  ? (isDark ? "rgba(34, 197, 94, 0.3)" : "#bbf7d0")
+                                  : isPending
+                                  ? (isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a")
+                                  : tokens.border
                               }`,
                             }}
                           >
@@ -1525,7 +1546,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
 
                         {/* Last Active */}
                         <td style={tdStyle}>
-                          <span style={{ color: "#64748b", fontSize: "12.5px" }}>{u.last_active}</span>
+                          <span style={{ color: tokens.textMuted, fontSize: "12.5px" }}>{u.last_active}</span>
                         </td>
 
                         {/* Actions */}
@@ -1534,7 +1555,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                             <span
                               style={{
                                 fontSize: "11.5px",
-                                color: "#94a3b8",
+                                color: tokens.textMuted,
                                 fontWeight: 500,
                                 paddingRight: "6px",
                               }}
@@ -1548,27 +1569,27 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                               style={{
                                 padding: "5px 12px",
                                 borderRadius: "6px",
-                                border: "1px solid #cbd5e1",
-                                background: "#ffffff",
-                                color: "#334155",
+                                border: `1px solid ${tokens.border}`,
+                                background: tokens.elevatedSurfaceBg,
+                                color: tokens.textPrimary,
                                 fontSize: "12px",
                                 fontWeight: 600,
                                 cursor: "pointer",
                                 transition: "all 0.12s ease",
                               }}
                               onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = "#94a3b8";
-                                e.currentTarget.style.background = "#f8fafc";
+                                e.currentTarget.style.borderColor = tokens.accent;
+                                e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#f8fafc";
                               }}
                               onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = "#cbd5e1";
-                                e.currentTarget.style.background = "#ffffff";
+                                e.currentTarget.style.borderColor = tokens.border;
+                                e.currentTarget.style.background = isDark ? tokens.elevatedSurfaceBg : "#ffffff";
                               }}
                             >
                               Edit
                             </button>
                           ) : (
-                            <span style={{ fontSize: "12px", color: "#94a3b8" }}>View only</span>
+                            <span style={{ fontSize: "12px", color: tokens.textMuted }}>View only</span>
                           )}
                         </td>
                       </tr>
@@ -1585,17 +1606,17 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
       {activeTab === "roles" && (
         <div
           style={{
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
+            background: tokens.surfaceBg,
+            border: `1px solid ${tokens.border}`,
             borderRadius: "10px",
             overflow: "hidden",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+            boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 2px rgba(0,0,0,0.02)",
           }}
         >
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
-              <thead style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                <tr style={{ color: "#64748b" }}>
+              <thead style={{ background: tokens.elevatedSurfaceBg, borderBottom: `1px solid ${tokens.border}` }}>
+                <tr style={{ color: tokens.textSecondary }}>
                   <th style={thStyle}>Role Name</th>
                   <th style={thStyle}>Description</th>
                   <th style={thStyle}>Users</th>
@@ -1609,7 +1630,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 {filteredRoles.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ ...tdStyle, textAlign: "center", padding: "48px 16px" }}>
-                      <div style={{ color: "#64748b", fontSize: "13.5px" }}>No roles found matching your filters.</div>
+                      <div style={{ color: tokens.textSecondary, fontSize: "13.5px" }}>No roles found matching your filters.</div>
                     </td>
                   </tr>
                 ) : (
@@ -1619,25 +1640,25 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       <tr
                         key={r.id}
                         style={{
-                          borderBottom: "1px solid #f1f5f9",
+                          borderBottom: `1px solid ${tokens.border}`,
                           transition: "background 0.12s ease",
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#fafafa")}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.03)" : "#fafafa")}
                         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                       >
                         {/* Role Name */}
                         <td style={tdStyle}>
-                          <div style={{ fontWeight: 600, color: "#0f172a" }}>{r.name}</div>
+                          <div style={{ fontWeight: 600, color: tokens.textPrimary }}>{r.name}</div>
                         </td>
 
                         {/* Description */}
-                        <td style={{ ...tdStyle, color: "#64748b", maxWidth: "340px" }}>
+                        <td style={{ ...tdStyle, color: tokens.textSecondary, maxWidth: "340px" }}>
                           {r.description || "—"}
                         </td>
 
                         {/* Users Count */}
                         <td style={tdStyle}>
-                          <span style={{ color: "#334155", fontWeight: 600 }}>
+                          <span style={{ color: tokens.textPrimary, fontWeight: 600 }}>
                             {r.users_count} {r.users_count === 1 ? "user" : "users"}
                           </span>
                         </td>
@@ -1649,10 +1670,11 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                               display: "inline-block",
                               padding: "2px 7px",
                               borderRadius: "6px",
-                              background: "#f1f5f9",
+                              background: tokens.elevatedSurfaceBg,
                               fontSize: "12px",
-                              color: "#475569",
+                              color: tokens.textSecondary,
                               fontWeight: 600,
+                              border: `1px solid ${tokens.border}`,
                             }}
                           >
                             {isOwnerRole ? "Full Access" : `${r.permissions_count} permissions`}
@@ -1668,9 +1690,11 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                               borderRadius: "10px",
                               fontSize: "11.5px",
                               fontWeight: 600,
-                              background: r.is_system ? "#f1f5f9" : "#eff6ff",
-                              color: r.is_system ? "#475569" : "#2563eb",
-                              border: `1px solid ${r.is_system ? "#e2e8f0" : "#bfdbfe"}`,
+                              background: r.is_system
+                                ? (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9")
+                                : (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff"),
+                              color: r.is_system ? tokens.textSecondary : (isDark ? "#60a5fa" : "#2563eb"),
+                              border: `1px solid ${r.is_system ? tokens.border : (isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe")}`,
                             }}
                           >
                             {r.type}
@@ -1687,9 +1711,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                                 style={{
                                   padding: "4px 10px",
                                   borderRadius: "6px",
-                                  border: "1px solid #cbd5e1",
-                                  background: "#ffffff",
-                                  color: "#334155",
+                                  border: `1px solid ${tokens.border}`,
+                                  background: tokens.elevatedSurfaceBg,
+                                  color: tokens.textPrimary,
                                   fontSize: "12px",
                                   fontWeight: 600,
                                   cursor: "pointer",
@@ -1706,9 +1730,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                                 style={{
                                   padding: "4px 10px",
                                   borderRadius: "6px",
-                                  border: "1px solid #fee2e2",
-                                  background: "#ffffff",
-                                  color: "#dc2626",
+                                  border: `1px solid ${isDark ? "rgba(239, 68, 68, 0.3)" : "#fee2e2"}`,
+                                  background: isDark ? "rgba(239, 68, 68, 0.12)" : "#ffffff",
+                                  color: "#ef4444",
                                   fontSize: "12px",
                                   fontWeight: 600,
                                   cursor: "pointer",
@@ -1740,7 +1764,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(15, 23, 42, 0.65)",
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(4px)",
             zIndex: 1000,
             overflowY: "auto",
             display: "flex",
@@ -1756,14 +1781,14 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "12px",
               width: "100%",
               maxWidth: "760px",
-              boxShadow: "0 24px 48px rgba(0, 0, 0, 0.25)",
+              boxShadow: "0 24px 48px rgba(0, 0, 0, 0.5)",
               marginBottom: "32px",
               overflow: "hidden",
-              border: "1px solid #cbd5e1",
+              border: `1px solid ${tokens.border}`,
               display: "flex",
               flexDirection: "column",
             }}
@@ -1779,16 +1804,16 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "14px 20px",
-                borderBottom: "1px solid #e2e8f0",
-                background: "#ffffff",
-                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
+                borderBottom: `1px solid ${tokens.border}`,
+                background: tokens.surfaceBg,
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
               }}
             >
               <div>
-                <h2 style={{ margin: 0, fontSize: "16px", color: "#0f172a", fontWeight: 700 }}>
+                <h2 style={{ margin: 0, fontSize: "16px", color: tokens.textPrimary, fontWeight: 700 }}>
                   {drawerMode === "add-user" ? "Add New User" : `Edit User: ${selectedUser?.name}`}
                 </h2>
-                <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
+                <p style={{ margin: "2px 0 0", fontSize: "12px", color: tokens.textSecondary }}>
                   {drawerMode === "add-user"
                     ? "Invite a team member to collaborate on your workspace"
                     : "Update role assignment, store access, and custom permissions"}
@@ -1799,15 +1824,15 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 type="button"
                 onClick={() => setDrawerMode(null)}
                 style={{
-                  border: "none",
-                  background: "#f1f5f9",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.elevatedSurfaceBg,
                   borderRadius: "6px",
                   width: "28px",
                   height: "28px",
                   cursor: "pointer",
                   display: "grid",
                   placeItems: "center",
-                  color: "#64748b",
+                  color: tokens.textSecondary,
                 }}
               >
                 <XMarkIcon />
@@ -1819,9 +1844,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
               {/* Card 1: User Details */}
               <div
                 style={{
-                  background: "#ffffff",
+                  background: tokens.elevatedSurfaceBg,
                   borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "14px 16px",
                   display: "flex",
                   flexDirection: "column",
@@ -1833,10 +1858,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   style={{
                     fontSize: "12.5px",
                     fontWeight: 700,
-                    color: "#0f172a",
+                    color: tokens.textPrimary,
                     textTransform: "uppercase",
                     letterSpacing: "0.04em",
-                    borderBottom: "1px solid #f1f5f9",
+                    borderBottom: `1px solid ${tokens.border}`,
                     paddingBottom: "6px",
                   }}
                 >
@@ -1867,12 +1892,12 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       placeholder="e.g. rahul.mehta@example.com"
                       style={{
                         ...inputStyle,
-                        background: drawerMode === "edit-user" ? "#f8fafc" : "#ffffff",
+                        background: drawerMode === "edit-user" ? (isDark ? "rgba(255,255,255,0.04)" : "#f8fafc") : (isDark ? tokens.surfaceBg : "#ffffff"),
                         cursor: drawerMode === "edit-user" ? "not-allowed" : "text",
                       }}
                     />
                     {drawerMode === "edit-user" && (
-                      <span style={{ fontSize: "11px", color: "#64748b", marginTop: "2px", display: "block" }}>
+                      <span style={{ fontSize: "11px", color: tokens.textMuted, marginTop: "2px", display: "block" }}>
                         Email cannot be changed after invitation.
                       </span>
                     )}
@@ -1883,9 +1908,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
               {/* Card 2: Role & Website Access */}
               <div
                 style={{
-                  background: "#ffffff",
+                  background: tokens.elevatedSurfaceBg,
                   borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "14px 16px",
                   display: "flex",
                   flexDirection: "column",
@@ -1897,10 +1922,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   style={{
                     fontSize: "12.5px",
                     fontWeight: 700,
-                    color: "#0f172a",
+                    color: tokens.textPrimary,
                     textTransform: "uppercase",
                     letterSpacing: "0.04em",
-                    borderBottom: "1px solid #f1f5f9",
+                    borderBottom: `1px solid ${tokens.border}`,
                     paddingBottom: "6px",
                   }}
                 >
@@ -1916,14 +1941,14 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     disabled={selectedUser?.is_owner}
                     style={{
                       ...inputStyle,
-                      background: selectedUser?.is_owner ? "#f8fafc" : "#ffffff",
+                      background: selectedUser?.is_owner ? (isDark ? "rgba(255,255,255,0.04)" : "#f8fafc") : (isDark ? tokens.surfaceBg : "#ffffff"),
                     }}
                   >
-                    <option value="" disabled>Select Role</option>
+                    <option value="" disabled style={{ background: tokens.surfaceBg, color: tokens.textPrimary }}>Select Role</option>
                     {roles
                       .filter((r) => (selectedUser?.is_owner ? true : r.name !== "Owner"))
                       .map((r) => (
-                        <option key={r.id} value={r.id}>
+                        <option key={r.id} value={r.id} style={{ background: tokens.surfaceBg, color: tokens.textPrimary }}>
                           {r.name} {r.is_system ? "(Default System Role)" : "(Custom Role)"}
                         </option>
                       ))}
@@ -1947,7 +1972,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                         style={{
                           background: "none",
                           border: "none",
-                          color: "#2563eb",
+                          color: tokens.accent,
                           fontSize: "12px",
                           fontWeight: 600,
                           cursor: "pointer",
@@ -1964,10 +1989,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       style={{
                         padding: "12px",
                         borderRadius: "8px",
-                        border: "1px solid #e2e8f0",
-                        background: "#f8fafc",
+                        border: `1px solid ${tokens.border}`,
+                        background: tokens.surfaceBg,
                         fontSize: "12.5px",
-                        color: "#64748b",
+                        color: tokens.textSecondary,
                         lineHeight: "1.5",
                       }}
                     >
@@ -1996,17 +2021,20 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                               justifyContent: "space-between",
                               padding: "8px 12px",
                               borderRadius: "7px",
-                              background: isChecked ? "#eff6ff" : "#ffffff",
-                              border: isChecked ? "1px solid #93c5fd" : "1px solid #e2e8f0",
+                              background: isChecked
+                                ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff")
+                                : (isDark ? tokens.surfaceBg : "#ffffff"),
+                              border: isChecked
+                                ? (isDark ? `1px solid ${tokens.accent}` : "1px solid #93c5fd")
+                                : `1px solid ${tokens.border}`,
                               cursor: selectedUser?.is_owner ? "default" : "pointer",
                               transition: "all 0.12s ease",
                             }}
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                              <input
-                                type="checkbox"
-                                disabled={selectedUser?.is_owner}
+                              <AdminCheckbox
                                 checked={isChecked}
+                                disabled={selectedUser?.is_owner}
                                 onChange={(e) => {
                                   if (e.target.checked) {
                                     setUserSelectedSiteIds((prev) => [...prev, s.id]);
@@ -2015,10 +2043,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                                   }
                                 }}
                               />
-                              <span style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>
+                              <span style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary }}>
                                 {s.brand_name}
                               </span>
-                              <span style={{ fontSize: "11.5px", color: "#64748b" }}>
+                              <span style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
                                 ({s.slug})
                               </span>
                             </div>
@@ -2029,9 +2057,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                                 fontWeight: 700,
                                 padding: "2px 7px",
                                 borderRadius: "4px",
-                                background: "#dbeafe",
-                                color: "#1e40af",
-                                border: "1px solid #bfdbfe",
+                                background: isDark ? "rgba(59, 130, 246, 0.25)" : "#dbeafe",
+                                color: isDark ? "#60a5fa" : "#1e40af",
+                                border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe"}`,
                                 letterSpacing: "0.03em",
                               }}
                             >
@@ -2048,9 +2076,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
               {/* Card 3: Permissions & Custom Overrides */}
               <div
                 style={{
-                  background: "#ffffff",
+                  background: tokens.elevatedSurfaceBg,
                   borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "14px 16px",
                   display: "flex",
                   flexDirection: "column",
@@ -2058,30 +2086,30 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f1f5f9", paddingBottom: "6px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "6px" }}>
                   <div
                     style={{
                       fontSize: "12.5px",
                       fontWeight: 700,
-                      color: "#0f172a",
+                      color: tokens.textPrimary,
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
                     }}
                   >
                     Permissions Overview
                   </div>
-                  <span style={{ fontSize: "11.5px", color: "#64748b" }}>
-                    Role: <strong>{currentSelectedRole?.name || "None"}</strong>
+                  <span style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
+                    Role: <strong style={{ color: tokens.textPrimary }}>{currentSelectedRole?.name || "None"}</strong>
                   </span>
                 </div>
 
                 {/* Inherited Permissions */}
                 <div>
-                  <div style={{ fontSize: "11.5px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "11.5px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "6px" }}>
                     Inherited Permissions ({inheritedPerms.length})
                   </div>
                   {inheritedPerms.length === 0 ? (
-                    <div style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>No permissions inherited</div>
+                    <div style={{ fontSize: "12px", color: tokens.textMuted, fontStyle: "italic" }}>No permissions inherited</div>
                   ) : (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", maxHeight: "90px", overflowY: "auto" }}>
                       {inheritedPerms.map((pId) => {
@@ -2095,11 +2123,11 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                               alignItems: "center",
                               padding: "2px 7px",
                               borderRadius: "4px",
-                              background: "#f1f5f9",
-                              color: "#475569",
+                              background: isDark ? tokens.surfaceBg : "#f1f5f9",
+                              color: tokens.textSecondary,
                               fontSize: "11px",
                               fontWeight: 500,
-                              border: "1px solid #e2e8f0",
+                              border: `1px solid ${tokens.border}`,
                             }}
                           >
                             {meta ? `${meta.module}: ${meta.name}` : pId}
@@ -2111,9 +2139,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 </div>
 
                 {/* Custom Additional Permissions */}
-                <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "10px" }}>
+                <div style={{ borderTop: `1px solid ${tokens.border}`, paddingTop: "10px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <div style={{ fontSize: "11.5px", fontWeight: 700, color: "#1d4ed8", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    <div style={{ fontSize: "11.5px", fontWeight: 700, color: isDark ? "#60a5fa" : "#1d4ed8", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                       Additional Custom Permissions ({userAdditionalPerms.length})
                     </div>
                     <button
@@ -2122,7 +2150,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       style={{
                         background: "none",
                         border: "none",
-                        color: "#2563eb",
+                        color: tokens.accent,
                         fontSize: "12px",
                         fontWeight: 600,
                         cursor: "pointer",
@@ -2134,7 +2162,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   </div>
 
                   {userAdditionalPerms.length === 0 ? (
-                    <div style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic", marginBottom: "6px" }}>
+                    <div style={{ fontSize: "12px", color: tokens.textMuted, fontStyle: "italic", marginBottom: "6px" }}>
                       No user-specific override permissions
                     </div>
                   ) : (
@@ -2150,11 +2178,11 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                               gap: "4px",
                               padding: "3px 8px",
                               borderRadius: "5px",
-                              background: "#eff6ff",
-                              color: "#1d4ed8",
+                              background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                              color: isDark ? "#60a5fa" : "#1d4ed8",
                               fontSize: "11px",
                               fontWeight: 600,
-                              border: "1px solid #bfdbfe",
+                              border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe"}`,
                             }}
                           >
                             <span>{meta ? `${meta.module}: ${meta.name}` : pId}</span>
@@ -2164,7 +2192,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                               style={{
                                 border: "none",
                                 background: "none",
-                                color: "#1d4ed8",
+                                color: isDark ? "#60a5fa" : "#1d4ed8",
                                 cursor: "pointer",
                                 padding: 0,
                                 fontSize: "12px",
@@ -2185,9 +2213,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     <div
                       style={{
                         marginTop: "8px",
-                        border: "1px solid #cbd5e1",
+                        border: `1px solid ${tokens.border}`,
                         borderRadius: "8px",
-                        background: "#ffffff",
+                        background: tokens.surfaceBg,
                         maxHeight: "180px",
                         overflowY: "auto",
                         padding: "8px 10px",
@@ -2195,7 +2223,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     >
                       {permissionCatalog.map((cat) => (
                         <div key={cat.key} style={{ marginBottom: "8px" }}>
-                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: "4px" }}>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", marginBottom: "4px" }}>
                             {cat.category}
                           </div>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
@@ -2213,12 +2241,20 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                                       padding: "3px 7px",
                                       borderRadius: "4px",
                                       border: isSelected
-                                        ? "1px solid #3b82f6"
+                                        ? `1px solid ${tokens.accent}`
                                         : isInherited
-                                        ? "1px solid #f1f5f9"
-                                        : "1px solid #e2e8f0",
-                                      background: isSelected ? "#eff6ff" : isInherited ? "#f8fafc" : "#ffffff",
-                                      color: isSelected ? "#1d4ed8" : isInherited ? "#94a3b8" : "#334155",
+                                        ? `1px solid ${tokens.border}`
+                                        : `1px solid ${tokens.border}`,
+                                      background: isSelected
+                                        ? (isDark ? "rgba(59, 130, 246, 0.25)" : "#eff6ff")
+                                        : isInherited
+                                        ? (isDark ? "rgba(255,255,255,0.03)" : "#f8fafc")
+                                        : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
+                                      color: isSelected
+                                        ? (isDark ? "#60a5fa" : "#1d4ed8")
+                                        : isInherited
+                                        ? tokens.textMuted
+                                        : tokens.textPrimary,
                                       fontSize: "11px",
                                       cursor: isInherited ? "not-allowed" : "pointer",
                                     }}
@@ -2245,8 +2281,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 bottom: 0,
                 zIndex: 20,
                 padding: "14px 20px",
-                borderTop: "1px solid #e2e8f0",
-                background: "#f8fafc",
+                borderTop: `1px solid ${tokens.border}`,
+                background: tokens.surfaceBg,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: drawerMode === "edit-user" && !selectedUser?.is_owner ? "space-between" : "flex-end",
@@ -2262,9 +2298,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       style={{
                         padding: "7px 13px",
                         borderRadius: "6px",
-                        border: "1px solid #93c5fd",
-                        background: "#ffffff",
-                        color: "#2563eb",
+                        border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}`,
+                        background: tokens.elevatedSurfaceBg,
+                        color: isDark ? "#60a5fa" : "#2563eb",
                         fontSize: "12.5px",
                         fontWeight: 600,
                         cursor: "pointer",
@@ -2279,9 +2315,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       style={{
                         padding: "7px 13px",
                         borderRadius: "6px",
-                        border: "1px solid #fca5a5",
-                        background: "#ffffff",
-                        color: "#dc2626",
+                        border: `1px solid ${isDark ? "rgba(239, 68, 68, 0.35)" : "#fca5a5"}`,
+                        background: isDark ? "rgba(239, 68, 68, 0.1)" : "#ffffff",
+                        color: "#ef4444",
                         fontSize: "12.5px",
                         fontWeight: 600,
                         cursor: "pointer",
@@ -2296,9 +2332,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       style={{
                         padding: "7px 13px",
                         borderRadius: "6px",
-                        border: "1px solid #86efac",
-                        background: "#ffffff",
-                        color: "#16a34a",
+                        border: `1px solid ${isDark ? "rgba(34, 197, 94, 0.35)" : "#86efac"}`,
+                        background: isDark ? "rgba(34, 197, 94, 0.1)" : "#ffffff",
+                        color: isDark ? "#4ade80" : "#16a34a",
                         fontSize: "12.5px",
                         fontWeight: 600,
                         cursor: "pointer",
@@ -2319,9 +2355,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     style={{
                       padding: "7px 12px",
                       borderRadius: "6px",
-                      border: "1px solid #e2e8f0",
-                      background: "#ffffff",
-                      color: "#64748b",
+                      border: `1px solid ${tokens.border}`,
+                      background: tokens.elevatedSurfaceBg,
+                      color: tokens.textSecondary,
                       fontSize: "12.5px",
                       fontWeight: 600,
                       cursor: "pointer",
@@ -2340,9 +2376,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   style={{
                     padding: "7px 14px",
                     borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#334155",
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.elevatedSurfaceBg,
+                    color: tokens.textPrimary,
                     fontSize: "13px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -2359,7 +2395,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     padding: "7px 16px",
                     borderRadius: "6px",
                     border: "none",
-                    background: "#2563eb",
+                    background: tokens.accent,
                     color: "#ffffff",
                     fontSize: "13px",
                     fontWeight: 600,
@@ -2390,7 +2426,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(15, 23, 42, 0.65)",
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(4px)",
             zIndex: 1000,
             overflowY: "auto",
             display: "flex",
@@ -2406,14 +2443,14 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "12px",
               width: "100%",
               maxWidth: "760px",
-              boxShadow: "0 24px 48px rgba(0, 0, 0, 0.25)",
+              boxShadow: "0 24px 48px rgba(0, 0, 0, 0.5)",
               marginBottom: "32px",
               overflow: "hidden",
-              border: "1px solid #cbd5e1",
+              border: `1px solid ${tokens.border}`,
               display: "flex",
               flexDirection: "column",
             }}
@@ -2429,16 +2466,16 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "14px 20px",
-                borderBottom: "1px solid #e2e8f0",
-                background: "#ffffff",
-                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
+                borderBottom: `1px solid ${tokens.border}`,
+                background: tokens.surfaceBg,
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
               }}
             >
               <div>
-                <h2 style={{ margin: 0, fontSize: "16px", color: "#0f172a", fontWeight: 700 }}>
+                <h2 style={{ margin: 0, fontSize: "16px", color: tokens.textPrimary, fontWeight: 700 }}>
                   {drawerMode === "create-role" ? "Create New Role" : `Edit Role: ${selectedRole?.name}`}
                 </h2>
-                <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
+                <p style={{ margin: "2px 0 0", fontSize: "12px", color: tokens.textSecondary }}>
                   Define permissions and operational privileges for this team role
                 </p>
               </div>
@@ -2447,15 +2484,15 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 type="button"
                 onClick={() => setDrawerMode(null)}
                 style={{
-                  border: "none",
-                  background: "#f1f5f9",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.elevatedSurfaceBg,
                   borderRadius: "6px",
                   width: "28px",
                   height: "28px",
                   cursor: "pointer",
                   display: "grid",
                   placeItems: "center",
-                  color: "#64748b",
+                  color: tokens.textSecondary,
                 }}
               >
                 <XMarkIcon />
@@ -2467,9 +2504,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
               {/* Card 1: Role Information */}
               <div
                 style={{
-                  background: "#ffffff",
+                  background: tokens.elevatedSurfaceBg,
                   borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "14px 16px",
                   display: "flex",
                   flexDirection: "column",
@@ -2481,10 +2518,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   style={{
                     fontSize: "12.5px",
                     fontWeight: 700,
-                    color: "#0f172a",
+                    color: tokens.textPrimary,
                     textTransform: "uppercase",
                     letterSpacing: "0.04em",
-                    borderBottom: "1px solid #f1f5f9",
+                    borderBottom: `1px solid ${tokens.border}`,
                     paddingBottom: "6px",
                   }}
                 >
@@ -2502,7 +2539,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                     placeholder="e.g. Catalog Specialist"
                     style={{
                       ...inputStyle,
-                      background: selectedRole?.is_system ? "#f8fafc" : "#ffffff",
+                      background: selectedRole?.is_system ? (isDark ? "rgba(255,255,255,0.04)" : "#f8fafc") : (isDark ? tokens.surfaceBg : "#ffffff"),
                     }}
                   />
                 </div>
@@ -2527,9 +2564,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
               {/* Card 2: Permissions Configuration */}
               <div
                 style={{
-                  background: "#ffffff",
+                  background: tokens.elevatedSurfaceBg,
                   borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   padding: "14px 16px",
                   display: "flex",
                   flexDirection: "column",
@@ -2537,19 +2574,19 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f1f5f9", paddingBottom: "6px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "6px" }}>
                   <div
                     style={{
                       fontSize: "12.5px",
                       fontWeight: 700,
-                      color: "#0f172a",
+                      color: tokens.textPrimary,
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
                     }}
                   >
                     Permissions Configuration
                   </div>
-                  <span style={{ fontSize: "12px", color: "#2563eb", fontWeight: 700 }}>
+                  <span style={{ fontSize: "12px", color: isDark ? "#60a5fa" : "#2563eb", fontWeight: 700 }}>
                     {rolePermissions.length} selected
                   </span>
                 </div>
@@ -2565,17 +2602,17 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       <div
                         key={cat.key}
                         style={{
-                          border: "1px solid #e2e8f0",
+                          border: `1px solid ${tokens.border}`,
                           borderRadius: "8px",
                           overflow: "hidden",
-                          background: "#ffffff",
+                          background: tokens.surfaceBg,
                         }}
                       >
                         {/* Category Header */}
                         <div
                           style={{
                             padding: "10px 14px",
-                            background: "#f8fafc",
+                            background: tokens.elevatedSurfaceBg,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "space-between",
@@ -2585,7 +2622,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                           onClick={() => setExpandedCategoryKey(isExpanded ? "" : cat.key)}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                            <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                               {cat.category}
                             </span>
                             <span
@@ -2594,8 +2631,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                                 fontWeight: 600,
                                 padding: "1px 6px",
                                 borderRadius: "10px",
-                                background: selectedInCatCount > 0 ? "#eff6ff" : "#f1f5f9",
-                                color: selectedInCatCount > 0 ? "#2563eb" : "#64748b",
+                                background: selectedInCatCount > 0
+                                  ? (isDark ? "rgba(59, 130, 246, 0.25)" : "#eff6ff")
+                                  : (isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9"),
+                                color: selectedInCatCount > 0 ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
                               }}
                             >
                               {selectedInCatCount} / {catPermIds.length}
@@ -2612,7 +2651,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                               style={{
                                 background: "none",
                                 border: "none",
-                                color: "#2563eb",
+                                color: tokens.accent,
                                 fontSize: "11.5px",
                                 fontWeight: 600,
                                 cursor: "pointer",
@@ -2622,7 +2661,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                               {allCatSelected ? "Deselect All" : "Select All"}
                             </button>
 
-                            <span style={{ fontSize: "11px", color: "#64748b" }}>
+                            <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
                               {isExpanded ? "▲" : "▼"}
                             </span>
                           </div>
@@ -2632,8 +2671,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                         {isExpanded && (
                           <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: "12px" }}>
                             {cat.modules.map((mod) => (
-                              <div key={mod.key} style={{ paddingBottom: "10px", borderBottom: "1px solid #f1f5f9" }}>
-                                <div style={{ fontSize: "12.5px", fontWeight: 600, color: "#334155", marginBottom: "6px" }}>
+                              <div key={mod.key} style={{ paddingBottom: "10px", borderBottom: `1px solid ${tokens.border}` }}>
+                                <div style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textPrimary, marginBottom: "6px" }}>
                                   {mod.module}
                                 </div>
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 12px" }}>
@@ -2647,13 +2686,12 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                                           alignItems: "center",
                                           gap: "6px",
                                           fontSize: "12px",
-                                          color: isChecked ? "#0f172a" : "#475569",
+                                          color: isChecked ? tokens.textPrimary : tokens.textSecondary,
                                           cursor: "pointer",
                                           userSelect: "none",
                                         }}
                                       >
-                                        <input
-                                          type="checkbox"
+                                        <AdminCheckbox
                                           checked={isChecked}
                                           onChange={() => toggleRolePermission(p.id)}
                                         />
@@ -2665,8 +2703,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                                               fontWeight: 700,
                                               padding: "1px 4px",
                                               borderRadius: "4px",
-                                              background: "#fef2f2",
-                                              color: "#dc2626",
+                                              background: isDark ? "rgba(239, 68, 68, 0.2)" : "#fef2f2",
+                                              color: "#ef4444",
                                             }}
                                             title="Sensitive permission"
                                           >
@@ -2695,8 +2733,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 bottom: 0,
                 zIndex: 20,
                 padding: "14px 20px",
-                borderTop: "1px solid #e2e8f0",
-                background: "#f8fafc",
+                borderTop: `1px solid ${tokens.border}`,
+                background: tokens.surfaceBg,
                 display: "flex",
                 justifyContent: "flex-end",
                 gap: "10px",
@@ -2709,9 +2747,9 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 style={{
                   padding: "7px 14px",
                   borderRadius: "6px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  color: "#334155",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.elevatedSurfaceBg,
+                  color: tokens.textPrimary,
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -2728,7 +2766,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   padding: "7px 16px",
                   borderRadius: "6px",
                   border: "none",
-                  background: "#2563eb",
+                  background: tokens.accent,
                   color: "#ffffff",
                   fontSize: "13px",
                   fontWeight: 600,
@@ -2749,10 +2787,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
       {deactivateModalUser && (
         <div style={modalBackdropStyle} onClick={() => setDeactivateModalUser(null)}>
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
-            <h4 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+            <h4 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
               Deactivate this user?
             </h4>
-            <p style={{ margin: "0 0 18px 0", fontSize: "13px", color: "#64748b", lineHeight: 1.45 }}>
+            <p style={{ margin: "0 0 18px 0", fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.45 }}>
               This user will no longer be able to access Webcreon until reactivated.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
@@ -2790,13 +2828,13 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
       {removeModalUser && (
         <div style={modalBackdropStyle} onClick={() => setRemoveModalUser(null)}>
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
-            <h4 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+            <h4 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
               Remove team member?
             </h4>
-            <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: "#64748b", lineHeight: 1.45 }}>
-              Are you sure you want to remove <strong>{removeModalUser.name}</strong> from your workspace? Their store access will be immediately revoked.
+            <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.45 }}>
+              Are you sure you want to remove <strong style={{ color: tokens.textPrimary }}>{removeModalUser.name}</strong> from your workspace? Their store access will be immediately revoked.
             </p>
-            <p style={{ margin: "0 0 18px 0", fontSize: "12px", color: "#059669", lineHeight: 1.4, background: "#ecfdf5", padding: "8px 10px", borderRadius: "6px", border: "1px solid #a7f3d0" }}>
+            <p style={{ margin: "0 0 18px 0", fontSize: "12px", color: isDark ? "#4ade80" : "#059669", lineHeight: 1.4, background: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5", padding: "8px 10px", borderRadius: "6px", border: `1px solid ${isDark ? "rgba(16, 185, 129, 0.3)" : "#a7f3d0"}` }}>
               🔒 <strong>Audit Logs Preserved:</strong> All past actions, orders, and activity history performed by this user remain safely stored in your Activity log.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
@@ -2834,11 +2872,11 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
       {deleteRoleModal && (
         <div style={modalBackdropStyle} onClick={() => setDeleteRoleModal(null)}>
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
-            <h4 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+            <h4 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
               Delete role?
             </h4>
-            <p style={{ margin: "0 0 18px 0", fontSize: "13px", color: "#64748b", lineHeight: 1.45 }}>
-              Are you sure you want to delete the role <strong>"{deleteRoleModal.name}"</strong>? This action cannot be undone.
+            <p style={{ margin: "0 0 18px 0", fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.45 }}>
+              Are you sure you want to delete the role <strong style={{ color: tokens.textPrimary }}>"{deleteRoleModal.name}"</strong>? This action cannot be undone.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
               <button
@@ -2875,11 +2913,11 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
       {roleAssignedWarningModal && (
         <div style={modalBackdropStyle} onClick={() => setRoleAssignedWarningModal(null)}>
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
-            <h4 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#d97706" }}>
+            <h4 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#f59e0b" }}>
               Cannot Delete Role
             </h4>
-            <p style={{ margin: "0 0 18px 0", fontSize: "13px", color: "#475569", lineHeight: 1.45 }}>
-              This role is currently assigned to <strong>{roleAssignedWarningModal.userCount}</strong> users. Reassign these users before deleting the role.
+            <p style={{ margin: "0 0 18px 0", fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.45 }}>
+              This role is currently assigned to <strong style={{ color: tokens.textPrimary }}>{roleAssignedWarningModal.userCount}</strong> users. Reassign these users before deleting the role.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button
@@ -2888,8 +2926,8 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 style={{
                   padding: "7px 16px",
                   borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  background: "#2563eb",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.accent,
                   color: "#ffffff",
                   fontSize: "13px",
                   fontWeight: 600,
@@ -2910,27 +2948,27 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         <div style={modalBackdropStyle} onClick={() => setCopiedInviteUrl(null)}>
           <div style={{ ...modalCardStyle, maxWidth: "440px" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-              <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#dcfce7", color: "#16a34a", display: "grid", placeItems: "center" }}>
+              <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: isDark ? "rgba(34, 197, 94, 0.2)" : "#dcfce7", color: isDark ? "#4ade80" : "#16a34a", display: "grid", placeItems: "center" }}>
                 ✓
               </div>
-              <h4 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+              <h4 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
                 Invitation Dispatched
               </h4>
             </div>
 
-            <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#64748b", lineHeight: 1.45 }}>
+            <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.45 }}>
               The invited team member can use this link to set their password and activate their account:
             </p>
 
             <div
               style={{
-                background: "#f1f5f9",
-                border: "1px solid #cbd5e1",
+                background: tokens.elevatedSurfaceBg,
+                border: `1px solid ${tokens.border}`,
                 borderRadius: "8px",
                 padding: "8px 12px",
                 fontSize: "12px",
                 fontFamily: "monospace",
-                color: "#0f172a",
+                color: tokens.textPrimary,
                 wordBreak: "break-all",
                 marginBottom: "16px",
               }}
@@ -2950,7 +2988,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                   padding: "7px 16px",
                   borderRadius: "8px",
                   border: "none",
-                  background: "#2563eb",
+                  background: tokens.accent,
                   color: "#ffffff",
                   fontSize: "13px",
                   fontWeight: 600,
@@ -2977,7 +3015,7 @@ const thStyle: React.CSSProperties = {
   fontWeight: 700,
   textTransform: "uppercase",
   letterSpacing: "0.05em",
-  color: "#64748b",
+  color: "#a1a1aa",
 };
 
 const tdStyle: React.CSSProperties = {
@@ -2989,7 +3027,7 @@ const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: "12.5px",
   fontWeight: 600,
-  color: "#334155",
+  color: "var(--admin-text-secondary, #64748b)",
   marginBottom: "5px",
 };
 
@@ -2998,10 +3036,10 @@ const inputStyle: React.CSSProperties = {
   height: "36px",
   padding: "0 12px",
   borderRadius: "8px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
+  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+  background: "var(--admin-elevated-surface, #f8fafc)",
   fontSize: "13px",
-  color: "#0f172a",
+  color: "var(--admin-text-primary, #0f172a)",
   outline: "none",
   boxSizing: "border-box",
 };
@@ -3014,7 +3052,7 @@ const menuItemStyle: React.CSSProperties = {
   border: "none",
   background: "transparent",
   fontSize: "12.5px",
-  color: "#334155",
+  color: "var(--admin-text-secondary, #64748b)",
   cursor: "pointer",
   borderRadius: "5px",
 };
@@ -3025,7 +3063,8 @@ const modalBackdropStyle: React.CSSProperties = {
   left: 0,
   right: 0,
   bottom: 0,
-  background: "rgba(15, 23, 42, 0.45)",
+  background: "rgba(0, 0, 0, 0.65)",
+  backdropFilter: "blur(4px)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -3036,11 +3075,11 @@ const modalBackdropStyle: React.CSSProperties = {
 const modalCardStyle: React.CSSProperties = {
   width: "100%",
   maxWidth: "380px",
-  background: "#ffffff",
+  background: "var(--admin-surface, #ffffff)",
   borderRadius: "14px",
   padding: "20px",
-  boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.22)",
-  border: "1px solid rgba(226, 232, 240, 0.9)",
+  boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.2)",
+  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   display: "flex",
   flexDirection: "column",
 };
@@ -3048,9 +3087,9 @@ const modalCardStyle: React.CSSProperties = {
 const modalCancelButtonStyle: React.CSSProperties = {
   padding: "7px 14px",
   borderRadius: "8px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#334155",
+  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+  background: "var(--admin-elevated-surface, #f8fafc)",
+  color: "var(--admin-text-primary, #0f172a)",
   fontSize: "13px",
   fontWeight: 600,
   cursor: "pointer",

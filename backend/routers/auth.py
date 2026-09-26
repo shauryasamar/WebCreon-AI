@@ -87,6 +87,11 @@ class UpdateAdminProfileRequest(BaseModel):
     phone: Optional[str] = None
     avatar_url: Optional[str] = None
     timezone: Optional[str] = None
+    theme_preference: Optional[str] = None
+
+
+class UpdateAdminThemeRequest(BaseModel):
+    theme_preference: str
 
 
 class CustomerSignupRequest(BaseModel):
@@ -251,6 +256,7 @@ def serialize_admin(admin: Admin, session: Optional[Session] = None) -> dict:
         "authProvider": getattr(admin, "auth_provider", "email"),
         "googleId": getattr(admin, "google_id", None),
         "timezone": getattr(admin, "timezone", "Asia/Kolkata"),
+        "themePreference": getattr(admin, "theme_preference", "light") or "light",
         "hasPassword": bool(getattr(admin, "password_hash", None)),
         "createdAt": admin.created_at.isoformat() if getattr(admin, "created_at", None) else None,
     }
@@ -317,6 +323,16 @@ def admin_signup(
         }
     )
     set_auth_cookie(response, ADMIN_COOKIE_NAME, token)
+    theme_mode = getattr(admin, "theme_preference", "light") or "light"
+    response.set_cookie(
+        key="app_theme_mode",
+        value=theme_mode,
+        httponly=False,
+        secure=COOKIE_SECURE,
+        samesite="Lax",
+        path="/",
+        max_age=365 * 86400,
+    )
     return response
 
 
@@ -436,6 +452,16 @@ def admin_login(
         }
     )
     set_auth_cookie(response, ADMIN_COOKIE_NAME, token)
+    theme_mode = getattr(admin, "theme_preference", "light") or "light"
+    response.set_cookie(
+        key="app_theme_mode",
+        value=theme_mode,
+        httponly=False,
+        secure=COOKIE_SECURE,
+        samesite="Lax",
+        path="/",
+        max_age=365 * 86400,
+    )
     return response
 
 
@@ -528,6 +554,16 @@ def admin_google_auth(
         }
     )
     set_auth_cookie(response, ADMIN_COOKIE_NAME, token)
+    theme_mode = getattr(admin, "theme_preference", "light") or "light"
+    response.set_cookie(
+        key="app_theme_mode",
+        value=theme_mode,
+        httponly=False,
+        secure=COOKIE_SECURE,
+        samesite="Lax",
+        path="/",
+        max_age=365 * 86400,
+    )
     return response
 
 
@@ -629,12 +665,50 @@ def update_admin_profile(
         admin_obj.avatar_url = payload.avatar_url.strip()
     if payload.timezone is not None:
         admin_obj.timezone = payload.timezone.strip()
+    if payload.theme_preference is not None:
+        mode = payload.theme_preference.strip().lower()
+        if mode in ("light", "dark", "system"):
+            admin_obj.theme_preference = mode
 
     session.add(admin_obj)
     session.commit()
     session.refresh(admin_obj)
 
     return {"admin": serialize_admin(admin_obj, session)}
+
+
+@router.patch("/admin/theme")
+def update_admin_theme(
+    payload: UpdateAdminThemeRequest,
+    response: Response,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    admin_id = admin["adminId"]
+    admin_obj = session.get(Admin, admin_id)
+    if not admin_obj:
+        raise HTTPException(status_code=404, detail="Admin not found")
+
+    mode = payload.theme_preference.strip().lower()
+    if mode not in ("light", "dark", "system"):
+        mode = "light"
+
+    admin_obj.theme_preference = mode
+    session.add(admin_obj)
+    session.commit()
+    session.refresh(admin_obj)
+
+    response.set_cookie(
+        key="app_theme_mode",
+        value=mode,
+        httponly=False,
+        secure=COOKIE_SECURE,
+        samesite="Lax",
+        path="/",
+        max_age=365 * 86400,
+    )
+
+    return {"themePreference": mode, "admin": serialize_admin(admin_obj, session)}
 
 
 from uuid import uuid4

@@ -21,6 +21,7 @@ import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
 import type { AdminNavKey, SettingsNavKey } from "./Component/BuilderDrawerPanel";
 import { useAdminAuth } from "./context/AdminAuthContext";
+import { useAdminTheme } from "./context/ThemeContext";
 
 // Direct imports for instant, 60fps zero-jitter workspace interactions
 import AdminLayout from "./Component/AdminLayout";
@@ -432,6 +433,7 @@ function StorefrontShell({
 
   const navbarBlockRef = useRef<HTMLDivElement | null>(null);
   const footerBlockRef = useRef<HTMLDivElement | null>(null);
+  const [footerIsHovered, setFooterIsHovered] = useState(false);
   const [measuredNavbarHeight, setMeasuredNavbarHeight] = useState(118);
 
   useEffect(() => {
@@ -598,6 +600,8 @@ function StorefrontShell({
           ref={footerBlockRef}
           data-editor-block-id={FOOTER_BLOCK_ID}
           data-editor-block-type="footer"
+          onMouseEnter={() => editMode && setFooterIsHovered(true)}
+          onMouseLeave={() => setFooterIsHovered(false)}
           onClick={(e) => {
             if (!editMode) return;
             e.stopPropagation();
@@ -606,7 +610,7 @@ function StorefrontShell({
           style={{
             position: "relative",
             cursor: editMode ? "pointer" : "default",
-            zIndex: editMode && footerIsSelected ? 50 : 5,
+            zIndex: editMode && footerIsSelected ? 50 : editMode && footerIsHovered ? 45 : 5,
             isolation: "isolate",
             overflow: "visible",
             marginTop: "auto",
@@ -618,14 +622,20 @@ function StorefrontShell({
             style={{
               position: "absolute",
               inset: "-2px",
-              border: editMode && footerIsSelected ? "2px solid #2563eb" : "1.5px dashed transparent",
+              border: editMode && footerIsSelected
+                ? "2px solid #2563eb"
+                : editMode && footerIsHovered
+                  ? "1.5px dashed #3b82f6"
+                  : "1.5px dashed transparent",
               borderRadius: "10px",
               pointerEvents: "none",
               zIndex: 40,
               transition: "all 0.15s ease",
               boxShadow: editMode && footerIsSelected
                 ? "0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 0 3.5px rgba(37, 99, 235, 0.22)"
-                : "none",
+                : editMode && footerIsHovered
+                  ? "0 0 0 2px rgba(59, 130, 246, 0.1)"
+                  : "none",
             }}
           />
 
@@ -852,14 +862,18 @@ function StorefrontSkeleton({
   isProductDetail?: boolean;
   siteSlug?: string;
 }) {
-  const bg = "#f8fafc";
-  const headerBg = "rgba(255,255,255,0.9)";
-  const border = "1px solid rgba(0,0,0,0.06)";
-  const cardBg = "#ffffff";
-  const cardBorder = "1px solid rgba(0,0,0,0.06)";
+  const { isDark, tokens } = useAdminTheme();
+
+  const bg = isDark ? tokens.workspaceBg : "#f8fafc";
+  const headerBg = isDark ? tokens.surfaceBg : "rgba(255,255,255,0.9)";
+  const border = `1px solid ${tokens.border}`;
+  const cardBg = isDark ? tokens.surfaceBg : "#ffffff";
+  const cardBorder = `1px solid ${tokens.border}`;
 
   const skStyle: React.CSSProperties = {
-    backgroundImage: "linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)",
+    backgroundImage: isDark
+      ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)"
+      : "linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)",
     backgroundSize: "200% 100%",
     animation: "storeShimmer 1.5s infinite linear",
     willChange: "background-position",
@@ -871,7 +885,7 @@ function StorefrontSkeleton({
       style={{
         minHeight: "100vh",
         background: bg,
-        color: "#0f172a",
+        color: tokens.textPrimary,
         overflow: "hidden",
         fontFamily:
           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -1141,6 +1155,7 @@ function BuilderPageContent() {
   const navigate = useNavigate();
   const { products } = useCart();
   const { admin: authAdmin, logoutAdmin: authLogoutAdmin, hasPermission, isOwner } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
   const canPublish = isOwner || hasPermission("customize:publish");
 
   const isStoreRoute = location.pathname.startsWith("/store/");
@@ -2440,6 +2455,22 @@ function BuilderPageContent() {
     }
   }, [location.pathname, editMode, adminAuthenticated]);
 
+  // Always reset scroll position to top when navigating across pages or admin tabs
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+
+    if (previewPaneRef.current) {
+      previewPaneRef.current.scrollTop = 0;
+    }
+    const scrollContainers = document.querySelectorAll<HTMLElement>(
+      ".builder-preview-scroll, [class*='builder-preview'], main"
+    );
+    scrollContainers.forEach((el) => {
+      el.scrollTop = 0;
+    });
+  }, [location.pathname, location.search]);
 
   const handleLogout = async () => {
     try {
@@ -2459,6 +2490,59 @@ function BuilderPageContent() {
   const canEditStorefront =
     !isAdminRoute && !isStoreRoute && adminAuthenticated;
 
+  const isDarkSiteTheme = activeSiteDefinition?.theme?.mode === "dark" || isColorDarkHex(activeSiteDefinition?.theme?.primary_bg);
+  const pageBg = isAdminRoute
+    ? (isDark ? tokens.surfaceBg : "#ffffff")
+    : activeSiteDefinition?.theme?.primary_bg ||
+    (isDarkSiteTheme ? "#0f172a" : (isDark ? tokens.workspaceBg : "#f8fafc"));
+  const textColor = isAdminRoute
+    ? tokens.textPrimary
+    : activeSiteDefinition?.theme?.text_color ||
+    (isDarkSiteTheme ? "#f9fafb" : tokens.textPrimary);
+
+  // When rendered in mobile deviceMode or inside preview iframe, eliminate scrollbar gutters and lock horizontal drift
+  useEffect(() => {
+    const isInsideFrame = typeof window !== "undefined" && (window.self !== window.top || isPreviewMode);
+    const shouldSuppress = isInsideFrame || deviceMode === "mobile";
+
+    if (!shouldSuppress) return;
+
+    document.documentElement.classList.add("is-mobile-preview");
+    document.body.classList.add("is-mobile-preview");
+
+    if (pageBg && isInsideFrame) {
+      document.documentElement.style.backgroundColor = pageBg;
+      document.body.style.backgroundColor = pageBg;
+    }
+
+    return () => {
+      document.documentElement.classList.remove("is-mobile-preview");
+      document.body.classList.remove("is-mobile-preview");
+    };
+  }, [isPreviewMode, pageBg, deviceMode]);
+
+  const disabledControlKeys = useMemo(() => {
+    const keys: ("saved-sites" | "chat" | "customize" | "admin-panel" | "assets" | "settings" | "qr-link")[] = [];
+    if (!hasPermission("saved_sites:view")) keys.push("saved-sites");
+    if (!hasPermission("chat:access") && !hasPermission("chat:view")) keys.push("chat");
+    if (!hasPermission("customize:edit") && !hasPermission("customize:view")) keys.push("customize");
+    if (!hasPermission("assets:view")) keys.push("assets");
+    if (!hasPermission("qr_link:view")) keys.push("qr-link");
+    const hasAnySettingsPermission = [
+      "profile:view", "users_roles:view", "general_settings:view",
+      "domain_settings:view", "billing:view", "integrations:view", "settings:view"
+    ].some((p) => hasPermission(p));
+    if (!hasAnySettingsPermission) keys.push("settings");
+
+    const hasAnyStorePermission = [
+      "products:view", "orders:view", "home_sections:view", "analytics:view",
+      "support:view", "discounts:view", "delivery:view", "earnings:view",
+      "payout_settings:view", "checkout_charges:view"
+    ].some((p) => hasPermission(p));
+    if (!hasAnyStorePermission) keys.push("admin-panel");
+
+    return keys;
+  }, [hasPermission]);
 
   if (isStoreRoute && loading && !activeSiteDefinition) {
     return (
@@ -2524,38 +2608,6 @@ function BuilderPageContent() {
   }
 
 
-  const isDarkSiteTheme = activeSiteDefinition?.theme?.mode === "dark" || isColorDarkHex(activeSiteDefinition?.theme?.primary_bg);
-  const pageBg = isAdminRoute
-    ? "#ffffff"
-    : activeSiteDefinition?.theme?.primary_bg ||
-    (isDarkSiteTheme ? "#0f172a" : "#f8fafc");
-  const textColor = isAdminRoute
-    ? "#0f172a"
-    : activeSiteDefinition?.theme?.text_color ||
-    (isDarkSiteTheme ? "#f9fafb" : "#111827");
-
-  // When rendered in mobile deviceMode or inside preview iframe, eliminate scrollbar gutters and lock horizontal drift
-  useEffect(() => {
-    const isInsideFrame = typeof window !== "undefined" && (window.self !== window.top || isPreviewMode);
-    const shouldSuppress = isInsideFrame || deviceMode === "mobile";
-
-    if (!shouldSuppress) return;
-
-    document.documentElement.classList.add("is-mobile-preview");
-    document.body.classList.add("is-mobile-preview");
-
-    if (pageBg && isInsideFrame) {
-      document.documentElement.style.backgroundColor = pageBg;
-      document.body.style.backgroundColor = pageBg;
-    }
-
-    return () => {
-      document.documentElement.classList.remove("is-mobile-preview");
-      document.body.classList.remove("is-mobile-preview");
-    };
-  }, [isPreviewMode, pageBg, deviceMode]);
-
-
   const topBar = showAdminTopbar ? (
     <BuilderTopControlBar
       siteName={siteName}
@@ -2575,31 +2627,7 @@ function BuilderPageContent() {
     />
   ) : null;
 
-
   const storeBadge = (pendingCounts?.total ?? 0) > 0 ? pendingCounts!.total : undefined;
-
-  const disabledControlKeys = useMemo(() => {
-    const keys: ("saved-sites" | "chat" | "customize" | "admin-panel" | "assets" | "settings" | "qr-link")[] = [];
-    if (!hasPermission("saved_sites:view")) keys.push("saved-sites");
-    if (!hasPermission("chat:access") && !hasPermission("chat:view")) keys.push("chat");
-    if (!hasPermission("customize:edit") && !hasPermission("customize:view")) keys.push("customize");
-    if (!hasPermission("assets:view")) keys.push("assets");
-    if (!hasPermission("qr_link:view")) keys.push("qr-link");
-    const hasAnySettingsPermission = [
-      "profile:view", "users_roles:view", "general_settings:view",
-      "domain_settings:view", "billing:view", "integrations:view", "settings:view"
-    ].some((p) => hasPermission(p));
-    if (!hasAnySettingsPermission) keys.push("settings");
-
-    const hasAnyStorePermission = [
-      "products:view", "orders:view", "home_sections:view", "analytics:view",
-      "support:view", "discounts:view", "delivery:view", "earnings:view",
-      "payout_settings:view", "checkout_charges:view"
-    ].some((p) => hasPermission(p));
-    if (!hasAnyStorePermission) keys.push("admin-panel");
-
-    return keys;
-  }, [hasPermission]);
 
   const leftPanel = showAdminTopbar ? (
     <BuilderControlPanel
@@ -2683,10 +2711,8 @@ function BuilderPageContent() {
         style={{
           height: "100%",
           overflowY: "auto",
-          background:
-            activeSiteDefinition.theme?.mode === "light"
-              ? "rgba(255,255,255,0.96)"
-              : "rgba(15,23,42,0.96)",
+          background: tokens.surfaceBg,
+          borderLeft: `1px solid ${tokens.border}`,
         }}
       >
         <EditorSidebar
@@ -3528,15 +3554,6 @@ function BuilderPageContent() {
           )}
         </div>
 
-
-        <QrLinkPopup
-          open={qrOpen}
-          onClose={() => setQrOpen(false)}
-          customerUrl={
-            siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
-          }
-        />
-
         {/* Floating Bottom-Right Corner Publish Button (Appears only when changes exist and user has publish permission) */}
         {showAdminTopbar && !isStoreRoute && !isAdminRoute && canPublish && (hasUnpublishedChanges || publishing || publishSuccess) && (
           <button
@@ -3567,6 +3584,14 @@ function BuilderPageContent() {
           </button>
         )}
       </BuilderShell>
+
+      <QrLinkPopup
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        customerUrl={
+          siteSlug ? `${window.location.origin}/store/${siteSlug}` : ""
+        }
+      />
     </DeviceModeProvider>
   );
 }

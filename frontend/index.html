@@ -1,16 +1,59 @@
 <!doctype html>
-<html lang="en" style="background-color: #f8fafc; color-scheme: light;">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
     <title>WebCreon AI</title>
+    <script>
+      (function() {
+        try {
+          var pathname = window.location.pathname || "";
+          var isStoreRoute = pathname.indexOf("/store/") !== -1 || pathname.indexOf("/site/") !== -1;
+          var isDark = false;
+          var customBg = null;
+
+          if (isStoreRoute) {
+            var pathParts = pathname.split("/");
+            var siteKey = pathParts[2] || "";
+            if (siteKey) {
+              var storeTheme = localStorage.getItem("wc_theme_mode_" + siteKey);
+              var storeBg = localStorage.getItem("wc_theme_bg_" + siteKey);
+              if (storeBg) customBg = storeBg;
+              if (storeTheme === "dark") isDark = true;
+            }
+          }
+
+          if (!isStoreRoute) {
+            var mode = localStorage.getItem("app_theme_mode");
+            if (!mode) {
+              var match = document.cookie.match(/(^|;\s*)app_theme_mode=([^;]+)/);
+              if (match) mode = decodeURIComponent(match[2]);
+            }
+            if (mode === "dark") {
+              isDark = true;
+            } else if (mode === "system" || (!mode && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+              isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            }
+          }
+
+          var bg = customBg || (isDark ? "#121214" : "#f8fafc");
+          var text = isDark ? "#f4f4f5" : "#0f172a";
+          var scheme = isDark ? "dark" : "light";
+
+          document.documentElement.style.backgroundColor = bg;
+          document.documentElement.style.color = text;
+          document.documentElement.style.colorScheme = scheme;
+          document.documentElement.setAttribute("data-theme", scheme);
+        } catch(e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Bebas+Neue&family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Cinzel:wght@400..900&family=Cormorant+Garamond:ital,wght@0,400..700;1,400..700&family=DM+Sans:ital,opsz,wght@0,9..40,400..800;1,9..40,400..800&family=Instrument+Serif:ital@0;1&family=Inter:ital,wght@0,300..900;1,300..900&family=Italiana&family=Marcellus&family=Michroma&family=Montserrat:ital,wght@0,300..900;1,300..900&family=Orbitron:wght@400..900&family=Outfit:wght@400..900&family=Parisienne&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:ital,wght@0,400..800;1,400..800&family=Poppins:ital,wght@0,400..800;1,400..800&family=Righteous&family=Space+Grotesk:wght@400..700&family=Syncopate:wght@400;700&family=Syne:wght@500..800&family=Tenor+Sans&family=Unbounded:wght@400..900&display=swap" rel="stylesheet">
   </head>
-  <body style="margin: 0; background-color: #f8fafc; color: #0f172a;">
+  <body style="margin: 0; min-height: 100vh;">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

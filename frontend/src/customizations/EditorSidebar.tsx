@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { useAdminTheme } from "../context/ThemeContext";
 import {
   applyFestivalTheme,
   applyThemeMode,
@@ -29,6 +30,7 @@ function PageBlocksTreeView({
   onSelectPage?: (pageId: string) => void;
   isLightMode?: boolean;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const location = useLocation();
   const currentPath = location.pathname;
 
@@ -196,19 +198,19 @@ function PageBlocksTreeView({
     <div
       style={{
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-        background: "#ffffff",
-        border: "1px solid #e2e8f0",
-        borderRadius: "4px",
+        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+        border: `1px solid ${tokens.border}`,
+        borderRadius: "6px",
         padding: "10px 8px",
         boxSizing: "border-box",
         width: "100%",
-        color: "#0f172a",
+        color: tokens.textPrimary,
         fontSize: "11px",
         lineHeight: "1.6",
       }}
     >
       {/* Root Node */}
-      <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: "6px", fontSize: "11.5px" }}>
+      <div style={{ fontWeight: 700, color: tokens.textPrimary, marginBottom: "6px", fontSize: "11.5px" }}>
         Storefront Pages & Components
       </div>
 
@@ -252,34 +254,34 @@ function PageBlocksTreeView({
                     alignItems: "center",
                     justifyContent: "space-between",
                     padding: "3px 4px",
-                    borderRadius: "3px",
+                    borderRadius: "4px",
                     cursor: "pointer",
                     fontWeight: isCurrent ? 700 : 500,
-                    color: isCurrent ? "#2563eb" : "#334155",
-                    background: isCurrent ? "rgba(37,99,235,0.06)" : "transparent",
+                    color: isCurrent ? tokens.accent : (isDark ? tokens.textPrimary : "#334155"),
+                    background: isCurrent ? (isDark ? "rgba(59,130,246,0.15)" : "rgba(37,99,235,0.06)") : "transparent",
                     transition: "all 0.1s ease",
                   }}
                   onMouseEnter={(e) => {
-                    if (!isCurrent) e.currentTarget.style.background = "#f1f5f9";
+                    if (!isCurrent) e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#f1f5f9";
                   }}
                   onMouseLeave={(e) => {
                     if (!isCurrent) e.currentTarget.style.background = "transparent";
                   }}
                 >
                   <span style={{ display: "flex", alignItems: "center" }}>
-                    <span style={{ color: "#94a3b8", marginRight: "6px", fontFamily: "monospace" }}>{isLastPage ? "└──" : "├──"}</span>
-                    <span style={{ color: isOpen ? "#2563eb" : "#94a3b8", fontSize: "9px", marginRight: "4px", display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s ease" }}>▶</span>
+                    <span style={{ color: tokens.textMuted, marginRight: "6px", fontFamily: "monospace" }}>{isLastPage ? "└──" : "├──"}</span>
+                    <span style={{ color: isOpen ? tokens.accent : tokens.textMuted, fontSize: "9px", marginRight: "4px", display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s ease" }}>▶</span>
                     <span>{p.name}</span>
-                    <span style={{ color: "#94a3b8", fontSize: "10px", marginLeft: "4px" }}>({p.route})</span>
+                    <span style={{ color: tokens.textMuted, fontSize: "10px", marginLeft: "4px" }}>({p.route})</span>
                   </span>
                   {isCurrent && (
-                    <span style={{ fontSize: "8.5px", color: "#2563eb", fontWeight: 700 }}>Active</span>
+                    <span style={{ fontSize: "8.5px", color: tokens.accent, fontWeight: 700 }}>Active</span>
                   )}
                 </div>
 
                 {/* Page Block Components - Accordion: only shown when page is opened */}
                 {isOpen && (
-                  <div style={{ marginLeft: "16px", borderLeft: isLastPage ? "none" : "1px solid #e2e8f0", paddingLeft: isLastPage ? "1px" : "0", display: "grid", marginTop: "1px" }}>
+                  <div style={{ marginLeft: "16px", borderLeft: isLastPage ? "none" : `1px solid ${tokens.border}`, paddingLeft: isLastPage ? "1px" : "0", display: "grid", marginTop: "1px" }}>
                     {p.blocks.map((b, bIdx) => {
                       const isLastBlock = bIdx === p.blocks.length - 1;
                       return (
@@ -297,24 +299,24 @@ function PageBlocksTreeView({
                             padding: "2px 4px",
                             borderRadius: "3px",
                             cursor: "pointer",
-                            color: "#475569",
+                            color: isDark ? tokens.textSecondary : "#475569",
                             fontSize: "10.5px",
                             transition: "all 0.1s ease",
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "#f1f5f9";
-                            e.currentTarget.style.color = "#2563eb";
+                            e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#f1f5f9";
+                            e.currentTarget.style.color = tokens.accent;
                           }}
                           onMouseLeave={(e) => {
                             e.currentTarget.style.background = "transparent";
-                            e.currentTarget.style.color = "#475569";
+                            e.currentTarget.style.color = isDark ? tokens.textSecondary : "#475569";
                           }}
                         >
                           <span>
-                            <span style={{ color: "#cbd5e1", marginRight: "6px" }}>{isLastBlock ? "└──" : "├──"}</span>
+                            <span style={{ color: tokens.textMuted, marginRight: "6px" }}>{isLastBlock ? "└──" : "├──"}</span>
                             {b.name}
                           </span>
-                          <span style={{ fontSize: "9px", color: "#94a3b8" }}>Edit</span>
+                          <span style={{ fontSize: "9px", color: tokens.textMuted }}>Edit</span>
                         </div>
                       );
                     })}
@@ -356,7 +358,8 @@ type JsonFieldControlProps = {
   onChange: (value: any) => void;
 };
 
-function sharedInputStyle(): React.CSSProperties {
+function sharedInputStyle(isLightMode: boolean = false): React.CSSProperties {
+  const isDark = !isLightMode;
   return {
     width: "100%",
     maxWidth: "100%",
@@ -365,9 +368,9 @@ function sharedInputStyle(): React.CSSProperties {
     height: "28px",
     padding: "3px 8px",
     borderRadius: "5px",
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
+    border: `1px solid ${isDark ? "rgba(255, 255, 255, 0.09)" : "#cbd5e1"}`,
+    background: isDark ? "#242429" : "#ffffff",
+    color: isDark ? "#f4f4f5" : "#0f172a",
     fontSize: "11.5px",
     fontWeight: 500,
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -420,6 +423,7 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
   closeOnSelect = false,
   onChange,
 }) => {
+  const { isDark, tokens } = useAdminTheme();
   const [open, setOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -473,9 +477,9 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
           padding: "3px 8px",
           paddingRight: "22px",
           borderRadius: "5px",
-          border: open ? "1px solid #2563eb" : "1px solid #cbd5e1",
-          background: "#ffffff",
-          color: selectedOption ? "#0f172a" : "#94a3b8",
+          border: open ? `1px solid ${tokens.accent}` : `1px solid ${tokens.border}`,
+          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+          color: selectedOption ? tokens.textPrimary : tokens.textMuted,
           fontSize: "11.5px",
           fontWeight: 500,
           fontFamily: isFontDropdown && selectedOption ? getFontPreviewFamily(selectedOption.value) : "'Inter', -apple-system, sans-serif",
@@ -485,7 +489,7 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
           cursor: "pointer",
           textAlign: "left",
           outline: "none",
-          boxShadow: open ? "0 0 0 2px rgba(37,99,235,0.15)" : "none",
+          boxShadow: open ? `0 0 0 2px ${tokens.accent}33` : "none",
           transition: "all 0.12s ease",
           boxSizing: "border-box",
         }}
@@ -507,7 +511,7 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
             transform: `translateY(-50%) rotate(${open ? "180deg" : "0deg"})`,
             width: "11px",
             height: "11px",
-            color: open ? "#2563eb" : "#64748b",
+            color: open ? tokens.accent : tokens.textMuted,
             transition: "transform 0.15s ease, color 0.12s ease",
             pointerEvents: "none",
           }}
@@ -524,10 +528,12 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
             left: 0,
             right: 0,
             zIndex: 99999,
-            background: "#ffffff",
+            background: isDark ? tokens.surfaceBg : "#ffffff",
             borderRadius: "6px",
-            border: "1px solid #cbd5e1",
-            boxShadow: "0 10px 25px -4px rgba(0, 0, 0, 0.16), 0 4px 10px -2px rgba(0, 0, 0, 0.08)",
+            border: `1px solid ${tokens.border}`,
+            boxShadow: isDark
+              ? "0 10px 25px -4px rgba(0, 0, 0, 0.6), 0 4px 10px -2px rgba(0, 0, 0, 0.4)"
+              : "0 10px 25px -4px rgba(0, 0, 0, 0.16), 0 4px 10px -2px rgba(0, 0, 0, 0.08)",
             maxHeight: "230px",
             overflowY: "auto",
             padding: "3px",
@@ -535,7 +541,7 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
           }}
         >
           {options.length === 0 ? (
-            <div style={{ padding: "4px 6px", fontSize: "10.5px", color: "#94a3b8" }}>No options</div>
+            <div style={{ padding: "4px 6px", fontSize: "10.5px", color: tokens.textMuted }}>No options</div>
           ) : (
             options.map((opt) => {
               const isSelected = opt.value === value;
@@ -555,8 +561,8 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
                     fontSize: "11px",
                     fontWeight: isSelected ? 600 : 500,
                     fontFamily: optionFontFamily || "'Inter', sans-serif",
-                    color: isSelected ? "#2563eb" : "#0f172a",
-                    background: isSelected ? "rgba(37,99,235,0.08)" : "transparent",
+                    color: isSelected ? tokens.accent : tokens.textPrimary,
+                    background: isSelected ? (isDark ? "rgba(59, 130, 246, 0.18)" : "rgba(37,99,235,0.08)") : "transparent",
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
@@ -566,7 +572,7 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
                     marginBottom: "1px",
                   }}
                   onMouseEnter={(e) => {
-                    if (!isSelected) (e.currentTarget as HTMLElement).style.background = "#f1f5f9";
+                    if (!isSelected) (e.currentTarget as HTMLElement).style.background = isDark ? tokens.elevatedSurfaceBg : "#f1f5f9";
                   }}
                   onMouseLeave={(e) => {
                     if (!isSelected) (e.currentTarget as HTMLElement).style.background = "transparent";
@@ -576,7 +582,7 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
                     {opt.label}
                   </span>
                   {isSelected && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "11px", height: "11px", color: "#2563eb", flexShrink: 0 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "11px", height: "11px", color: tokens.accent, flexShrink: 0 }}>
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
@@ -590,7 +596,8 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
   );
 };
 
-function colorInputStyle(_isLightMode: boolean): React.CSSProperties {
+function colorInputStyle(isLightMode: boolean = false): React.CSSProperties {
+  const isDark = !isLightMode;
   return {
     width: "100%",
     maxWidth: "100%",
@@ -599,21 +606,22 @@ function colorInputStyle(_isLightMode: boolean): React.CSSProperties {
     height: "26px",
     padding: "2px",
     borderRadius: "4px",
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+    border: `1px solid ${isDark ? "rgba(255, 255, 255, 0.1)" : "#cbd5e1"}`,
+    background: isDark ? "#242429" : "#ffffff",
     cursor: "pointer",
   };
 }
 
-function sectionCardStyle(_isLightMode: boolean): React.CSSProperties {
+function sectionCardStyle(isLightMode: boolean = false): React.CSSProperties {
+  const isDark = !isLightMode;
   return {
     display: "grid",
     gap: "10px",
     padding: "10px 12px",
     borderRadius: "8px",
-    border: "1px solid #e2e8f0",
-    background: "#ffffff",
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)",
+    border: `1px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0"}`,
+    background: isDark ? "#18181b" : "#ffffff",
+    boxShadow: isDark ? "none" : "0 1px 2px rgba(0, 0, 0, 0.02)",
     boxSizing: "border-box",
     maxWidth: "100%",
     minWidth: 0,
@@ -1144,6 +1152,7 @@ function CompactColorRow({
   value: string;
   onChange: (val: string) => void;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const hexVal = typeof value === "string" && value ? value : "#2563eb";
   const isValidHex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(hexVal);
 
@@ -1155,9 +1164,9 @@ function CompactColorRow({
         justifyContent: "space-between",
         padding: "3.5px 7px",
         minHeight: "29px",
-        background: "#f8fafc",
+        background: isDark ? tokens.surfaceBg : "#f8fafc",
         borderRadius: "4px",
-        border: "1px solid #e2e8f0",
+        border: `1px solid ${tokens.border}`,
         boxSizing: "border-box",
         width: "100%",
         gap: "6px",
@@ -1171,7 +1180,7 @@ function CompactColorRow({
             height: "18px",
             borderRadius: "4px",
             background: hexVal,
-            border: "1px solid rgba(0,0,0,0.18)",
+            border: `1px solid ${isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)"}`,
             boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
             cursor: "pointer",
             flexShrink: 0,
@@ -1196,7 +1205,7 @@ function CompactColorRow({
             }}
           />
         </label>
-        <span style={{ fontSize: "11px", fontWeight: 600, color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {label}
         </span>
       </div>
@@ -1216,10 +1225,10 @@ function CompactColorRow({
           fontFamily: "'Inter', monospace",
           fontSize: "10.5px",
           fontWeight: 700,
-          color: "#0f172a",
+          color: tokens.textPrimary,
           borderRadius: "4px",
-          border: "1px solid #cbd5e1",
-          background: "#ffffff",
+          border: `1px solid ${tokens.border}`,
+          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
           outline: "none",
           padding: "0 2px",
           boxSizing: "border-box",
@@ -1239,6 +1248,7 @@ function ModernColorPicker({
   onChange: (val: string) => void;
   label?: string;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const hexVal = typeof value === "string" && value ? value : "#2563eb";
   const isValidHex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(hexVal);
 
@@ -1246,10 +1256,10 @@ function ModernColorPicker({
     <div style={{ display: "grid", gap: "4px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {label && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-          <label style={{ fontSize: "10px", fontWeight: 600, color: "#475569", letterSpacing: "0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }} title={label}>
+          <label style={{ fontSize: "10px", fontWeight: 600, color: tokens.textSecondary, letterSpacing: "0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }} title={label}>
             {label}
           </label>
-          <span style={{ fontSize: "10px", fontFamily: "'Inter', monospace", fontWeight: 700, color: "#475569", background: "rgba(100,116,139,0.08)", padding: "1px 5px", borderRadius: "3px", flexShrink: 0, lineHeight: 1.2 }}>
+          <span style={{ fontSize: "10px", fontFamily: "'Inter', monospace", fontWeight: 700, color: tokens.textSecondary, background: isDark ? "rgba(255,255,255,0.06)" : "rgba(100,116,139,0.08)", padding: "1px 5px", borderRadius: "3px", flexShrink: 0, lineHeight: 1.2 }}>
             {hexVal.toUpperCase()}
           </span>
         </div>
@@ -1265,10 +1275,10 @@ function ModernColorPicker({
           height: "28px",
           padding: "3px 8px",
           borderRadius: "5px",
-          border: "1px solid #cbd5e1",
-          background: "#ffffff",
+          border: `1px solid ${tokens.border}`,
+          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
           boxSizing: "border-box",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+          boxShadow: isDark ? "none" : "0 1px 2px rgba(0,0,0,0.02)",
         }}
       >
         {/* Interactive Swatch & Native Spectrum Trigger */}
@@ -1279,7 +1289,7 @@ function ModernColorPicker({
             height: "20px",
             borderRadius: "4px",
             background: hexVal,
-            border: "1px solid rgba(0,0,0,0.18)",
+            border: `1px solid ${isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)"}`,
             boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
             cursor: "pointer",
             flexShrink: 0,
@@ -1322,7 +1332,7 @@ function ModernColorPicker({
             fontFamily: "'Inter', monospace",
             fontSize: "11px",
             fontWeight: 700,
-            color: "#0f172a",
+            color: tokens.textPrimary,
             padding: 0,
             minWidth: 0,
             letterSpacing: "0.02em",
@@ -1333,7 +1343,7 @@ function ModernColorPicker({
           style={{
             fontSize: "8.5px",
             fontWeight: 800,
-            color: "#94a3b8",
+            color: tokens.textMuted,
             letterSpacing: "0.05em",
             userSelect: "none",
           }}
@@ -1352,7 +1362,8 @@ function renderFieldControl(
   isLightMode: boolean,
   onChange: (value: any) => void
 ) {
-  const inputStyle = sharedInputStyle();
+  const isDark = !isLightMode;
+  const inputStyle = sharedInputStyle(isLightMode);
 
   if (field.type === "text") {
     const activeVal =
@@ -1419,8 +1430,8 @@ function renderFieldControl(
             WebkitAppearance: "none",
             MozAppearance: "none",
             cursor: "pointer",
-            background: "#ffffff",
-            color: "#0f172a",
+            background: isDark ? "#242429" : "#ffffff",
+            color: isDark ? "#f4f4f5" : "#0f172a",
             fontWeight: 500,
             fontSize: "11px",
           }}
@@ -1434,7 +1445,7 @@ function renderFieldControl(
             <option
               key={String(opt.value)}
               value={String(opt.value)}
-              style={{ color: "#0f172a", background: "#ffffff", fontSize: "11px" }}
+              style={{ color: isDark ? "#f4f4f5" : "#0f172a", background: isDark ? "#242429" : "#ffffff", fontSize: "11px" }}
             >
               {opt.label}
             </option>
@@ -1454,7 +1465,7 @@ function renderFieldControl(
             transform: "translateY(-50%)",
             width: "11px",
             height: "11px",
-            color: "#64748b",
+            color: isDark ? "#a1a1aa" : "#64748b",
             pointerEvents: "none",
           }}
         >
@@ -1492,8 +1503,8 @@ function renderFieldControl(
           gap: "6px",
           padding: "3px 6px",
           borderRadius: "4px",
-          border: "1px solid #e2e8f0",
-          background: isChecked ? "rgba(37,99,235,0.04)" : "#ffffff",
+          border: `1px solid ${isDark ? (isChecked ? "rgba(59,130,246,0.3)" : "rgba(255,255,255,0.08)") : "#e2e8f0"}`,
+          background: isDark ? (isChecked ? "rgba(59,130,246,0.12)" : "#242429") : (isChecked ? "rgba(37,99,235,0.04)" : "#ffffff"),
           cursor: "pointer",
           userSelect: "none",
           transition: "all 0.12s ease",
@@ -1501,7 +1512,7 @@ function renderFieldControl(
           width: "100%",
         }}
       >
-        <span style={{ fontSize: "10.5px", fontWeight: 500, color: isChecked ? "#0f172a" : "#475569" }}>
+        <span style={{ fontSize: "10.5px", fontWeight: 500, color: isChecked ? (isDark ? "#ffffff" : "#0f172a") : (isDark ? "#a1a1aa" : "#475569") }}>
           {field.label}
         </span>
         <div
@@ -1510,7 +1521,7 @@ function renderFieldControl(
             width: "24px",
             height: "14px",
             borderRadius: "999px",
-            background: isChecked ? ADMIN_BLUE : "#cbd5e1",
+            background: isChecked ? (isDark ? "#3b82f6" : "#2563eb") : (isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"),
             transition: "background 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
             flexShrink: 0,
           }}
@@ -1577,6 +1588,7 @@ const SegmentedRow = ({
   value: string;
   onChange: (val: string) => void;
 }) => {
+  const { isDark, tokens } = useAdminTheme();
   const isCompact = options.length >= 4;
   const isVeryCompact = options.length >= 5;
 
@@ -1585,7 +1597,7 @@ const SegmentedRow = ({
       style={{
         display: "grid",
         gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`,
-        background: "#f1f5f9",
+        background: isDark ? tokens.surfaceBg : "#f1f5f9",
         padding: "2px",
         borderRadius: "5px",
         gap: "2px",
@@ -1593,6 +1605,7 @@ const SegmentedRow = ({
         maxWidth: "100%",
         boxSizing: "border-box",
         minWidth: 0,
+        border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "transparent"}`,
       }}
     >
       {options.map((opt) => {
@@ -1610,9 +1623,9 @@ const SegmentedRow = ({
               fontWeight: active ? 700 : 500,
               borderRadius: "4px",
               border: "none",
-              background: active ? "#ffffff" : "transparent",
-              color: active ? "#0f172a" : "#64748b",
-              boxShadow: active ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+              background: active ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
+              color: active ? (isDark ? tokens.textPrimary : "#0f172a") : tokens.textMuted,
+              boxShadow: active ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 2px rgba(0,0,0,0.08)") : "none",
               cursor: "pointer",
               textAlign: "center",
               whiteSpace: "nowrap",
@@ -1649,6 +1662,7 @@ const NumberStepperField = ({
   unit?: string;
   onChange: (val: number) => void;
 }) => {
+  const { isDark, tokens } = useAdminTheme();
   const valueRef = useRef(value);
   valueRef.current = value;
   const onChangeRef = useRef(onChange);
@@ -1743,7 +1757,7 @@ const NumberStepperField = ({
           style={{
             fontSize: "10px",
             fontWeight: 600,
-            color: "#475569",
+            color: tokens.textSecondary,
             letterSpacing: "0.01em",
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -1759,8 +1773,8 @@ const NumberStepperField = ({
           style={{
             fontSize: "10px",
             fontWeight: 700,
-            color: ADMIN_BLUE,
-            background: "rgba(37,99,235,0.08)",
+            color: tokens.accent,
+            background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)",
             padding: "1px 5px",
             borderRadius: "3px",
             fontVariantNumeric: "tabular-nums",
@@ -1787,9 +1801,9 @@ const NumberStepperField = ({
             width: "24px",
             height: "26px",
             borderRadius: "4px",
-            border: "1px solid #cbd5e1",
-            background: "#f8fafc",
-            color: "#334155",
+            border: `1px solid ${tokens.border}`,
+            background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
+            color: tokens.textPrimary,
             fontWeight: 700,
             fontSize: "13px",
             cursor: "pointer",
@@ -1825,7 +1839,7 @@ const NumberStepperField = ({
             }
           }}
           style={{
-            ...sharedInputStyle(),
+            ...sharedInputStyle(!isDark),
             flex: 1,
             textAlign: "center",
             fontWeight: 600,
@@ -1833,8 +1847,9 @@ const NumberStepperField = ({
             padding: "0 2px",
             height: "26px",
             minWidth: 0,
-            color: "#0f172a",
-            background: "#ffffff",
+            color: tokens.textPrimary,
+            background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+            border: `1px solid ${tokens.border}`,
           }}
         />
 
@@ -1850,9 +1865,9 @@ const NumberStepperField = ({
             width: "24px",
             height: "26px",
             borderRadius: "4px",
-            border: "1px solid #cbd5e1",
-            background: "#f8fafc",
-            color: "#334155",
+            border: `1px solid ${tokens.border}`,
+            background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
+            color: tokens.textPrimary,
             fontWeight: 700,
             fontSize: "13px",
             cursor: "pointer",
@@ -1886,20 +1901,23 @@ const NumberStepperField = ({
           cursor: "pointer",
           margin: "4px 0 2px 0",
           boxSizing: "border-box",
-          background: `linear-gradient(to right, ${ADMIN_BLUE} 0%, ${ADMIN_BLUE} ${percent}%, #e2e8f0 ${percent}%, #e2e8f0 100%)`,
+          background: `linear-gradient(to right, ${tokens.accent} 0%, ${tokens.accent} ${percent}%, ${isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"} ${percent}%, ${isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"} 100%)`,
         }}
       />
     </div>
   );
 };
 
-const SectionDivider = ({ title }: { title: string }) => (
-  <div style={{ paddingTop: "10px", marginTop: "4px", borderTop: "1px solid #f1f5f9", display: "grid", gap: "6px", width: "100%", boxSizing: "border-box" }}>
-    <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-      {title}
-    </span>
-  </div>
-);
+const SectionDivider = ({ title }: { title: string }) => {
+  const { isDark, tokens } = useAdminTheme();
+  return (
+    <div style={{ paddingTop: "10px", marginTop: "4px", borderTop: `1px solid ${tokens.border}`, display: "grid", gap: "6px", width: "100%", boxSizing: "border-box" }}>
+      <span style={{ fontSize: "10.5px", fontWeight: 700, color: tokens.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        {title}
+      </span>
+    </div>
+  );
+};
 
 function HeroSlidesEditor({
   selectedBlock,
@@ -1916,6 +1934,7 @@ function HeroSlidesEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const currentProps = selectedBlock.props ?? {};
 
   const autoPlayInterval = typeof currentProps.auto_play_interval === "number" ? currentProps.auto_play_interval : 3;
@@ -2117,7 +2136,7 @@ function HeroSlidesEditor({
           {/* Left: Auto-rotate Toggle with matched label & height */}
           <div style={{ display: "grid", gap: "4px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "4px", minWidth: 0, width: "100%" }}>
-              <label style={{ fontSize: "10px", fontWeight: 600, color: "#475569", letterSpacing: "0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
+              <label style={{ fontSize: "10px", fontWeight: 600, color: tokens.textSecondary, letterSpacing: "0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
                 Auto-Rotate
               </label>
               <span
@@ -2126,8 +2145,8 @@ function HeroSlidesEditor({
                   fontWeight: 700,
                   padding: "1px 5px",
                   borderRadius: "3px",
-                  background: autoPlay ? "rgba(37,99,235,0.08)" : "rgba(100,116,139,0.08)",
-                  color: autoPlay ? ADMIN_BLUE : "#64748b",
+                  background: autoPlay ? (isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)") : (isDark ? "rgba(255,255,255,0.06)" : "rgba(100,116,139,0.08)"),
+                  color: autoPlay ? tokens.accent : tokens.textMuted,
                   fontVariantNumeric: "tabular-nums",
                   flexShrink: 0,
                   lineHeight: 1.2,
@@ -2147,8 +2166,8 @@ function HeroSlidesEditor({
                 padding: "0 8px",
                 height: "26px",
                 borderRadius: "4px",
-                border: "1px solid #cbd5e1",
-                background: autoPlay ? "rgba(37,99,235,0.04)" : "#ffffff",
+                border: `1px solid ${isDark ? (autoPlay ? "rgba(59,130,246,0.3)" : tokens.border) : "#cbd5e1"}`,
+                background: isDark ? (autoPlay ? "rgba(59,130,246,0.12)" : tokens.elevatedSurfaceBg) : (autoPlay ? "rgba(37,99,235,0.04)" : "#ffffff"),
                 cursor: "pointer",
                 userSelect: "none",
                 transition: "all 0.12s ease",
@@ -2156,7 +2175,7 @@ function HeroSlidesEditor({
                 width: "100%",
               }}
             >
-              <span style={{ fontSize: "11px", fontWeight: 600, color: autoPlay ? "#0f172a" : "#64748b" }}>
+              <span style={{ fontSize: "11px", fontWeight: 600, color: autoPlay ? tokens.textPrimary : tokens.textMuted }}>
                 {autoPlay ? "Enabled" : "Disabled"}
               </span>
               <div
@@ -2165,7 +2184,7 @@ function HeroSlidesEditor({
                   width: "22px",
                   height: "13px",
                   borderRadius: "999px",
-                  background: autoPlay ? ADMIN_BLUE : "#cbd5e1",
+                  background: autoPlay ? tokens.accent : (isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"),
                   transition: "background 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
                   flexShrink: 0,
                 }}
@@ -2178,7 +2197,7 @@ function HeroSlidesEditor({
                     width: "9px",
                     height: "9px",
                     borderRadius: "999px",
-                    background: "#ffffff",
+              background: "#ffffff",
                     boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
                     transition: "left 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
                   }}
@@ -2242,9 +2261,9 @@ function HeroSlidesEditor({
                 onDragOver={(e) => handleDragOver(e, idx)}
                 onDragEnd={handleDragEnd}
                 style={{
-                  border: isExpanded ? `1px solid ${ADMIN_BLUE}` : "1px solid #e2e8f0",
+                  border: isExpanded ? `1px solid ${tokens.accent}` : `1px solid ${tokens.border}`,
                   borderRadius: "5px",
-                  background: isExpanded ? "#ffffff" : "#f8fafc",
+                  background: isExpanded ? (isDark ? tokens.surfaceBg : "#ffffff") : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
                   boxShadow: isExpanded ? "0 0 0 1px rgba(37,99,235,0.15)" : "none",
                   opacity: draggedIdx === idx ? 0.5 : 1,
                   transition: "all 120ms ease",
@@ -2264,7 +2283,7 @@ function HeroSlidesEditor({
                     justifyContent: "space-between",
                     gap: "4px",
                     cursor: "pointer",
-                    background: isExpanded ? "rgba(37,99,235,0.04)" : "transparent",
+                    background: isExpanded ? (isDark ? "rgba(59,130,246,0.08)" : "rgba(37,99,235,0.04)") : "transparent",
                     width: "100%",
                     minWidth: 0,
                     boxSizing: "border-box",
@@ -2274,10 +2293,10 @@ function HeroSlidesEditor({
                     <span style={{ cursor: "grab", fontSize: "10px", color: "#94a3b8", userSelect: "none", flexShrink: 0 }}>
                       ⋮⋮
                     </span>
-                    <span style={{ fontSize: "9px", fontWeight: 700, padding: "1px 4px", borderRadius: "3px", background: "#e2e8f0", color: "#334155", flexShrink: 0 }}>
+                    <span style={{ fontSize: "9px", fontWeight: 700, padding: "1px 4px", borderRadius: "3px", background: isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0", color: isDark ? tokens.textSecondary : "#334155", flexShrink: 0 }}>
                       #{idx + 1}
                     </span>
-                    <span style={{ fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: ADMIN_TEXT, minWidth: 0 }}>
+                    <span style={{ fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: tokens.textPrimary, minWidth: 0 }}>
                       {slide.headline || `Banner Slide ${idx + 1}`}
                     </span>
                   </div>
@@ -2307,14 +2326,14 @@ function HeroSlidesEditor({
 
                 {/* Accordion Body */}
                 {isExpanded && (
-                  <div style={{ padding: "6px 8px", borderTop: "1px solid #e2e8f0", display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box", background: "#ffffff" }}>
+                  <div style={{ padding: "6px 8px", borderTop: `1px solid ${tokens.border}`, display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box", background: isDark ? tokens.surfaceBg : "#ffffff" }}>
                     {/* Compact Sub-tabs */}
                     <div
                       style={{
                         display: "grid",
                         gridTemplateColumns: "repeat(3, 1fr)",
                         gap: "2px",
-                        background: "#f1f5f9",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
                         padding: "2px",
                         borderRadius: "5px",
                         width: "100%",
@@ -2336,7 +2355,7 @@ function HeroSlidesEditor({
                               padding: "4px 2px",
                               border: "none",
                               borderRadius: "4px",
-                              background: active ? "#ffffff" : "transparent",
+                              background: active ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
                               color: active ? ADMIN_BLUE : "#64748b",
                               fontWeight: active ? 800 : 600,
                               fontSize: "9.5px",
@@ -2404,7 +2423,7 @@ function HeroSlidesEditor({
 
                         {/* Flash Sale Countdown */}
                         {slide.variant === "flash_sale" && (
-                          <div style={{ display: "grid", gap: "4px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                          <div style={{ display: "grid", gap: "4px", padding: "5px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}`, borderRadius: "5px" }}>
                             <div style={{ display: "grid", gap: "2px" }}>
                               <label style={{ fontSize: "8.5px", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>Mode</label>
                               <SegmentedRow
@@ -2450,7 +2469,7 @@ function HeroSlidesEditor({
 
                         {/* Product Launch Card */}
                         {slide.variant === "product_launch" && (
-                          <div style={{ display: "grid", gap: "4px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                          <div style={{ display: "grid", gap: "4px", padding: "5px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}`, borderRadius: "5px" }}>
                             <input
                               type="text"
                               placeholder="Product Title"
@@ -2480,7 +2499,7 @@ function HeroSlidesEditor({
                         {/* Trust Badges Editor (For Minimal Brand & Default/Standard banners) */}
                         {(slide.variant !== "flash_sale" && slide.variant !== "product_launch") && (
                           (Array.isArray(slide.trust_badges) ? slide.trust_badges.length > 0 : slide.variant === "minimal_brand") ? (
-                            <div style={{ display: "grid", gap: "4px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                            <div style={{ display: "grid", gap: "4px", padding: "5px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}`, borderRadius: "5px" }}>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                 <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Trust Badges</label>
                                 <button
@@ -2511,8 +2530,8 @@ function HeroSlidesEditor({
                                       display: "flex",
                                       alignItems: "center",
                                       gap: "3px",
-                                      background: "#ffffff",
-                                      border: "1px solid #cbd5e1",
+                                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                      border: `1px solid ${tokens.border}`,
                                       borderRadius: "4px",
                                       padding: "1px 5px",
                                       fontSize: "9.5px",
@@ -2694,7 +2713,7 @@ function HeroSlidesEditor({
 
                         {/* Festive Motif Position & Opacity (when festival theme is enabled) */}
                         {(siteDefinition.theme?.festival_theme && siteDefinition.theme.festival_theme !== "none") && (
-                          <div style={{ display: "grid", gap: "5px", marginTop: "2px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                          <div style={{ display: "grid", gap: "5px", marginTop: "2px", padding: "5px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}`, borderRadius: "5px" }}>
                             <div style={{ display: "grid", gap: "2px" }}>
                               <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                                 Festive Motif Position
@@ -2813,19 +2832,19 @@ function HeroSlidesEditor({
                         <SectionDivider title="Action Buttons" />
 
                         {/* Primary Button */}
-                        <div style={{ display: "grid", gap: "4px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                        <div style={{ display: "grid", gap: "4px", padding: "5px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}`, borderRadius: "5px" }}>
                           <div
                             onClick={() => handleSlideChange(idx, "show_primary_cta", !showPrimary)}
                             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
                           >
-                            <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#475569", textTransform: "uppercase" }}>Primary Button</span>
+                            <span style={{ fontSize: "8.5px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase" }}>Primary Button</span>
                             <div
                               style={{
                                 position: "relative",
                                 width: "20px",
                                 height: "12px",
                                 borderRadius: "999px",
-                                background: showPrimary ? ADMIN_BLUE : "#cbd5e1",
+                                background: showPrimary ? tokens.accent : (isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"),
                                 transition: "background 0.15s ease",
                               }}
                             >
@@ -2837,7 +2856,7 @@ function HeroSlidesEditor({
                                   width: "8px",
                                   height: "8px",
                                   borderRadius: "999px",
-                                  background: "#ffffff",
+              background: "#ffffff",
                                   transition: "left 0.15s ease",
                                 }}
                               />
@@ -2876,19 +2895,19 @@ function HeroSlidesEditor({
                         </div>
 
                         {/* Secondary Button */}
-                        <div style={{ display: "grid", gap: "4px", padding: "5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "5px" }}>
+                        <div style={{ display: "grid", gap: "4px", padding: "5px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}`, borderRadius: "5px" }}>
                           <div
                             onClick={() => handleSlideChange(idx, "show_secondary_cta", !showSecondary)}
                             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
                           >
-                            <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#475569", textTransform: "uppercase" }}>Secondary Button</span>
+                            <span style={{ fontSize: "8.5px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase" }}>Secondary Button</span>
                             <div
                               style={{
                                 position: "relative",
                                 width: "20px",
                                 height: "12px",
                                 borderRadius: "999px",
-                                background: showSecondary ? ADMIN_BLUE : "#cbd5e1",
+                                background: showSecondary ? tokens.accent : (isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"),
                                 transition: "background 0.15s ease",
                               }}
                             >
@@ -2900,7 +2919,7 @@ function HeroSlidesEditor({
                                   width: "8px",
                                   height: "8px",
                                   borderRadius: "999px",
-                                  background: "#ffffff",
+              background: "#ffffff",
                                   transition: "left 0.15s ease",
                                 }}
                               />
@@ -2954,6 +2973,7 @@ function SectionGroupCarouselEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const currentProps = selectedBlock.props ?? {};
   const [activeTab, setActiveTab] = useState<"layout" | "styling">("layout");
 
@@ -3038,7 +3058,7 @@ function SectionGroupCarouselEditor({
           display: "grid",
           gridTemplateColumns: "repeat(2, 1fr)",
           gap: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           padding: "2px",
           borderRadius: "6px",
           width: "100%",
@@ -3061,8 +3081,8 @@ function SectionGroupCarouselEditor({
                 padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10px",
                 cursor: "pointer",
@@ -3505,6 +3525,7 @@ function ProductCarouselEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "styling">("layout");
   const p = selectedBlock.props ?? {};
 
@@ -3557,7 +3578,7 @@ function ProductCarouselEditor({
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {/* Tab Bar */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "2px", background: "#f1f5f9", padding: "2px", borderRadius: "6px", boxSizing: "border-box" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "2px", background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9", padding: "2px", borderRadius: "6px", boxSizing: "border-box" }}>
         {[{ id: "layout", label: "Layout" }, { id: "styling", label: "Styles" }].map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -3567,8 +3588,8 @@ function ProductCarouselEditor({
               onClick={() => setActiveTab(tab.id as any)}
               style={{
                 padding: "5px 4px", border: "none", borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600, fontSize: "10px",
                 cursor: "pointer", textAlign: "center",
                 boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
@@ -3890,6 +3911,7 @@ function ProductGridEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "styling">("layout");
   const p = selectedBlock.props ?? {};
 
@@ -3928,7 +3950,7 @@ function ProductGridEditor({
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {/* Tab Bar */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "2px", background: "#f1f5f9", padding: "2px", borderRadius: "6px", boxSizing: "border-box" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "2px", background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9", padding: "2px", borderRadius: "6px", boxSizing: "border-box" }}>
         {[{ id: "layout", label: "Layout" }, { id: "styling", label: "Styles" }].map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -3938,8 +3960,8 @@ function ProductGridEditor({
               onClick={() => setActiveTab(tab.id as any)}
               style={{
                 padding: "5px 4px", border: "none", borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600, fontSize: "10px",
                 cursor: "pointer", textAlign: "center",
                 boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
@@ -4225,6 +4247,7 @@ function FooterEditor({
   onSiteDefinitionChange: (next: any) => void;
   siteDefinition: any;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
 
   const f = siteDefinition.footer || {};
@@ -4385,14 +4408,14 @@ function FooterEditor({
   };
 
   // Colors
-  const isDark = theme.mode === "dark";
-  const defaultFooterBg = theme.footer_bg || theme.secondary_bg || (isDark ? "#0f172a" : "#f8fafc");
+  const isSiteDark = theme.mode === "dark";
+  const defaultFooterBg = theme.footer_bg || theme.secondary_bg || (isSiteDark ? "#0f172a" : "#f8fafc");
   const footerBg = getVal("footer_bg", defaultFooterBg);
-  const footerTextColor = getVal("footer_text_color", theme.footer_text_color || (isDark ? "#ffffff" : "#0f172a"));
-  const footerMutedColor = getVal("footer_muted_color", theme.footer_muted_color || (isDark ? "#94a3b8" : "#64748b"));
-  const footerBorderColor = getVal("footer_border_color", theme.footer_border_color || (isDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)"));
+  const footerTextColor = getVal("footer_text_color", theme.footer_text_color || (isSiteDark ? "#ffffff" : "#0f172a"));
+  const footerMutedColor = getVal("footer_muted_color", theme.footer_muted_color || (isSiteDark ? "#94a3b8" : "#64748b"));
+  const footerBorderColor = getVal("footer_border_color", theme.footer_border_color || (isSiteDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)"));
   const resolvedAccent = getVal("accent_color", theme.accent_color || ADMIN_BLUE);
-  const inputBgColor = getVal("input_bg_color", isDark ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.95)");
+  const inputBgColor = getVal("input_bg_color", isSiteDark ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.95)");
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -4402,7 +4425,7 @@ function FooterEditor({
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "3px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           padding: "2px",
           borderRadius: "6px",
           width: "100%",
@@ -4422,8 +4445,8 @@ function FooterEditor({
               onClick={() => setActiveTab(tab.id as any)}
               style={{
                 border: "none",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontSize: "11px",
                 fontWeight: isActive ? 800 : 600,
                 padding: "6px 4px",
@@ -4564,10 +4587,10 @@ function FooterEditor({
                       gridTemplateColumns: "1fr 1.3fr auto",
                       gap: "4px",
                       alignItems: "center",
-                      background: "#f8fafc",
+                      background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
                       padding: "4px 6px",
                       borderRadius: "6px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                     }}
                   >
                     <input
@@ -4812,6 +4835,7 @@ function CartEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
   const p = selectedBlock.props ?? {};
 
@@ -4946,7 +4970,7 @@ function CartEditor({
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           padding: "2px",
           borderRadius: "6px",
           width: "100%",
@@ -4970,8 +4994,8 @@ function CartEditor({
                 padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10px",
                 cursor: "pointer",
@@ -5062,7 +5086,7 @@ function CartEditor({
                       gap: "6px",
                       padding: "6px 8px",
                       borderRadius: "4px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       background: isChecked ? "rgba(37,99,235,0.04)" : "#ffffff",
                       cursor: "pointer",
                       userSelect: "none",
@@ -5079,7 +5103,7 @@ function CartEditor({
                         width: "24px",
                         height: "14px",
                         borderRadius: "999px",
-                        background: isChecked ? ADMIN_BLUE : "#cbd5e1",
+                        background: isChecked ? tokens.accent : (isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"),
                         transition: "background 0.15s ease",
                         flexShrink: 0,
                       }}
@@ -5092,7 +5116,7 @@ function CartEditor({
                           width: "10px",
                           height: "10px",
                           borderRadius: "50%",
-                          background: "#ffffff",
+              background: "#ffffff",
                           transition: "left 0.15s ease",
                           boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
                         }}
@@ -5130,10 +5154,10 @@ function CartEditor({
                     padding: "0 8px",
                     fontSize: "11px",
                     fontWeight: 600,
-                    color: "#0f172a",
                     borderRadius: "4px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
+                    border: `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
                     boxSizing: "border-box",
                   }}
                 />
@@ -5154,10 +5178,10 @@ function CartEditor({
                     padding: "0 8px",
                     fontSize: "11px",
                     fontWeight: 600,
-                    color: "#0f172a",
                     borderRadius: "4px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
+                    border: `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
                     boxSizing: "border-box",
                   }}
                 />
@@ -5178,10 +5202,10 @@ function CartEditor({
                     padding: "0 8px",
                     fontSize: "11px",
                     fontWeight: 600,
-                    color: "#0f172a",
                     borderRadius: "4px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
+                    border: `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
                     boxSizing: "border-box",
                   }}
                 />
@@ -5202,10 +5226,10 @@ function CartEditor({
                     padding: "0 8px",
                     fontSize: "11px",
                     fontWeight: 600,
-                    color: "#0f172a",
                     borderRadius: "4px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
+                    border: `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
                     boxSizing: "border-box",
                   }}
                 />
@@ -5234,10 +5258,10 @@ function CartEditor({
                     padding: "0 8px",
                     fontSize: "11px",
                     fontWeight: 600,
-                    color: "#0f172a",
                     borderRadius: "4px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
+                    border: `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
                     boxSizing: "border-box",
                   }}
                 />
@@ -5259,10 +5283,10 @@ function CartEditor({
                       padding: "0 8px",
                       fontSize: "11px",
                       fontWeight: 600,
-                      color: "#0f172a",
                       borderRadius: "4px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
+                      border: `1px solid ${tokens.border}`,
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      color: tokens.textPrimary,
                       boxSizing: "border-box",
                     }}
                   />
@@ -5283,10 +5307,10 @@ function CartEditor({
                       padding: "0 8px",
                       fontSize: "11px",
                       fontWeight: 600,
-                      color: "#0f172a",
                       borderRadius: "4px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
+                      border: `1px solid ${tokens.border}`,
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      color: tokens.textPrimary,
                       boxSizing: "border-box",
                     }}
                   />
@@ -5309,10 +5333,10 @@ function CartEditor({
                       padding: "0 8px",
                       fontSize: "11px",
                       fontWeight: 600,
-                      color: "#0f172a",
                       borderRadius: "4px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
+                      border: `1px solid ${tokens.border}`,
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      color: tokens.textPrimary,
                       boxSizing: "border-box",
                     }}
                   />
@@ -5333,10 +5357,10 @@ function CartEditor({
                       padding: "0 8px",
                       fontSize: "11px",
                       fontWeight: 600,
-                      color: "#0f172a",
                       borderRadius: "4px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
+                      border: `1px solid ${tokens.border}`,
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      color: tokens.textPrimary,
                       boxSizing: "border-box",
                     }}
                   />
@@ -5358,10 +5382,10 @@ function CartEditor({
                     padding: "0 8px",
                     fontSize: "11px",
                     fontWeight: 600,
-                    color: "#0f172a",
                     borderRadius: "4px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
+                    border: `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
                     boxSizing: "border-box",
                   }}
                 />
@@ -5390,10 +5414,10 @@ function CartEditor({
                     padding: "0 8px",
                     fontSize: "11px",
                     fontWeight: 600,
-                    color: "#0f172a",
                     borderRadius: "4px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
+                    border: `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
                     boxSizing: "border-box",
                   }}
                 />
@@ -5415,10 +5439,10 @@ function CartEditor({
                       padding: "0 8px",
                       fontSize: "11px",
                       fontWeight: 600,
-                      color: "#0f172a",
                       borderRadius: "4px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
+                      border: `1px solid ${tokens.border}`,
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      color: tokens.textPrimary,
                       boxSizing: "border-box",
                     }}
                   />
@@ -5439,10 +5463,10 @@ function CartEditor({
                       padding: "0 8px",
                       fontSize: "11px",
                       fontWeight: 600,
-                      color: "#0f172a",
                       borderRadius: "4px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
+                      border: `1px solid ${tokens.border}`,
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      color: tokens.textPrimary,
                       boxSizing: "border-box",
                     }}
                   />
@@ -5464,10 +5488,10 @@ function CartEditor({
                     padding: "0 8px",
                     fontSize: "11px",
                     fontWeight: 600,
-                    color: "#0f172a",
                     borderRadius: "4px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
+                    border: `1px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                    color: tokens.textPrimary,
                     boxSizing: "border-box",
                   }}
                 />
@@ -5560,6 +5584,7 @@ function CheckoutStepsEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
   const p = selectedBlock?.props ?? {};
 
@@ -5653,17 +5678,17 @@ function CheckoutStepsEditor({
     padding: "0 8px",
     fontSize: "11px",
     fontWeight: 600,
-    color: "#0f172a",
+    color: (isDark ? tokens.textPrimary : "#0f172a"),
     borderRadius: "4px",
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
     boxSizing: "border-box",
   };
 
   const fieldLabelStyle: React.CSSProperties = {
     fontSize: "9px",
     fontWeight: 700,
-    color: "#64748b",
+    color: tokens.textMuted,
     textTransform: "uppercase",
   };
 
@@ -5677,7 +5702,7 @@ function CheckoutStepsEditor({
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           padding: "2px",
           borderRadius: "6px",
           width: "100%",
@@ -5701,8 +5726,8 @@ function CheckoutStepsEditor({
                 padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10px",
                 cursor: "pointer",
@@ -5951,6 +5976,7 @@ function CompactToggleRow({
   checked: boolean;
   onChange: (val: boolean) => void;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   return (
     <div
       onClick={() => onChange(!checked)}
@@ -5961,19 +5987,46 @@ function CompactToggleRow({
         gap: "8px",
         padding: "5px 7px",
         borderRadius: "5px",
-        background: checked ? "rgba(37,99,235,0.05)" : "#f8fafc",
-        border: `1px solid ${checked ? "#bfdbfe" : "#e2e8f0"}`,
+        background: isDark
+          ? checked
+            ? "rgba(59,130,246,0.12)"
+            : tokens.elevatedSurfaceBg
+          : checked
+          ? "rgba(37,99,235,0.05)"
+          : "#f8fafc",
+        border: `1px solid ${
+          isDark
+            ? checked
+              ? "rgba(59,130,246,0.3)"
+              : tokens.border
+            : checked
+            ? "#bfdbfe"
+            : "#e2e8f0"
+        }`,
         cursor: "pointer",
         transition: "all 0.15s ease",
         userSelect: "none",
       }}
     >
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: "10px", fontWeight: 700, color: checked ? "#1e40af" : "#334155", lineHeight: 1.2 }}>
+        <div
+          style={{
+            fontSize: "10px",
+            fontWeight: 700,
+            color: isDark
+              ? checked
+                ? tokens.accent
+                : tokens.textPrimary
+              : checked
+              ? "#1e40af"
+              : "#334155",
+            lineHeight: 1.2,
+          }}
+        >
           {label}
         </div>
         {subtitle && (
-          <div style={{ fontSize: "8.5px", color: "#64748b", marginTop: "1px" }}>
+          <div style={{ fontSize: "8.5px", color: tokens.textMuted, marginTop: "1px" }}>
             {subtitle}
           </div>
         )}
@@ -5983,7 +6036,11 @@ function CompactToggleRow({
           width: "28px",
           height: "16px",
           borderRadius: "999px",
-          background: checked ? ADMIN_BLUE : "#cbd5e1",
+          background: checked
+            ? tokens.accent
+            : isDark
+            ? "rgba(255,255,255,0.15)"
+            : "#cbd5e1",
           position: "relative",
           transition: "background 0.2s ease",
           flexShrink: 0,
@@ -5994,12 +6051,12 @@ function CompactToggleRow({
             width: "12px",
             height: "12px",
             borderRadius: "50%",
-            background: "#ffffff",
+              background: "#ffffff",
             position: "absolute",
             top: "2px",
             left: checked ? "14px" : "2px",
             transition: "left 0.2s ease",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
           }}
         />
       </div>
@@ -6053,6 +6110,7 @@ function PaymentMethodsEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
   const p = selectedBlock?.props ?? {};
 
@@ -6146,16 +6204,16 @@ function PaymentMethodsEditor({
     height: "26px",
     padding: "2px 6px",
     borderRadius: "4px",
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
     fontSize: "11px",
-    color: "#0f172a",
+    color: (isDark ? tokens.textPrimary : "#0f172a"),
   };
 
   const fieldLabelStyle: React.CSSProperties = {
     fontSize: "9px",
     fontWeight: 700,
-    color: "#64748b",
+    color: tokens.textMuted,
     textTransform: "uppercase",
   };
 
@@ -6168,7 +6226,7 @@ function PaymentMethodsEditor({
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "2px",
           padding: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           borderRadius: "6px",
           width: "100%",
           maxWidth: "100%",
@@ -6191,8 +6249,8 @@ function PaymentMethodsEditor({
                 padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10px",
                 cursor: "pointer",
@@ -6550,6 +6608,7 @@ function ProfileEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
   const p = selectedBlock?.props ?? {};
 
@@ -6623,17 +6682,17 @@ function ProfileEditor({
     padding: "0 8px",
     fontSize: "11px",
     fontWeight: 600,
-    color: "#0f172a",
+    color: (isDark ? tokens.textPrimary : "#0f172a"),
     borderRadius: "4px",
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
     boxSizing: "border-box",
   };
 
   const fieldLabelStyle: React.CSSProperties = {
     fontSize: "9px",
     fontWeight: 700,
-    color: "#64748b",
+    color: tokens.textMuted,
     textTransform: "uppercase",
   };
 
@@ -6656,7 +6715,7 @@ function ProfileEditor({
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           padding: "2px",
           borderRadius: "6px",
           marginBottom: "2px",
@@ -6675,7 +6734,7 @@ function ProfileEditor({
                 fontWeight: active ? 700 : 500,
                 borderRadius: "4px",
                 border: "none",
-                background: active ? "#ffffff" : "transparent",
+                background: active ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
                 color: active ? "#0f172a" : "#64748b",
                 boxShadow: active ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
                 cursor: "pointer",
@@ -6987,6 +7046,7 @@ function SignInEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
   const p = selectedBlock?.props ?? {};
 
@@ -7058,16 +7118,16 @@ function SignInEditor({
     height: "26px",
     padding: "2px 6px",
     borderRadius: "4px",
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
     fontSize: "11px",
-    color: "#0f172a",
+    color: (isDark ? tokens.textPrimary : "#0f172a"),
   };
 
   const fieldLabelStyle: React.CSSProperties = {
     fontSize: "9px",
     fontWeight: 700,
-    color: "#64748b",
+    color: tokens.textMuted,
     textTransform: "uppercase",
   };
 
@@ -7091,7 +7151,7 @@ function SignInEditor({
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "2px",
           padding: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           borderRadius: "6px",
           width: "100%",
           maxWidth: "100%",
@@ -7114,8 +7174,8 @@ function SignInEditor({
                 padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10px",
                 cursor: "pointer",
@@ -7385,6 +7445,7 @@ function SignUpEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
   const p = selectedBlock?.props ?? {};
 
@@ -7456,16 +7517,16 @@ function SignUpEditor({
     height: "26px",
     padding: "2px 6px",
     borderRadius: "4px",
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
     fontSize: "11px",
-    color: "#0f172a",
+    color: (isDark ? tokens.textPrimary : "#0f172a"),
   };
 
   const fieldLabelStyle: React.CSSProperties = {
     fontSize: "9px",
     fontWeight: 700,
-    color: "#64748b",
+    color: tokens.textMuted,
     textTransform: "uppercase",
   };
 
@@ -7489,7 +7550,7 @@ function SignUpEditor({
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "2px",
           padding: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           borderRadius: "6px",
           width: "100%",
           maxWidth: "100%",
@@ -7512,8 +7573,8 @@ function SignUpEditor({
                 padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10px",
                 cursor: "pointer",
@@ -7805,6 +7866,7 @@ function SupportEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
   const p = selectedBlock?.props ?? {};
 
@@ -7900,16 +7962,16 @@ function SupportEditor({
     height: "28px",
     padding: "4px 8px",
     borderRadius: "4px",
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
     fontSize: "11.5px",
-    color: "#0f172a",
+    color: (isDark ? tokens.textPrimary : "#0f172a"),
   };
 
   const fieldLabelStyle: React.CSSProperties = {
     fontSize: "9px",
     fontWeight: 700,
-    color: "#64748b",
+    color: tokens.textMuted,
     textTransform: "uppercase",
   };
 
@@ -7933,7 +7995,7 @@ function SupportEditor({
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "2px",
           padding: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           borderRadius: "6px",
           width: "100%",
           maxWidth: "100%",
@@ -7956,8 +8018,8 @@ function SupportEditor({
                 padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10.5px",
                 cursor: "pointer",
@@ -8351,6 +8413,7 @@ function OrdersEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
   const p = selectedBlock?.props ?? {};
 
@@ -8422,16 +8485,16 @@ function OrdersEditor({
     height: "26px",
     padding: "2px 6px",
     borderRadius: "4px",
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
     fontSize: "11px",
-    color: "#0f172a",
+    color: (isDark ? tokens.textPrimary : "#0f172a"),
   };
 
   const fieldLabelStyle: React.CSSProperties = {
     fontSize: "9px",
     fontWeight: 700,
-    color: "#64748b",
+    color: tokens.textMuted,
     textTransform: "uppercase",
   };
 
@@ -8455,7 +8518,7 @@ function OrdersEditor({
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "2px",
           padding: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           borderRadius: "6px",
           width: "100%",
           maxWidth: "100%",
@@ -8478,8 +8541,8 @@ function OrdersEditor({
                 padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10px",
                 cursor: "pointer",
@@ -8848,6 +8911,7 @@ function PlaceOrderEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
   const p = selectedBlock?.props ?? {};
 
@@ -8942,16 +9006,16 @@ function PlaceOrderEditor({
     height: "26px",
     padding: "2px 6px",
     borderRadius: "4px",
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
     fontSize: "11px",
-    color: "#0f172a",
+    color: (isDark ? tokens.textPrimary : "#0f172a"),
   };
 
   const fieldLabelStyle: React.CSSProperties = {
     fontSize: "9px",
     fontWeight: 700,
-    color: "#64748b",
+    color: tokens.textMuted,
     textTransform: "uppercase",
   };
 
@@ -8972,7 +9036,7 @@ function PlaceOrderEditor({
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "2px",
           padding: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           borderRadius: "6px",
           width: "100%",
           maxWidth: "100%",
@@ -8995,8 +9059,8 @@ function PlaceOrderEditor({
                 padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10px",
                 cursor: "pointer",
@@ -9324,16 +9388,17 @@ function CheckoutOrderSummaryNotice({
   onSelectPage?: (pageId: string) => void;
   onSelectBlock?: (blockId: string | null) => void;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   return (
     <div style={{ display: "grid", gap: "10px", width: "100%", boxSizing: "border-box" }}>
       <section
         style={{
           ...sectionCardStyle(isLightMode),
           padding: "14px 12px",
-          background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
-          border: "1px solid #cbd5e1",
+          background: isDark ? tokens.elevatedSurfaceBg : "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+          boxShadow: isDark ? "none" : "0 2px 8px rgba(0,0,0,0.04)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -9342,11 +9407,11 @@ function CheckoutOrderSummaryNotice({
               width: "28px",
               height: "28px",
               borderRadius: "6px",
-              background: "rgba(37,99,235,0.1)",
+              background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.1)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: ADMIN_BLUE,
+              color: tokens.accent,
               flexShrink: 0,
             }}
           >
@@ -9357,20 +9422,20 @@ function CheckoutOrderSummaryNotice({
             </svg>
           </div>
           <div>
-            <div style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}>
+            <div style={{ fontSize: "12px", fontWeight: 800, color: tokens.textPrimary }}>
               Order Summary
             </div>
-            <span style={{ fontSize: "9px", fontWeight: 700, padding: "1px 5px", borderRadius: "3px", background: "#e0f2fe", color: "#0369a1" }}>
+            <span style={{ fontSize: "9px", fontWeight: 700, padding: "1px 5px", borderRadius: "3px", background: isDark ? "rgba(59,130,246,0.18)" : "#e0f2fe", color: isDark ? "#93c5fd" : "#0369a1" }}>
               SHARED WITH CART
             </span>
           </div>
         </div>
 
-        <p style={{ margin: "0 0 10px", fontSize: "11px", color: "#475569", lineHeight: 1.6 }}>
+        <p style={{ margin: "0 0 10px", fontSize: "11px", color: tokens.textSecondary, lineHeight: 1.6 }}>
           This block is shared with your <strong>Shopping Cart</strong> — keeping pricing, promo logic, and labels perfectly in sync across the cart and every checkout step.
         </p>
 
-        <p style={{ margin: "0 0 14px", fontSize: "10.5px", color: "#64748b", lineHeight: 1.5 }}>
+        <p style={{ margin: "0 0 14px", fontSize: "10.5px", color: tokens.textMuted, lineHeight: 1.5 }}>
           To adjust text labels, promo code input, border styles, or colors, head to the <strong>Cart</strong> page and edit the component there.
         </p>
 
@@ -9385,7 +9450,7 @@ function CheckoutOrderSummaryNotice({
             height: "32px",
             borderRadius: "6px",
             border: "none",
-            background: ADMIN_BLUE,
+            background: tokens.accent,
             color: "#ffffff",
             fontSize: "11px",
             fontWeight: 700,
@@ -9446,6 +9511,7 @@ function DeliveryFormEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
   const p = selectedBlock?.props ?? {};
 
@@ -9551,17 +9617,17 @@ function DeliveryFormEditor({
     padding: "0 8px",
     fontSize: "11px",
     fontWeight: 600,
-    color: "#0f172a",
+    color: (isDark ? tokens.textPrimary : "#0f172a"),
     borderRadius: "4px",
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
     boxSizing: "border-box",
   };
 
   const fieldLabelStyle: React.CSSProperties = {
     fontSize: "9px",
     fontWeight: 700,
-    color: "#64748b",
+    color: tokens.textMuted,
     textTransform: "uppercase",
   };
 
@@ -9581,7 +9647,7 @@ function DeliveryFormEditor({
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           padding: "2px",
           borderRadius: "6px",
           width: "100%",
@@ -9605,8 +9671,8 @@ function DeliveryFormEditor({
                 padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10px",
                 cursor: "pointer",
@@ -10219,6 +10285,7 @@ function ProductDetailEditor({
   onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
   siteDefinition: EditorSiteDefinition;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"design" | "colors">("design");
   const p = selectedBlock.props ?? {};
   const theme = siteDefinition.theme || {};
@@ -10381,7 +10448,7 @@ function ProductDetailEditor({
           userSelect: "none",
         }}
       >
-        <span style={{ fontSize: "10px", fontWeight: 600, color: "#334155" }}>
+        <span style={{ fontSize: "10px", fontWeight: 600, color: isDark ? tokens.textPrimary : "#334155" }}>
           {label}
         </span>
         <div
@@ -10390,7 +10457,7 @@ function ProductDetailEditor({
             width: "22px",
             height: "13px",
             borderRadius: "999px",
-            background: isChecked ? ADMIN_BLUE : "#cbd5e1",
+            background: isChecked ? tokens.accent : (isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"),
             transition: "background 0.15s ease",
             flexShrink: 0,
           }}
@@ -10420,7 +10487,7 @@ function ProductDetailEditor({
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
           gap: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           padding: "2px",
           borderRadius: "6px",
           width: "100%",
@@ -10443,8 +10510,8 @@ function ProductDetailEditor({
                 padding: "6px 2px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10px",
                 cursor: "pointer",
@@ -10599,10 +10666,10 @@ function ProductDetailEditor({
                       padding: "0 6px",
                       fontSize: "11px",
                       fontWeight: 600,
-                      color: "#0f172a",
                       borderRadius: "4px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
+                      border: `1px solid ${tokens.border}`,
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      color: tokens.textPrimary,
                       boxSizing: "border-box",
                     }}
                   />
@@ -10663,7 +10730,7 @@ function ProductDetailEditor({
                       display: "grid",
                       gap: "4px",
                       padding: "6px 8px",
-                      background: isReturns ? "#f8fafc" : "#ffffff",
+                      background: isReturns ? (isDark ? tokens.elevatedSurfaceBg : "#f8fafc") : (isDark ? tokens.surfaceBg : "#ffffff"),
                       border: isReturns ? "1px solid #cbd5e1" : "1px solid #e2e8f0",
                       borderRadius: "5px",
                     }}
@@ -10702,7 +10769,7 @@ function ProductDetailEditor({
                               width: "22px",
                               height: "13px",
                               borderRadius: "999px",
-                              background: isReturnsActive ? ADMIN_BLUE : "#cbd5e1",
+                              background: isReturnsActive ? tokens.accent : (isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"),
                               transition: "background 0.15s ease",
                               flexShrink: 0,
                             }}
@@ -10715,7 +10782,7 @@ function ProductDetailEditor({
                                 width: "9px",
                                 height: "9px",
                                 borderRadius: "999px",
-                                background: "#ffffff",
+              background: "#ffffff",
                                 transition: "left 0.15s ease",
                               }}
                             />
@@ -10758,8 +10825,8 @@ function ProductDetailEditor({
                             fontWeight: 700,
                             color: "#64748b",
                             borderRadius: "4px",
-                            border: "1px solid #e2e8f0",
-                            background: "#f1f5f9",
+                            border: `1px solid ${tokens.border}`,
+                            background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
                             boxSizing: "border-box",
                             cursor: "not-allowed",
                           }}
@@ -10803,10 +10870,10 @@ function ProductDetailEditor({
                             padding: "0 5px",
                             fontSize: "10.5px",
                             fontWeight: 600,
-                            color: "#0f172a",
+                            color: (isDark ? tokens.textPrimary : "#0f172a"),
                             borderRadius: "4px",
-                            border: "1px solid #cbd5e1",
-                            background: "#ffffff",
+                            border: `1px solid ${tokens.border}`,
+                            background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                             boxSizing: "border-box",
                           }}
                         />
@@ -10821,10 +10888,10 @@ function ProductDetailEditor({
                             padding: "0 5px",
                             fontSize: "10.5px",
                             fontWeight: 600,
-                            color: "#0f172a",
+                            color: (isDark ? tokens.textPrimary : "#0f172a"),
                             borderRadius: "4px",
-                            border: "1px solid #cbd5e1",
-                            background: "#ffffff",
+                            border: `1px solid ${tokens.border}`,
+                            background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                             boxSizing: "border-box",
                           }}
                         />
@@ -11001,6 +11068,7 @@ function NavbarEditor({
   onSiteDefinitionChange: (next: any) => void;
   siteDefinition: any;
 }) {
+  const { isDark, tokens } = useAdminTheme();
   const [activeTab, setActiveTab] = useState<"brand" | "search" | "layout" | "icons" | "colors">("brand");
 
   const theme = siteDefinition.theme || {};
@@ -11034,7 +11102,7 @@ function NavbarEditor({
     onSiteDefinitionChange(nextDef);
   };
 
-  const isDark = theme?.mode === "dark";
+  const isSiteDark = theme?.mode === "dark";
   const defaultBrandName =
     theme.brandName ||
     theme.brand_name ||
@@ -11058,14 +11126,14 @@ function NavbarEditor({
   const brandFontWeight = String(getVal("brand_font_weight", "700"));
   const brandFontStyle = getVal("brand_font_style", "normal");
   const brandFontSize = Number(getVal("brand_font_size", 18));
-  const brandTextColor = getVal("brand_text_color", theme.accent_color || (isDark ? "#f8fafc" : "#15803d"));
+  const brandTextColor = getVal("brand_text_color", theme.accent_color || (isSiteDark ? "#f8fafc" : "#15803d"));
 
   const searchDisplayMode = getVal("search_display_mode", "bar");
   const searchPlacement = getVal("search_placement", "center");
   const searchMaxWidth = Number(getVal("search_max_width", 420));
   const searchHeight = Number(getVal("search_height", 38));
-  const searchTextColor = getVal("search_text_color", theme.text_color || (isDark ? "#f8fafc" : "#0f172a"));
-  const searchMutedTextColor = getVal("search_muted_text_color", isDark ? "#94a3b8" : "#64748b");
+  const searchTextColor = getVal("search_text_color", theme.text_color || (isSiteDark ? "#f8fafc" : "#0f172a"));
+  const searchMutedTextColor = getVal("search_muted_text_color", isSiteDark ? "#94a3b8" : "#64748b");
 
   const navbarVariant = getVal("navbar_variant", "glassmorphism");
   const navbarPosition = getVal("navbar_position", "sticky");
@@ -11107,7 +11175,7 @@ function NavbarEditor({
           display: "grid",
           gridTemplateColumns: "repeat(5, 1fr)",
           gap: "2px",
-          background: "#f1f5f9",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
           padding: "2px",
           borderRadius: "6px",
           width: "100%",
@@ -11133,8 +11201,8 @@ function NavbarEditor({
                 padding: "5px 1px",
                 border: "none",
                 borderRadius: "4px",
-                background: isActive ? "#ffffff" : "transparent",
-                color: isActive ? ADMIN_BLUE : "#64748b",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                 fontWeight: isActive ? 800 : 600,
                 fontSize: "10px",
                 cursor: "pointer",
@@ -11819,7 +11887,8 @@ export default function EditorSidebar({
   activePageId,
   onSelectPage,
 }: EditorSidebarProps) {
-  const isLightMode = true;
+  const { isDark, tokens } = useAdminTheme();
+  const isLightMode = !isDark;
 
   const [snapshotName, setSnapshotName] = useState("");
   const [snapshotFeedback, setSnapshotFeedback] = useState<string | null>(null);
@@ -11909,8 +11978,8 @@ export default function EditorSidebar({
     }
   };
 
-  const textColor = "#0f172a";
-  const accentColor = siteDefinition.theme?.accent_color || "#2563eb";
+  const textColor = isDark ? tokens.textPrimary : "#0f172a";
+  const accentColor = tokens.accent || siteDefinition.theme?.accent_color || "#2563eb";
   const _rawSelectedBlock = findBlockById(siteDefinition, selectedBlockId);
   const selectedBlock =
     (selectedBlockId === "checkout_steps" || selectedBlockId === "checkoutsteps" || selectedBlockId === "checkout_stepper")
@@ -12088,8 +12157,8 @@ export default function EditorSidebar({
         overflowX: "hidden",
         padding: "8px 10px",
         boxSizing: "border-box",
-        color: "#0f172a",
-        background: "#ffffff",
+        color: tokens.textPrimary,
+        background: tokens.surfaceBg,
         border: "none",
         borderRadius: 0,
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -12105,20 +12174,20 @@ export default function EditorSidebar({
         .wc-editor-sidebar input:not([type="range"]):focus,
         .wc-editor-sidebar select:focus,
         .wc-editor-sidebar textarea:focus {
-          border-color: ${ADMIN_BLUE} !important;
-          background: #ffffff !important;
-          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important;
+          border-color: ${tokens.accent} !important;
+          background: ${isDark ? tokens.surfaceBg : "#ffffff"} !important;
+          box-shadow: 0 0 0 2px ${tokens.accent}33 !important;
         }
 
         .wc-editor-sidebar input:not([type="range"]):hover,
         .wc-editor-sidebar select:hover,
         .wc-editor-sidebar textarea:hover {
-          border-color: #94a3b8;
+          border-color: ${tokens.textSecondary};
         }
 
         .wc-editor-sidebar {
           scrollbar-width: thin;
-          scrollbar-color: #cbd5e1 transparent;
+          scrollbar-color: ${isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"} transparent;
         }
         .wc-editor-sidebar::-webkit-scrollbar {
           width: 4px;
@@ -12127,11 +12196,11 @@ export default function EditorSidebar({
           background: transparent;
         }
         .wc-editor-sidebar::-webkit-scrollbar-thumb {
-          background: #e2e8f0;
+          background: ${isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"};
           border-radius: 999px;
         }
         .wc-editor-sidebar::-webkit-scrollbar-thumb:hover {
-          background: #cbd5e1;
+          background: ${isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1"};
         }
 
         /* Range slider styling */
@@ -12169,7 +12238,7 @@ export default function EditorSidebar({
           height: 12px !important;
           border-radius: 50% !important;
           background: #ffffff !important;
-          border: 2px solid ${ADMIN_BLUE} !important;
+          border: 2px solid ${tokens.accent} !important;
           cursor: pointer !important;
           box-shadow: none !important;
           margin-top: -4px !important;
@@ -12188,7 +12257,7 @@ export default function EditorSidebar({
           height: 12px !important;
           border-radius: 50% !important;
           background: #ffffff !important;
-          border: 2px solid ${ADMIN_BLUE} !important;
+          border: 2px solid ${tokens.accent} !important;
           box-shadow: none !important;
           margin-top: -4px !important;
           outline: none !important;
@@ -12212,7 +12281,7 @@ export default function EditorSidebar({
           height: 12px !important;
           border-radius: 50% !important;
           background: #ffffff !important;
-          border: 2px solid ${ADMIN_BLUE} !important;
+          border: 2px solid ${tokens.accent} !important;
           cursor: pointer !important;
           box-shadow: none !important;
           outline: none !important;
@@ -12228,7 +12297,7 @@ export default function EditorSidebar({
           height: 12px !important;
           border-radius: 50% !important;
           background: #ffffff !important;
-          border: 2px solid ${ADMIN_BLUE} !important;
+          border: 2px solid ${tokens.accent} !important;
           box-shadow: none !important;
           outline: none !important;
           box-sizing: border-box !important;
@@ -12248,8 +12317,8 @@ export default function EditorSidebar({
           display: "flex",
           gap: "2px",
           padding: "2px",
-          background: "#f1f5f9",
-          borderRadius: "5px",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+          borderRadius: "6px",
           marginBottom: "8px",
           boxSizing: "border-box",
         }}
@@ -12263,9 +12332,9 @@ export default function EditorSidebar({
             borderRadius: "4px",
             border: "none",
             cursor: "pointer",
-            background: selectedTab === "theme" ? ADMIN_BLUE : "transparent",
-            color: selectedTab === "theme" ? "#ffffff" : "#64748b",
-            boxShadow: selectedTab === "theme" ? "0 1px 2px rgba(37,99,235,0.2)" : "none",
+            background: selectedTab === "theme" ? tokens.accent : "transparent",
+            color: selectedTab === "theme" ? "#ffffff" : tokens.textMuted,
+            boxShadow: selectedTab === "theme" ? "0 1px 4px rgba(59,130,246,0.3)" : "none",
             fontSize: "10.5px",
             fontWeight: 700,
             letterSpacing: "0.04em",
@@ -12295,9 +12364,9 @@ export default function EditorSidebar({
             borderRadius: "4px",
             border: "none",
             cursor: "pointer",
-            background: selectedTab === "block" ? ADMIN_BLUE : "transparent",
-            color: selectedTab === "block" ? "#ffffff" : "#64748b",
-            boxShadow: selectedTab === "block" ? "0 1px 2px rgba(37,99,235,0.2)" : "none",
+            background: selectedTab === "block" ? tokens.accent : "transparent",
+            color: selectedTab === "block" ? "#ffffff" : tokens.textMuted,
+            boxShadow: selectedTab === "block" ? "0 1px 4px rgba(59,130,246,0.3)" : "none",
             fontSize: "10.5px",
             fontWeight: 700,
             letterSpacing: "0.04em",
@@ -12322,7 +12391,7 @@ export default function EditorSidebar({
         <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
           {/* Saved Snapshots Section */}
           <section style={{ ...sectionCardStyle(isLightMode), boxSizing: "border-box", overflow: "visible" }}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textMuted }}>
               SAVED SNAPSHOTS
             </div>
             
@@ -12338,7 +12407,7 @@ export default function EditorSidebar({
                     handleSaveSnapshot();
                   }
                 }}
-                style={{ ...sharedInputStyle(), flex: 1, minWidth: 0, height: "26px", fontSize: "11px" }}
+                style={{ ...sharedInputStyle(isLightMode), flex: 1, minWidth: 0, height: "26px", fontSize: "11px" }}
               />
               <button
                 type="button"
@@ -12348,7 +12417,7 @@ export default function EditorSidebar({
                   height: "26px",
                   borderRadius: "4px",
                   border: "none",
-                  background: snapshotFeedback ? "#10b981" : ADMIN_BLUE,
+                  background: snapshotFeedback ? "#10b981" : tokens.accent,
                   color: "#ffffff",
                   fontSize: "11px",
                   fontWeight: 600,
@@ -12365,7 +12434,7 @@ export default function EditorSidebar({
             </div>
 
             {savedSnapshots.length === 0 ? (
-              <div style={{ fontSize: "10.5px", color: "#94a3b8", textAlign: "center", padding: "6px 0" }}>
+              <div style={{ fontSize: "10.5px", color: tokens.textMuted, textAlign: "center", padding: "6px 0" }}>
                 No snapshots yet. Enter a name & click + Save.
               </div>
             ) : (
@@ -12413,8 +12482,10 @@ export default function EditorSidebar({
                           padding: "4px 6px",
                           minHeight: "29px",
                           borderRadius: "4px",
-                          background: isCurrentActive ? "#f0fdf4" : "#f8fafc",
-                          border: isCurrentActive ? "1.5px solid #10b981" : "1px solid #e2e8f0",
+                          background: isCurrentActive
+                            ? (isDark ? "rgba(16, 185, 129, 0.15)" : "#f0fdf4")
+                            : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
+                          border: isCurrentActive ? "1.5px solid #10b981" : `1px solid ${tokens.border}`,
                           boxShadow: isCurrentActive ? "0 1px 3px rgba(16,185,129,0.12)" : "none",
                           gap: "6px",
                           width: "100%",
@@ -12425,11 +12496,11 @@ export default function EditorSidebar({
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: "5px", flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", gap: "2px", alignItems: "center", flexShrink: 0 }}>
-                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.primary_bg || "#ffffff", border: "1px solid #cbd5e1" }} title={`Primary: ${th.primary_bg || '#ffffff'}`} />
-                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.accent_color || "#2563eb", border: "1px solid #cbd5e1" }} title={`Accent: ${th.accent_color || '#2563eb'}`} />
-                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.navbar_bg || "#0f172a", border: "1px solid #cbd5e1" }} title={`Navbar: ${th.navbar_bg || '#0f172a'}`} />
+                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.primary_bg || "#ffffff", border: `1px solid ${tokens.border}` }} title={`Primary: ${th.primary_bg || '#ffffff'}`} />
+                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.accent_color || "#2563eb", border: `1px solid ${tokens.border}` }} title={`Accent: ${th.accent_color || '#2563eb'}`} />
+                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.navbar_bg || "#0f172a", border: `1px solid ${tokens.border}` }} title={`Navbar: ${th.navbar_bg || '#0f172a'}`} />
                           </div>
-                          <span style={{ fontSize: "10.5px", fontWeight: isCurrentActive ? 700 : 600, color: isCurrentActive ? "#065f46" : "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: "10.5px", fontWeight: isCurrentActive ? 700 : 600, color: isCurrentActive ? (isDark ? "#34d399" : "#065f46") : tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
                             {snap.name}
                           </span>
                         </div>
@@ -12462,7 +12533,7 @@ export default function EditorSidebar({
                                 height: "20px",
                                 borderRadius: "3px",
                                 border: "none",
-                                background: ADMIN_BLUE,
+                                background: tokens.accent,
                                 color: "#ffffff",
                                 fontSize: "9.5px",
                                 fontWeight: 700,
@@ -12484,7 +12555,7 @@ export default function EditorSidebar({
                               height: "20px",
                               borderRadius: "3px",
                               border: "none",
-                              background: "rgba(239,68,68,0.1)",
+                              background: "rgba(239,68,68,0.12)",
                               color: "#ef4444",
                               fontSize: "12px",
                               fontWeight: 700,
@@ -12513,9 +12584,9 @@ export default function EditorSidebar({
                       width: "100%",
                       padding: "4px 6px",
                       borderRadius: "4px",
-                      border: "1px dashed #cbd5e1",
-                      background: "#ffffff",
-                      color: ADMIN_BLUE,
+                      border: `1px dashed ${tokens.border}`,
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      color: tokens.accent,
                       fontSize: "10px",
                       fontWeight: 700,
                       cursor: "pointer",
@@ -12539,11 +12610,11 @@ export default function EditorSidebar({
 
           {/* Appearance & Mode Section */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textMuted }}>
               APPEARANCE & MODE
             </div>
 
-            <div style={{ display: "flex", gap: "3px", padding: "2px", background: "#f1f5f9", borderRadius: "5px" }}>
+            <div style={{ display: "flex", gap: "3px", padding: "2px", background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9", borderRadius: "5px" }}>
               <button
                 type="button"
                 onClick={() =>
@@ -12557,11 +12628,11 @@ export default function EditorSidebar({
                   cursor: "pointer",
                   background:
                     siteDefinition.theme?.mode === "light"
-                      ? "#ffffff"
+                      ? (isDark ? tokens.surfaceBg : "#ffffff")
                       : "transparent",
                   color:
-                    siteDefinition.theme?.mode === "light" ? "#0f172a" : "#64748b",
-                  boxShadow: siteDefinition.theme?.mode === "light" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                    siteDefinition.theme?.mode === "light" ? tokens.textPrimary : tokens.textMuted,
+                  boxShadow: siteDefinition.theme?.mode === "light" ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.06)") : "none",
                   fontSize: "10.5px",
                   fontWeight: 700,
                   display: "flex",
@@ -12598,11 +12669,11 @@ export default function EditorSidebar({
                   cursor: "pointer",
                   background:
                     siteDefinition.theme?.mode === "dark"
-                      ? "#000000"
+                      ? (isDark ? tokens.surfaceBg : "#000000")
                       : "transparent",
                   color:
-                    siteDefinition.theme?.mode === "dark" ? "#ffffff" : "#64748b",
-                  boxShadow: siteDefinition.theme?.mode === "dark" ? "0 1px 2px rgba(0,0,0,0.25)" : "none",
+                    siteDefinition.theme?.mode === "dark" ? (isDark ? tokens.accent : "#ffffff") : tokens.textMuted,
+                  boxShadow: siteDefinition.theme?.mode === "dark" ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.25)") : "none",
                   fontSize: "10.5px",
                   fontWeight: 700,
                   display: "flex",
@@ -12810,7 +12881,7 @@ export default function EditorSidebar({
       ) : (
         <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
           {/* Dynamic Page & Inspector Breadcrumb Header */}
-          <div style={{ paddingBottom: "4px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box" }}>
+          <div style={{ paddingBottom: "4px", borderBottom: `1px solid ${tokens.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "4px", minWidth: 0 }}>
               {selectedBlock ? (
                 <button
@@ -12818,8 +12889,8 @@ export default function EditorSidebar({
                   onClick={() => onSelectBlock && onSelectBlock(null)}
                   style={{
                     border: "none",
-                    background: "rgba(37,99,235,0.08)",
-                    color: ADMIN_BLUE,
+                    background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)",
+                    color: tokens.accent,
                     padding: "2px 6px",
                     borderRadius: "3px",
                     fontSize: "9.5px",
@@ -12835,12 +12906,12 @@ export default function EditorSidebar({
                   ← Tree
                 </button>
               ) : (
-                <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textMuted }}>
                   PAGE
                 </span>
               )}
-              <span style={{ fontSize: "9px", color: "#cbd5e1" }}>/</span>
-              <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <span style={{ fontSize: "9px", color: tokens.textMuted }}>/</span>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {selectedBlock
                   ? (isPlaceOrderBlock(selectedBlock) ||
                      selectedBlock.id === "place_order_cta" ||
@@ -12944,7 +13015,7 @@ export default function EditorSidebar({
               </span>
             </div>
             {selectedBlock && (
-              <span style={{ fontSize: "8.5px", fontWeight: 800, padding: "1px 4px", borderRadius: "3px", background: "rgba(37,99,235,0.08)", color: ADMIN_BLUE, flexShrink: 0 }}>
+              <span style={{ fontSize: "8.5px", fontWeight: 800, padding: "1px 4px", borderRadius: "3px", background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)", color: tokens.accent, flexShrink: 0 }}>
                 EDITING
               </span>
             )}
@@ -12959,8 +13030,8 @@ export default function EditorSidebar({
             />
           ) : !editableConfig && !hasSpecialEditor ? (
             <div style={sectionCardStyle(isLightMode)}>
-              <div style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>{selectedBlock.type}</div>
-              <p style={{ margin: 0, fontSize: "10.5px", color: "#64748b", lineHeight: 1.4 }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: tokens.textPrimary }}>{selectedBlock.type}</div>
+              <p style={{ margin: 0, fontSize: "10.5px", color: tokens.textMuted, lineHeight: 1.4 }}>
                 This block does not have configurable properties.
               </p>
             </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useAdminTheme } from "../context/ThemeContext";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import GlassToast from "./GlassToast";
@@ -23,53 +24,6 @@ interface EmailSettings {
   updated_at?: string;
 }
 
-const plainCardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
-  borderRadius: "10px",
-  boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  outline: "none",
-  fontSize: "13px",
-  boxSizing: "border-box",
-  color: "#0f172a",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "12px",
-  fontWeight: 600,
-  color: "#475569",
-  marginBottom: "4px",
-  display: "block",
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  background: "#2563eb",
-  color: "#ffffff",
-  border: "none",
-  borderRadius: "6px",
-  fontWeight: 600,
-  cursor: "pointer",
-  transition: "all 0.15s ease",
-};
-
-const ghostButtonStyle: React.CSSProperties = {
-  background: "#ffffff",
-  color: "#334155",
-  border: "1px solid #cbd5e1",
-  borderRadius: "6px",
-  fontWeight: 600,
-  cursor: "pointer",
-  transition: "all 0.15s ease",
-};
-
 const CheckCircleIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -85,8 +39,55 @@ const XMarkIcon = () => (
 );
 
 export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ siteId: propSiteId }) => {
+  const { isDark, tokens } = useAdminTheme();
   const { siteId: paramSiteId } = useParams<{ siteId?: string }>();
   const activeSiteId = propSiteId || paramSiteId || "";
+
+  const plainCardStyle: React.CSSProperties = {
+    background: isDark ? tokens.surfaceBg : "#ffffff",
+    border: `1px solid ${tokens.border}`,
+    borderRadius: "10px",
+    boxShadow: isDark ? "0 4px 20px rgba(0, 0, 0, 0.25)" : "0 1px 2px rgba(0,0,0,0.03)",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "8px 12px",
+    borderRadius: "6px",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+    outline: "none",
+    fontSize: "13px",
+    boxSizing: "border-box",
+    color: tokens.textPrimary,
+    colorScheme: isDark ? "dark" : "light",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: tokens.textSecondary,
+    marginBottom: "4px",
+    display: "block",
+  };
+
+  const primaryButtonStyle: React.CSSProperties = {
+    background: tokens.accent || "#2563eb",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: "6px",
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+
+  const ghostButtonStyle: React.CSSProperties = {
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+    color: tokens.textPrimary,
+    border: `1px solid ${tokens.border}`,
+    borderRadius: "6px",
+    fontWeight: 600,
+    cursor: "pointer",
+  };
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -367,16 +368,16 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
   };
 
   return (
-    <div style={{ padding: "0", maxWidth: "100%", color: "#0f172a" }}>
+    <div style={{ padding: "0", maxWidth: "100%", color: tokens.textPrimary }}>
       {/* 1. Top Navbar Header */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.surfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
           padding: "10px 14px",
           marginBottom: "16px",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -387,10 +388,10 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
         <div
           style={{
             display: "inline-flex",
-            background: "#f1f5f9",
+            background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
             padding: "3px",
             borderRadius: "8px",
-            border: "1px solid #e2e8f0",
+            border: `1px solid ${tokens.border}`,
           }}
         >
           <button
@@ -399,15 +400,15 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
               borderRadius: "6px",
               padding: "6px 16px",
               border: "none",
-              background: "#ffffff",
-              color: "#0f172a",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+              background: isDark ? tokens.surfaceBg : "#ffffff",
+              color: tokens.textPrimary,
+              boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
               fontSize: "13px",
               fontWeight: 700,
               cursor: "default",
             }}
           >
-            Notifications
+            Notifications & Email
           </button>
         </div>
 
@@ -424,7 +425,7 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
               padding: "7px 16px",
               borderRadius: "6px",
               border: "none",
-              background: saving ? "#94a3b8" : (hasUnsavedChanges ? "#2563eb" : "#0f172a"),
+              background: saving ? tokens.textMuted : (hasUnsavedChanges ? (tokens.accent || "#2563eb") : (isDark ? tokens.elevatedSurfaceBg : "#0f172a")),
               color: "#ffffff",
               fontWeight: 700,
               fontSize: "13px",
@@ -432,7 +433,7 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
               boxShadow: hasUnsavedChanges ? "0 1px 3px rgba(37,99,235,0.3)" : "none",
               opacity: saving ? 0.7 : 1,
               whiteSpace: "nowrap",
-              transition: "all 0.15s ease",
+              transition: "background 0.15s ease",
             }}
           >
             {saving ? "Saving..." : "Save Settings"}
@@ -460,16 +461,16 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
               justifyContent: "space-between",
               paddingBottom: "14px",
               marginBottom: "18px",
-              borderBottom: "1px solid #f1f5f9",
+              borderBottom: `1px solid ${tokens.border}`,
             }}
           >
-            <h2 style={{ fontSize: "14.5px", fontWeight: 700, color: "#0f172a", margin: 0 }}>
+            <h2 style={{ fontSize: "14.5px", fontWeight: 700, color: tokens.textPrimary, margin: 0 }}>
               Email & SMTP Setup
             </h2>
 
             {/* Small Compact Toggle */}
             <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none" }}>
-              <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#475569" }}>
+              <span style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textSecondary }}>
                 Customer Emails:
               </span>
               <div style={{ position: "relative", width: "34px", height: "20px" }}>
@@ -487,8 +488,7 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    backgroundColor: settings.is_enabled ? "#2563eb" : "#cbd5e1",
-                    transition: "background-color 0.15s ease",
+                    backgroundColor: settings.is_enabled ? "#2563eb" : (isDark ? "rgba(255, 255, 255, 0.18)" : "#cbd5e1"),
                     borderRadius: "20px",
                   }}
                 >
@@ -503,12 +503,11 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
                       borderRadius: "50%",
                       boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
                       transform: settings.is_enabled ? "translateX(14px)" : "translateX(0px)",
-                      transition: "transform 0.15s ease",
                     }}
                   />
                 </span>
               </div>
-              <span style={{ fontSize: "12px", fontWeight: 700, minWidth: "48px", color: settings.is_enabled ? "#2563eb" : "#64748b" }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, minWidth: "48px", color: settings.is_enabled ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary }}>
                 {settings.is_enabled ? "Active" : "Inactive"}
               </span>
             </label>
@@ -593,13 +592,12 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
                     style={{
                       padding: "6px 14px",
                       borderRadius: "6px",
-                      border: active ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
-                      background: active ? "#eff6ff" : "#ffffff",
-                      color: active ? "#1d4ed8" : "#475569",
+                      border: active ? `1.5px solid ${tokens.accent || "#2563eb"}` : `1px solid ${tokens.border}`,
+                      background: active ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
+                      color: active ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
                       fontSize: "12.5px",
                       fontWeight: active ? 700 : 500,
                       cursor: "pointer",
-                      transition: "all 0.12s ease",
                     }}
                   >
                     {p.label}
@@ -643,7 +641,7 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
           <div
             style={{
               paddingTop: "14px",
-              borderTop: "1px solid #f1f5f9",
+              borderTop: `1px solid ${tokens.border}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -654,15 +652,15 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
             {/* Status */}
             <div style={{ fontSize: "12.5px" }}>
               {settings.verification_status === "verified" ? (
-                <span style={{ color: "#16a34a", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ color: isDark ? "#4ade80" : "#16a34a", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px" }}>
                   <CheckCircleIcon /> Verified
                 </span>
               ) : settings.verification_status === "failed" ? (
-                <span style={{ color: "#dc2626", fontWeight: 700 }}>
+                <span style={{ color: isDark ? "#fca5a5" : "#dc2626", fontWeight: 700 }}>
                   ⚠️ Failed ({settings.verification_error || "Check credentials"})
                 </span>
               ) : (
-                <span style={{ color: "#64748b", fontWeight: 500 }}>
+                <span style={{ color: tokens.textSecondary, fontWeight: 500 }}>
                   Using Default Platform Mailer
                 </span>
               )}
@@ -699,7 +697,7 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(15, 23, 42, 0.4)",
+            background: isDark ? "rgba(0, 0, 0, 0.75)" : "rgba(15, 23, 42, 0.4)",
             backdropFilter: "blur(2px)",
             display: "grid",
             placeItems: "center",
@@ -709,10 +707,10 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
         >
           <div style={{ ...plainCardStyle, maxWidth: "400px", width: "100%", padding: "18px 20px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <h3 style={{ fontSize: "14px", fontWeight: 700, margin: 0, color: "#0f172a" }}>Send Test Email</h3>
+              <h3 style={{ fontSize: "14px", fontWeight: 700, margin: 0, color: tokens.textPrimary }}>Send Test Email</h3>
               <button
                 onClick={() => setIsTestModalOpen(false)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: 0 }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: tokens.textSecondary, padding: 0 }}
               >
                 <XMarkIcon />
               </button>
@@ -737,9 +735,9 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
                   fontSize: "12px",
                   fontWeight: 600,
                   marginBottom: "12px",
-                  background: testFeedback.success ? "#f0fdf4" : "#fef2f2",
-                  border: testFeedback.success ? "1px solid #bbf7d0" : "1px solid #fecaca",
-                  color: testFeedback.success ? "#166534" : "#991b1b",
+                  background: testFeedback.success ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"),
+                  border: testFeedback.success ? (isDark ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid #bbf7d0") : (isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca"),
+                  color: testFeedback.success ? (isDark ? "#4ade80" : "#166534") : (isDark ? "#fca5a5" : "#991b1b"),
                 }}
               >
                 {testFeedback.message}
@@ -762,7 +760,7 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
                   ...primaryButtonStyle,
                   padding: "6px 16px",
                   fontSize: "12px",
-                  background: testing || !testRecipient.trim() ? "#94a3b8" : "#2563eb",
+                  background: testing || !testRecipient.trim() ? tokens.textMuted : (tokens.accent || "#2563eb"),
                 }}
               >
                 {testing ? "Sending..." : "Send"}
@@ -776,3 +774,5 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
 };
 
 export default AdminNotificationsSettings;
+
+

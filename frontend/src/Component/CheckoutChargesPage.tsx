@@ -4,6 +4,7 @@ import { API_BASE_URL } from "../config/api";
 import GlassToast from "./GlassToast";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import AccessDeniedView from "./AccessDeniedView";
+import { useAdminTheme } from "../context/ThemeContext";
 import { AdminTaxComplianceDesk } from "./AdminTaxComplianceDesk";
 
 export type ChargeCode =
@@ -265,48 +266,51 @@ const ToggleSwitch: React.FC<{
   onChange: (checked: boolean) => void;
   disabled?: boolean;
   id?: string;
-}> = ({ checked, onChange, disabled, id }) => (
-  <button
-    type="button"
-    role="switch"
-    id={id}
-    aria-checked={checked}
-    disabled={disabled}
-    onClick={(e) => {
-      e.stopPropagation();
-      onChange(!checked);
-    }}
-    style={{
-      position: "relative",
-      display: "inline-flex",
-      alignItems: "center",
-      width: "32px",
-      height: "18px",
-      flexShrink: 0,
-      cursor: disabled ? "not-allowed" : "pointer",
-      borderRadius: "999px",
-      border: "none",
-      backgroundColor: checked ? "#16a34a" : "#cbd5e1",
-      transition: "background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-      padding: "2px",
-      outline: "none",
-      boxSizing: "border-box",
-    }}
-  >
-    <span
-      style={{
-        display: "inline-block",
-        width: "14px",
-        height: "14px",
-        borderRadius: "50%",
-        backgroundColor: "#ffffff",
-        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.2)",
-        transform: checked ? "translateX(14px)" : "translateX(0px)",
-        transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+}> = ({ checked, onChange, disabled, id }) => {
+  const { isDark } = useAdminTheme();
+  return (
+    <button
+      type="button"
+      role="switch"
+      id={id}
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange(!checked);
       }}
-    />
-  </button>
-);
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        width: "32px",
+        height: "18px",
+        flexShrink: 0,
+        cursor: disabled ? "not-allowed" : "pointer",
+        borderRadius: "999px",
+        border: "none",
+        backgroundColor: checked ? "#16a34a" : isDark ? "rgba(255, 255, 255, 0.18)" : "#cbd5e1",
+        transition: "background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        padding: "2px",
+        outline: "none",
+        boxSizing: "border-box",
+      }}
+    >
+      <span
+        style={{
+          display: "inline-block",
+          width: "14px",
+          height: "14px",
+          borderRadius: "50%",
+          backgroundColor: "#ffffff",
+          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.2)",
+          transform: checked ? "translateX(14px)" : "translateX(0px)",
+          transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
+      />
+    </button>
+  );
+};
 
 const getShortTabLabel = (label: string) => {
   const map: Record<string, string> = {
@@ -336,8 +340,25 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
   const { siteId: paramSiteId } = useParams<{ siteId: string }>();
   const siteId = propSiteId || paramSiteId || (typeof window !== "undefined" ? localStorage.getItem("last_active_site_id") || "" : "");
   const { hasPermission, isOwner } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
   const canView = isOwner || hasPermission("checkout_charges:view");
   const canEdit = isOwner || hasPermission("checkout_charges:edit");
+
+  const plainCardStyle: React.CSSProperties = {
+    background: tokens.surfaceBg,
+    border: `1px solid ${tokens.border}`,
+    borderRadius: "10px",
+    boxShadow: isDark ? "0 1px 2px rgba(0,0,0,0.2)" : "0 1px 2px rgba(0,0,0,0.03)",
+    overflow: "hidden",
+  };
+
+  const emptyCardStyle: React.CSSProperties = {
+    ...plainCardStyle,
+    padding: "24px 16px",
+    textAlign: "center",
+    color: tokens.textSecondary,
+    fontSize: "13.5px",
+  };
 
   const cachedSettings = getCachedCheckoutSettings(siteId);
 
@@ -429,6 +450,7 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
         setLoading(false);
         return;
       }
+
       if (!canView) {
         setLoading(false);
         return;
@@ -606,23 +628,23 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
 
   if (loading) {
     return (
-      <div style={{ minHeight: "300px", display: "grid", placeItems: "center", color: "#64748b", fontSize: "13.5px" }}>
+      <div style={{ minHeight: "300px", display: "grid", placeItems: "center", color: tokens.textSecondary, fontSize: "13.5px" }}>
         Loading settings...
       </div>
     );
   }
 
   return (
-    <div style={{ color: "#0f172a", width: "100%" }}>
+    <div style={{ color: tokens.textPrimary, width: "100%" }}>
       {/* Top Header Card (Segmented Mode + Search & Action Button) */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: tokens.surfaceBg,
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
           padding: "10px 14px",
           marginBottom: "16px",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          boxShadow: isDark ? "0 1px 2px rgba(0,0,0,0.2)" : "0 1px 2px rgba(0,0,0,0.03)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -634,10 +656,10 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
         <div
           style={{
             display: "inline-flex",
-            background: "#f1f5f9",
+            background: tokens.elevatedSurfaceBg,
             padding: "3px",
             borderRadius: "8px",
-            border: "1px solid #e2e8f0",
+            border: `1px solid ${tokens.border}`,
             gap: "2px",
           }}
         >
@@ -667,10 +689,10 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
                   borderRadius: "6px",
                   padding: "6px 14px",
                   border: "none",
-                  background: isActive ? "#ffffff" : "transparent",
-                  color: isActive ? "#0f172a" : "#64748b",
+                  background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                  color: isActive ? tokens.textPrimary : tokens.textSecondary,
                   boxShadow: isActive
-                    ? "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                    ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)")
                     : "none",
                   fontSize: "13px",
                   fontWeight: 600,
@@ -706,9 +728,9 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
                 gap: "5px",
                 padding: "7px 12px",
                 borderRadius: "6px",
-                background: "#ffffff",
-                border: "1px solid #cbd5e1",
-                color: "#0f172a",
+                background: tokens.elevatedSurfaceBg,
+                border: `1px solid ${tokens.border}`,
+                color: tokens.textPrimary,
                 fontWeight: 600,
                 fontSize: "12.5px",
                 cursor: canEdit ? "pointer" : "not-allowed",
@@ -732,8 +754,8 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
                 gap: "6px",
                 padding: "7px 16px",
                 borderRadius: "6px",
-                border: "none",
-                background: !canEdit ? "#94a3b8" : (isTaxDirty ? "#2563eb" : "#0f172a"),
+                border: isDark && !isTaxDirty ? `1px solid ${tokens.border}` : "none",
+                background: !canEdit ? (isDark ? "rgba(255,255,255,0.1)" : "#94a3b8") : (isTaxDirty ? (isDark ? "linear-gradient(135deg, #2563eb, #1d4ed8)" : "#2563eb") : (isDark ? tokens.elevatedSurfaceBg : "#0f172a")),
                 color: "#ffffff",
                 fontWeight: 700,
                 fontSize: "13px",
@@ -757,8 +779,8 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
                 gap: "6px",
                 padding: "7px 16px",
                 borderRadius: "6px",
-                border: "none",
-                background: !canEdit ? "#94a3b8" : (hasUnsavedChanges ? "#2563eb" : "#0f172a"),
+                border: isDark && !hasUnsavedChanges ? `1px solid ${tokens.border}` : "none",
+                background: !canEdit ? (isDark ? "rgba(255,255,255,0.1)" : "#94a3b8") : (hasUnsavedChanges ? (isDark ? "linear-gradient(135deg, #2563eb, #1d4ed8)" : "#2563eb") : (isDark ? tokens.elevatedSurfaceBg : "#0f172a")),
                 color: "#ffffff",
                 fontWeight: 700,
                 fontSize: "13px",
@@ -791,7 +813,7 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
             display: "flex",
             flexWrap: "wrap",
             gap: "4px",
-            borderBottom: "1px solid #e2e8f0",
+            borderBottom: `1px solid ${tokens.border}`,
             marginBottom: "16px",
           }}
         >
@@ -811,7 +833,7 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
                   border: "none",
                   borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
                   background: "transparent",
-                  color: isActive ? "#2563eb" : "#64748b",
+                  color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -826,7 +848,7 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
                     height: "6px",
                     minWidth: "6px",
                     borderRadius: "999px",
-                    background: charge.enabled ? "#16a34a" : "#cbd5e1",
+                    background: charge.enabled ? "#16a34a" : (isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1"),
                     display: "inline-block",
                     transition: "background 0.2s ease",
                   }}
@@ -844,7 +866,7 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
             display: "flex",
             flexWrap: "wrap",
             gap: "4px",
-            borderBottom: "1px solid #e2e8f0",
+            borderBottom: `1px solid ${tokens.border}`,
             marginBottom: "16px",
           }}
         >
@@ -863,7 +885,7 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
                   border: "none",
                   borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
                   background: "transparent",
-                  color: isActive ? "#2563eb" : "#64748b",
+                  color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -878,7 +900,7 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
                     height: "6px",
                     minWidth: "6px",
                     borderRadius: "999px",
-                    background: charge.enabled ? "#16a34a" : "#cbd5e1",
+                    background: charge.enabled ? "#16a34a" : (isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1"),
                     display: "inline-block",
                     transition: "background 0.2s ease",
                   }}
@@ -915,10 +937,10 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
                 gap: "8px",
               }}
             >
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                 No custom charges
               </div>
-              <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+              <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
                 Create optional or mandatory store charges tailored to your checkout flow.
               </p>
               {canEdit && (
@@ -978,13 +1000,42 @@ const ChargeConfigCard: React.FC<{
   onRemove?: () => void;
   canEdit?: boolean;
 }> = ({ charge, onChange, onRemove, canEdit = true }) => {
+  const { isDark, tokens } = useAdminTheme();
+
+  const plainCardStyle: React.CSSProperties = {
+    background: tokens.surfaceBg,
+    border: `1px solid ${tokens.border}`,
+    borderRadius: "10px",
+    boxShadow: isDark ? "0 1px 2px rgba(0,0,0,0.2)" : "0 1px 2px rgba(0,0,0,0.03)",
+    overflow: "hidden",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: tokens.textSecondary,
+    marginBottom: "4px",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    padding: "7px 10px",
+    borderRadius: "6px",
+    border: `1px solid ${tokens.border}`,
+    background: canEdit ? tokens.elevatedSurfaceBg : (isDark ? "rgba(255,255,255,0.03)" : "#f8fafc"),
+    color: tokens.textPrimary,
+    fontSize: "13px",
+    width: "100%",
+    boxSizing: "border-box",
+    outline: "none",
+  };
+
   return (
     <div style={plainCardStyle}>
       {/* Card Header */}
       <div
         style={{
           padding: "14px 18px",
-          borderBottom: "1px solid #f1f5f9",
+          borderBottom: `1px solid ${tokens.border}`,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
@@ -993,15 +1044,15 @@ const ChargeConfigCard: React.FC<{
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+          <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
             {charge.label}
           </div>
           {charge.refundable ? (
-            <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px", background: "#f1f5f9", color: "#475569" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px", background: isDark ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9", color: tokens.textSecondary }}>
               Refundable
             </span>
           ) : (
-            <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px", background: "#fffbeb", color: "#92400e", border: "1px solid #fde68a" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px", background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb", color: isDark ? "#fbbf24" : "#92400e", border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}` }}>
               Non-Refundable
             </span>
           )}
@@ -1021,9 +1072,9 @@ const ChargeConfigCard: React.FC<{
                 gap: "4px",
                 padding: "5px 9px",
                 borderRadius: "5px",
-                border: "1px solid #e2e8f0",
-                background: "#ffffff",
-                color: "#64748b",
+                border: `1px solid ${tokens.border}`,
+                background: tokens.elevatedSurfaceBg,
+                color: tokens.textSecondary,
                 fontSize: "12px",
                 fontWeight: 600,
                 cursor: canEdit ? "pointer" : "not-allowed",
@@ -1051,7 +1102,7 @@ const ChargeConfigCard: React.FC<{
               style={{
                 fontSize: "13px",
                 fontWeight: 600,
-                color: charge.enabled ? "#0f172a" : "#64748b",
+                color: charge.enabled ? tokens.textPrimary : tokens.textSecondary,
               }}
             >
               Active
@@ -1087,11 +1138,7 @@ const ChargeConfigCard: React.FC<{
                 if (canEdit) onChange(charge.id, "label", e.target.value);
               }}
               placeholder="Display label"
-              style={{
-                ...inputStyle,
-                background: canEdit ? "#ffffff" : "#f8fafc",
-                cursor: canEdit ? "text" : "not-allowed",
-              }}
+              style={inputStyle}
             />
           </div>
 
@@ -1104,14 +1151,10 @@ const ChargeConfigCard: React.FC<{
               onChange={(e) => {
                 if (canEdit) onChange(charge.id, "amountType", e.target.value as "fixed" | "percent");
               }}
-              style={{
-                ...inputStyle,
-                background: canEdit ? "#ffffff" : "#f8fafc",
-                cursor: canEdit ? "pointer" : "not-allowed",
-              }}
+              style={inputStyle}
             >
-              <option value="fixed">Fixed (₹)</option>
-              <option value="percent">Percentage (%)</option>
+              <option value="fixed" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Fixed (₹)</option>
+              <option value="percent" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Percentage (%)</option>
             </select>
           </div>
 
@@ -1129,11 +1172,7 @@ const ChargeConfigCard: React.FC<{
               onChange={(e) => {
                 if (canEdit) onChange(charge.id, "amountValue", e.target.value);
               }}
-              style={{
-                ...inputStyle,
-                background: canEdit ? "#ffffff" : "#f8fafc",
-                cursor: canEdit ? "text" : "not-allowed",
-              }}
+              style={inputStyle}
             />
           </div>
 
@@ -1146,16 +1185,12 @@ const ChargeConfigCard: React.FC<{
               onChange={(e) => {
                 if (canEdit) onChange(charge.id, "applyConditionType", e.target.value as ChargeRule["applyConditionType"]);
               }}
-              style={{
-                ...inputStyle,
-                background: canEdit ? "#ffffff" : "#f8fafc",
-                cursor: canEdit ? "pointer" : "not-allowed",
-              }}
+              style={inputStyle}
             >
-              <option value="none">Always Apply (Default)</option>
-              <option value="subtotal_lt">Subtotal less than (&lt;)</option>
-              <option value="subtotal_gte">Subtotal greater than or equal (≥)</option>
-              <option value="payment_method">Payment method (e.g. COD)</option>
+              <option value="none" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Always Apply (Default)</option>
+              <option value="subtotal_lt" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Subtotal less than (&lt;)</option>
+              <option value="subtotal_gte" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Subtotal greater than or equal (≥)</option>
+              <option value="payment_method" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Payment method (e.g. COD)</option>
             </select>
           </div>
 
@@ -1175,11 +1210,7 @@ const ChargeConfigCard: React.FC<{
                   if (canEdit) onChange(charge.id, "applyConditionValue", e.target.value);
                 }}
                 placeholder={charge.applyConditionType === "payment_method" ? "cod" : "499"}
-                style={{
-                  ...inputStyle,
-                  background: canEdit ? "#ffffff" : "#f8fafc",
-                  cursor: canEdit ? "text" : "not-allowed",
-                }}
+                style={inputStyle}
               />
             </div>
           )}
@@ -1193,14 +1224,10 @@ const ChargeConfigCard: React.FC<{
               onChange={(e) => {
                 if (canEdit) onChange(charge.id, "waiveConditionType", e.target.value as ChargeRule["waiveConditionType"]);
               }}
-              style={{
-                ...inputStyle,
-                background: canEdit ? "#ffffff" : "#f8fafc",
-                cursor: canEdit ? "pointer" : "not-allowed",
-              }}
+              style={inputStyle}
             >
-              <option value="none">No Waiver</option>
-              <option value="subtotal_gte">Free when Subtotal ≥</option>
+              <option value="none" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>No Waiver</option>
+              <option value="subtotal_gte" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Free when Subtotal ≥</option>
             </select>
           </div>
 
@@ -1217,11 +1244,7 @@ const ChargeConfigCard: React.FC<{
                   if (canEdit) onChange(charge.id, "waiveConditionValue", e.target.value);
                 }}
                 placeholder="e.g. 999"
-                style={{
-                  ...inputStyle,
-                  background: canEdit ? "#ffffff" : "#f8fafc",
-                  cursor: canEdit ? "text" : "not-allowed",
-                }}
+                style={inputStyle}
               />
             </div>
           )}
@@ -1237,17 +1260,13 @@ const ChargeConfigCard: React.FC<{
                 if (canEdit) onChange(charge.id, "description", e.target.value);
               }}
               placeholder="Short internal description"
-              style={{
-                ...inputStyle,
-                background: canEdit ? "#ffffff" : "#f8fafc",
-                cursor: canEdit ? "text" : "not-allowed",
-              }}
+              style={inputStyle}
             />
           </div>
 
           {/* Checkbox Options */}
           <div style={{ gridColumn: "1 / -1", display: "flex", flexWrap: "wrap", gap: "20px", paddingTop: "4px" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: canEdit ? "pointer" : "not-allowed", fontSize: "13px", color: "#334155" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: canEdit ? "pointer" : "not-allowed", fontSize: "13px", color: tokens.textPrimary }}>
               <input
                 type="checkbox"
                 disabled={!canEdit}
@@ -1260,7 +1279,7 @@ const ChargeConfigCard: React.FC<{
               Refundable on return
             </label>
 
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: canEdit ? "pointer" : "not-allowed", fontSize: "13px", color: "#334155" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: canEdit ? "pointer" : "not-allowed", fontSize: "13px", color: tokens.textPrimary }}>
               <input
                 type="checkbox"
                 disabled={!canEdit}
@@ -1280,41 +1299,6 @@ const ChargeConfigCard: React.FC<{
       </div>
     </div>
   );
-};
-
-const plainCardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
-  borderRadius: "10px",
-  boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-  overflow: "hidden",
-};
-
-const emptyCardStyle: React.CSSProperties = {
-  ...plainCardStyle,
-  padding: "24px 16px",
-  textAlign: "center",
-  color: "#64748b",
-  fontSize: "13.5px",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "12px",
-  fontWeight: 600,
-  color: "#475569",
-  marginBottom: "4px",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "7px 10px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
-  fontSize: "13px",
-  width: "100%",
-  boxSizing: "border-box",
-  outline: "none",
 };
 
 export default CheckoutChargesPage;

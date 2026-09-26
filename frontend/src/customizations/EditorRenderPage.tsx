@@ -432,7 +432,7 @@ function EditorBlockWrapper({
         maxWidth: "100%",
         margin: "0",
         padding: 0,
-        zIndex: selected ? 5 : 1,
+        zIndex: selected ? 30 : isHovered ? 25 : 1,
         overflow: "visible",
         boxSizing: "border-box",
         borderRadius: isCart ? 0 : `${containerRadius}px`,

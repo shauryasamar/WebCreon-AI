@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { API_BASE_URL } from "../config/api";
 import { clearSavedSitesMemoryCache } from "../utils/savedSitesCache";
+import { setThemeCookie } from "./ThemeContext";
 
 export type AdminUser = {
   id: string;
@@ -19,6 +20,7 @@ export type AdminUser = {
   authProvider?: string;
   googleId?: string | null;
   timezone?: string;
+  themePreference?: "light" | "dark" | "system" | string | null;
   hasPassword?: boolean;
   createdAt?: string | null;
 };
@@ -61,6 +63,14 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (typeof window !== "undefined") {
         if (next) {
           localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(next));
+          if (next.themePreference && (next.themePreference === "light" || next.themePreference === "dark" || next.themePreference === "system")) {
+            const currentSaved = localStorage.getItem("app_theme_mode");
+            if (currentSaved !== next.themePreference) {
+              localStorage.setItem("app_theme_mode", next.themePreference);
+              setThemeCookie(next.themePreference, 365);
+              window.dispatchEvent(new CustomEvent("wc-theme-change", { detail: next.themePreference }));
+            }
+          }
         } else {
           localStorage.removeItem(ADMIN_STORAGE_KEY);
         }

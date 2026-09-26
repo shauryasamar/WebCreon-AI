@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL as API_BASE } from "../config/api";
 import GlassToast from "./GlassToast";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
+import { AdminCheckbox } from "./AdminProducts";
 import AccessDeniedView from "./AccessDeniedView";
 
 interface CouponItem {
@@ -166,6 +168,7 @@ const ErrorBadge = ({ message }: { message?: string }) => {
 
 export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }) {
   const { hasPermission } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
   const canViewDiscounts = hasPermission("discounts:view");
   const canCreateDiscounts = hasPermission("discounts:create");
   const canEditDiscounts = hasPermission("discounts:edit");
@@ -685,9 +688,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
 
   // Styling Tokens
   const plainCardStyle: React.CSSProperties = {
-    background: "#ffffff",
+    background: tokens.surfaceBg,
     borderRadius: "10px",
-    border: "1px solid #cbd5e1",
+    border: `1px solid ${tokens.border}`,
     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   };
 
@@ -697,32 +700,33 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    color: "#64748b",
+    color: tokens.textSecondary,
   };
 
   const tdStyle: React.CSSProperties = {
     padding: "12px 14px",
     verticalAlign: "middle",
-    borderBottom: "1px solid #f1f5f9",
+    borderBottom: `1px solid ${tokens.border}`,
   };
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
-    boxSizing: "border-box",
     height: "36px",
-    borderRadius: "7px",
-    border: "1px solid #cbd5e1",
-    background: "#f8fafc",
     padding: "0 10px",
+    borderRadius: "7px",
+    border: `1px solid ${tokens.border}`,
     fontSize: "13px",
-    color: "#0f172a",
+    color: tokens.textPrimary,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+    colorScheme: isDark ? "dark" : "light",
+    boxSizing: "border-box",
     outline: "none",
   };
 
   const labelStyle: React.CSSProperties = {
     fontSize: "12px",
     fontWeight: 700,
-    color: "#334155",
+    color: tokens.textSecondary,
     marginBottom: "4px",
     display: "block",
   };
@@ -737,7 +741,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
   }
 
   return (
-    <div style={{ width: "100%", color: "#0f172a", display: "flex", flexDirection: "column", gap: "10px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+    <div style={{ width: "100%", color: tokens.textPrimary, display: "flex", flexDirection: "column", gap: "10px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
       <style>{`
         @keyframes storeShimmer {
           0% { background-position: 200% 0; }
@@ -749,8 +753,8 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
       {/* 1. TOP HEADER CARD (Mode Switcher + Search & Filter Button) */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: tokens.surfaceBg,
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
           padding: "10px 14px",
           boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
@@ -774,10 +778,10 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: tokens.elevatedSurfaceBg,
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
             <button
@@ -786,8 +790,8 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                 borderRadius: "6px",
                 padding: "6px 16px",
                 border: "none",
-                background: "#ffffff",
-                color: "#0f172a",
+                background: tokens.surfaceBg,
+                color: tokens.textPrimary,
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
                 fontSize: "13px",
                 fontWeight: 700,
@@ -818,7 +822,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   left: "11px",
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   display: "grid",
                   placeItems: "center",
                 }}
@@ -848,7 +852,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "#94a3b8",
+                    color: tokens.textMuted,
                     padding: "2px",
                     display: "grid",
                     placeItems: "center",
@@ -872,9 +876,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   height: "36px",
                   padding: "0 12px",
                   borderRadius: "7px",
-                  border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                  background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                  color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
+                  border: activeFilterCount > 0 ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}` : `1px solid ${tokens.border}`,
+                  background: activeFilterCount > 0 ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
+                  color: activeFilterCount > 0 ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -910,8 +914,8 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                     top: "44px",
                     right: 0,
                     width: "290px",
-                    background: "#ffffff",
-                    border: "1px solid #cbd5e1",
+                    background: tokens.surfaceBg,
+                    border: `1px solid ${tokens.border}`,
                     borderRadius: "10px",
                     boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08)",
                     padding: "16px",
@@ -921,8 +925,8 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                     gap: "12px",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Filter Discounts</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "8px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>Filter Discounts</span>
                     {activeFilterCount > 0 && (
                       <button
                         type="button"
@@ -941,7 +945,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
 
                   {/* Filter by Type */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Discount Type</label>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Discount Type</label>
                     <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}>
                       <option value="all">All Types</option>
                       <option value="percentage">Percentage (%)</option>
@@ -952,7 +956,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
 
                   {/* Filter First Order */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Customer Eligibility</label>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Customer Eligibility</label>
                     <select value={filterFirstOrder} onChange={(e) => setFilterFirstOrder(e.target.value)} style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}>
                       <option value="all">All Discounts</option>
                       <option value="first_only">First-Time Customers Only</option>
@@ -962,7 +966,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
 
                   {/* Sort By */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Sort Order</label>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Sort Order</label>
                     <select value={filterSortBy} onChange={(e) => setFilterSortBy(e.target.value)} style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}>
                       <option value="newest">Newest Created</option>
                       <option value="oldest">Oldest Created</option>
@@ -1007,10 +1011,10 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
               gap: "6px",
               flexWrap: "wrap",
               paddingTop: "6px",
-              borderTop: "1px solid #f1f5f9",
+              borderTop: `1px solid ${tokens.border}`,
             }}
           >
-            <span style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 600, marginRight: "2px" }}>
+            <span style={{ fontSize: "11.5px", color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>
               Active:
             </span>
 
@@ -1024,16 +1028,16 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>Type: {filterType.replace("_", " ")}</span>
                 <button
                   type="button"
                   onClick={() => setFilterType("all")}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={{ background: "none", border: "none", color: isDark ? "#93c5fd" : "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -1050,16 +1054,16 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>{filterFirstOrder === "first_only" ? "1st Order Only" : "Existing Users"}</span>
                 <button
                   type="button"
                   onClick={() => setFilterFirstOrder("all")}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={{ background: "none", border: "none", color: isDark ? "#93c5fd" : "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -1076,16 +1080,16 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>Sort: {filterSortBy}</span>
                 <button
                   type="button"
                   onClick={() => setFilterSortBy("newest")}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={{ background: "none", border: "none", color: isDark ? "#93c5fd" : "#1d4ed8", cursor: "pointer", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -1127,20 +1131,20 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
       >
         {/* Total Campaigns */}
         <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 600, color: "#334155", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: tokens.textSecondary, lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {stats.totalCoupons}
           </div>
-          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             Total Campaigns
           </div>
         </div>
 
         {/* Active on Store */}
         <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 600, color: "#334155", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: tokens.textSecondary, lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {activeCount}
           </div>
-          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             Active on Store
           </div>
         </div>
@@ -1150,17 +1154,17 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
           <div style={{ fontSize: "22px", fontWeight: 600, color: "#2563eb", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {stats.totalRedemptions}
           </div>
-          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             Total Redeemed
           </div>
         </div>
 
         {/* Customer Savings */}
         <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 600, color: "#059669", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: isDark ? "#4ade80" : "#059669", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             ₹{stats.totalSavings.toLocaleString("en-IN")}
           </div>
-          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             Customer Savings
           </div>
         </div>
@@ -1170,7 +1174,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
           <div style={{ fontSize: "22px", fontWeight: 600, color: expiringSoonCount > 0 ? "#d97706" : "#64748b", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {expiringSoonCount}
           </div>
-          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: tokens.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
             Expiring Soon
           </div>
         </div>
@@ -1183,7 +1187,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
           justifyContent: "space-between",
           alignItems: "center",
           gap: "16px",
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: `1px solid ${tokens.border}`,
           marginTop: "4px",
         }}
       >
@@ -1220,9 +1224,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   gap: "6px",
                   padding: "8px 12px",
                   border: "none",
-                  borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                  borderBottom: isActive ? (isDark ? `2px solid ${tokens.accent}` : "2px solid #2563eb") : "2px solid transparent",
                   background: "transparent",
-                  color: isActive ? "#2563eb" : "#64748b",
+                  color: isActive ? (isDark ? tokens.accent : "#2563eb") : tokens.textSecondary,
                   fontSize: "13px",
                   fontWeight: isActive ? 700 : 500,
                   cursor: "pointer",
@@ -1239,8 +1243,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                     fontWeight: 700,
                     padding: "1px 6px",
                     borderRadius: "10px",
-                    background: isActive ? "#dbeafe" : "#f1f5f9",
-                    color: isActive ? "#1e40af" : "#64748b",
+                    background: isActive ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#dbeafe") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                    color: isActive ? (isDark ? "#93c5fd" : "#1e40af") : tokens.textSecondary,
+                    border: isDark ? `1px solid ${isActive ? "rgba(59, 130, 246, 0.35)" : tokens.border}` : "none",
                   }}
                 >
                   {tab.count}
@@ -1258,8 +1263,8 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
-                background: "#ffffff",
-                border: "1px solid #cbd5e1",
+                background: tokens.surfaceBg,
+                border: `1px solid ${tokens.border}`,
                 borderRadius: "8px",
                 padding: "3px 4px",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
@@ -1271,20 +1276,20 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                   borderRadius: "5px",
                   padding: "4px 8px",
                   fontSize: "12px",
                   fontWeight: 700,
-                  color: "#1d4ed8",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
                   whiteSpace: "nowrap",
                 }}
               >
                 <span>{selectedIds.size} Selected</span>
               </div>
 
-              <div style={{ width: "1px", height: "16px", background: "#e2e8f0", margin: "0 2px" }} />
+              <div style={{ width: "1px", height: "16px", background: tokens.border, margin: "0 2px" }} />
 
               {/* Bulk Activate / Resume */}
               <button
@@ -1300,9 +1305,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   fontSize: "12px",
                   fontWeight: 600,
                   borderRadius: "5px",
-                  border: "1px solid #bbf7d0",
-                  background: "#f0fdf4",
-                  color: "#166534",
+                  border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`,
+                  background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4",
+                  color: isDark ? "#4ade80" : "#166534",
                   cursor: bulkLoading ? "not-allowed" : "pointer",
                   whiteSpace: "nowrap",
                   transition: "all 0.15s ease",
@@ -1326,9 +1331,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   fontSize: "12px",
                   fontWeight: 600,
                   borderRadius: "5px",
-                  border: "1px solid #fde68a",
-                  background: "#fffbeb",
-                  color: "#b45309",
+                  border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
+                  background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
+                  color: isDark ? "#fde047" : "#b45309",
                   cursor: bulkLoading ? "not-allowed" : "pointer",
                   whiteSpace: "nowrap",
                   transition: "all 0.15s ease",
@@ -1352,9 +1357,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   fontSize: "12px",
                   fontWeight: 600,
                   borderRadius: "5px",
-                  border: "1px solid #fecaca",
-                  background: "#fef2f2",
-                  color: "#dc2626",
+                  border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
+                  background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                  color: isDark ? "#fca5a5" : "#dc2626",
                   cursor: bulkLoading ? "not-allowed" : "pointer",
                   whiteSpace: "nowrap",
                   transition: "all 0.15s ease",
@@ -1364,7 +1369,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                 <span>Delete</span>
               </button>
 
-              <div style={{ width: "1px", height: "16px", background: "#e2e8f0", margin: "0 2px" }} />
+              <div style={{ width: "1px", height: "16px", background: tokens.border, margin: "0 2px" }} />
 
               {/* Clear Selection Button */}
               <button
@@ -1380,7 +1385,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   borderRadius: "4px",
                   border: "none",
                   background: "transparent",
-                  color: "#64748b",
+                  color: tokens.textSecondary,
                   cursor: "pointer",
                   padding: 0,
                   transition: "all 0.15s ease",
@@ -1442,11 +1447,10 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
 
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
-            <thead style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-              <tr style={{ color: "#64748b" }}>
+            <thead style={{ background: tokens.elevatedSurfaceBg, borderBottom: `1px solid ${tokens.border}` }}>
+              <tr style={{ color: tokens.textSecondary }}>
                 <th style={{ ...thStyle, width: "36px", textAlign: "center", padding: "10px 12px" }}>
-                  <input
-                    type="checkbox"
+                  <AdminCheckbox
                     checked={filteredCoupons.length > 0 && filteredCoupons.every((c) => selectedIds.has(c.id))}
                     onChange={(e) => {
                       if (e.target.checked) {
@@ -1459,7 +1463,6 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                         setSelectedIds(next);
                       }
                     }}
-                    style={{ cursor: "pointer", width: "15px", height: "15px" }}
                   />
                 </th>
                 <th style={thStyle}>Discount Code & Details</th>
@@ -1473,24 +1476,24 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
             <tbody style={{ opacity: loading && coupons.length > 0 ? 0.6 : 1, transition: "opacity 0.12s ease" }}>
               {loading && coupons.length === 0 ? (
                 [...Array(4)].map((_, idx) => (
-                  <tr key={`skel-row-${idx}`} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <tr key={`skel-row-${idx}`} style={{ borderBottom: `1px solid ${tokens.border}` }}>
                     <td style={{ ...tdStyle, width: "36px", textAlign: "center" }}>
-                      <div style={{ width: "15px", height: "15px", background: "#f1f5f9", borderRadius: "4px", margin: "0 auto" }} />
+                      <div style={{ width: "15px", height: "15px", background: tokens.elevatedSurfaceBg, borderRadius: "4px", margin: "0 auto" }} />
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ height: "16px", width: "120px", borderRadius: "4px", background: "#f1f5f9" }} />
+                      <div style={{ height: "16px", width: "120px", borderRadius: "4px", background: tokens.elevatedSurfaceBg }} />
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ height: "16px", width: "80px", borderRadius: "4px", background: "#f1f5f9" }} />
+                      <div style={{ height: "16px", width: "80px", borderRadius: "4px", background: tokens.elevatedSurfaceBg }} />
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ height: "16px", width: "140px", borderRadius: "4px", background: "#f1f5f9" }} />
+                      <div style={{ height: "16px", width: "140px", borderRadius: "4px", background: tokens.elevatedSurfaceBg }} />
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ height: "16px", width: "90px", borderRadius: "4px", background: "#f1f5f9" }} />
+                      <div style={{ height: "16px", width: "90px", borderRadius: "4px", background: tokens.elevatedSurfaceBg }} />
                     </td>
                     <td style={{ ...tdStyle, textAlign: "right" }}>
-                      <div style={{ height: "26px", width: "80px", borderRadius: "6px", background: "#f1f5f9", marginLeft: "auto" }} />
+                      <div style={{ height: "26px", width: "80px", borderRadius: "6px", background: tokens.elevatedSurfaceBg, marginLeft: "auto" }} />
                     </td>
                   </tr>
                 ))
@@ -1498,11 +1501,11 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                 <tr>
                   <td colSpan={6} style={{ ...tdStyle, textAlign: "center", padding: "48px 16px" }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", maxWidth: "340px", margin: "0 auto" }}>
-                      <div style={{ display: "inline-flex", padding: "10px", borderRadius: "50%", background: "#f1f5f9", color: "#64748b" }}>
+                      <div style={{ display: "inline-flex", padding: "10px", borderRadius: "50%", background: tokens.elevatedSurfaceBg, color: tokens.textSecondary }}>
                         <TagIcon size={24} />
                       </div>
-                      <span style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>No discount promo codes found</span>
-                      <span style={{ fontSize: "12.5px", color: "#64748b" }}>
+                      <span style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>No discount promo codes found</span>
+                      <span style={{ fontSize: "12.5px", color: tokens.textSecondary }}>
                         {searchQuery ? "Try refining your search terms or filters." : "Create your first discount coupon to boost sales."}
                       </span>
                     </div>
@@ -1517,14 +1520,13 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                     <tr
                       key={coupon.id}
                       style={{
-                        background: isSelected ? "#eff6ff" : "transparent",
+                        background: isSelected ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : "transparent",
                         transition: "background 0.1s ease",
                       }}
                     >
                       {/* Checkbox */}
                       <td style={{ ...tdStyle, width: "36px", textAlign: "center" }}>
-                        <input
-                          type="checkbox"
+                        <AdminCheckbox
                           checked={isSelected}
                           onChange={(e) => {
                             const next = new Set(selectedIds);
@@ -1532,7 +1534,6 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                             else next.delete(coupon.id);
                             setSelectedIds(next);
                           }}
-                          style={{ cursor: "pointer", width: "15px", height: "15px" }}
                         />
                       </td>
 
@@ -1545,9 +1546,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                 fontFamily: "monospace",
                                 fontWeight: 800,
                                 fontSize: "13.5px",
-                                color: "#0f172a",
-                                background: "#f1f5f9",
-                                border: "1px solid #e2e8f0",
+                                color: tokens.textPrimary,
+                                background: tokens.elevatedSurfaceBg,
+                                border: `1px solid ${tokens.border}`,
                                 borderRadius: "5px",
                                 padding: "2px 7px",
                                 letterSpacing: "0.05em",
@@ -1556,11 +1557,11 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                               {coupon.code}
                             </span>
                             {coupon.isPublic === false ? (
-                              <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", background: "#f1f5f9", border: "1px solid #cbd5e1", padding: "1px 5px", borderRadius: "4px" }}>
+                              <span style={{ fontSize: "10px", fontWeight: 700, color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}`, padding: "1px 5px", borderRadius: "4px" }}>
                                 Secret Code
                               </span>
                             ) : (
-                              <span style={{ fontSize: "10px", fontWeight: 700, color: "#1d4ed8", background: "#eff6ff", border: "1px solid #bfdbfe", padding: "1px 5px", borderRadius: "4px" }}>
+                              <span style={{ fontSize: "10px", fontWeight: 700, color: isDark ? "#93c5fd" : "#1d4ed8", background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff", border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`, padding: "1px 5px", borderRadius: "4px" }}>
                                 Public
                               </span>
                             )}
@@ -1572,7 +1573,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                 background: "none",
                                 border: "none",
                                 cursor: "pointer",
-                                color: "#64748b",
+                                color: tokens.textSecondary,
                                 padding: "3px",
                                 display: "grid",
                                 placeItems: "center",
@@ -1583,11 +1584,11 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                             </button>
                           </div>
                           {coupon.description && (
-                            <span style={{ fontSize: "12px", color: "#64748b", maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <span style={{ fontSize: "12px", color: tokens.textSecondary, maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {coupon.description}
                             </span>
                           )}
-                          <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                          <span style={{ fontSize: "11px", color: tokens.textMuted }}>
                             Created {new Date(coupon.createdAt).toLocaleDateString()}
                           </span>
                         </div>
@@ -1610,11 +1611,11 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                               : `₹${coupon.discountValue} Flat OFF`}
                           </span>
                           {coupon.discountType === "percentage" && coupon.maxDiscountAmount ? (
-                            <span style={{ fontSize: "11.5px", color: "#64748b" }}>
+                            <span style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
                               Up to ₹{coupon.maxDiscountAmount}
                             </span>
                           ) : null}
-                          <span style={{ fontSize: "11px", color: "#94a3b8", textTransform: "capitalize" }}>
+                          <span style={{ fontSize: "11px", color: tokens.textMuted, textTransform: "capitalize" }}>
                             {coupon.discountType.replace("_", " ")}
                           </span>
                         </div>
@@ -1623,16 +1624,16 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                       {/* Conditions & Limits */}
                       <td style={tdStyle}>
                         <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                          <span style={{ fontSize: "12.5px", color: "#334155", fontWeight: 600 }}>
+                          <span style={{ fontSize: "12.5px", color: tokens.textSecondary, fontWeight: 600 }}>
                             {coupon.minOrderValue > 0 ? `Min order: ₹${coupon.minOrderValue}` : "No min subtotal"}
                           </span>
                           <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap" }}>
                             {coupon.isFirstOrderOnly && (
-                              <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#d97706", background: "#fffbeb", border: "1px solid #fde68a", padding: "0 5px", borderRadius: "3px" }}>
+                              <span style={{ fontSize: "10.5px", fontWeight: 700, color: isDark ? "#fde047" : "#d97706", background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb", border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`, padding: "0 5px", borderRadius: "3px" }}>
                                 1st Order Only
                               </span>
                             )}
-                            <span style={{ fontSize: "11px", color: "#64748b" }}>
+                            <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
                               {coupon.perCustomerLimit === 1 ? "1 per customer" : `${coupon.perCustomerLimit}x per user`}
                             </span>
                           </div>
@@ -1645,9 +1646,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                 style={{
                                   fontSize: "10.5px",
                                   fontWeight: 700,
-                                  color: "#7c3aed",
-                                  background: "#f5f3ff",
-                                  border: "1px solid #ddd6fe",
+                                  color: isDark ? "#c084fc" : "#7c3aed",
+                                  background: isDark ? "rgba(168, 85, 247, 0.15)" : "#f5f3ff",
+                                  border: `1px solid ${isDark ? "rgba(192, 132, 252, 0.3)" : "#ddd6fe"}`,
                                   padding: "1px 5px",
                                   borderRadius: "3px",
                                   display: "inline-flex",
@@ -1663,9 +1664,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                 style={{
                                   fontSize: "10.5px",
                                   fontWeight: 700,
-                                  color: "#0891b2",
-                                  background: "#ecfeff",
-                                  border: "1px solid #a5f3fc",
+                                  color: isDark ? "#67e8f9" : "#0891b2",
+                                  background: isDark ? "rgba(6, 182, 212, 0.15)" : "#ecfeff",
+                                  border: `1px solid ${isDark ? "rgba(6, 182, 212, 0.3)" : "#a5f3fc"}`,
                                   padding: "1px 5px",
                                   borderRadius: "3px",
                                   display: "inline-flex",
@@ -1680,9 +1681,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                 style={{
                                   fontSize: "10.5px",
                                   fontWeight: 600,
-                                  color: "#64748b",
-                                  background: "#f8fafc",
-                                  border: "1px solid #e2e8f0",
+                                  color: tokens.textSecondary,
+                                  background: tokens.elevatedSurfaceBg,
+                                  border: `1px solid ${tokens.border}`,
                                   padding: "1px 5px",
                                   borderRadius: "3px",
                                 }}
@@ -1704,7 +1705,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                       <td style={tdStyle}>
                         <div style={{ display: "flex", flexDirection: "column", gap: "5px", minWidth: "120px" }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#0f172a" }}>
+                            <span style={{ fontSize: "12.5px", fontWeight: 700, color: tokens.textPrimary }}>
                               {coupon.timesUsed} {coupon.totalUsageLimit ? `/ ${coupon.totalUsageLimit}` : "used"}
                             </span>
                             <span
@@ -1713,9 +1714,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                 fontWeight: 700,
                                 padding: "1px 6px",
                                 borderRadius: "4px",
-                                background: expired ? "#fef2f2" : coupon.isActive ? "#f0fdf4" : "#f8fafc",
-                                color: expired ? "#dc2626" : coupon.isActive ? "#16a34a" : "#64748b",
-                                border: `1px solid ${expired ? "#fecaca" : coupon.isActive ? "#bbf7d0" : "#e2e8f0"}`,
+                                background: expired ? (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2") : coupon.isActive ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : tokens.elevatedSurfaceBg,
+                                color: expired ? (isDark ? "#fca5a5" : "#dc2626") : coupon.isActive ? (isDark ? "#4ade80" : "#16a34a") : tokens.textSecondary,
+                                border: `1px solid ${expired ? (isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca") : coupon.isActive ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0") : tokens.border}`,
                               }}
                             >
                               {expired ? "Expired" : coupon.isActive ? "Live" : "Paused"}
@@ -1724,19 +1725,19 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
 
                           {/* Progress bar if usage limit set */}
                           {coupon.totalUsageLimit && (
-                            <div style={{ width: "100%", height: "5px", background: "#e2e8f0", borderRadius: "3px", overflow: "hidden" }}>
+                            <div style={{ width: "100%", height: "5px", background: isDark ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0", borderRadius: "3px", overflow: "hidden" }}>
                               <div
                                 style={{
                                   height: "100%",
                                   width: `${Math.min((coupon.timesUsed / coupon.totalUsageLimit) * 100, 100)}%`,
-                                  background: (coupon.timesUsed / coupon.totalUsageLimit) >= 0.9 ? "#ef4444" : "#2563eb",
+                                  background: (coupon.timesUsed / coupon.totalUsageLimit) >= 0.9 ? "#ef4444" : (isDark ? tokens.accent : "#2563eb"),
                                   borderRadius: "3px",
                                 }}
                               />
                             </div>
                           )}
 
-                          <span style={{ fontSize: "11px", color: "#059669", fontWeight: 600 }}>
+                          <span style={{ fontSize: "11px", color: isDark ? "#4ade80" : "#059669", fontWeight: 600 }}>
                             Saved ₹{coupon.totalSavings.toLocaleString("en-IN")}
                           </span>
                         </div>
@@ -1755,9 +1756,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                 padding: "4px 8px",
                                 height: "28px",
                                 borderRadius: "5px",
-                                border: "1px solid #cbd5e1",
-                                background: coupon.isActive ? "#ffffff" : "#f1f5f9",
-                                color: coupon.isActive ? "#16a34a" : "#64748b",
+                                border: `1px solid ${isDark ? (coupon.isActive ? "rgba(74, 222, 128, 0.3)" : tokens.border) : tokens.border}`,
+                                background: coupon.isActive ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#ffffff") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                                color: coupon.isActive ? (isDark ? "#4ade80" : "#16a34a") : tokens.textSecondary,
                                 fontSize: "11.5px",
                                 fontWeight: 700,
                                 cursor: "pointer",
@@ -1777,9 +1778,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                 width: "28px",
                                 height: "28px",
                                 borderRadius: "5px",
-                                border: "1px solid #cbd5e1",
-                                background: "#ffffff",
-                                color: "#334155",
+                                border: `1px solid ${tokens.border}`,
+                                background: tokens.surfaceBg,
+                                color: tokens.textSecondary,
                                 cursor: "pointer",
                                 display: "grid",
                                 placeItems: "center",
@@ -1799,9 +1800,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                 width: "28px",
                                 height: "28px",
                                 borderRadius: "5px",
-                                border: "1px solid #fecaca",
-                                background: "#ffffff",
-                                color: "#dc2626",
+                                border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
+                                background: isDark ? "rgba(239, 68, 68, 0.15)" : tokens.surfaceBg,
+                                color: isDark ? "#fca5a5" : "#dc2626",
                                 cursor: "pointer",
                                 display: "grid",
                                 placeItems: "center",
@@ -1844,12 +1845,12 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "12px",
               width: "100%",
               maxWidth: "840px",
               boxShadow: "0 24px 48px rgba(0,0,0,0.25)",
-              border: "1px solid #cbd5e1",
+              border: `1px solid ${tokens.border}`,
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
@@ -1866,13 +1867,13 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "14px 20px",
-                borderBottom: "1px solid #e2e8f0",
-                background: "#ffffff",
+                borderBottom: `1px solid ${tokens.border}`,
+                background: tokens.surfaceBg,
                 boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                <span style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
                   {editingCoupon ? `Edit Promo Code: ${editingCoupon.code}` : "Add New Promo Code"}
                 </span>
               </div>
@@ -1884,10 +1885,10 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
-                    background: "#f8fafc",
+                    background: tokens.elevatedSurfaceBg,
                     padding: "4px 10px",
                     borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
+                    border: `1px solid ${tokens.border}`,
                   }}
                 >
                   <span
@@ -1911,11 +1912,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                     />
                     <span>{formIsActive ? "Active on Store" : "Paused"}</span>
                   </span>
-                  <input
-                    type="checkbox"
+                  <AdminCheckbox
                     checked={formIsActive}
                     onChange={(e) => setFormIsActive(e.target.checked)}
-                    style={{ cursor: "pointer", width: "15px", height: "15px" }}
                   />
                 </div>
 
@@ -1927,7 +1926,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                     border: "none",
                     fontSize: "18px",
                     cursor: "pointer",
-                    color: "#64748b",
+                    color: tokens.textSecondary,
                     padding: "4px",
                     lineHeight: 1,
                     display: "grid",
@@ -1948,14 +1947,14 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
                   gap: "14px",
                   padding: "16px 20px",
-                  background: "#f8fafc",
+                  background: tokens.elevatedSurfaceBg,
                 }}
               >
                 {/* Left Column */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   {/* Card 1: General Info */}
-                  <div style={{ background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #f1f5f9", paddingBottom: "6px" }}>
+                  <div style={{ background: tokens.surfaceBg, borderRadius: "8px", border: `1px solid ${tokens.border}`, padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "6px" }}>
                       General Details
                     </div>
 
@@ -1985,12 +1984,12 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                           style={{
                             height: "36px",
                             padding: "0 10px",
-                            background: "#f1f5f9",
-                            border: "1px solid #cbd5e1",
+                            background: tokens.elevatedSurfaceBg,
+                            border: `1px solid ${tokens.border}`,
                             borderRadius: "7px",
                             fontSize: "12px",
                             fontWeight: 600,
-                            color: "#334155",
+                            color: tokens.textSecondary,
                             cursor: "pointer",
                             display: "inline-flex",
                             alignItems: "center",
@@ -2019,8 +2018,8 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   </div>
 
                   {/* Card 2: Discount Value & Calculation */}
-                  <div style={{ background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #f1f5f9", paddingBottom: "6px" }}>
+                  <div style={{ background: tokens.surfaceBg, borderRadius: "8px", border: `1px solid ${tokens.border}`, padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "6px" }}>
                       Discount Type & Amount
                     </div>
 
@@ -2043,9 +2042,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                             style={{
                               padding: "8px 4px",
                               borderRadius: "6px",
-                              border: formType === t.type ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                              background: formType === t.type ? "#eff6ff" : "#ffffff",
-                              color: formType === t.type ? "#1d4ed8" : "#334155",
+                              border: formType === t.type ? (isDark ? "1.5px solid #3b82f6" : "2px solid #2563eb") : `1px solid ${tokens.border}`,
+                              background: formType === t.type ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
+                              color: formType === t.type ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textSecondary,
                               fontSize: "12px",
                               fontWeight: 700,
                               cursor: "pointer",
@@ -2109,12 +2108,12 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   </div>
 
                   {/* Card 3: Targeting & Scope */}
-                  <div style={{ background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "6px" }}>
-                      <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  <div style={{ background: tokens.surfaceBg, borderRadius: "8px", border: `1px solid ${tokens.border}`, padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "6px" }}>
+                      <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                         Applicability & Targeting
                       </div>
-                      <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>
+                      <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>
                         {formAppliesTo === "all" ? "All Products" : formAppliesTo === "collections" ? `${formCollectionIds.length} Selected` : `${formCategoryIds.length} Selected`}
                       </span>
                     </div>
@@ -2138,9 +2137,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                             style={{
                               padding: "7px 4px",
                               borderRadius: "6px",
-                              border: formAppliesTo === opt.id ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                              background: formAppliesTo === opt.id ? "#eff6ff" : "#ffffff",
-                              color: formAppliesTo === opt.id ? "#1d4ed8" : "#334155",
+                              border: formAppliesTo === opt.id ? (isDark ? "1.5px solid #3b82f6" : "2px solid #2563eb") : `1px solid ${tokens.border}`,
+                              background: formAppliesTo === opt.id ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
+                              color: formAppliesTo === opt.id ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textSecondary,
                               fontSize: "11.5px",
                               fontWeight: 700,
                               cursor: "pointer",
@@ -2157,7 +2156,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                     {/* Collections Picker */}
                     {formAppliesTo === "collections" && (
                       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        <div style={{ fontSize: "12px", color: "#64748b" }}>
+                        <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
                           Discount will only apply to items belonging to selected collections.
                         </div>
 
@@ -2184,9 +2183,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "4px",
-                                    background: "#f5f3ff",
-                                    border: "1px solid #ddd6fe",
-                                    color: "#6d28d9",
+                                    background: isDark ? "rgba(168, 85, 247, 0.15)" : "#f5f3ff",
+                                    border: `1px solid ${isDark ? "rgba(192, 132, 252, 0.3)" : "#ddd6fe"}`,
+                                    color: isDark ? "#c084fc" : "#6d28d9",
                                     borderRadius: "4px",
                                     padding: "2px 8px",
                                     fontSize: "11.5px",
@@ -2200,7 +2199,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                     style={{
                                       background: "none",
                                       border: "none",
-                                      color: "#6d28d9",
+                                      color: isDark ? "#c084fc" : "#6d28d9",
                                       cursor: "pointer",
                                       padding: 0,
                                       fontSize: "12px",
@@ -2220,17 +2219,17 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                           style={{
                             maxHeight: "150px",
                             overflowY: "auto",
-                            border: "1px solid #e2e8f0",
+                            border: `1px solid ${tokens.border}`,
                             borderRadius: "6px",
                             padding: "6px",
-                            background: "#f8fafc",
+                            background: tokens.elevatedSurfaceBg,
                             display: "flex",
                             flexDirection: "column",
                             gap: "4px",
                           }}
                         >
                           {storeCollections.length === 0 ? (
-                            <div style={{ fontSize: "12px", color: "#94a3b8", padding: "8px", textAlign: "center" }}>
+                            <div style={{ fontSize: "12px", color: tokens.textMuted, padding: "8px", textAlign: "center" }}>
                               No collections found in this store.
                             </div>
                           ) : (
@@ -2247,14 +2246,13 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                       gap: "8px",
                                       padding: "5px 8px",
                                       borderRadius: "4px",
-                                      background: isChecked ? "#ffffff" : "transparent",
+                                      background: isChecked ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
                                       cursor: "pointer",
                                       fontSize: "12.5px",
-                                      color: "#1e293b",
+                                      color: tokens.textPrimary,
                                     }}
                                   >
-                                    <input
-                                      type="checkbox"
+                                    <AdminCheckbox
                                       checked={isChecked}
                                       onChange={(e) => {
                                         if (e.target.checked) {
@@ -2264,7 +2262,6 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                         }
                                         if (formErrors.targeting) setFormErrors((prev) => ({ ...prev, targeting: "" }));
                                       }}
-                                      style={{ cursor: "pointer", width: "14px", height: "14px" }}
                                     />
                                     <span>{c.name}</span>
                                   </label>
@@ -2279,7 +2276,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                     {/* Categories Picker */}
                     {formAppliesTo === "categories" && (
                       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        <div style={{ fontSize: "12px", color: "#64748b" }}>
+                        <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
                           Discount will only apply to items belonging to selected categories.
                         </div>
 
@@ -2306,9 +2303,9 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "4px",
-                                    background: "#ecfeff",
-                                    border: "1px solid #a5f3fc",
-                                    color: "#0e7490",
+                                    background: isDark ? "rgba(6, 182, 212, 0.15)" : "#ecfeff",
+                                    border: `1px solid ${isDark ? "rgba(6, 182, 212, 0.3)" : "#a5f3fc"}`,
+                                    color: isDark ? "#67e8f9" : "#0e7490",
                                     borderRadius: "4px",
                                     padding: "2px 8px",
                                     fontSize: "11.5px",
@@ -2322,7 +2319,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                     style={{
                                       background: "none",
                                       border: "none",
-                                      color: "#0e7490",
+                                      color: isDark ? "#67e8f9" : "#0e7490",
                                       cursor: "pointer",
                                       padding: 0,
                                       fontSize: "12px",
@@ -2342,17 +2339,17 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                           style={{
                             maxHeight: "150px",
                             overflowY: "auto",
-                            border: "1px solid #e2e8f0",
+                            border: `1px solid ${tokens.border}`,
                             borderRadius: "6px",
                             padding: "6px",
-                            background: "#f8fafc",
+                            background: tokens.elevatedSurfaceBg,
                             display: "flex",
                             flexDirection: "column",
                             gap: "4px",
                           }}
                         >
                           {storeCategories.length === 0 ? (
-                            <div style={{ fontSize: "12px", color: "#94a3b8", padding: "8px", textAlign: "center" }}>
+                            <div style={{ fontSize: "12px", color: tokens.textMuted, padding: "8px", textAlign: "center" }}>
                               No categories found in this store.
                             </div>
                           ) : (
@@ -2369,14 +2366,13 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                       gap: "8px",
                                       padding: "5px 8px",
                                       borderRadius: "4px",
-                                      background: isChecked ? "#ffffff" : "transparent",
+                                      background: isChecked ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
                                       cursor: "pointer",
                                       fontSize: "12.5px",
-                                      color: "#1e293b",
+                                      color: tokens.textPrimary,
                                     }}
                                   >
-                                    <input
-                                      type="checkbox"
+                                    <AdminCheckbox
                                       checked={isChecked}
                                       onChange={(e) => {
                                         if (e.target.checked) {
@@ -2386,7 +2382,6 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                                         }
                                         if (formErrors.targeting) setFormErrors((prev) => ({ ...prev, targeting: "" }));
                                       }}
-                                      style={{ cursor: "pointer", width: "14px", height: "14px" }}
                                     />
                                     <span>{c.name}</span>
                                   </label>
@@ -2403,8 +2398,8 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                 {/* Right Column */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   {/* Card 3: Conditions & Rules */}
-                  <div style={{ background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #f1f5f9", paddingBottom: "6px" }}>
+                  <div style={{ background: tokens.surfaceBg, borderRadius: "8px", border: `1px solid ${tokens.border}`, padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "6px" }}>
                       Eligibility & Limits
                     </div>
 
@@ -2478,23 +2473,19 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
 
                     {/* First Order Restriction Checkbox */}
                     <div style={{ paddingTop: "4px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12.5px", fontWeight: 600, color: "#1e293b" }}>
-                        <input
-                          type="checkbox"
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12.5px", fontWeight: 600, color: tokens.textPrimary }}>
+                        <AdminCheckbox
                           checked={formFirstOrderOnly}
                           onChange={(e) => setFormFirstOrderOnly(e.target.checked)}
-                          style={{ width: "15px", height: "15px", cursor: "pointer" }}
                         />
                         <span>First-time customers only</span>
                       </label>
 
                       {/* Public on Storefront Checkbox */}
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12.5px", fontWeight: 600, color: "#1e293b" }}>
-                        <input
-                          type="checkbox"
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12.5px", fontWeight: 600, color: tokens.textPrimary }}>
+                        <AdminCheckbox
                           checked={formIsPublic}
                           onChange={(e) => setFormIsPublic(e.target.checked)}
-                          style={{ width: "15px", height: "15px", cursor: "pointer" }}
                         />
                         <span>Show in Available Offers list</span>
                       </label>
@@ -2502,8 +2493,8 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   </div>
 
                   {/* Card 4: Date Schedule */}
-                  <div style={{ background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid #f1f5f9", paddingBottom: "6px" }}>
+                  <div style={{ background: tokens.surfaceBg, borderRadius: "8px", border: `1px solid ${tokens.border}`, padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "6px" }}>
                       Validity Schedule
                     </div>
 
@@ -2563,8 +2554,8 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   justifyContent: "flex-end",
                   gap: "10px",
                   padding: "12px 20px",
-                  borderTop: "1px solid #e2e8f0",
-                  background: "#ffffff",
+                  borderTop: `1px solid ${tokens.border}`,
+                  background: tokens.surfaceBg,
                 }}
               >
                 <button
@@ -2573,12 +2564,12 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   style={{
                     height: "34px",
                     padding: "0 16px",
-                    background: "#ffffff",
-                    border: "1px solid #cbd5e1",
+                    background: tokens.surfaceBg,
+                    border: `1px solid ${tokens.border}`,
                     borderRadius: "6px",
                     fontSize: "12.5px",
                     fontWeight: 600,
-                    color: "#475569",
+                    color: tokens.textSecondary,
                     cursor: "pointer",
                   }}
                 >

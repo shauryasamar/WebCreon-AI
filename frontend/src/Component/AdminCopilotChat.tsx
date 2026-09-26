@@ -4,6 +4,7 @@ import { API_BASE_URL } from "../config/api";
 import { saveThemeSnapshot, updateThemeValues, applyThemeToPages } from "../customizations/editorUtils";
 import { AiAvatar } from "./AiAvatar";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import { AccessDeniedView } from "./AccessDeniedView";
 
 type DataCard = {
@@ -138,15 +139,17 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
     }
   }, [messages, siteId]);
 
-  // Clean fixed admin dashboard theme for Copilot UI
-  const chatBg = "#ffffff";
-  const chatText = "#0f172a";
-  const chatMuted = "#64748b";
-  const userBubbleBg = "#2563eb";
-  const assistantBubbleBg = "#f1f5f9";
-  const assistantBubbleText = "#0f172a";
-  const inputBorderColor = "#cbd5e1";
-  const inputBg = "#ffffff";
+  const { isDark, tokens } = useAdminTheme();
+
+  // Dynamic admin dashboard theme for Copilot UI
+  const chatBg = tokens.surfaceBg;
+  const chatText = tokens.textPrimary;
+  const chatMuted = tokens.textMuted;
+  const userBubbleBg = tokens.accent;
+  const assistantBubbleBg = isDark ? tokens.elevatedSurfaceBg : "#f1f5f9";
+  const assistantBubbleText = isDark ? tokens.textPrimary : "#0f172a";
+  const inputBorderColor = tokens.border;
+  const inputBg = isDark ? tokens.elevatedSurfaceBg : "#ffffff";
 
   const handleSaveThemeToLibrary = (themeObj: any, themeName: string) => {
     if (siteDefinition && onSiteDefinitionChange) {
@@ -569,19 +572,19 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                             style={{
                               padding: "12px 14px",
                               borderRadius: "10px",
-                              background: "#ffffff",
-                              border: "1px solid #e2e8f0",
-                              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                              border: `1px solid ${tokens.border}`,
+                              boxShadow: isDark ? "none" : "0 1px 3px rgba(0,0,0,0.04)",
                             }}
                           >
-                            <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", marginBottom: "4px" }}>
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary, marginBottom: "4px" }}>
                               {card.title || "AI Credit Limit Reached"}
                             </div>
-                            <div style={{ fontSize: "12px", color: "#64748b", lineHeight: 1.5, marginBottom: card.reset_date ? "6px" : "10px" }}>
+                            <div style={{ fontSize: "12px", color: tokens.textSecondary, lineHeight: 1.5, marginBottom: card.reset_date ? "6px" : "10px" }}>
                               {card.description || "You have used all credits in your monthly pool. Upgrade your plan to continue using AI Copilot."}
                             </div>
                             {card.reset_date && (
-                              <div style={{ fontSize: "11px", color: "#94a3b8", marginBottom: "10px" }}>
+                              <div style={{ fontSize: "11px", color: tokens.textMuted, marginBottom: "10px" }}>
                                 Resets on: {new Date(card.reset_date).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
                               </div>
                             )}
@@ -590,7 +593,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                               onClick={handleUpgradeClick}
                               style={{
                                 padding: "6px 14px",
-                                background: "#2563eb",
+                                background: tokens.accent,
                                 color: "#ffffff",
                                 border: "none",
                                 borderRadius: "6px",
@@ -675,13 +678,13 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
 
                         if (card.type === "palette_suggestions_card" && Array.isArray(card.palettes)) {
                       return (
-                        <div key={cIdx} style={{ padding: "10px", borderRadius: "10px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-                          <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: "#1e293b" }}>{card.title}</div>
+                        <div key={cIdx} style={{ padding: "10px", borderRadius: "10px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}` }}>
+                          <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: tokens.textPrimary }}>{card.title}</div>
                           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                             {card.palettes.map((pal: any, pIdx: number) => (
-                              <div key={pIdx} style={{ padding: "8px 10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+                              <div key={pIdx} style={{ padding: "8px 10px", background: isDark ? tokens.surfaceBg : "#ffffff", borderRadius: "8px", border: `1px solid ${tokens.border}` }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                                  <div style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>{pal.name}</div>
+                                  <div style={{ fontSize: "11px", fontWeight: 700, color: tokens.textPrimary }}>{pal.name}</div>
                                   <div style={{ display: "flex", gap: "4px" }}>
                                     <button
                                       type="button"
@@ -690,7 +693,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                                         padding: "3px 8px",
                                         fontSize: "10px",
                                         fontWeight: 700,
-                                        background: "#2563eb",
+                                        background: tokens.accent,
                                         color: "#ffffff",
                                         border: "none",
                                         borderRadius: "5px",
@@ -706,7 +709,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                                         padding: "3px 6px",
                                         fontSize: "10px",
                                         fontWeight: 700,
-                                        background: "#059669",
+                                        background: tokens.success,
                                         color: "#ffffff",
                                         border: "none",
                                         borderRadius: "5px",
@@ -717,15 +720,15 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                                     </button>
                                   </div>
                                 </div>
-                                <div style={{ fontSize: "10px", color: "#64748b", marginBottom: "6px" }}>{pal.description}</div>
+                                <div style={{ fontSize: "10px", color: tokens.textSecondary, marginBottom: "6px" }}>{pal.description}</div>
                                 <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                                  <span style={{ fontSize: "9px", color: "#94a3b8", marginRight: "2px" }}>Swatches:</span>
-                                  <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.primary_bg, border: "1px solid #cbd5e1" }} title={`Primary BG: ${pal.primary_bg}`} />
-                                  <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.secondary_bg, border: "1px solid #cbd5e1" }} title={`Secondary BG: ${pal.secondary_bg}`} />
-                                  <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.accent_color, border: "1px solid #cbd5e1" }} title={`Accent: ${pal.accent_color}`} />
-                                  {pal.card_bg && <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.card_bg, border: "1px solid #cbd5e1" }} title={`Card BG: ${pal.card_bg}`} />}
-                                  <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.navbar_bg, border: "1px solid #cbd5e1" }} title={`Navbar BG: ${pal.navbar_bg}`} />
-                                  <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.footer_bg, border: "1px solid #cbd5e1" }} title={`Footer BG: ${pal.footer_bg}`} />
+                                  <span style={{ fontSize: "9px", color: tokens.textMuted, marginRight: "2px" }}>Swatches:</span>
+                                  <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.primary_bg, border: `1px solid ${tokens.border}` }} title={`Primary BG: ${pal.primary_bg}`} />
+                                  <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.secondary_bg, border: `1px solid ${tokens.border}` }} title={`Secondary BG: ${pal.secondary_bg}`} />
+                                  <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.accent_color, border: `1px solid ${tokens.border}` }} title={`Accent: ${pal.accent_color}`} />
+                                  {pal.card_bg && <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.card_bg, border: `1px solid ${tokens.border}` }} title={`Card BG: ${pal.card_bg}`} />}
+                                  <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.navbar_bg, border: `1px solid ${tokens.border}` }} title={`Navbar BG: ${pal.navbar_bg}`} />
+                                  <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: pal.footer_bg, border: `1px solid ${tokens.border}` }} title={`Footer BG: ${pal.footer_bg}`} />
                                 </div>
                               </div>
                             ))}
@@ -869,22 +872,22 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
 
                     if (card.type === "returns_card" && card.returns) {
                       return (
-                        <div key={cIdx} style={{ padding: "10px", borderRadius: "10px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-                          <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: "#334155" }}>{card.title}</div>
+                        <div key={cIdx} style={{ padding: "10px", borderRadius: "10px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}` }}>
+                          <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: tokens.textPrimary }}>{card.title}</div>
                           {card.returns.map((ret: any, rIdx: number) => {
                             const rst = String(ret.status || "Requested").toLowerCase();
-                            const badgeBg = rst.includes("approved") || rst.includes("closed") ? "#10b981" : rst.includes("reject") ? "#ef4444" : rst.includes("inspect") || rst.includes("receive") ? "#f59e0b" : "#6366f1";
+                            const badgeBg = rst.includes("approved") || rst.includes("closed") ? tokens.success : rst.includes("reject") ? tokens.danger : rst.includes("inspect") || rst.includes("receive") ? tokens.warning : tokens.accent;
 
                             return (
-                              <div key={rIdx} style={{ padding: "8px 10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "6px" }}>
+                              <div key={rIdx} style={{ padding: "8px 10px", background: isDark ? tokens.surfaceBg : "#ffffff", borderRadius: "8px", border: `1px solid ${tokens.border}`, marginBottom: "6px" }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>Return #{ret.id} {ret.order_id ? `(Order #${ret.order_id})` : ""}</span>
+                                  <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textPrimary }}>Return #{ret.id} {ret.order_id ? `(Order #${ret.order_id})` : ""}</span>
                                   <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "999px", background: badgeBg, color: "#ffffff" }}>{ret.status}</span>
                                 </div>
-                                <div style={{ fontSize: "11px", color: "#475569", marginBottom: "2px" }}>Reason: {ret.reason || "Customer return request"}</div>
+                                <div style={{ fontSize: "11px", color: tokens.textSecondary, marginBottom: "2px" }}>Reason: {ret.reason || "Customer return request"}</div>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px" }}>
-                                  <span style={{ fontSize: "11px", fontWeight: 800, color: "#16a34a" }}>₹{ret.amount?.toFixed?.(2) || ret.amount || "0.00"}</span>
-                                  <span style={{ fontSize: "10px", color: "#64748b" }}>Refund: {ret.refund_status || "Pending"}</span>
+                                  <span style={{ fontSize: "11px", fontWeight: 800, color: tokens.success }}>₹{ret.amount?.toFixed?.(2) || ret.amount || "0.00"}</span>
+                                  <span style={{ fontSize: "10px", color: tokens.textMuted }}>Refund: {ret.refund_status || "Pending"}</span>
                                 </div>
                               </div>
                             );
@@ -895,23 +898,23 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
 
                     if (card.type === "orders_card" && card.orders) {
                       return (
-                        <div key={cIdx} style={{ padding: "10px", borderRadius: "10px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-                          <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: "#334155" }}>{card.title}</div>
+                        <div key={cIdx} style={{ padding: "10px", borderRadius: "10px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}` }}>
+                          <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: tokens.textPrimary }}>{card.title}</div>
                           {card.orders.map((ord: any, oIdx: number) => {
                             const isCancelled = String(ord.status).toLowerCase().includes("canc");
                             const isDelivered = String(ord.status).toLowerCase().includes("deliver");
-                            const badgeBg = isCancelled ? "#ef4444" : isDelivered ? "#10b981" : "#2563eb";
+                            const badgeBg = isCancelled ? tokens.danger : isDelivered ? tokens.success : tokens.accent;
 
                             return (
-                              <div key={oIdx} style={{ padding: "8px 10px", background: "#ffffff", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "6px" }}>
+                              <div key={oIdx} style={{ padding: "8px 10px", background: isDark ? tokens.surfaceBg : "#ffffff", borderRadius: "8px", border: `1px solid ${tokens.border}`, marginBottom: "6px" }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a" }}>Order #{ord.id}</span>
+                                  <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textPrimary }}>Order #{ord.id}</span>
                                   <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "999px", background: badgeBg, color: "#ffffff" }}>{ord.status}</span>
                                 </div>
-                                <div style={{ fontSize: "11px", color: "#475569", marginBottom: "2px" }}>{ord.items_summary || "Order Items"}</div>
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: 800, color: "#1e293b", marginTop: "4px" }}>
+                                <div style={{ fontSize: "11px", color: tokens.textSecondary, marginBottom: "2px" }}>{ord.items_summary || "Order Items"}</div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: 800, color: tokens.textPrimary, marginTop: "4px" }}>
                                   <span>₹{ord.total?.toFixed?.(2) || ord.total}</span>
-                                  <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 500 }}>{ord.date || ""}</span>
+                                  <span style={{ fontSize: "10px", color: tokens.textMuted, fontWeight: 500 }}>{ord.date || ""}</span>
                                 </div>
                               </div>
                             );
@@ -923,19 +926,19 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                     if (card.type === "table_card" && Array.isArray(card.rows)) {
                       const cols = card.columns && card.columns.length > 0 ? card.columns : Object.keys(card.rows[0] || {});
                       return (
-                        <div key={cIdx} style={{ padding: "10px", borderRadius: "10px", background: "#ffffff", border: "1px solid #e2e8f0", overflowX: "auto" }}>
-                          <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: "#1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div key={cIdx} style={{ padding: "10px", borderRadius: "10px", background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", border: `1px solid ${tokens.border}`, overflowX: "auto" }}>
+                          <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: tokens.textPrimary, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <span>📊 {card.title || "Query Results"}</span>
-                            <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600 }}>{card.row_count !== undefined ? card.row_count : card.rows.length} rows</span>
+                            <span style={{ fontSize: "10px", color: tokens.textMuted, fontWeight: 600 }}>{card.row_count !== undefined ? card.row_count : card.rows.length} rows</span>
                           </div>
                           {card.rows.length === 0 ? (
-                            <div style={{ fontSize: "11px", color: "#94a3b8", textAlign: "center", padding: "8px" }}>No matching records found in store database.</div>
+                            <div style={{ fontSize: "11px", color: tokens.textMuted, textAlign: "center", padding: "8px" }}>No matching records found in store database.</div>
                           ) : (
                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", textAlign: "left" }}>
                               <thead>
-                                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                                <tr style={{ background: isDark ? tokens.surfaceBg : "#f8fafc", borderBottom: `1px solid ${tokens.border}` }}>
                                   {cols.map((col: string, colIdx: number) => (
-                                    <th key={colIdx} style={{ padding: "6px 8px", fontWeight: 700, color: "#475569", textTransform: "capitalize", whiteSpace: "nowrap" }}>
+                                    <th key={colIdx} style={{ padding: "6px 8px", fontWeight: 700, color: tokens.textSecondary, textTransform: "capitalize", whiteSpace: "nowrap" }}>
                                       {col.replace(/_/g, " ")}
                                     </th>
                                   ))}
@@ -943,7 +946,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                               </thead>
                               <tbody>
                                 {card.rows.map((r: any, rIdx: number) => (
-                                  <tr key={rIdx} style={{ borderBottom: "1px solid #f1f5f9", background: rIdx % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
+                                  <tr key={rIdx} style={{ borderBottom: `1px solid ${tokens.divider}`, background: rIdx % 2 === 0 ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : (isDark ? tokens.surfaceBg : "#f8fafc") }}>
                                     {cols.map((col: string, cIdx2: number) => {
                                       const rawVal = r[col];
                                       const colLower = col.toLowerCase().trim();
@@ -997,7 +1000,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                                       }
 
                                       return (
-                                        <td key={cIdx2} style={{ padding: "6px 8px", color: "#1e293b", whiteSpace: "nowrap" }}>
+                                        <td key={cIdx2} style={{ padding: "6px 8px", color: tokens.textPrimary, whiteSpace: "nowrap" }}>
                                           {displayVal}
                                         </td>
                                       );
@@ -1059,17 +1062,51 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
           onClick={() => handleSend()}
           disabled={loading || !input.trim() || !canSendCopilot || isPaywallLocked}
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "6px",
             padding: "8px 14px",
             borderRadius: "8px",
-            border: "none",
-            background: loading || !input.trim() || !canSendCopilot || isPaywallLocked ? "#cbd5e1" : userBubbleBg,
-            color: "#ffffff",
+            border: `1px solid ${
+              loading || !input.trim() || !canSendCopilot || isPaywallLocked
+                ? isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)"
+                : "transparent"
+            }`,
+            background:
+              loading || !input.trim() || !canSendCopilot || isPaywallLocked
+                ? isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(15, 23, 42, 0.04)"
+                : userBubbleBg,
+            color:
+              loading || !input.trim() || !canSendCopilot || isPaywallLocked
+                ? tokens.textMuted
+                : "#ffffff",
             fontSize: "12px",
-            fontWeight: 700,
-            cursor: loading || !input.trim() || !canSendCopilot ? "default" : "pointer",
+            fontWeight: 600,
+            cursor: loading || !input.trim() || !canSendCopilot || isPaywallLocked ? "not-allowed" : "pointer",
+            boxShadow:
+              loading || !input.trim() || !canSendCopilot || isPaywallLocked
+                ? "none"
+                : "0 2px 8px rgba(59, 130, 246, 0.35)",
+            opacity: loading || !input.trim() || !canSendCopilot || isPaywallLocked ? 0.6 : 1,
+            transition: "all 0.15s ease",
+            flexShrink: 0,
           }}
         >
-          Send
+          <span>Send</span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
         </button>
       </div>
     </div>

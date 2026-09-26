@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, ChangeEvent } from "react";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import { resolveAvatarUrl } from "./UserAvatar";
 import { GlassToast } from "./GlassToast";
 import { AccessDeniedView } from "./AccessDeniedView";
@@ -71,9 +72,7 @@ export default function AdminProfileSettings() {
     : rawRole === "store_owner"
     ? "Store Owner"
     : rawRole;
-  const [themeMode, setThemeMode] = useState<"light" | "dark" | "system">(
-    (localStorage.getItem("app_theme_mode") as "light" | "dark" | "system") || "light"
-  );
+  const { themeMode, setThemeMode: handleThemeChange, isDark, tokens } = useAdminTheme();
   const [avatarUrl, setAvatarUrl] = useState(
     admin?.avatarUrl || getDefaultAvatarForGender(admin?.gender || "Male")
   );
@@ -107,12 +106,6 @@ export default function AdminProfileSettings() {
       />
     );
   }
-
-  // Save theme mode to localStorage
-  const handleThemeChange = (mode: "light" | "dark" | "system") => {
-    setThemeMode(mode);
-    localStorage.setItem("app_theme_mode", mode);
-  };
 
   // When gender changes, update avatar if currently using preset
   const handleGenderChange = (newGender: string) => {
@@ -238,7 +231,7 @@ export default function AdminProfileSettings() {
         width: "100%",
         boxSizing: "border-box",
         padding: 0,
-        color: "#0f172a",
+        color: tokens.textPrimary,
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
       }}
     >
@@ -255,10 +248,10 @@ export default function AdminProfileSettings() {
         {/* MAIN PROFILE CARD */}
         <div
           style={{
-            background: "#ffffff",
+            background: isDark ? tokens.surfaceBg : "#ffffff",
             borderRadius: "14px",
-            border: "1px solid #e2e8f0",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+            border: `1px solid ${tokens.border}`,
+            boxShadow: isDark ? "0 1px 3px rgba(0, 0, 0, 0.3)" : "0 1px 3px rgba(0, 0, 0, 0.04)",
             padding: "20px 22px",
             display: "flex",
             flexDirection: "column",
@@ -291,9 +284,9 @@ export default function AdminProfileSettings() {
                     height: "64px",
                     borderRadius: "50%",
                     objectFit: "cover",
-                    border: "2px solid #e2e8f0",
-                    background: "#f8fafc",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+                    border: `2px solid ${tokens.border}`,
+                    background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
                   }}
                 />
                 {/* Camera Overlay Icon */}
@@ -305,13 +298,13 @@ export default function AdminProfileSettings() {
                     width: "22px",
                     height: "22px",
                     borderRadius: "50%",
-                    background: "#2563eb",
-                    border: "2px solid #ffffff",
+                    background: tokens.accent,
+                    border: `2px solid ${isDark ? tokens.surfaceBg : "#ffffff"}`,
                     color: "#ffffff",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
                   }}
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -324,7 +317,7 @@ export default function AdminProfileSettings() {
               {/* Name & Email */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
                     {name || admin?.name || "Admin Account"}
                   </h3>
                   <span
@@ -334,9 +327,15 @@ export default function AdminProfileSettings() {
                       textTransform: isOwner ? "none" : "capitalize",
                       padding: "2.5px 9px",
                       borderRadius: "6px",
-                      background: isOwner ? "#fef3c7" : "#eff6ff",
-                      color: isOwner ? "#b45309" : "#2563eb",
-                      border: isOwner ? "1px solid #fde68a" : "1px solid #bfdbfe",
+                      background: isOwner
+                        ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7")
+                        : (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff"),
+                      color: isOwner
+                        ? (isDark ? "#fbbf24" : "#b45309")
+                        : (isDark ? "#60a5fa" : "#2563eb"),
+                      border: isOwner
+                        ? (isDark ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid #fde68a")
+                        : (isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe"),
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "4px",
@@ -344,7 +343,7 @@ export default function AdminProfileSettings() {
                   >
                     {isOwner ? (
                       <>
-                        <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 12, height: 12, color: "#d97706" }}>
+                        <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 12, height: 12, color: isDark ? "#fbbf24" : "#d97706" }}>
                           <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
                         </svg>
                         Owner
@@ -354,25 +353,25 @@ export default function AdminProfileSettings() {
                     )}
                   </span>
                 </div>
-                <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "#64748b" }}>
+                <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: tokens.textSecondary }}>
                   {admin?.email || "admin@webcreon.ai"}
                 </p>
               </div>
             </div>
 
-            {/* TINY ICON THEME SEGMENTED SLIDER (Matching Image Style) */}
+            {/* TINY ICON THEME SEGMENTED SLIDER */}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
-              <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              <span style={{ fontSize: "10px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                 Theme
               </span>
               <div
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  background: "#f1f5f9",
+                  background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
                   padding: "3px",
                   borderRadius: "20px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                   gap: "2px",
                 }}
               >
@@ -386,9 +385,9 @@ export default function AdminProfileSettings() {
                     height: "24px",
                     borderRadius: "14px",
                     border: "none",
-                    background: themeMode === "light" ? "#ffffff" : "transparent",
-                    color: themeMode === "light" ? "#2563eb" : "#64748b",
-                    boxShadow: themeMode === "light" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                    background: themeMode === "light" ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                    color: themeMode === "light" ? tokens.accentText : tokens.textSecondary,
+                    boxShadow: themeMode === "light" ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.1)") : "none",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -419,9 +418,9 @@ export default function AdminProfileSettings() {
                     height: "24px",
                     borderRadius: "14px",
                     border: "none",
-                    background: themeMode === "dark" ? "#ffffff" : "transparent",
-                    color: themeMode === "dark" ? "#2563eb" : "#64748b",
-                    boxShadow: themeMode === "dark" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                    background: themeMode === "dark" ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                    color: themeMode === "dark" ? tokens.accentText : tokens.textSecondary,
+                    boxShadow: themeMode === "dark" ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.1)") : "none",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -444,9 +443,9 @@ export default function AdminProfileSettings() {
                     height: "24px",
                     borderRadius: "14px",
                     border: "none",
-                    background: themeMode === "system" ? "#ffffff" : "transparent",
-                    color: themeMode === "system" ? "#2563eb" : "#64748b",
-                    boxShadow: themeMode === "system" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                    background: themeMode === "system" ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                    color: themeMode === "system" ? tokens.accentText : tokens.textSecondary,
+                    boxShadow: themeMode === "system" ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.1)") : "none",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -464,13 +463,13 @@ export default function AdminProfileSettings() {
             </div>
           </div>
 
-          <hr style={{ border: "none", borderTop: "1px solid #f1f5f9", margin: 0 }} />
+          <hr style={{ border: "none", borderTop: `1px solid ${tokens.border}`, margin: 0 }} />
 
           {/* FORM FIELDS SECTION */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
             {/* Full Name */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>
+              <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>
                 Full Name
               </label>
               <input
@@ -482,20 +481,20 @@ export default function AdminProfileSettings() {
                   height: "38px",
                   padding: "0 12px",
                   borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
+                  border: `1px solid ${tokens.border}`,
                   fontSize: "13px",
                   outline: "none",
-                  background: "#ffffff",
-                  color: "#0f172a",
+                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                  color: tokens.textPrimary,
                 }}
-                onFocus={(e) => (e.target.style.borderColor = "#2563eb")}
-                onBlur={(e) => (e.target.style.borderColor = "#cbd5e1")}
+                onFocus={(e) => (e.target.style.borderColor = tokens.accent)}
+                onBlur={(e) => (e.target.style.borderColor = tokens.border)}
               />
             </div>
 
             {/* Phone Number */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>
+              <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>
                 Phone Number
               </label>
               <input
@@ -507,30 +506,30 @@ export default function AdminProfileSettings() {
                   height: "38px",
                   padding: "0 12px",
                   borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
+                  border: `1px solid ${tokens.border}`,
                   fontSize: "13px",
                   outline: "none",
-                  background: "#ffffff",
-                  color: "#0f172a",
+                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                  color: tokens.textPrimary,
                 }}
-                onFocus={(e) => (e.target.style.borderColor = "#2563eb")}
-                onBlur={(e) => (e.target.style.borderColor = "#cbd5e1")}
+                onFocus={(e) => (e.target.style.borderColor = tokens.accent)}
+                onBlur={(e) => (e.target.style.borderColor = tokens.border)}
               />
             </div>
 
             {/* Gender Toggle */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>
+              <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>
                 Gender
               </label>
               <div
                 style={{
                   display: "flex",
                   gap: "6px",
-                  background: "#f8fafc",
+                  background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
                   padding: "3px",
                   borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${tokens.border}`,
                 }}
               >
                 {["Male", "Female", "Other"].map((gOption) => {
@@ -544,13 +543,13 @@ export default function AdminProfileSettings() {
                         flex: 1,
                         height: "32px",
                         borderRadius: "6px",
-                        border: isSelected ? "1px solid #cbd5e1" : "1px solid transparent",
-                        background: isSelected ? "#ffffff" : "transparent",
-                        color: isSelected ? "#0f172a" : "#64748b",
+                        border: isSelected ? `1px solid ${tokens.border}` : "1px solid transparent",
+                        background: isSelected ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                        color: isSelected ? tokens.textPrimary : tokens.textMuted,
                         fontSize: "12px",
                         fontWeight: isSelected ? 700 : 500,
                         cursor: "pointer",
-                        boxShadow: isSelected ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
+                        boxShadow: isSelected ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.06)") : "none",
                         transition: "all 0.15s ease",
                       }}
                     >
@@ -564,10 +563,10 @@ export default function AdminProfileSettings() {
             {/* Admin Role (Read-only, assigned by owner) */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>
+                <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>
                   Workspace Role
                 </label>
-                <span style={{ fontSize: "10.5px", color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                <span style={{ fontSize: "10.5px", color: tokens.textMuted, display: "inline-flex", alignItems: "center", gap: "3px" }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 11, height: 11 }}>
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -580,8 +579,12 @@ export default function AdminProfileSettings() {
                   height: "38px",
                   padding: "0 12px",
                   borderRadius: "8px",
-                  border: isOwner ? "1px solid #fde68a" : "1px solid #e2e8f0",
-                  background: isOwner ? "#fffbeb" : "#f8fafc",
+                  border: isOwner
+                    ? (isDark ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid #fde68a")
+                    : `1px solid ${tokens.border}`,
+                  background: isOwner
+                    ? (isDark ? "rgba(245, 158, 11, 0.12)" : "#fffbeb")
+                    : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
@@ -597,10 +600,10 @@ export default function AdminProfileSettings() {
                         gap: "5px",
                         fontSize: "12.5px",
                         fontWeight: 700,
-                        color: "#b45309",
+                        color: isDark ? "#fbbf24" : "#b45309",
                       }}
                     >
-                      <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 14, height: 14, color: "#d97706" }}>
+                      <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 14, height: 14, color: isDark ? "#fbbf24" : "#d97706" }}>
                         <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
                       </svg>
                       Owner
@@ -613,7 +616,7 @@ export default function AdminProfileSettings() {
                         gap: "6px",
                         fontSize: "12.5px",
                         fontWeight: 600,
-                        color: "#1e293b",
+                        color: tokens.textPrimary,
                       }}
                     >
                       <span
@@ -621,7 +624,7 @@ export default function AdminProfileSettings() {
                           width: "7px",
                           height: "7px",
                           borderRadius: "50%",
-                          background: "#2563eb",
+                          background: tokens.accent,
                         }}
                       />
                       {displayRole}
@@ -634,8 +637,12 @@ export default function AdminProfileSettings() {
                     fontWeight: 600,
                     padding: "2px 8px",
                     borderRadius: "4px",
-                    background: isOwner ? "#fef3c7" : "#e2e8f0",
-                    color: isOwner ? "#92400e" : "#475569",
+                    background: isOwner
+                      ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7")
+                      : (isDark ? tokens.surfaceBg : "#e2e8f0"),
+                    color: isOwner
+                      ? (isDark ? "#fbbf24" : "#92400e")
+                      : tokens.textSecondary,
                   }}
                 >
                   {isOwner ? "Full Workspace Access" : "Assigned by Owner"}
@@ -646,7 +653,7 @@ export default function AdminProfileSettings() {
 
           {/* Timezone */}
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <label style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>
+            <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>
               Timezone
             </label>
             <select
@@ -656,28 +663,28 @@ export default function AdminProfileSettings() {
                 height: "38px",
                 padding: "0 12px",
                 borderRadius: "8px",
-                border: "1px solid #cbd5e1",
+                border: `1px solid ${tokens.border}`,
                 fontSize: "13px",
                 outline: "none",
-                background: "#ffffff",
-                color: "#0f172a",
+                background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                color: tokens.textPrimary,
                 cursor: "pointer",
               }}
             >
-              <option value="Asia/Kolkata">Asia/Kolkata (IST - UTC+5:30)</option>
-              <option value="America/New_York">America/New_York (EST - UTC-5:00)</option>
-              <option value="Europe/London">Europe/London (GMT - UTC+0:00)</option>
-              <option value="Asia/Tokyo">Asia/Tokyo (JST - UTC+9:00)</option>
-              <option value="Australia/Sydney">Australia/Sydney (AEST - UTC+10:00)</option>
+              <option value="Asia/Kolkata" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Asia/Kolkata (IST - UTC+5:30)</option>
+              <option value="America/New_York" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>America/New_York (EST - UTC-5:00)</option>
+              <option value="Europe/London" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Europe/London (GMT - UTC+0:00)</option>
+              <option value="Asia/Tokyo" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Asia/Tokyo (JST - UTC+9:00)</option>
+              <option value="Australia/Sydney" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Australia/Sydney (AEST - UTC+10:00)</option>
             </select>
           </div>
 
-          <hr style={{ border: "none", borderTop: "1px solid #f1f5f9", margin: 0 }} />
+          <hr style={{ border: "none", borderTop: `1px solid ${tokens.border}`, margin: 0 }} />
 
           {/* FOOTER ROW: AUTH STATUS & SAVE */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>
                 Auth Provider:
               </span>
               <span
@@ -686,9 +693,15 @@ export default function AdminProfileSettings() {
                   fontWeight: 700,
                   padding: "3px 10px",
                   borderRadius: "6px",
-                  background: admin?.authProvider === "google" ? "#eff6ff" : "#f1f5f9",
-                  color: admin?.authProvider === "google" ? "#2563eb" : "#475569",
-                  border: admin?.authProvider === "google" ? "1px solid #bfdbfe" : "1px solid #e2e8f0",
+                  background: admin?.authProvider === "google"
+                    ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff")
+                    : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                  color: admin?.authProvider === "google"
+                    ? (isDark ? "#60a5fa" : "#2563eb")
+                    : tokens.textSecondary,
+                  border: admin?.authProvider === "google"
+                    ? (isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe")
+                    : `1px solid ${tokens.border}`,
                 }}
               >
                 {admin?.authProvider === "google" ? "Google Account" : "Local Password"}
@@ -703,7 +716,7 @@ export default function AdminProfileSettings() {
                   style={{
                     background: "none",
                     border: "none",
-                    color: "#dc2626",
+                    color: "#ef4444",
                     fontSize: "13px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -727,24 +740,28 @@ export default function AdminProfileSettings() {
                   padding: "0 24px",
                   borderRadius: "8px",
                   border: "none",
-                  background: !canEdit ? "#94a3b8" : isDirty ? "#2563eb" : "#0f172a",
+                  background: !canEdit
+                    ? (isDark ? tokens.elevatedSurfaceBg : "#94a3b8")
+                    : isDirty
+                    ? tokens.accent
+                    : (isDark ? tokens.elevatedSurfaceBg : "#0f172a"),
                   color: "#ffffff",
                   fontSize: "13px",
                   fontWeight: 700,
                   cursor: saving || !canEdit ? "not-allowed" : "pointer",
                   boxShadow: isDirty && canEdit
                     ? "0 2px 8px rgba(37, 99, 235, 0.3)"
-                    : "0 1px 3px rgba(15, 23, 42, 0.15)",
+                    : "0 1px 3px rgba(0, 0, 0, 0.2)",
                   transition: "all 0.15s ease",
                 }}
                 onMouseEnter={(e) => {
                   if (!saving && canEdit) {
-                    e.currentTarget.style.background = isDirty ? "#1d4ed8" : "#1e293b";
+                    e.currentTarget.style.background = isDirty ? "#1d4ed8" : (isDark ? tokens.hoverBg : "#1e293b");
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!saving && canEdit) {
-                    e.currentTarget.style.background = isDirty ? "#2563eb" : "#0f172a";
+                    e.currentTarget.style.background = isDirty ? tokens.accent : (isDark ? tokens.elevatedSurfaceBg : "#0f172a");
                   }
                 }}
               >
@@ -764,8 +781,8 @@ export default function AdminProfileSettings() {
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(15, 23, 42, 0.5)",
-            backdropFilter: "blur(3px)",
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(4px)",
             zIndex: 9999,
             display: "flex",
             alignItems: "center",
@@ -777,13 +794,13 @@ export default function AdminProfileSettings() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "#ffffff",
+              background: isDark ? tokens.surfaceBg : "#ffffff",
               borderRadius: "16px",
               width: "100%",
               maxWidth: "440px",
               padding: "24px",
-              boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.25)",
-              border: "1px solid #e2e8f0",
+              boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.5)",
+              border: `1px solid ${tokens.border}`,
               display: "flex",
               flexDirection: "column",
               gap: "16px",
@@ -795,8 +812,8 @@ export default function AdminProfileSettings() {
                   width: "40px",
                   height: "40px",
                   borderRadius: "10px",
-                  background: "#fee2e2",
-                  color: "#dc2626",
+                  background: isDark ? "rgba(239, 68, 68, 0.2)" : "#fee2e2",
+                  color: "#ef4444",
                   display: "grid",
                   placeItems: "center",
                   flexShrink: 0,
@@ -809,16 +826,16 @@ export default function AdminProfileSettings() {
                 </svg>
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
                   Delete Admin Account?
                 </h3>
-                <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "#64748b" }}>
+                <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: tokens.textSecondary }}>
                   This action is permanent and cannot be undone.
                 </p>
               </div>
             </div>
 
-            <p style={{ margin: 0, fontSize: "13px", color: "#475569", lineHeight: 1.5 }}>
+            <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.5 }}>
               Are you sure you want to permanently delete your account (<strong>{admin?.email}</strong>)? Your administrator access will be revoked immediately.
             </p>
 
@@ -830,9 +847,9 @@ export default function AdminProfileSettings() {
                 style={{
                   padding: "8px 16px",
                   borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  color: "#475569",
+                  border: `1px solid ${tokens.border}`,
+                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                  color: tokens.textPrimary,
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -864,7 +881,7 @@ export default function AdminProfileSettings() {
         </div>
       )}
 
-      {/* AVATAR PICKER MODAL (HIDDEN BY DEFAULT) */}
+      {/* AVATAR PICKER MODAL */}
       {isAvatarModalOpen && (
         <div
           style={{
@@ -873,8 +890,8 @@ export default function AdminProfileSettings() {
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(15, 23, 42, 0.45)",
-            backdropFilter: "blur(3px)",
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(4px)",
             zIndex: 9999,
             display: "flex",
             alignItems: "center",
@@ -886,13 +903,13 @@ export default function AdminProfileSettings() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "#ffffff",
+              background: isDark ? tokens.surfaceBg : "#ffffff",
               borderRadius: "16px",
               width: "100%",
               maxWidth: "460px",
               padding: "20px 22px",
-              boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.2)",
-              border: "1px solid #e2e8f0",
+              boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.5)",
+              border: `1px solid ${tokens.border}`,
               display: "flex",
               flexDirection: "column",
               gap: "16px",
@@ -901,10 +918,10 @@ export default function AdminProfileSettings() {
             {/* Modal Header */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
                   Choose Profile Picture
                 </h3>
-                <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "#64748b" }}>
+                <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: tokens.textSecondary }}>
                   Select a 3D avatar character or upload a custom image
                 </p>
               </div>
@@ -912,8 +929,8 @@ export default function AdminProfileSettings() {
                 type="button"
                 onClick={() => setIsAvatarModalOpen(false)}
                 style={{
-                  background: "#f1f5f9",
-                  border: "none",
+                  background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "50%",
                   width: "28px",
                   height: "28px",
@@ -921,7 +938,7 @@ export default function AdminProfileSettings() {
                   alignItems: "center",
                   justifyContent: "center",
                   cursor: "pointer",
-                  color: "#64748b",
+                  color: tokens.textSecondary,
                   fontSize: "14px",
                   fontWeight: 700,
                 }}
@@ -933,7 +950,7 @@ export default function AdminProfileSettings() {
             {/* Avatar Grid */}
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "11px", fontWeight: 700, color: "#475569", textTransform: "uppercase" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase" }}>
                   3D Avatars ({gender})
                 </span>
                 <button
@@ -943,7 +960,7 @@ export default function AdminProfileSettings() {
                   style={{
                     background: "none",
                     border: "none",
-                    color: "#2563eb",
+                    color: tokens.accent,
                     fontSize: "12px",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -973,8 +990,10 @@ export default function AdminProfileSettings() {
                       style={{
                         padding: "10px 8px",
                         borderRadius: "12px",
-                        border: isSelected ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                        background: isSelected ? "#eff6ff" : "#f8fafc",
+                        border: isSelected ? `2px solid ${tokens.accent}` : `1px solid ${tokens.border}`,
+                        background: isSelected
+                          ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff")
+                          : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
                         display: "flex",
                         flexDirection: "column",
                         alignItems: "center",
@@ -982,10 +1001,10 @@ export default function AdminProfileSettings() {
                         transition: "all 0.15s ease",
                       }}
                       onMouseEnter={(e) => {
-                        if (!isSelected) e.currentTarget.style.borderColor = "#cbd5e1";
+                        if (!isSelected) e.currentTarget.style.borderColor = tokens.accent;
                       }}
                       onMouseLeave={(e) => {
-                        if (!isSelected) e.currentTarget.style.borderColor = "#e2e8f0";
+                        if (!isSelected) e.currentTarget.style.borderColor = tokens.border;
                       }}
                     >
                       <img
@@ -996,9 +1015,9 @@ export default function AdminProfileSettings() {
                           height: "56px",
                           borderRadius: "50%",
                           objectFit: "cover",
-                          background: "#ffffff",
-                          border: isSelected ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                          boxShadow: isSelected ? "0 2px 8px rgba(37, 99, 235, 0.25)" : "none",
+                          background: isDark ? tokens.surfaceBg : "#ffffff",
+                          border: isSelected ? `2px solid ${tokens.accent}` : `1px solid ${tokens.border}`,
+                          boxShadow: isSelected ? `0 2px 8px ${tokens.accent}40` : "none",
                         }}
                       />
                     </div>
@@ -1024,9 +1043,9 @@ export default function AdminProfileSettings() {
                 style={{
                   padding: "8px 16px",
                   borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  color: "#475569",
+                  border: `1px solid ${tokens.border}`,
+                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                  color: tokens.textPrimary,
                   fontSize: "12px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -1041,3 +1060,4 @@ export default function AdminProfileSettings() {
     </div>
   );
 }
+

@@ -5,6 +5,7 @@ import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
 import GlassToast from "./GlassToast";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import AccessDeniedView from "./AccessDeniedView";
 import {
   resolveMediaUrl,
@@ -69,8 +70,8 @@ const CANNED_RESPONSES = [
 ];
 
 const plainCardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
+  background: "var(--admin-surface, #ffffff)",
+  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   borderRadius: "10px",
   boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
 };
@@ -79,8 +80,9 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "8px 12px",
   borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
+  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+  background: "var(--admin-elevated-surface, #f8fafc)",
+  color: "var(--admin-text-primary, #0f172a)",
   outline: "none",
   fontSize: "14px",
   boxSizing: "border-box",
@@ -89,7 +91,7 @@ const inputStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   fontSize: "12px",
   fontWeight: 700,
-  color: "#475569",
+  color: "var(--admin-text-secondary, #64748b)",
   marginBottom: "6px",
 };
 
@@ -97,16 +99,16 @@ const thStyle: React.CSSProperties = {
   padding: "10px 14px",
   fontSize: "11px",
   fontWeight: 700,
-  color: "#64748b",
+  color: "var(--admin-text-secondary, #64748b)",
   textTransform: "uppercase",
-  borderBottom: "1px solid #e2e8f0",
+  borderBottom: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   letterSpacing: "0.05em",
 };
 
 const tdStyle: React.CSSProperties = {
   padding: "12px 14px",
   fontSize: "13px",
-  borderBottom: "1px solid #f1f5f9",
+  borderBottom: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   verticalAlign: "middle",
 };
 
@@ -121,9 +123,9 @@ const primaryButtonStyle: React.CSSProperties = {
 };
 
 const ghostButtonStyle: React.CSSProperties = {
-  background: "#ffffff",
-  color: "#334155",
-  border: "1px solid #cbd5e1",
+  background: "var(--admin-surface, #ffffff)",
+  color: "var(--admin-text-secondary, #64748b)",
+  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   borderRadius: "6px",
   fontWeight: 600,
   cursor: "pointer",
@@ -142,27 +144,30 @@ const dangerButtonStyle: React.CSSProperties = {
   transition: "all 0.15s ease",
 };
 
-const StatCard = ({ label, value }: { label: string; value: string }) => (
-  <div
-    style={{
-      background: "#ffffff",
-      borderRadius: "8px",
-      border: "1px solid #e2e8f0",
-      padding: "16px 20px",
-      display: "flex",
-      flexDirection: "column",
-      gap: "4px",
-      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-    }}
-  >
-    <div style={{ fontSize: "24px", fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
-      {value}
+const StatCard = ({ label, value }: { label: string; value: string }) => {
+  const { tokens } = useAdminTheme();
+  return (
+    <div
+      style={{
+        background: tokens.surfaceBg,
+        borderRadius: "8px",
+        border: `1px solid ${tokens.border}`,
+        padding: "16px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+      }}
+    >
+      <div style={{ fontSize: "24px", fontWeight: 700, color: tokens.textPrimary, lineHeight: 1.2 }}>
+        {value}
+      </div>
+      <div style={{ fontSize: "12px", color: tokens.textSecondary, fontWeight: 500 }}>
+        {label}
+      </div>
     </div>
-    <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>
-      {label}
-    </div>
-  </div>
-);
+  );
+};
 
 // Clean SVG Icons
 const KeyIcon = () => (
@@ -271,6 +276,7 @@ const SendIcon = () => (
 
 export const AdminSupportDesk: React.FC = () => {
   const { hasPermission, isOwner } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
   const canView = isOwner || hasPermission("support:view");
   const canRespond = isOwner || hasPermission("support:respond");
   const canEdit = isOwner || hasPermission("support:edit");
@@ -491,8 +497,8 @@ export const AdminSupportDesk: React.FC = () => {
         gap: "7px",
         padding: "3px 8px 3px 9px",
         borderRadius: "6px",
-        background: crmEnabled ? "#f0fdf4" : "#ffffff",
-        border: `1px solid ${crmEnabled ? "#bbf7d0" : "#cbd5e1"}`,
+        background: crmEnabled ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : tokens.surfaceBg,
+        border: `1px solid ${crmEnabled ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0") : tokens.border}`,
         marginBottom: "4px",
         transition: "all 0.15s ease",
         pointerEvents: "auto",
@@ -504,7 +510,7 @@ export const AdminSupportDesk: React.FC = () => {
         style={{
           fontSize: "12px",
           fontWeight: 600,
-          color: crmEnabled ? "#15803d" : "#64748b",
+          color: crmEnabled ? (isDark ? "#4ade80" : "#15803d") : tokens.textSecondary,
           display: "inline-flex",
           alignItems: "center",
           gap: "5px",
@@ -517,7 +523,7 @@ export const AdminSupportDesk: React.FC = () => {
             width: "6px",
             height: "6px",
             borderRadius: "50%",
-            background: crmEnabled ? "#16a34a" : "#94a3b8",
+            background: crmEnabled ? "#16a34a" : (isDark ? "#64748b" : "#94a3b8"),
           }}
         />
         CRM Service
@@ -532,7 +538,7 @@ export const AdminSupportDesk: React.FC = () => {
           width: "28px",
           height: "16px",
           borderRadius: "999px",
-          background: crmEnabled ? "#16a34a" : "#cbd5e1",
+          background: crmEnabled ? "#16a34a" : (isDark ? tokens.border : "#cbd5e1"),
           border: "none",
           cursor: !canEdit ? "not-allowed" : togglingCrm ? "wait" : "pointer",
           opacity: !canEdit ? 0.6 : 1,
@@ -554,7 +560,7 @@ export const AdminSupportDesk: React.FC = () => {
             height: "13px",
             borderRadius: "50%",
             background: "#ffffff",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.25)",
             transition: "left 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         />
@@ -1269,14 +1275,14 @@ export const AdminSupportDesk: React.FC = () => {
   }
 
   return (
-    <div style={{ color: "#0f172a" }}>
+    <div style={{ color: tokens.textPrimary }}>
       {toastMessage && <GlassToast message={toastMessage} onClose={() => setToastMessage(null)} />}
 
       {/* Top Header Card (Segmented Mode + Global Search & Filter Button) */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: tokens.surfaceBg,
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
           padding: "10px 14px",
           marginBottom: "16px",
@@ -1301,10 +1307,10 @@ export const AdminSupportDesk: React.FC = () => {
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: tokens.elevatedSurfaceBg,
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
             {(["tickets", "agents"] as const).map((value) => {
@@ -1322,10 +1328,10 @@ export const AdminSupportDesk: React.FC = () => {
                     borderRadius: "6px",
                     padding: "6px 16px",
                     border: "none",
-                    background: isActive ? "#ffffff" : "transparent",
-                    color: isActive ? "#0f172a" : "#64748b",
+                    background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                    color: isActive ? tokens.textPrimary : tokens.textSecondary,
                     boxShadow: isActive
-                      ? "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      ? (isDark ? "0 1px 4px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)")
                       : "none",
                     fontSize: "13px",
                     fontWeight: isActive ? 700 : 500,
@@ -1358,7 +1364,7 @@ export const AdminSupportDesk: React.FC = () => {
                   left: "11px",
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   display: "grid",
                   placeItems: "center",
                 }}
@@ -1384,8 +1390,8 @@ export const AdminSupportDesk: React.FC = () => {
                   fontSize: "13px",
                   height: "36px",
                   borderRadius: "7px",
-                  border: "1px solid #cbd5e1",
-                  background: "#f8fafc",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.elevatedSurfaceBg,
                 }}
               />
               {searchQuery && (
@@ -1402,7 +1408,7 @@ export const AdminSupportDesk: React.FC = () => {
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "#94a3b8",
+                    color: tokens.textMuted,
                     padding: "2px",
                     display: "grid",
                     placeItems: "center",
@@ -1425,9 +1431,9 @@ export const AdminSupportDesk: React.FC = () => {
                   height: "36px",
                   padding: "0 12px",
                   borderRadius: "7px",
-                  border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                  background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                  color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
+                  border: activeFilterCount > 0 ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}` : `1px solid ${tokens.border}`,
+                  background: activeFilterCount > 0 ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
+                  color: activeFilterCount > 0 ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -1464,8 +1470,8 @@ export const AdminSupportDesk: React.FC = () => {
                   top: "44px",
                   right: "0",
                   width: "320px",
-                  background: "#ffffff",
-                  border: "1px solid #cbd5e1",
+                  background: tokens.surfaceBg,
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "10px",
                   boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
                   padding: "16px",
@@ -1476,10 +1482,10 @@ export const AdminSupportDesk: React.FC = () => {
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Filter Tickets</div>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>Filter Tickets</div>
                   <button
                     onClick={() => setIsFilterOpen(false)}
-                    style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", padding: "2px" }}
+                    style={{ background: "none", border: "none", color: tokens.textSecondary, cursor: "pointer", padding: "2px" }}
                   >
                     <XMarkIcon />
                   </button>
@@ -1551,7 +1557,7 @@ export const AdminSupportDesk: React.FC = () => {
                     justifyContent: "space-between",
                     alignItems: "center",
                     paddingTop: "8px",
-                    borderTop: "1px solid #f1f5f9",
+                    borderTop: `1px solid ${tokens.border}`,
                   }}
                 >
                   <button
@@ -1601,10 +1607,10 @@ export const AdminSupportDesk: React.FC = () => {
               flexWrap: "wrap",
               gap: "6px",
               paddingTop: "6px",
-              borderTop: "1px solid #f1f5f9",
+              borderTop: `1px solid ${tokens.border}`,
             }}
           >
-            <span style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 600, marginRight: "2px" }}>
+            <span style={{ fontSize: "11.5px", color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>
               Active:
             </span>
 
@@ -1715,7 +1721,7 @@ export const AdminSupportDesk: React.FC = () => {
               justifyContent: "space-between",
               flexWrap: "wrap",
               gap: "8px",
-              borderBottom: "1px solid #e2e8f0",
+              borderBottom: `1px solid ${tokens.border}`,
               marginBottom: "16px",
             }}
           >
@@ -1742,9 +1748,9 @@ export const AdminSupportDesk: React.FC = () => {
                       gap: "8px",
                       padding: "10px 14px",
                       border: "none",
-                      borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                      borderBottom: isActive ? `2px solid ${tokens.accent}` : "2px solid transparent",
                       background: "transparent",
-                      color: isActive ? "#2563eb" : "#64748b",
+                      color: isActive ? (isDark ? "#93c5fd" : "#2563eb") : tokens.textSecondary,
                       fontSize: "13px",
                       fontWeight: isActive ? 700 : 500,
                       cursor: "pointer",
@@ -1760,9 +1766,9 @@ export const AdminSupportDesk: React.FC = () => {
                         fontWeight: 700,
                         padding: "1px 6px",
                         borderRadius: "10px",
-                        background: isActive ? "#eff6ff" : "#f1f5f9",
-                        color: isActive ? "#2563eb" : "#64748b",
-                        border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
+                        background: isActive ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                        color: isActive ? (isDark ? "#93c5fd" : "#2563eb") : tokens.textSecondary,
+                        border: `1px solid ${isActive ? (isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe") : (isDark ? tokens.border : "#e2e8f0")}`,
                       }}
                     >
                       {tab.count}
@@ -1788,7 +1794,7 @@ export const AdminSupportDesk: React.FC = () => {
           >
             {/* Tickets Cards List */}
             {loading ? (
-              <div style={{ ...plainCardStyle, padding: "32px 16px", textAlign: "center", color: "#64748b", fontSize: "14px" }}>
+              <div style={{ ...plainCardStyle, padding: "32px 16px", textAlign: "center", color: tokens.textSecondary, fontSize: "14px" }}>
                 Loading support tickets...
               </div>
             ) : tickets.length === 0 ? (
@@ -1799,11 +1805,11 @@ export const AdminSupportDesk: React.FC = () => {
                   textAlign: "center",
                 }}
               >
-                <div style={{ display: "inline-flex", padding: "12px", borderRadius: "50%", background: "#eff6ff", color: "#2563eb", marginBottom: "12px" }}>
+                <div style={{ display: "inline-flex", padding: "12px", borderRadius: "50%", background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff", color: isDark ? "#93c5fd" : "#2563eb", marginBottom: "12px" }}>
                   <CheckCircleIcon />
                 </div>
-                <h3 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>No Support Tickets Found</h3>
-                <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+                <h3 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>No Support Tickets Found</h3>
+                <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
                   {searchQuery || activeFilterCount > 0 ? "Try adjusting your search query or filters." : "All customer inquiries and dispute requests have been addressed."}
                 </p>
               </div>
@@ -1818,7 +1824,7 @@ export const AdminSupportDesk: React.FC = () => {
                       onClick={() => handleOpenTicket(t.id)}
                       style={{
                         ...plainCardStyle,
-                        border: isUrgent ? "1px solid #fecaca" : "1px solid #e2e8f0",
+                        border: isUrgent ? (isDark ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid #fecaca") : `1px solid ${tokens.border}`,
                         padding: "16px 18px",
                         display: "flex",
                         flexDirection: "column",
@@ -1830,9 +1836,9 @@ export const AdminSupportDesk: React.FC = () => {
                       {/* Top Row: Ticket ID, Order tag, Priority, Status, Date */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                          <strong style={{ fontSize: "13.5px", color: "#0f172a", fontFamily: "monospace" }}>#{t.ticket_number}</strong>
+                          <strong style={{ fontSize: "13.5px", color: tokens.textPrimary, fontFamily: "monospace" }}>#{t.ticket_number}</strong>
                           {t.order_id && (
-                            <span style={{ fontSize: "12px", color: "#2563eb", background: "#eff6ff", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>
+                            <span style={{ fontSize: "12px", color: isDark ? "#93c5fd" : "#2563eb", background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff", border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`, padding: "2px 8px", borderRadius: "6px", fontWeight: 600 }}>
                               Order #{t.order_id.slice(0, 8)}
                             </span>
                           )}
@@ -1845,16 +1851,29 @@ export const AdminSupportDesk: React.FC = () => {
                               textTransform: "uppercase",
                               background:
                                 t.priority === "urgent"
-                                  ? "#fee2e2"
+                                  ? (isDark ? "rgba(239, 68, 68, 0.2)" : "#fee2e2")
                                   : t.priority === "high"
-                                    ? "#ffedd5"
-                                    : "#f1f5f9",
+                                    ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#ffedd5")
+                                    : t.priority === "medium" || t.priority === "normal"
+                                      ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                                      : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
                               color:
                                 t.priority === "urgent"
-                                  ? "#dc2626"
+                                  ? (isDark ? "#fca5a5" : "#dc2626")
                                   : t.priority === "high"
-                                    ? "#c2410c"
-                                    : "#475569",
+                                    ? (isDark ? "#fdba74" : "#c2410c")
+                                    : t.priority === "medium" || t.priority === "normal"
+                                      ? (isDark ? "#93c5fd" : "#2563eb")
+                                      : tokens.textSecondary,
+                              border: `1px solid ${
+                                t.priority === "urgent"
+                                  ? (isDark ? "rgba(239, 68, 68, 0.35)" : "#fca5a5")
+                                  : t.priority === "high"
+                                    ? (isDark ? "rgba(245, 158, 11, 0.35)" : "#fdba74")
+                                    : t.priority === "medium" || t.priority === "normal"
+                                      ? (isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe")
+                                      : tokens.border
+                              }`,
                             }}
                           >
                             {t.priority}
@@ -1868,36 +1887,45 @@ export const AdminSupportDesk: React.FC = () => {
                               textTransform: "capitalize",
                               background:
                                 t.status === "open"
-                                  ? "#dbeafe"
+                                  ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#dbeafe")
                                   : t.status === "waiting_customer"
-                                    ? "#fef3c7"
+                                    ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7")
                                     : isResolvedOrClosed
-                                      ? "#dcfce7"
-                                      : "#f1f5f9",
+                                      ? (isDark ? "rgba(34, 197, 94, 0.2)" : "#dcfce7")
+                                      : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
                               color:
                                 t.status === "open"
-                                  ? "#1d4ed8"
+                                  ? (isDark ? "#93c5fd" : "#1d4ed8")
                                   : t.status === "waiting_customer"
-                                    ? "#b45309"
+                                    ? (isDark ? "#fde047" : "#b45309")
                                     : isResolvedOrClosed
-                                      ? "#16a34a"
-                                      : "#475569",
+                                      ? (isDark ? "#86efac" : "#16a34a")
+                                      : tokens.textSecondary,
+                              border: `1px solid ${
+                                t.status === "open"
+                                  ? (isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe")
+                                  : t.status === "waiting_customer"
+                                    ? (isDark ? "rgba(245, 158, 11, 0.35)" : "#fde68a")
+                                    : isResolvedOrClosed
+                                      ? (isDark ? "rgba(34, 197, 94, 0.35)" : "#bbf7d0")
+                                      : tokens.border
+                              }`,
                             }}
                           >
                             {t.status === "closed" ? "Closed / Done" : t.status === "resolved" ? "Resolved" : t.status.replace("_", " ")}
                           </span>
                         </div>
 
-                        <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                        <span style={{ fontSize: "12px", color: tokens.textMuted }}>
                           {t.created_at ? new Date(t.created_at).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
                         </span>
                       </div>
 
                       {/* Middle Row: Subject & Message Preview */}
                       <div>
-                        <h4 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>{t.subject}</h4>
+                        <h4 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>{t.subject}</h4>
                         {t.order_items_summary && (
-                          <div style={{ margin: "4px 0 6px", display: "inline-flex", alignItems: "center", gap: "6px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", padding: "2px 8px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 700 }}>
+                          <div style={{ margin: "4px 0 6px", display: "inline-flex", alignItems: "center", gap: "6px", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, color: isDark ? "#86efac" : "#166534", padding: "2px 8px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 700 }}>
                             {t.order_items_summary.image_url && (
                               <img src={resolveMediaUrl(t.order_items_summary.image_url)} alt="" style={{ width: "16px", height: "16px", borderRadius: "3px", objectFit: "cover" }} />
                             )}
@@ -1905,8 +1933,8 @@ export const AdminSupportDesk: React.FC = () => {
                           </div>
                         )}
                         {t.last_message && (
-                          <p style={{ margin: 0, fontSize: "12.5px", color: "#64748b", lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            <span style={{ fontWeight: 600, color: "#475569" }}>{t.last_message_sender || "Customer"}: </span>
+                          <p style={{ margin: 0, fontSize: "12.5px", color: tokens.textSecondary, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <span style={{ fontWeight: 600, color: tokens.textSecondary }}>{t.last_message_sender || "Customer"}: </span>
                             {t.last_message}
                           </p>
                         )}
@@ -1919,13 +1947,13 @@ export const AdminSupportDesk: React.FC = () => {
                           alignItems: "center",
                           justifyContent: "space-between",
                           paddingTop: "10px",
-                          borderTop: "1px solid #f1f5f9",
+                          borderTop: `1px solid ${tokens.border}`,
                           flexWrap: "wrap",
                           gap: "8px",
                         }}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12.5px", color: "#475569" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12.5px", color: tokens.textSecondary }}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
                             <UserIcon />
                             <strong>{t.customer.name}</strong> {t.customer.phone ? `(${t.customer.phone})` : ""}
@@ -1937,18 +1965,18 @@ export const AdminSupportDesk: React.FC = () => {
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           {/* Quick Agent Assignment Dropdown */}
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Assigned:</span>
+                            <span style={{ fontSize: "12px", color: tokens.textSecondary, fontWeight: 600 }}>Assigned:</span>
                             <select
                               value={t.assigned_agent.id || ""}
                               onChange={(e) => handleAssignAgent(t.id, e.target.value || null)}
                               style={{
                                 height: "30px",
                                 borderRadius: "6px",
-                                border: "1px solid #cbd5e1",
+                                border: `1px solid ${t.assigned_agent.id ? (isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe") : tokens.border}`,
                                 fontSize: "12px",
                                 padding: "0 8px",
-                                background: t.assigned_agent.id ? "#eff6ff" : "#ffffff",
-                                color: t.assigned_agent.id ? "#1d4ed8" : "#475569",
+                                background: t.assigned_agent.id ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.elevatedSurfaceBg,
+                                color: t.assigned_agent.id ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
                                 fontWeight: 600,
                               }}
                             >
@@ -1966,11 +1994,19 @@ export const AdminSupportDesk: React.FC = () => {
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
-                              gap: "4px",
-                              background: "#2563eb",
+                              gap: "6px",
+                              padding: "6px 14px",
+                              height: "30px",
+                              borderRadius: "7px",
+                              border: "none",
+                              background: isDark ? "linear-gradient(135deg, #2563eb, #1d4ed8)" : "linear-gradient(135deg, #3b82f6, #2563eb)",
                               color: "#ffffff",
+                              fontSize: "12.5px",
                               fontWeight: 700,
                               cursor: "pointer",
+                              boxShadow: "0 2px 6px rgba(37, 99, 235, 0.25)",
+                              transition: "all 0.15s ease",
+                              whiteSpace: "nowrap",
                             }}
                           >
                             <span>Open Case</span>
@@ -2074,9 +2110,9 @@ export const AdminSupportDesk: React.FC = () => {
           {showAddAgentModal && (
             <div
               style={{
-                background: "#ffffff",
+                background: tokens.surfaceBg,
                 borderRadius: "8px",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${tokens.border}`,
                 padding: "16px 18px",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                 display: "flex",
@@ -2090,14 +2126,14 @@ export const AdminSupportDesk: React.FC = () => {
                   justifyContent: "space-between",
                   alignItems: "center",
                   paddingBottom: "10px",
-                  borderBottom: "1px solid #f1f5f9",
+                  borderBottom: `1px solid ${tokens.border}`,
                 }}
               >
                 <div>
-                  <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", margin: "0 0 2px" }}>
+                  <h3 style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 2px" }}>
                     Register Support Agent
                   </h3>
-                  <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                  <p style={{ fontSize: "12px", color: tokens.textSecondary, margin: 0 }}>
                     Create login credentials for support team staff to access the support desk, answer inquiries, and resolve customer cases.
                   </p>
                 </div>
@@ -2107,7 +2143,7 @@ export const AdminSupportDesk: React.FC = () => {
                   style={{
                     background: "none",
                     border: "none",
-                    color: "#94a3b8",
+                    color: tokens.textMuted,
                     cursor: "pointer",
                     padding: "4px",
                     display: "grid",
@@ -2149,13 +2185,13 @@ export const AdminSupportDesk: React.FC = () => {
                           display: "inline-flex",
                           alignItems: "center",
                           padding: "0 9px",
-                          background: "#f1f5f9",
-                          border: "1px solid #cbd5e1",
+                          background: tokens.elevatedSurfaceBg,
+                          border: `1px solid ${tokens.border}`,
                           borderRight: "none",
                           borderRadius: "6px 0 0 6px",
                           fontSize: "12px",
                           fontWeight: 600,
-                          color: "#475569",
+                          color: tokens.textSecondary,
                           whiteSpace: "nowrap",
                           boxSizing: "border-box",
                         }}
@@ -2272,7 +2308,7 @@ export const AdminSupportDesk: React.FC = () => {
             >
               <div
                 style={{
-                  background: "#ffffff",
+                  background: tokens.surfaceBg,
                   borderRadius: "14px",
                   padding: "22px",
                   maxWidth: "400px",
@@ -2283,10 +2319,10 @@ export const AdminSupportDesk: React.FC = () => {
                   boxSizing: "border-box",
                 }}
               >
-                <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
                   Reset Password for {resetPasswordAgent.name}
                 </h3>
-                <p style={{ margin: "0 0 12px", fontSize: "12px", color: "#64748b" }}>
+                <p style={{ margin: "0 0 12px", fontSize: "12px", color: tokens.textSecondary }}>
                   Enter a new login password for this support agent.
                 </p>
 
@@ -2343,9 +2379,9 @@ export const AdminSupportDesk: React.FC = () => {
 
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
               overflow: "hidden",
               width: "100%",
               boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
@@ -2354,7 +2390,7 @@ export const AdminSupportDesk: React.FC = () => {
             <div style={{ overflowX: "auto", width: "100%" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "auto" }}>
                 <thead>
-                  <tr style={{ background: "#f8fafc" }}>
+                  <tr style={{ background: tokens.elevatedSurfaceBg }}>
                     <th style={{ ...thStyle, width: "32%", minWidth: "150px" }}>Agent Details</th>
                     <th style={{ ...thStyle, width: "24%", minWidth: "130px" }}>Duty & Tickets</th>
                     <th style={{ ...thStyle, width: "18%", minWidth: "100px" }}>Cases Handled</th>
@@ -2364,7 +2400,7 @@ export const AdminSupportDesk: React.FC = () => {
                 <tbody>
                   {agents.length === 0 ? (
                     <tr>
-                      <td colSpan={4} style={{ ...tdStyle, textAlign: "center", padding: "32px", color: "#64748b" }}>
+                      <td colSpan={4} style={{ ...tdStyle, textAlign: "center", padding: "32px", color: tokens.textSecondary }}>
                         No support agents registered yet. Click '+ Add support agent' above to register your first agent.
                       </td>
                     </tr>
@@ -2374,8 +2410,8 @@ export const AdminSupportDesk: React.FC = () => {
                         {/* Column 1: Agent Details (Name, Phone, Email) */}
                         <td style={tdStyle}>
                           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                            <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>{agent.name}</div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#64748b", flexWrap: "wrap" }}>
+                            <div style={{ fontWeight: 700, color: tokens.textPrimary, fontSize: "13px" }}>{agent.name}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: tokens.textSecondary, flexWrap: "wrap" }}>
                               {agent.phone && (
                                 <>
                                   <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
@@ -2403,9 +2439,9 @@ export const AdminSupportDesk: React.FC = () => {
                                 borderRadius: "4px",
                                 fontSize: "11px",
                                 fontWeight: 600,
-                                background: agent.is_active ? "#f0fdf4" : "#fef2f2",
-                                color: agent.is_active ? "#15803d" : "#b91c1c",
-                                border: `1px solid ${agent.is_active ? "#bbf7d0" : "#fecaca"}`,
+                                background: agent.is_active ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"),
+                                color: agent.is_active ? (isDark ? "#86efac" : "#15803d") : (isDark ? "#fca5a5" : "#b91c1c"),
+                                border: `1px solid ${agent.is_active ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0") : (isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca")}`,
                                 width: "fit-content",
                                 minWidth: "fit-content",
                                 whiteSpace: "nowrap",
@@ -2423,7 +2459,7 @@ export const AdminSupportDesk: React.FC = () => {
                               />
                               <span style={{ whiteSpace: "nowrap" }}>{agent.is_active ? "On Duty" : "Inactive"}</span>
                             </span>
-                            <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                            <div style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
                               <span style={{ color: (agent.assigned_ticket_count || 0) > 0 ? "#2563eb" : "#64748b", fontWeight: (agent.assigned_ticket_count || 0) > 0 ? 600 : 400 }}>
                                 {agent.assigned_ticket_count || 0} active
                               </span>
@@ -2442,9 +2478,9 @@ export const AdminSupportDesk: React.FC = () => {
                                 alignItems: "center",
                                 padding: "3px 8px",
                                 borderRadius: "5px",
-                                background: "#fffbeb",
-                                border: "1px solid #fde68a",
-                                color: "#b45309",
+                                background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
+                                border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.35)" : "#fde68a"}`,
+                                color: isDark ? "#fde047" : "#b45309",
                                 fontWeight: 700,
                                 fontSize: "12.5px",
                               }}
@@ -2452,7 +2488,7 @@ export const AdminSupportDesk: React.FC = () => {
                               {agent.assigned_ticket_count} Active
                             </span>
                           ) : (
-                            <span style={{ color: "#94a3b8", fontSize: "12.5px", fontWeight: 500 }}>
+                            <span style={{ color: tokens.textMuted, fontSize: "12.5px", fontWeight: 500 }}>
                               {agent.total_resolved_count || 0} Resolved
                             </span>
                           )}
@@ -2525,7 +2561,7 @@ export const AdminSupportDesk: React.FC = () => {
                               </button>
                             </div>
                           ) : (
-                            <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>View only</span>
+                            <span style={{ fontSize: "11.5px", color: tokens.textMuted }}>View only</span>
                           )}
                         </td>
                       </tr>
@@ -2560,7 +2596,7 @@ export const AdminSupportDesk: React.FC = () => {
             style={{
               width: "100%",
               maxWidth: "800px",
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               height: "100%",
               display: "flex",
               flexDirection: "column",
@@ -2569,26 +2605,49 @@ export const AdminSupportDesk: React.FC = () => {
             }}
           >
             {(detailLoading && !detailData) ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>Loading case details...</div>
+              <div style={{ padding: "40px", textAlign: "center", color: tokens.textSecondary }}>Loading case details...</div>
             ) : (
               <>
                 {/* Drawer Header */}
-                <div style={{ padding: "14px 20px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc", flexShrink: 0 }}>
+                <div style={{ padding: "14px 20px", borderBottom: `1px solid ${tokens.border}`, background: tokens.elevatedSurfaceBg, flexShrink: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "3px" }}>
-                        <span style={{ fontSize: "14.5px", fontWeight: 700, fontFamily: "monospace", color: "#0f172a" }}>
+                        <span style={{ fontSize: "14.5px", fontWeight: 700, fontFamily: "monospace", color: tokens.textPrimary }}>
                           #{detailData.ticket.ticket_number}
                         </span>
                         <span
                           style={{
                             fontSize: "11px",
                             fontWeight: 700,
-                            padding: "2px 7px",
-                            borderRadius: "4px",
-                            background: detailData.ticket.priority === "urgent" ? "#fee2e2" : "#f1f5f9",
-                            color: detailData.ticket.priority === "urgent" ? "#dc2626" : "#64748b",
+                            padding: "2px 8px",
+                            borderRadius: "6px",
                             textTransform: "uppercase",
+                            background:
+                              detailData.ticket.priority === "urgent"
+                                ? (isDark ? "rgba(239, 68, 68, 0.2)" : "#fee2e2")
+                                : detailData.ticket.priority === "high"
+                                  ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#ffedd5")
+                                  : detailData.ticket.priority === "medium" || detailData.ticket.priority === "normal"
+                                    ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                                    : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                            color:
+                              detailData.ticket.priority === "urgent"
+                                ? (isDark ? "#fca5a5" : "#dc2626")
+                                : detailData.ticket.priority === "high"
+                                  ? (isDark ? "#fdba74" : "#c2410c")
+                                  : detailData.ticket.priority === "medium" || detailData.ticket.priority === "normal"
+                                    ? (isDark ? "#93c5fd" : "#2563eb")
+                                    : tokens.textSecondary,
+                            border: `1px solid ${
+                              detailData.ticket.priority === "urgent"
+                                ? (isDark ? "rgba(239, 68, 68, 0.35)" : "#fca5a5")
+                                : detailData.ticket.priority === "high"
+                                  ? (isDark ? "rgba(245, 158, 11, 0.35)" : "#fdba74")
+                                  : detailData.ticket.priority === "medium" || detailData.ticket.priority === "normal"
+                                    ? (isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe")
+                                    : tokens.border
+                            }`,
                           }}
                         >
                           {detailData.ticket.priority}
@@ -2597,17 +2656,40 @@ export const AdminSupportDesk: React.FC = () => {
                           style={{
                             fontSize: "11px",
                             fontWeight: 700,
-                            padding: "2px 7px",
-                            borderRadius: "4px",
-                            background: detailData.ticket.status === "resolved" || detailData.ticket.status === "closed" ? "#f0fdf4" : "#eff6ff",
-                            color: detailData.ticket.status === "resolved" || detailData.ticket.status === "closed" ? "#16a34a" : "#2563eb",
+                            padding: "2px 8px",
+                            borderRadius: "6px",
                             textTransform: "capitalize",
+                            background:
+                              detailData.ticket.status === "open"
+                                ? (isDark ? "rgba(59, 130, 246, 0.2)" : "#dbeafe")
+                                : detailData.ticket.status === "waiting_customer"
+                                  ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7")
+                                  : detailData.ticket.status === "resolved" || detailData.ticket.status === "closed"
+                                    ? (isDark ? "rgba(34, 197, 94, 0.2)" : "#dcfce7")
+                                    : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                            color:
+                              detailData.ticket.status === "open"
+                                ? (isDark ? "#93c5fd" : "#1d4ed8")
+                                : detailData.ticket.status === "waiting_customer"
+                                  ? (isDark ? "#fde047" : "#b45309")
+                                  : detailData.ticket.status === "resolved" || detailData.ticket.status === "closed"
+                                    ? (isDark ? "#86efac" : "#16a34a")
+                                    : tokens.textSecondary,
+                            border: `1px solid ${
+                              detailData.ticket.status === "open"
+                                ? (isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe")
+                                : detailData.ticket.status === "waiting_customer"
+                                  ? (isDark ? "rgba(245, 158, 11, 0.35)" : "#fde68a")
+                                  : detailData.ticket.status === "resolved" || detailData.ticket.status === "closed"
+                                    ? (isDark ? "rgba(34, 197, 94, 0.35)" : "#bbf7d0")
+                                    : tokens.border
+                            }`,
                           }}
                         >
-                          {detailData.ticket.status === "closed" ? "Closed" : detailData.ticket.status.replace("_", " ")}
+                          {detailData.ticket.status === "closed" ? "Closed / Done" : detailData.ticket.status === "resolved" ? "Resolved" : detailData.ticket.status.replace("_", " ")}
                         </span>
                       </div>
-                      <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: "#0f172a" }}>
+                      <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: tokens.textPrimary }}>
                         {detailData.ticket.subject}
                       </h3>
                     </div>
@@ -2620,8 +2702,8 @@ export const AdminSupportDesk: React.FC = () => {
                         }}
                         title="Sync latest messages"
                         style={{
-                          background: "#ffffff",
-                          border: "1px solid #cbd5e1",
+                          background: tokens.surfaceBg,
+                          border: `1px solid ${tokens.border}`,
                           height: "28px",
                           padding: "0 8px",
                           borderRadius: "6px",
@@ -2631,7 +2713,7 @@ export const AdminSupportDesk: React.FC = () => {
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "4px",
-                          color: "#475569",
+                          color: tokens.textSecondary,
                         }}
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2644,8 +2726,8 @@ export const AdminSupportDesk: React.FC = () => {
                         type="button"
                         onClick={() => setSelectedTicketId(null)}
                         style={{
-                          background: "#ffffff",
-                          border: "1px solid #cbd5e1",
+                          background: tokens.surfaceBg,
+                          border: `1px solid ${tokens.border}`,
                           width: "28px",
                           height: "28px",
                           borderRadius: "6px",
@@ -2653,7 +2735,7 @@ export const AdminSupportDesk: React.FC = () => {
                           cursor: "pointer",
                           display: "grid",
                           placeItems: "center",
-                          color: "#64748b",
+                          color: tokens.textSecondary,
                         }}
                       >
                         <XMarkIcon />
@@ -2662,13 +2744,13 @@ export const AdminSupportDesk: React.FC = () => {
                   </div>
 
                   {/* Customer Quick Context */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: "#64748b" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: tokens.textSecondary }}>
                     <span>
-                      Customer: <strong style={{ color: "#334155" }}>{detailData.customer_crm.name}</strong> ({detailData.customer_crm.phone || "No phone"})
+                      Customer: <strong style={{ color: tokens.textSecondary }}>{detailData.customer_crm.name}</strong> ({detailData.customer_crm.phone || "No phone"})
                     </span>
                     <span>•</span>
                     <span>
-                      Assigned: <strong style={{ color: "#334155" }}>{detailData.assigned_agent.name}</strong>
+                      Assigned: <strong style={{ color: tokens.textSecondary }}>{detailData.assigned_agent.name}</strong>
                     </span>
                   </div>
 
@@ -2690,9 +2772,9 @@ export const AdminSupportDesk: React.FC = () => {
                           padding: "5px 12px",
                           borderRadius: "6px",
                           border: "1px solid",
-                          borderColor: detailTab === tab.key ? "#2563eb" : "#cbd5e1",
-                          background: detailTab === tab.key ? "#2563eb" : "#ffffff",
-                          color: detailTab === tab.key ? "#ffffff" : "#475569",
+                          borderColor: detailTab === tab.key ? (isDark ? tokens.accent : "#2563eb") : (isDark ? tokens.border : "#cbd5e1"),
+                          background: detailTab === tab.key ? (isDark ? tokens.accent : "#2563eb") : (isDark ? tokens.surfaceBg : "#ffffff"),
+                          color: detailTab === tab.key ? "#ffffff" : tokens.textSecondary,
                           fontSize: "12px",
                           fontWeight: 600,
                           cursor: "pointer",
@@ -2707,7 +2789,7 @@ export const AdminSupportDesk: React.FC = () => {
 
                 {/* Drawer Body - Full Height for Chat */}
                 {detailTab === "chat" && (
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, background: "#f8fafc" }}>
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, background: tokens.elevatedSurfaceBg }}>
                     {/* Message Thread History - Takes Maximum Vertical Height */}
                     <div
                       style={{
@@ -2732,23 +2814,23 @@ export const AdminSupportDesk: React.FC = () => {
                               style={{
                                 alignSelf: "center",
                                 width: "92%",
-                                background: "#fffbeb",
-                                border: "1px dashed #f59e0b",
+                                background: isDark ? "rgba(245, 158, 11, 0.12)" : "#fffbeb",
+                                border: `1px dashed ${isDark ? "rgba(245, 158, 11, 0.45)" : "#f59e0b"}`,
                                 borderRadius: "8px",
                                 padding: "10px 14px",
                               }}
                             >
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px", fontSize: "11px", fontWeight: 700, color: "#475569" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px", fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>
                                 <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
                                   <LockIcon />
                                   <span>Private Staff Note ({m.sender_name})</span>
                                 </span>
-                                <span style={{ color: "#94a3b8", fontWeight: 500 }}>
+                                <span style={{ color: tokens.textMuted, fontWeight: 500 }}>
                                   {m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
                                 </span>
                               </div>
                               {parsed.cleanText && (
-                                <p style={{ margin: 0, fontSize: "12.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", color: "#334155" }}>
+                                <p style={{ margin: 0, fontSize: "12.5px", lineHeight: 1.5, whiteSpace: "pre-wrap", color: tokens.textSecondary }}>
                                   {parsed.cleanText}
                                 </p>
                               )}
@@ -2784,7 +2866,7 @@ export const AdminSupportDesk: React.FC = () => {
                                 alignItems: "flex-end",
                               }}
                             >
-                              <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
+                              <div style={{ fontSize: "11px", color: tokens.textSecondary, marginBottom: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
                                 <span style={{ fontWeight: 600, color: "#2563eb" }}>{m.sender_name}</span>
                                 <span>•</span>
                                 <span>{m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
@@ -2841,18 +2923,18 @@ export const AdminSupportDesk: React.FC = () => {
                               alignItems: "flex-start",
                             }}
                           >
-                            <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
+                            <div style={{ fontSize: "11px", color: tokens.textSecondary, marginBottom: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
                               <UserIcon />
-                              <span style={{ fontWeight: 600, color: "#0f172a" }}>{m.sender_name}</span>
+                              <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{m.sender_name}</span>
                               <span>•</span>
                               <span>{m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
                             </div>
                             {parsed.cleanText && (
                               <div
                                 style={{
-                                  background: "#ffffff",
-                                  border: "1px solid #e2e8f0",
-                                  color: "#0f172a",
+                                  background: tokens.surfaceBg,
+                                  border: `1px solid ${tokens.border}`,
+                                  color: tokens.textPrimary,
                                   padding: "10px 14px",
                                   borderRadius: "10px 10px 10px 2px",
                                   fontSize: "13px",
@@ -2886,8 +2968,8 @@ export const AdminSupportDesk: React.FC = () => {
                     {/* Compact, Sleek Bottom Composer */}
                     <div
                       style={{
-                        background: "#ffffff",
-                        borderTop: "1px solid #e2e8f0",
+                        background: tokens.surfaceBg,
+                        borderTop: `1px solid ${tokens.border}`,
                         padding: "10px 16px",
                         display: "flex",
                         flexDirection: "column",
@@ -2897,7 +2979,7 @@ export const AdminSupportDesk: React.FC = () => {
                     >
                       {/* Top bar of composer: Pill mode toggle & Quick Templates dropdown */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" }}>
-                        <div style={{ display: "inline-flex", background: "#f1f5f9", padding: "2px", borderRadius: "6px" }}>
+                        <div style={{ display: "inline-flex", background: tokens.elevatedSurfaceBg, padding: "2px", borderRadius: "6px" }}>
                           <button
                             type="button"
                             onClick={() => setIsInternalNote(false)}
@@ -2906,12 +2988,12 @@ export const AdminSupportDesk: React.FC = () => {
                               padding: "4px 10px",
                               borderRadius: "4px",
                               border: "none",
-                              background: !isInternalNote ? "#ffffff" : "transparent",
-                              color: !isInternalNote ? "#0f172a" : "#64748b",
+                              background: !isInternalNote ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                              color: !isInternalNote ? tokens.textPrimary : tokens.textSecondary,
                               fontSize: "11.5px",
                               fontWeight: 600,
                               cursor: !canRespond ? "not-allowed" : "pointer",
-                              boxShadow: !isInternalNote ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                              boxShadow: !isInternalNote ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.06)") : "none",
                             }}
                           >
                             Reply to Customer
@@ -2924,12 +3006,12 @@ export const AdminSupportDesk: React.FC = () => {
                               padding: "4px 10px",
                               borderRadius: "4px",
                               border: "none",
-                              background: isInternalNote ? "#ffffff" : "transparent",
-                              color: isInternalNote ? "#0f172a" : "#64748b",
+                              background: isInternalNote ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                              color: isInternalNote ? tokens.textPrimary : tokens.textSecondary,
                               fontSize: "11.5px",
                               fontWeight: 600,
                               cursor: !canRespond ? "not-allowed" : "pointer",
-                              boxShadow: isInternalNote ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                              boxShadow: isInternalNote ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.06)") : "none",
                             }}
                           >
                             Private Staff Note
@@ -2949,10 +3031,10 @@ export const AdminSupportDesk: React.FC = () => {
                             height: "28px",
                             padding: "0 8px",
                             borderRadius: "5px",
-                            border: "1px solid #cbd5e1",
-                            background: "#ffffff",
+                            border: `1px solid ${tokens.border}`,
+                            background: tokens.surfaceBg,
                             fontSize: "11.5px",
-                            color: "#475569",
+                            color: tokens.textSecondary,
                             outline: "none",
                             cursor: !canRespond ? "not-allowed" : "pointer",
                             opacity: !canRespond ? 0.6 : 1,
@@ -2969,9 +3051,9 @@ export const AdminSupportDesk: React.FC = () => {
 
                       {/* Composer Image Attachment Preview */}
                       {composerImage && (
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f8fafc", padding: "6px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", width: "fit-content" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", background: tokens.elevatedSurfaceBg, padding: "6px 10px", borderRadius: "6px", border: `1px solid ${tokens.border}`, width: "fit-content" }}>
                           <img src={composerImage.previewUrl} alt="Preview" style={{ width: "32px", height: "32px", borderRadius: "4px", objectFit: "cover" }} />
-                          <span style={{ fontSize: "12px", color: "#334155", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: "12px", color: tokens.textSecondary, maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {composerImage.file.name}
                           </span>
                           <button
@@ -2980,7 +3062,7 @@ export const AdminSupportDesk: React.FC = () => {
                               URL.revokeObjectURL(composerImage.previewUrl);
                               setComposerImage(null);
                             }}
-                            style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "13px", padding: "0 2px" }}
+                            style={{ background: "none", border: "none", color: tokens.textSecondary, cursor: "pointer", fontSize: "13px", padding: "0 2px" }}
                           >
                             ✕
                           </button>
@@ -3013,14 +3095,14 @@ export const AdminSupportDesk: React.FC = () => {
                           style={{
                             height: "38px",
                             width: "38px",
-                            background: "#ffffff",
-                            border: "1px solid #cbd5e1",
+                            background: tokens.surfaceBg,
+                            border: `1px solid ${tokens.border}`,
                             borderRadius: "6px",
                             cursor: !canRespond ? "not-allowed" : "pointer",
                             opacity: !canRespond ? 0.6 : 1,
                             display: "grid",
                             placeItems: "center",
-                            color: "#64748b",
+                            color: tokens.textSecondary,
                             flexShrink: 0,
                           }}
                         >
@@ -3049,14 +3131,14 @@ export const AdminSupportDesk: React.FC = () => {
                             maxHeight: "120px",
                             padding: "9px 12px",
                             borderRadius: "6px",
-                            border: "1px solid #cbd5e1",
-                            background: !canRespond ? "#f1f5f9" : isInternalNote ? "#f8fafc" : "#ffffff",
+                            border: `1px solid ${tokens.border}`,
+                            background: !canRespond ? (isDark ? tokens.surfaceBg : "#f1f5f9") : isInternalNote ? (isDark ? "rgba(245, 158, 11, 0.08)" : "#f8fafc") : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
                             fontSize: "13px",
                             outline: "none",
                             fontFamily: "inherit",
                             boxSizing: "border-box",
                             resize: "none",
-                            color: "#0f172a",
+                            color: tokens.textPrimary,
                             cursor: !canRespond ? "not-allowed" : "text",
                           }}
                         />
@@ -3092,33 +3174,33 @@ export const AdminSupportDesk: React.FC = () => {
 
                 {/* Tab: Order & Shipping Details & Return/Refund History */}
                 {detailTab === "order" && (
-                  <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "14px", background: "#f8fafc" }}>
+                  <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "14px", background: tokens.elevatedSurfaceBg }}>
                     {!detailData.order_360 ? (
-                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "24px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+                      <div style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "24px", textAlign: "center", color: tokens.textSecondary, fontSize: "13px" }}>
                         No order linked to this support ticket.
                       </div>
                     ) : (
                       <>
                         {/* Order Return & Refund Audit Banner */}
-                        <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "16px" }}>
+                        <div style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "16px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
                             <div>
-                              <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Linked Order</span>
-                              <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>#{detailData.order_360.id.slice(0, 8)}</div>
+                              <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase" }}>Linked Order</span>
+                              <div style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>#{detailData.order_360.id.slice(0, 8)}</div>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                               {detailData.order_360.refund_summary?.is_fully_refunded ? (
-                                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", padding: "3px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700 }}>
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4", color: isDark ? "#86efac" : "#166534", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, padding: "3px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700 }}>
                                   <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#16a34a" }} />
                                   FULLY REFUNDED
                                 </span>
                               ) : (detailData.order_360.refund_summary?.already_refunded || 0) > 0 ? (
-                                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a", padding: "3px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700 }}>
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb", color: isDark ? "#fde047" : "#b45309", border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`, padding: "3px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700 }}>
                                   <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#f59e0b" }} />
                                   PARTIALLY REFUNDED
                                 </span>
                               ) : (
-                                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "#f8fafc", color: "#475569", border: "1px solid #e2e8f0", padding: "3px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700 }}>
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: tokens.elevatedSurfaceBg, color: tokens.textSecondary, border: `1px solid ${tokens.border}`, padding: "3px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700 }}>
                                   <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#94a3b8" }} />
                                   ACTIVE / NOT REFUNDED
                                 </span>
@@ -3128,48 +3210,48 @@ export const AdminSupportDesk: React.FC = () => {
 
                           {/* 3 Metrics Row */}
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "8px", marginBottom: "12px" }}>
-                            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 12px" }}>
-                              <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, display: "block" }}>Total Order Paid</span>
-                              <strong style={{ fontSize: "15px", color: "#0f172a" }}>₹{detailData.order_360.total.toLocaleString("en-IN")}</strong>
+                            <div style={{ background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "6px", padding: "10px 12px" }}>
+                              <span style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 600, display: "block" }}>Total Order Paid</span>
+                              <strong style={{ fontSize: "15px", color: tokens.textPrimary }}>₹{detailData.order_360.total.toLocaleString("en-IN")}</strong>
                             </div>
-                            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 12px" }}>
-                              <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, display: "block" }}>Already Refunded</span>
+                            <div style={{ background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "6px", padding: "10px 12px" }}>
+                              <span style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 600, display: "block" }}>Already Refunded</span>
                               <strong style={{ fontSize: "15px", color: (detailData.order_360.refund_summary?.already_refunded || 0) > 0 ? "#dc2626" : "#475569" }}>
                                 ₹{(detailData.order_360.refund_summary?.already_refunded || 0).toLocaleString("en-IN")}
                               </strong>
                             </div>
-                            <div style={{ background: (detailData.order_360.refund_summary?.remaining_refundable || 0) > 0 ? "#f0fdf4" : "#fef2f2", border: `1px solid ${(detailData.order_360.refund_summary?.remaining_refundable || 0) > 0 ? "#bbf7d0" : "#fecaca"}`, borderRadius: "6px", padding: "10px 12px" }}>
-                              <span style={{ fontSize: "11px", color: (detailData.order_360.refund_summary?.remaining_refundable || 0) > 0 ? "#166534" : "#991b1b", fontWeight: 600, display: "block" }}>Max Remaining Refundable</span>
-                              <strong style={{ fontSize: "15px", color: (detailData.order_360.refund_summary?.remaining_refundable || 0) > 0 ? "#15803d" : "#b91c1c" }}>
+                            <div style={{ background: (detailData.order_360.refund_summary?.remaining_refundable || 0) > 0 ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"), border: `1px solid ${(detailData.order_360.refund_summary?.remaining_refundable || 0) > 0 ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0") : (isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca")}`, borderRadius: "6px", padding: "10px 12px" }}>
+                              <span style={{ fontSize: "11px", color: (detailData.order_360.refund_summary?.remaining_refundable || 0) > 0 ? (isDark ? "#86efac" : "#166534") : (isDark ? "#fca5a5" : "#991b1b"), fontWeight: 600, display: "block" }}>Max Remaining Refundable</span>
+                              <strong style={{ fontSize: "15px", color: (detailData.order_360.refund_summary?.remaining_refundable || 0) > 0 ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#f87171" : "#b91c1c") }}>
                                 ₹{(detailData.order_360.refund_summary?.remaining_refundable !== undefined ? detailData.order_360.refund_summary.remaining_refundable : detailData.order_360.total).toLocaleString("en-IN")}
                               </strong>
                             </div>
                           </div>
 
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                            <div>Order Status: <strong style={{ textTransform: "uppercase", color: "#0f172a" }}>{detailData.order_360.status}</strong></div>
-                            <div>Payment: <strong style={{ textTransform: "uppercase", color: "#0f172a" }}>{detailData.order_360.payment_method || "N/A"} ({detailData.order_360.payment_status})</strong></div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px", background: tokens.elevatedSurfaceBg, padding: "8px 12px", borderRadius: "6px", border: `1px solid ${tokens.border}` }}>
+                            <div>Order Status: <strong style={{ textTransform: "uppercase", color: tokens.textPrimary }}>{detailData.order_360.status}</strong></div>
+                            <div>Payment: <strong style={{ textTransform: "uppercase", color: tokens.textPrimary }}>{detailData.order_360.payment_method || "N/A"} ({detailData.order_360.payment_status})</strong></div>
                           </div>
                         </div>
 
                         {/* Order Items List */}
-                        <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "16px" }}>
-                          <h4 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Order Package Contents</h4>
+                        <div style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "16px" }}>
+                          <h4 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>Order Package Contents</h4>
                           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                             {detailData.order_360.items.map((it: any) => (
-                              <div key={it.id} style={{ display: "flex", alignItems: "center", gap: "10px", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "8px 12px", borderRadius: "6px" }}>
+                              <div key={it.id} style={{ display: "flex", alignItems: "center", gap: "10px", background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}`, padding: "8px 12px", borderRadius: "6px" }}>
                                 {it.product_image ? (
-                                  <img src={resolveMediaUrl(it.product_image)} alt={it.product_name} style={{ width: "38px", height: "38px", objectFit: "cover", borderRadius: "4px", border: "1px solid #cbd5e1" }} />
+                                  <img src={resolveMediaUrl(it.product_image)} alt={it.product_name} style={{ width: "38px", height: "38px", objectFit: "cover", borderRadius: "4px", border: `1px solid ${tokens.border}` }} />
                                 ) : (
-                                  <div style={{ width: "38px", height: "38px", borderRadius: "4px", background: "#e2e8f0", display: "grid", placeItems: "center", color: "#64748b" }}>
+                                  <div style={{ width: "38px", height: "38px", borderRadius: "4px", background: "#e2e8f0", display: "grid", placeItems: "center", color: tokens.textSecondary }}>
                                     <PackageIcon />
                                   </div>
                                 )}
                                 <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>{it.product_name}</div>
-                                  <div style={{ fontSize: "11.5px", color: "#64748b" }}>Qty: {it.quantity} {it.variant ? `· ${it.variant}` : ""} · ₹{it.unit_price} each</div>
+                                  <div style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary }}>{it.product_name}</div>
+                                  <div style={{ fontSize: "11.5px", color: tokens.textSecondary }}>Qty: {it.quantity} {it.variant ? `· ${it.variant}` : ""} · ₹{it.unit_price} each</div>
                                 </div>
-                                <div style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>₹{it.line_total}</div>
+                                <div style={{ fontWeight: 700, fontSize: "13px", color: tokens.textPrimary }}>₹{it.line_total}</div>
                               </div>
                             ))}
                           </div>
@@ -3177,19 +3259,19 @@ export const AdminSupportDesk: React.FC = () => {
 
                         {/* Return Requests History Audit Trail */}
                         {detailData.order_360.returns_history && detailData.order_360.returns_history.length > 0 && (
-                          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "16px" }}>
+                          <div style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "16px" }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-                              <h4 style={{ margin: 0, fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                              <h4 style={{ margin: 0, fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                                 Prior Return Requests ({detailData.order_360.returns_history.length})
                               </h4>
-                              <span style={{ fontSize: "11px", color: "#64748b" }}>Order Return History</span>
+                              <span style={{ fontSize: "11px", color: tokens.textSecondary }}>Order Return History</span>
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                               {detailData.order_360.returns_history.map((ret: any) => (
-                                <div key={ret.id} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 12px" }}>
+                                <div key={ret.id} style={{ background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "6px", padding: "10px 12px" }}>
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "4px" }}>
                                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                      <span style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>#{ret.id.slice(0, 8)}</span>
+                                      <span style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>#{ret.id.slice(0, 8)}</span>
                                       <span style={{ fontSize: "10.5px", fontWeight: 700, textTransform: "uppercase", padding: "2px 6px", borderRadius: "4px", background: ret.status === "refunded" ? "#dcfce7" : ret.status === "approved" ? "#dbeafe" : "#f1f5f9", color: ret.status === "refunded" ? "#16a34a" : ret.status === "approved" ? "#1d4ed8" : "#475569" }}>
                                         {ret.status}
                                       </span>
@@ -3200,7 +3282,7 @@ export const AdminSupportDesk: React.FC = () => {
                                   </div>
 
                                   {ret.items && ret.items.length > 0 && (
-                                    <div style={{ fontSize: "11.5px", color: "#475569", marginBottom: "4px" }}>
+                                    <div style={{ fontSize: "11.5px", color: tokens.textSecondary, marginBottom: "4px" }}>
                                       {ret.items.map((ri: any, idx: number) => (
                                         <div key={idx}>
                                           • {ri.product_name} (Requested: {ri.quantity_requested}, Approved: {ri.quantity_approved || 0}) — {ri.reason_code ? `Reason: ${ri.reason_code}` : ""}
@@ -3210,7 +3292,7 @@ export const AdminSupportDesk: React.FC = () => {
                                   )}
 
                                   {ret.admin_note && (
-                                    <div style={{ fontSize: "11px", color: "#64748b", fontStyle: "italic", marginTop: "4px" }}>
+                                    <div style={{ fontSize: "11px", color: tokens.textSecondary, fontStyle: "italic", marginTop: "4px" }}>
                                       Admin Note: {ret.admin_note}
                                     </div>
                                   )}
@@ -3222,23 +3304,23 @@ export const AdminSupportDesk: React.FC = () => {
 
                         {/* Refund Transactions Audit Trail */}
                         {detailData.order_360.refund_transactions && detailData.order_360.refund_transactions.length > 0 && (
-                          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "16px" }}>
-                            <h4 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                          <div style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "16px" }}>
+                            <h4 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                               Processed Refund Records ({detailData.order_360.refund_transactions.length})
                             </h4>
                             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                               {detailData.order_360.refund_transactions.map((rf: any, idx: number) => (
-                                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "8px 12px", borderRadius: "6px", fontSize: "12px" }}>
+                                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, padding: "8px 12px", borderRadius: "6px", fontSize: "12px" }}>
                                   <div>
-                                    <div style={{ fontWeight: 700, color: "#166534" }}>
+                                    <div style={{ fontWeight: 700, color: isDark ? "#86efac" : "#166534" }}>
                                       ₹{rf.amount} {rf.refund_id ? `· ${rf.refund_id}` : ""}
                                     </div>
-                                    <div style={{ fontSize: "11px", color: "#15803d" }}>
+                                    <div style={{ fontSize: "11px", color: isDark ? "#4ade80" : "#15803d" }}>
                                       {rf.source ? `Source: ${rf.source}` : "Refund"} {rf.actor_name ? `by ${rf.actor_name}` : ""} {rf.arn ? `(ARN: ${rf.arn})` : ""}
                                     </div>
-                                    {rf.note && <div style={{ fontSize: "11px", color: "#166534", marginTop: "2px" }}>Note: {rf.note}</div>}
+                                    {rf.note && <div style={{ fontSize: "11px", color: isDark ? "#86efac" : "#166534", marginTop: "2px" }}>Note: {rf.note}</div>}
                                   </div>
-                                  <div style={{ fontSize: "11px", color: "#15803d", fontWeight: 600 }}>
+                                  <div style={{ fontSize: "11px", color: isDark ? "#86efac" : "#15803d", fontWeight: 600 }}>
                                     {rf.created_at ? new Date(rf.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Processed"}
                                   </div>
                                 </div>
@@ -3249,11 +3331,11 @@ export const AdminSupportDesk: React.FC = () => {
 
                         {/* Shipment Info */}
                         {detailData.order_360.shipment && (
-                          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px" }}>
-                            <h4 style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                          <div style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "14px" }}>
+                            <h4 style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                               Delivery Logistics Details
                             </h4>
-                            <div style={{ fontSize: "12.5px", color: "#334155", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                            <div style={{ fontSize: "12.5px", color: tokens.textSecondary, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                               <div>Logistics Mode: <strong>{detailData.order_360.shipment.delivery_mode}</strong></div>
                               <div>Tracking Status: <strong>{detailData.order_360.shipment.status}</strong></div>
                               {detailData.order_360.shipment.courier_name && <div>Partner / Rider: <strong>{detailData.order_360.shipment.courier_name}</strong></div>}
@@ -3268,55 +3350,55 @@ export const AdminSupportDesk: React.FC = () => {
 
                 {/* Tab: Customer CRM Profile */}
                 {detailTab === "crm" && (
-                  <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "12px", background: "#f8fafc" }}>
+                  <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "12px", background: tokens.elevatedSurfaceBg }}>
                     {/* Customer Metric Cards */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
-                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "12px", textAlign: "center" }}>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Customer Orders</span>
-                        <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
+                      <div style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "12px", textAlign: "center" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase" }}>Customer Orders</span>
+                        <div style={{ fontSize: "18px", fontWeight: 700, color: tokens.textPrimary, marginTop: "2px" }}>
                           {detailData.customer_crm.total_orders}
                         </div>
-                        <span style={{ fontSize: "10.5px", color: "#94a3b8" }}>Placed by customer</span>
+                        <span style={{ fontSize: "10.5px", color: tokens.textMuted }}>Placed by customer</span>
                       </div>
 
-                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "12px", textAlign: "center" }}>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Lifetime Spend</span>
+                      <div style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "12px", textAlign: "center" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase" }}>Lifetime Spend</span>
                         <div style={{ fontSize: "18px", fontWeight: 700, color: "#16a34a", marginTop: "2px" }}>
                           ₹{detailData.customer_crm.total_spend.toLocaleString("en-IN")}
                         </div>
-                        <span style={{ fontSize: "10.5px", color: "#94a3b8" }}>This Store</span>
+                        <span style={{ fontSize: "10.5px", color: tokens.textMuted }}>This Store</span>
                       </div>
 
-                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "12px", textAlign: "center" }}>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Claims Filed</span>
+                      <div style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "12px", textAlign: "center" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase" }}>Claims Filed</span>
                         <div style={{ fontSize: "18px", fontWeight: 700, color: detailData.customer_crm.total_disputes > 3 ? "#dc2626" : "#2563eb", marginTop: "2px" }}>
                           {detailData.customer_crm.total_disputes}
                         </div>
-                        <span style={{ fontSize: "10.5px", color: "#94a3b8" }}>Disputes</span>
+                        <span style={{ fontSize: "10.5px", color: tokens.textMuted }}>Disputes</span>
                       </div>
                     </div>
 
                     {/* Contact Details */}
-                    <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "16px" }}>
-                      <h4 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                    <div style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "16px" }}>
+                      <h4 style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                         Customer Contact Details
                       </h4>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12.5px" }}>
                         <div>
-                          <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>Full Name:</span>
-                          <strong style={{ color: "#0f172a" }}>{detailData.customer_crm.name}</strong>
+                          <span style={{ fontSize: "11px", color: tokens.textSecondary, display: "block" }}>Full Name:</span>
+                          <strong style={{ color: tokens.textPrimary }}>{detailData.customer_crm.name}</strong>
                         </div>
                         <div>
-                          <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>Email Address:</span>
-                          <strong style={{ color: "#0f172a" }}>{detailData.customer_crm.email || "Not Provided"}</strong>
+                          <span style={{ fontSize: "11px", color: tokens.textSecondary, display: "block" }}>Email Address:</span>
+                          <strong style={{ color: tokens.textPrimary }}>{detailData.customer_crm.email || "Not Provided"}</strong>
                         </div>
                         <div>
-                          <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>Phone Number:</span>
-                          <strong style={{ color: "#0f172a" }}>{detailData.customer_crm.phone || "Not Provided"}</strong>
+                          <span style={{ fontSize: "11px", color: tokens.textSecondary, display: "block" }}>Phone Number:</span>
+                          <strong style={{ color: tokens.textPrimary }}>{detailData.customer_crm.phone || "Not Provided"}</strong>
                         </div>
                         <div>
-                          <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>Customer ID:</span>
-                          <code style={{ fontSize: "11px", color: "#64748b", background: "#f1f5f9", padding: "1px 5px", borderRadius: "4px" }}>
+                          <span style={{ fontSize: "11px", color: tokens.textSecondary, display: "block" }}>Customer ID:</span>
+                          <code style={{ fontSize: "11px", color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, padding: "1px 5px", borderRadius: "4px" }}>
                             {String(detailData.customer_crm.id).slice(0, 12)}...
                           </code>
                         </div>
@@ -3339,20 +3421,20 @@ export const AdminSupportDesk: React.FC = () => {
 
                 {/* Tab: Resolution Tools & Actions */}
                 {detailTab === "actions" && (
-                  <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "14px", background: "#f8fafc" }}>
-                    <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "16px" }}>
-                      <h4 style={{ margin: "0 0 12px", fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>
+                  <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "14px", background: tokens.elevatedSurfaceBg }}>
+                    <div style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "16px" }}>
+                      <h4 style={{ margin: "0 0 12px", fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary }}>
                         Case Resolution Management
                       </h4>
 
                       {detailData.ticket.status === "closed" || detailData.ticket.status === "resolved" ? (
-                        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "14px", borderRadius: "8px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#166534", fontWeight: 700, fontSize: "13px" }}>
+                        <div style={{ background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, padding: "14px", borderRadius: "8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: isDark ? "#86efac" : "#166534", fontWeight: 700, fontSize: "13px" }}>
                             <CheckCircleIcon />
                             <span>This Ticket is Closed & Completed</span>
                           </div>
                           {detailData.ticket.resolution_note && (
-                            <p style={{ margin: "8px 0 12px", fontSize: "12.5px", color: "#15803d" }}>
+                            <p style={{ margin: "8px 0 12px", fontSize: "12.5px", color: isDark ? "#4ade80" : "#15803d" }}>
                               Resolution: {detailData.ticket.resolution_note}
                             </p>
                           )}
@@ -3360,9 +3442,9 @@ export const AdminSupportDesk: React.FC = () => {
                             onClick={() => handleExecuteAction("reopen")}
                             disabled={!canEdit || actionProcessing}
                             style={{
-                              background: "#ffffff",
-                              color: "#166534",
-                              border: "1px solid #86efac",
+                              background: tokens.surfaceBg,
+                              color: isDark ? "#86efac" : "#166534",
+                              border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.4)" : "#86efac"}`,
                               padding: "6px 14px",
                               borderRadius: "6px",
                               fontSize: "12px",
@@ -3376,7 +3458,7 @@ export const AdminSupportDesk: React.FC = () => {
                         </div>
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                          <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+                          <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
                             Choose an appropriate resolution action for this customer support case:
                           </p>
 
@@ -3385,20 +3467,20 @@ export const AdminSupportDesk: React.FC = () => {
                               const isEscrowReleased = !isCodOrder && (detailData.order_360?.escrow_status === "unheld" || detailData.order_360?.escrow_status === "released" || detailData.order_360?.refund_summary?.is_escrow_released);
                               const remaining = detailData.order_360?.refund_summary?.remaining_refundable ?? detailData.order_360?.total ?? 0;
                               return (
-                                <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px", background: "#ffffff" }}>
+                                <div style={{ border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "14px", background: tokens.surfaceBg }}>
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                                    <strong style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Issue Refund</strong>
+                                    <strong style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>Issue Refund</strong>
                                     {isCodOrder ? (
-                                      <span style={{ fontSize: "10.5px", fontWeight: 600, background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0", padding: "1px 6px", borderRadius: "4px" }}>
+                                      <span style={{ fontSize: "10.5px", fontWeight: 600, background: tokens.elevatedSurfaceBg, color: tokens.textSecondary, border: `1px solid ${tokens.border}`, padding: "1px 6px", borderRadius: "4px" }}>
                                         COD Payout
                                       </span>
                                     ) : isEscrowReleased ? (
-                                      <span style={{ fontSize: "10.5px", fontWeight: 600, background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0", padding: "1px 6px", borderRadius: "4px" }}>
+                                      <span style={{ fontSize: "10.5px", fontWeight: 600, background: tokens.elevatedSurfaceBg, color: tokens.textSecondary, border: `1px solid ${tokens.border}`, padding: "1px 6px", borderRadius: "4px" }}>
                                         Direct Transfer
                                       </span>
                                     ) : null}
                                   </div>
-                                  <p style={{ margin: "0 0 10px", fontSize: "12px", color: "#64748b" }}>
+                                  <p style={{ margin: "0 0 10px", fontSize: "12px", color: tokens.textSecondary }}>
                                     {detailData.order_360?.refund_summary?.is_fully_refunded
                                       ? "Order is already fully refunded."
                                       : isEscrowReleased
@@ -3428,9 +3510,9 @@ export const AdminSupportDesk: React.FC = () => {
                               );
                             })()}
 
-                            <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", padding: "12px", background: "#f8fafc" }}>
-                              <strong style={{ display: "block", fontSize: "13px", color: "#0f172a", marginBottom: "4px" }}>Re-Dispatch Replacement</strong>
-                              <p style={{ margin: "0 0 10px", fontSize: "11.5px", color: "#64748b" }}>Authorize and dispatch a free replacement package.</p>
+                            <div style={{ border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "12px", background: tokens.elevatedSurfaceBg }}>
+                              <strong style={{ display: "block", fontSize: "13px", color: tokens.textPrimary, marginBottom: "4px" }}>Re-Dispatch Replacement</strong>
+                              <p style={{ margin: "0 0 10px", fontSize: "11.5px", color: tokens.textSecondary }}>Authorize and dispatch a free replacement package.</p>
                               <button
                                 onClick={openReplacementModal}
                                 disabled={!canEdit || actionProcessing}
@@ -3450,9 +3532,9 @@ export const AdminSupportDesk: React.FC = () => {
                               </button>
                             </div>
 
-                            <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", padding: "12px", background: "#f8fafc", gridColumn: "span 2" }}>
-                              <strong style={{ display: "block", fontSize: "13px", color: "#0f172a", marginBottom: "4px" }}>Close Case / Conclude Ticket</strong>
-                              <p style={{ margin: "0 0 10px", fontSize: "11.5px", color: "#64748b" }}>Mark inquiry as resolved and archive this case.</p>
+                            <div style={{ border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "12px", background: tokens.elevatedSurfaceBg, gridColumn: "span 2" }}>
+                              <strong style={{ display: "block", fontSize: "13px", color: tokens.textPrimary, marginBottom: "4px" }}>Close Case / Conclude Ticket</strong>
+                              <p style={{ margin: "0 0 10px", fontSize: "11.5px", color: tokens.textSecondary }}>Mark inquiry as resolved and archive this case.</p>
                               <button
                                 onClick={() => handleExecuteAction("close")}
                                 disabled={!canEdit || actionProcessing}
@@ -3506,7 +3588,7 @@ export const AdminSupportDesk: React.FC = () => {
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "12px",
               width: "100%",
               maxWidth: "600px",
@@ -3520,24 +3602,24 @@ export const AdminSupportDesk: React.FC = () => {
             }}
           >
             {/* Modal Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", paddingBottom: "12px", borderBottom: "1px solid #f1f5f9" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", paddingBottom: "12px", borderBottom: `1px solid ${tokens.border}` }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>Process Order Refund</h3>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>Process Order Refund</h3>
                   {detailData?.order_360 && (
-                    <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "4px", background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "4px", background: tokens.elevatedSurfaceBg, color: tokens.textSecondary, border: `1px solid ${tokens.border}` }}>
                       Order #{detailData.order_360.id || detailData.order_360.order_id} • {String(detailData.order_360.payment_method || "ONLINE").toUpperCase()}
                     </span>
                   )}
                 </div>
-                <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>
+                <p style={{ margin: 0, fontSize: "12px", color: tokens.textSecondary }}>
                   Select items and fee adjustments to refund. Unselected fees remain retained by the store.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowRefundModal(false)}
-                style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", color: "#64748b", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}
+                style={{ background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "6px", color: tokens.textSecondary, cursor: "pointer", padding: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
                 <XMarkIcon />
               </button>
@@ -3557,18 +3639,18 @@ export const AdminSupportDesk: React.FC = () => {
               const maxRemaining = Number(detailData.order_360.refund_summary?.remaining_refundable !== undefined ? detailData.order_360.refund_summary.remaining_refundable : totalPaid);
 
               return (
-                <div style={{ margin: "0 0 16px", padding: "12px 14px", borderRadius: "8px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                <div style={{ margin: "0 0 16px", padding: "12px 14px", borderRadius: "8px", background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}` }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", textAlign: "left" }}>
                     <div>
-                      <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>Total Order Paid</span>
-                      <strong style={{ fontSize: "14px", color: "#0f172a" }}>₹{totalPaid.toFixed(2)}</strong>
+                      <span style={{ fontSize: "11px", color: tokens.textSecondary, display: "block" }}>Total Order Paid</span>
+                      <strong style={{ fontSize: "14px", color: tokens.textPrimary }}>₹{totalPaid.toFixed(2)}</strong>
                     </div>
                     <div>
                       <span style={{ fontSize: "11px", color: alreadyRefunded > 0 ? "#b91c1c" : "#64748b", display: "block" }}>Already Refunded</span>
                       <strong style={{ fontSize: "14px", color: alreadyRefunded > 0 ? "#b91c1c" : "#64748b" }}>₹{alreadyRefunded.toFixed(2)}</strong>
                     </div>
                     <div>
-                      <span style={{ fontSize: "11px", color: "#0f172a", display: "block" }}>Max Refundable</span>
+                      <span style={{ fontSize: "11px", color: tokens.textPrimary, display: "block" }}>Max Refundable</span>
                       <strong style={{ fontSize: "14px", color: maxRemaining > 0 ? "#0f172a" : "#94a3b8" }}>₹{maxRemaining.toFixed(2)}</strong>
                     </div>
                   </div>
@@ -3578,29 +3660,29 @@ export const AdminSupportDesk: React.FC = () => {
 
             {/* COD or Escrow Released Notice */}
             {["cod", "cash on delivery", "cash_on_delivery"].includes(String(detailData?.order_360?.payment_method || "").trim().toLowerCase()) ? (
-              <div style={{ padding: "10px 12px", borderRadius: "6px", background: "#f8fafc", border: "1px solid #cbd5e1", color: "#334155", fontSize: "11.5px", marginBottom: "14px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+              <div style={{ padding: "10px 12px", borderRadius: "6px", background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}`, color: tokens.textSecondary, fontSize: "11.5px", marginBottom: "14px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "2px" }}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                 <div>
                   <strong>Cash on Delivery Order:</strong> Reversal occurs outside the gateway. Record the disbursal mode (UPI/Bank Transfer) and reference ID below so it is tracked and visible on customer order history.
                 </div>
               </div>
             ) : (detailData?.order_360?.escrow_status === "unheld" || detailData?.order_360?.escrow_status === "released" || detailData?.order_360?.refund_summary?.is_escrow_released) ? (
-              <div style={{ padding: "9px 12px", borderRadius: "6px", background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: "12px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontWeight: 600, color: "#0f172a" }}>Note:</span> Payout has settled to merchant bank. Record the direct transfer details below.
+              <div style={{ padding: "9px 12px", borderRadius: "6px", background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}`, color: tokens.textSecondary, fontSize: "12px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontWeight: 600, color: tokens.textPrimary }}>Note:</span> Payout has settled to merchant bank. Record the direct transfer details below.
               </div>
             ) : null}
 
             {/* If order is fully refunded */}
             {detailData?.order_360?.refund_summary?.is_fully_refunded ? (
-              <div style={{ padding: "12px", borderRadius: "8px", background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#475569", fontSize: "12px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ padding: "12px", borderRadius: "8px", background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}`, color: tokens.textSecondary, fontSize: "12px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                 <span><strong>Order Fully Refunded:</strong> ₹{detailData.order_360.total} has already been refunded for this order.</span>
               </div>
             ) : (
               <>
                 {/* Presets Toolbar */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "14px", padding: "6px 10px", borderRadius: "6px", background: "#f8fafc", border: "1px solid #f1f5f9" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "14px", padding: "6px 10px", borderRadius: "6px", background: tokens.elevatedSurfaceBg, border: "1px solid #f1f5f9" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>
                     Quick Presets:
                   </span>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
@@ -3608,7 +3690,7 @@ export const AdminSupportDesk: React.FC = () => {
                       type="button"
                       onClick={handleSelectMaxFullRefund}
                       style={{
-                        background: "#0f172a",
+                        background: isDark ? "linear-gradient(135deg, #2563eb, #1d4ed8)" : "#0f172a",
                         color: "#ffffff",
                         border: "none",
                         borderRadius: "4px",
@@ -3634,9 +3716,9 @@ export const AdminSupportDesk: React.FC = () => {
                         recalculateRefundAmount(allMap, {});
                       }}
                       style={{
-                        background: "#ffffff",
-                        color: "#334155",
-                        border: "1px solid #cbd5e1",
+                        background: tokens.surfaceBg,
+                        color: tokens.textSecondary,
+                        border: `1px solid ${tokens.border}`,
                         borderRadius: "4px",
                         padding: "4px 8px",
                         fontSize: "11px",
@@ -3655,7 +3737,7 @@ export const AdminSupportDesk: React.FC = () => {
                       }}
                       style={{
                         background: "none",
-                        color: "#64748b",
+                        color: tokens.textSecondary,
                         border: "none",
                         padding: "4px 6px",
                         fontSize: "11px",
@@ -3672,7 +3754,7 @@ export const AdminSupportDesk: React.FC = () => {
                 {detailData?.order_360?.items && detailData.order_360.items.length > 0 && (
                   <div style={{ marginBottom: "16px" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                      <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                      <span style={{ fontSize: "11.5px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.4px" }}>
                         1. Select Products to Refund:
                       </span>
                     </div>
@@ -3694,8 +3776,8 @@ export const AdminSupportDesk: React.FC = () => {
                               padding: "8px 12px",
                               borderRadius: "6px",
                               fontSize: "12px",
-                              border: isSelected ? "1px solid #0f172a" : "1px solid #e2e8f0",
-                              background: isSelected ? "#f8fafc" : "#ffffff",
+                              border: isSelected ? (isDark ? "1px solid rgba(59, 130, 246, 0.6)" : "1px solid #0f172a") : `1px solid ${tokens.border}`,
+                              background: isSelected ? (isDark ? "rgba(59, 130, 246, 0.12)" : "#f8fafc") : tokens.surfaceBg,
                               transition: "all 0.15s ease",
                             }}
                           >
@@ -3704,14 +3786,14 @@ export const AdminSupportDesk: React.FC = () => {
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => handleToggleRefundItem(it.id, maxQty)}
-                                style={{ accentColor: "#0f172a", width: "15px", height: "15px", cursor: "pointer" }}
+                                style={{ accentColor: "#2563eb", width: "15px", height: "15px", cursor: "pointer" }}
                               />
                               {it.product_image && (
-                                <img src={resolveMediaUrl(it.product_image)} alt="" style={{ width: "32px", height: "32px", borderRadius: "4px", objectFit: "cover", flexShrink: 0, border: "1px solid #e2e8f0" }} />
+                                <img src={resolveMediaUrl(it.product_image)} alt="" style={{ width: "32px", height: "32px", borderRadius: "4px", objectFit: "cover", flexShrink: 0, border: `1px solid ${tokens.border}` }} />
                               )}
                               <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.product_name}</div>
-                                <div style={{ color: "#64748b", fontSize: "11px" }}>
+                                <div style={{ fontWeight: 600, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.product_name}</div>
+                                <div style={{ color: tokens.textSecondary, fontSize: "11px" }}>
                                   ₹{it.unit_price} each • Ordered: {maxQty}
                                 </div>
                               </div>
@@ -3720,7 +3802,7 @@ export const AdminSupportDesk: React.FC = () => {
                             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
                               {/* Quantity Stepper */}
                               {isSelected ? (
-                                <div style={{ display: "flex", alignItems: "center", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "4px", overflow: "hidden" }}>
+                                <div style={{ display: "flex", alignItems: "center", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", overflow: "hidden" }}>
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -3728,11 +3810,11 @@ export const AdminSupportDesk: React.FC = () => {
                                       handleRefundQtyChange(it.id, Math.max(1, selectedQty - 1));
                                     }}
                                     disabled={selectedQty <= 1}
-                                    style={{ border: "none", background: selectedQty <= 1 ? "#f8fafc" : "#ffffff", color: "#334155", padding: "2px 7px", fontSize: "12px", fontWeight: 700, cursor: selectedQty <= 1 ? "not-allowed" : "pointer" }}
+                                    style={{ border: "none", background: selectedQty <= 1 ? (isDark ? "rgba(255,255,255,0.04)" : "#f8fafc") : tokens.elevatedSurfaceBg, color: tokens.textSecondary, padding: "2px 7px", fontSize: "12px", fontWeight: 700, cursor: selectedQty <= 1 ? "not-allowed" : "pointer" }}
                                   >
                                     -
                                   </button>
-                                  <span style={{ padding: "2px 8px", fontSize: "11.5px", fontWeight: 600, color: "#0f172a", minWidth: "16px", textAlign: "center" }}>
+                                  <span style={{ padding: "2px 8px", fontSize: "11.5px", fontWeight: 600, color: tokens.textPrimary, minWidth: "16px", textAlign: "center" }}>
                                     {selectedQty}
                                   </span>
                                   <button
@@ -3742,16 +3824,16 @@ export const AdminSupportDesk: React.FC = () => {
                                       handleRefundQtyChange(it.id, Math.min(maxQty, selectedQty + 1));
                                     }}
                                     disabled={selectedQty >= maxQty}
-                                    style={{ border: "none", background: selectedQty >= maxQty ? "#f8fafc" : "#ffffff", color: "#334155", padding: "2px 7px", fontSize: "12px", fontWeight: 700, cursor: selectedQty >= maxQty ? "not-allowed" : "pointer" }}
+                                    style={{ border: "none", background: selectedQty >= maxQty ? (isDark ? "rgba(255,255,255,0.04)" : "#f8fafc") : tokens.elevatedSurfaceBg, color: tokens.textSecondary, padding: "2px 7px", fontSize: "12px", fontWeight: 700, cursor: selectedQty >= maxQty ? "not-allowed" : "pointer" }}
                                   >
                                     +
                                   </button>
                                 </div>
                               ) : (
-                                <span style={{ fontSize: "11px", color: "#94a3b8" }}>Not selected</span>
+                                <span style={{ fontSize: "11px", color: tokens.textMuted }}>Not selected</span>
                               )}
 
-                              <span style={{ fontWeight: 600, color: isSelected ? "#0f172a" : "#64748b", minWidth: "55px", textAlign: "right" }}>
+                              <span style={{ fontWeight: 600, color: isSelected ? tokens.textPrimary : tokens.textSecondary, minWidth: "55px", textAlign: "right" }}>
                                 ₹{itemSubtotal.toFixed(2)}
                               </span>
                             </div>
@@ -3770,10 +3852,10 @@ export const AdminSupportDesk: React.FC = () => {
                   return (
                     <div style={{ marginBottom: "16px" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                        <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                        <span style={{ fontSize: "11.5px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.4px" }}>
                           2. Additional Fees & Charges:
                         </span>
-                        <span style={{ fontSize: "11px", color: "#64748b" }}>
+                        <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
                           Select to refund or leave to retain by store
                         </span>
                       </div>
@@ -3796,8 +3878,8 @@ export const AdminSupportDesk: React.FC = () => {
                                 padding: "8px 12px",
                                 borderRadius: "6px",
                                 fontSize: "12px",
-                                border: isChecked ? "1px solid #0f172a" : "1px solid #e2e8f0",
-                                background: isChecked ? "#f8fafc" : "#ffffff",
+                                border: isChecked ? (isDark ? "1px solid rgba(59, 130, 246, 0.6)" : "1px solid #0f172a") : `1px solid ${tokens.border}`,
+                                background: isChecked ? (isDark ? "rgba(59, 130, 246, 0.12)" : "#f8fafc") : tokens.surfaceBg,
                                 cursor: "pointer",
                                 transition: "all 0.15s ease",
                               }}
@@ -3807,10 +3889,10 @@ export const AdminSupportDesk: React.FC = () => {
                                   type="checkbox"
                                   checked={isChecked}
                                   onChange={() => handleToggleRefundCharge(chId, isRef, ch.label || "Fee")}
-                                  style={{ accentColor: "#0f172a", width: "15px", height: "15px", cursor: "pointer" }}
+                                  style={{ accentColor: "#2563eb", width: "15px", height: "15px", cursor: "pointer" }}
                                 />
                                 <div>
-                                  <div style={{ fontWeight: 600, color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <div style={{ fontWeight: 600, color: tokens.textPrimary, display: "flex", alignItems: "center", gap: "6px" }}>
                                     <span>{ch.label || "Additional Charge"}</span>
                                     <span
                                       style={{
@@ -3818,21 +3900,21 @@ export const AdminSupportDesk: React.FC = () => {
                                         fontWeight: 600,
                                         padding: "1px 5px",
                                         borderRadius: "3px",
-                                        background: isRef ? "#f1f5f9" : "#fffbeb",
-                                        color: isRef ? "#475569" : "#b45309",
-                                        border: `1px solid ${isRef ? "#e2e8f0" : "#fef3c7"}`,
+                                        background: isRef ? (isDark ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9") : (isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb"),
+                                        color: isRef ? tokens.textSecondary : (isDark ? "#fbbf24" : "#b45309"),
+                                        border: `1px solid ${isRef ? tokens.border : (isDark ? "rgba(245, 158, 11, 0.3)" : "#fef3c7")}`,
                                       }}
                                     >
                                       {isRef ? "Refundable" : "Non-Refundable"}
                                     </span>
                                   </div>
-                                  <div style={{ fontSize: "11px", color: isChecked ? "#0f172a" : "#64748b" }}>
+                                  <div style={{ fontSize: "11px", color: isChecked ? tokens.textPrimary : tokens.textSecondary }}>
                                     {isChecked ? `✓ Refund ₹${chargeAmt.toFixed(2)} to customer` : `Retain fee ₹${chargeAmt.toFixed(2)} by store`}
                                   </div>
                                 </div>
                               </div>
 
-                              <span style={{ fontWeight: 600, color: isChecked ? "#0f172a" : "#94a3b8", minWidth: "55px", textAlign: "right" }}>
+                              <span style={{ fontWeight: 600, color: isChecked ? tokens.textPrimary : tokens.textSecondary, minWidth: "55px", textAlign: "right" }}>
                                 +₹{chargeAmt.toFixed(2)}
                               </span>
                             </div>
@@ -3867,16 +3949,16 @@ export const AdminSupportDesk: React.FC = () => {
                   const retainedFees = chargesTotal - chargesCalc;
 
                   return (
-                    <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 12px", marginBottom: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
+                    <div style={{ background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "6px", padding: "10px 12px", marginBottom: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
                       <div>
-                        <span style={{ color: "#334155", fontWeight: 600 }}>Refund Breakdown:</span>
-                        <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                        <span style={{ color: tokens.textSecondary, fontWeight: 600 }}>Refund Breakdown:</span>
+                        <div style={{ fontSize: "11px", color: tokens.textSecondary, marginTop: "2px" }}>
                           Products: ₹{itemsCalc.toFixed(2)} • Fees: ₹{chargesCalc.toFixed(2)} {retainedFees > 0 ? `(Retained fees: ₹${retainedFees.toFixed(2)})` : ""}
                         </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <span style={{ fontSize: "10.5px", color: "#64748b", display: "block" }}>Calculated Amount</span>
-                        <strong style={{ fontSize: "14px", color: "#0f172a" }}>₹{totalCalc.toFixed(2)}</strong>
+                        <span style={{ fontSize: "10.5px", color: tokens.textSecondary, display: "block" }}>Calculated Amount</span>
+                        <strong style={{ fontSize: "14px", color: tokens.textPrimary }}>₹{totalCalc.toFixed(2)}</strong>
                       </div>
                     </div>
                   );
@@ -3884,7 +3966,7 @@ export const AdminSupportDesk: React.FC = () => {
 
                 {/* Refund Policy / Reason Selection */}
                 <div style={{ marginBottom: "12px" }}>
-                  <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
+                  <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "4px" }}>
                     Return / Refund Policy Reason
                   </label>
                   <select
@@ -3905,11 +3987,11 @@ export const AdminSupportDesk: React.FC = () => {
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                  <label style={{ fontSize: "11.5px", fontWeight: 600, color: "#334155" }}>
+                  <label style={{ fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary }}>
                     Refund Amount (₹)
                   </label>
                   {detailData?.order_360?.refund_summary?.remaining_refundable !== undefined && (
-                    <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
                       Max balance: ₹{detailData.order_360.refund_summary.remaining_refundable}
                     </span>
                   )}
@@ -3938,10 +4020,10 @@ export const AdminSupportDesk: React.FC = () => {
                   detailData?.order_360?.escrow_status === "unheld" ||
                   detailData?.order_360?.escrow_status === "released" ||
                   detailData?.order_360?.refund_summary?.is_escrow_released) && (
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 12px", marginBottom: "12px" }}>
+                  <div style={{ background: tokens.elevatedSurfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "6px", padding: "10px 12px", marginBottom: "12px" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "6px" }}>
                       <div>
-                        <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
+                        <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "4px" }}>
                           Disbursal Method
                         </label>
                         <select
@@ -3956,7 +4038,7 @@ export const AdminSupportDesk: React.FC = () => {
                         </select>
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
+                        <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "4px" }}>
                           Payout Reference / UTR
                         </label>
                         <input
@@ -3968,13 +4050,13 @@ export const AdminSupportDesk: React.FC = () => {
                         />
                       </div>
                     </div>
-                    <span style={{ fontSize: "10.5px", color: "#64748b" }}>
+                    <span style={{ fontSize: "10.5px", color: tokens.textSecondary }}>
                       Recorded in order audit log and shown on customer's order receipt.
                     </span>
                   </div>
                 )}
 
-                <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
+                <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "4px" }}>
                   Resolution Note (Logged in case history & customer communication)
                 </label>
                 <textarea
@@ -3987,10 +4069,10 @@ export const AdminSupportDesk: React.FC = () => {
               </>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", paddingTop: "8px", borderTop: "1px solid #f1f5f9" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", paddingTop: "8px", borderTop: `1px solid ${tokens.border}` }}>
               <button
                 onClick={() => setShowRefundModal(false)}
-                style={{ background: "#ffffff", border: "1px solid #cbd5e1", padding: "6px 14px", borderRadius: "6px", fontSize: "12px", cursor: "pointer", color: "#475569", fontWeight: 600 }}
+                style={{ background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, padding: "6px 14px", borderRadius: "6px", fontSize: "12px", cursor: "pointer", color: tokens.textSecondary, fontWeight: 600 }}
               >
                 Cancel
               </button>
@@ -4006,7 +4088,7 @@ export const AdminSupportDesk: React.FC = () => {
                   (detailData?.order_360?.refund_summary?.remaining_refundable !== undefined && Number(refundAmountInput) > detailData.order_360.refund_summary.remaining_refundable)
                 }
                 style={{
-                  background: (detailData?.ticket?.status === "closed" || detailData?.ticket?.status === "resolved" || detailData?.order_360?.refund_summary?.is_fully_refunded) ? "#94a3b8" : "#0f172a",
+                  background: (detailData?.ticket?.status === "closed" || detailData?.ticket?.status === "resolved" || detailData?.order_360?.refund_summary?.is_fully_refunded) ? (isDark ? tokens.elevatedSurfaceBg : "#94a3b8") : (isDark ? "linear-gradient(135deg, #2563eb, #1d4ed8)" : "#0f172a"),
                   color: "#fff",
                   border: "none",
                   padding: "6px 16px",
@@ -4055,7 +4137,7 @@ export const AdminSupportDesk: React.FC = () => {
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "14px",
               width: "100%",
               maxWidth: "540px",
@@ -4068,15 +4150,15 @@ export const AdminSupportDesk: React.FC = () => {
               boxSizing: "border-box",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", borderBottom: "1px solid #f1f5f9", paddingBottom: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", borderBottom: `1px solid ${tokens.border}`, paddingBottom: "10px" }}>
               <div>
-                <h3 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>Re-Dispatch Replacement Package</h3>
-                <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>Select items and quantities to replace and send out.</p>
+                <h3 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>Re-Dispatch Replacement Package</h3>
+                <p style={{ margin: 0, fontSize: "12px", color: tokens.textSecondary }}>Select items and quantities to replace and send out.</p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowReplacementModal(false)}
-                style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "4px" }}
+                style={{ background: "none", border: "none", color: tokens.textMuted, cursor: "pointer", padding: "4px" }}
               >
                 <XMarkIcon />
               </button>
@@ -4086,7 +4168,7 @@ export const AdminSupportDesk: React.FC = () => {
             {detailData?.order_360?.items && detailData.order_360.items.length > 0 && (
               <div style={{ marginBottom: "14px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  <span style={{ fontSize: "11.5px", fontWeight: 700, color: tokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.5px" }}>
                     Select Items to Replace:
                   </span>
                   <div style={{ display: "flex", gap: "10px" }}>
@@ -4107,7 +4189,7 @@ export const AdminSupportDesk: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setSelectedReplacementItems({})}
-                      style={{ background: "none", border: "none", color: "#64748b", fontSize: "11px", fontWeight: 600, cursor: "pointer", padding: 0 }}
+                      style={{ background: "none", border: "none", color: tokens.textSecondary, fontSize: "11px", fontWeight: 600, cursor: "pointer", padding: 0 }}
                     >
                       Clear
                     </button>
@@ -4130,8 +4212,8 @@ export const AdminSupportDesk: React.FC = () => {
                           padding: "10px 12px",
                           borderRadius: "8px",
                           fontSize: "12px",
-                          border: isSelected ? "1.5px solid #0284c7" : "1px solid #e2e8f0",
-                          background: isSelected ? "#f0f9ff" : "#ffffff",
+                          border: isSelected ? (isDark ? "1.5px solid rgba(2, 132, 199, 0.6)" : "1.5px solid #0284c7") : `1px solid ${tokens.border}`,
+                          background: isSelected ? (isDark ? "rgba(2, 132, 199, 0.15)" : "#f0f9ff") : tokens.surfaceBg,
                           transition: "all 0.15s ease",
                         }}
                       >
@@ -4146,8 +4228,8 @@ export const AdminSupportDesk: React.FC = () => {
                             <img src={resolveMediaUrl(it.product_image)} alt="" style={{ width: "34px", height: "34px", borderRadius: "6px", objectFit: "cover", flexShrink: 0 }} />
                           )}
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.product_name}</div>
-                            <div style={{ color: "#64748b", fontSize: "11px" }}>
+                            <div style={{ fontWeight: 600, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.product_name}</div>
+                            <div style={{ color: tokens.textSecondary, fontSize: "11px" }}>
                               Total in Order: {maxQty} unit(s)
                             </div>
                           </div>
@@ -4155,7 +4237,7 @@ export const AdminSupportDesk: React.FC = () => {
 
                         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
                           {isSelected ? (
-                            <div style={{ display: "flex", alignItems: "center", background: "#ffffff", border: "1px solid #7dd3fc", borderRadius: "6px", overflow: "hidden" }}>
+                            <div style={{ display: "flex", alignItems: "center", background: tokens.surfaceBg, border: "1px solid #7dd3fc", borderRadius: "6px", overflow: "hidden" }}>
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -4163,7 +4245,7 @@ export const AdminSupportDesk: React.FC = () => {
                                   handleReplacementQtyChange(it.id, Math.max(1, selectedQty - 1));
                                 }}
                                 disabled={selectedQty <= 1}
-                                style={{ border: "none", background: selectedQty <= 1 ? "#f1f5f9" : "#ffffff", color: "#334155", padding: "3px 7px", fontSize: "12px", fontWeight: 700, cursor: selectedQty <= 1 ? "not-allowed" : "pointer" }}
+                                style={{ border: "none", background: selectedQty <= 1 ? "#f1f5f9" : "#ffffff", color: tokens.textSecondary, padding: "3px 7px", fontSize: "12px", fontWeight: 700, cursor: selectedQty <= 1 ? "not-allowed" : "pointer" }}
                               >
                                 -
                               </button>
@@ -4177,13 +4259,13 @@ export const AdminSupportDesk: React.FC = () => {
                                   handleReplacementQtyChange(it.id, Math.min(maxQty, selectedQty + 1));
                                 }}
                                 disabled={selectedQty >= maxQty}
-                                style={{ border: "none", background: selectedQty >= maxQty ? "#f1f5f9" : "#ffffff", color: "#334155", padding: "3px 7px", fontSize: "12px", fontWeight: 700, cursor: selectedQty >= maxQty ? "not-allowed" : "pointer" }}
+                                style={{ border: "none", background: selectedQty >= maxQty ? "#f1f5f9" : "#ffffff", color: tokens.textSecondary, padding: "3px 7px", fontSize: "12px", fontWeight: 700, cursor: selectedQty >= maxQty ? "not-allowed" : "pointer" }}
                               >
                                 +
                               </button>
                             </div>
                           ) : (
-                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Excluded</span>
+                            <span style={{ fontSize: "11px", color: tokens.textMuted }}>Excluded</span>
                           )}
                         </div>
                       </div>
@@ -4195,7 +4277,7 @@ export const AdminSupportDesk: React.FC = () => {
 
             {/* Replacement Reason Basis */}
             <div style={{ marginBottom: "12px" }}>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "4px" }}>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "4px" }}>
                 Replacement Reason / Policy Basis
               </label>
               <select
@@ -4215,7 +4297,7 @@ export const AdminSupportDesk: React.FC = () => {
               </select>
             </div>
 
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "4px" }}>
+            <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "4px" }}>
               Resolution Note & Dispatch Instructions
             </label>
             <textarea
@@ -4229,7 +4311,7 @@ export const AdminSupportDesk: React.FC = () => {
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
               <button
                 onClick={() => setShowReplacementModal(false)}
-                style={{ background: "none", border: "1px solid #cbd5e1", padding: "6px 14px", borderRadius: "6px", fontSize: "12px", cursor: "pointer", color: "#475569", fontWeight: 600 }}
+                style={{ background: "none", border: `1px solid ${tokens.border}`, padding: "6px 14px", borderRadius: "6px", fontSize: "12px", cursor: "pointer", color: tokens.textSecondary, fontWeight: 600 }}
               >
                 Cancel
               </button>

@@ -2,14 +2,17 @@ import React, { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
 import WebCreonAnimatedLogo from "../Component/WebCreonAnimatedLogo";
 import { GlassToast } from "../Component/GlassToast";
+import AdminThemeToggle from "../Component/AdminThemeToggle";
 
 export default function AdminAcceptInvitePage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
   const navigate = useNavigate();
   const { refreshAdmin } = useAdminAuth();
+  const { isDark, tokens, themeMode } = useAdminTheme();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +75,7 @@ export default function AdminAcceptInvitePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ token, password, theme_preference: themeMode }),
       });
 
       const data = await res.json().catch(() => null);
@@ -105,10 +108,13 @@ export default function AdminAcceptInvitePage() {
         width: "100vw",
         display: "flex",
         overflow: "hidden",
-        background: "#ffffff",
+        background: tokens.workspaceBg,
+        color: tokens.textPrimary,
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        position: "relative",
       }}
     >
+      <AdminThemeToggle style={{ position: "fixed", top: "16px", right: "16px", zIndex: 100 }} />
       <style>{`
         @media (max-width: 860px) {
           .wn-invite-split-container {
@@ -120,7 +126,7 @@ export default function AdminAcceptInvitePage() {
             width: 100% !important;
             padding: 24px 16px 12px 16px !important;
             border-right: none !important;
-            border-bottom: 1px solid #e2e8f0 !important;
+            border-bottom: 1px solid ${tokens.border} !important;
           }
           .wn-invite-right-panel {
             flex: 1 1 auto !important;
@@ -146,12 +152,11 @@ export default function AdminAcceptInvitePage() {
           className="wn-invite-left-panel"
           style={{
             flex: "1 1 58%",
-            background: "#f8fafc",
-            backgroundImage: `
-              radial-gradient(at 50% 0%, rgba(37, 99, 235, 0.04) 0px, transparent 50%),
-              radial-gradient(at 100% 100%, rgba(249, 128, 18, 0.03) 0px, transparent 50%)
-            `,
-            borderRight: "1px solid #e2e8f0",
+            background: tokens.elevatedSurfaceBg,
+            backgroundImage: isDark
+              ? `radial-gradient(at 50% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(249, 115, 22, 0.05) 0px, transparent 50%)`
+              : `radial-gradient(at 50% 0%, rgba(37, 99, 235, 0.04) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(249, 128, 18, 0.03) 0px, transparent 50%)`,
+            borderRight: `1px solid ${tokens.border}`,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -178,7 +183,7 @@ export default function AdminAcceptInvitePage() {
             justifyContent: "center",
             alignItems: "center",
             padding: "32px 40px",
-            background: "#ffffff",
+            background: tokens.surfaceBg,
             boxSizing: "border-box",
           }}
         >
@@ -191,20 +196,20 @@ export default function AdminAcceptInvitePage() {
             }}
           >
             {loading ? (
-              <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b" }}>
+              <div style={{ textAlign: "center", padding: "40px 0", color: tokens.textSecondary }}>
                 <div
                   style={{
                     width: "28px",
                     height: "28px",
-                    border: "3px solid #e2e8f0",
-                    borderTopColor: "#2563eb",
+                    border: `3px solid ${tokens.border}`,
+                    borderTopColor: tokens.accent,
                     borderRadius: "50%",
                     animation: "spin 0.8s linear infinite",
                     margin: "0 auto 12px auto",
                   }}
                 />
                 <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-                <div style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary }}>
                   Verifying workspace invitation...
                 </div>
               </div>
@@ -215,8 +220,8 @@ export default function AdminAcceptInvitePage() {
                     width: "44px",
                     height: "44px",
                     borderRadius: "50%",
-                    background: "#fef2f2",
-                    color: "#ef4444",
+                    background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                    color: isDark ? "#f87171" : "#ef4444",
                     display: "grid",
                     placeItems: "center",
                     margin: "0 auto 14px",
@@ -226,10 +231,10 @@ export default function AdminAcceptInvitePage() {
                 >
                   ✕
                 </div>
-                <h2 style={{ margin: "0 0 6px 0", fontSize: "19px", fontWeight: 700, color: "#0f172a" }}>
+                <h2 style={{ margin: "0 0 6px 0", fontSize: "19px", fontWeight: 700, color: tokens.textPrimary }}>
                   Invitation Invalid
                 </h2>
-                <p style={{ margin: "0 0 20px 0", fontSize: "12.5px", color: "#64748b", lineHeight: 1.5 }}>
+                <p style={{ margin: "0 0 20px 0", fontSize: "12.5px", color: tokens.textSecondary, lineHeight: 1.5 }}>
                   {error || "This invitation link is invalid or has expired."}
                 </p>
                 <button
@@ -240,7 +245,7 @@ export default function AdminAcceptInvitePage() {
                     height: "40px",
                     borderRadius: "8px",
                     border: "none",
-                    background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+                    background: tokens.accent,
                     color: "#ffffff",
                     fontSize: "13px",
                     fontWeight: 600,
@@ -259,13 +264,13 @@ export default function AdminAcceptInvitePage() {
                       margin: 0,
                       fontSize: "20px",
                       fontWeight: 700,
-                      color: "#0f172a",
+                      color: tokens.textPrimary,
                       letterSpacing: "-0.01em",
                     }}
                   >
                     Accept Invitation
                   </h2>
-                  <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#64748b" }}>
+                  <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: tokens.textSecondary }}>
                     Create your password to join the workspace
                   </p>
                 </div>
@@ -273,8 +278,8 @@ export default function AdminAcceptInvitePage() {
                 {/* USER & ROLE BADGE */}
                 <div
                   style={{
-                    background: "#f8fafc",
-                    border: "1px solid #e2e8f0",
+                    background: tokens.elevatedSurfaceBg,
+                    border: `1px solid ${tokens.border}`,
                     borderRadius: "10px",
                     padding: "12px 14px",
                     marginBottom: "16px",
@@ -284,24 +289,24 @@ export default function AdminAcceptInvitePage() {
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                       {invitationData.name}
                     </span>
                     <span
                       style={{
                         padding: "2px 8px",
                         borderRadius: "999px",
-                        background: "#eff6ff",
-                        color: "#2563eb",
+                        background: isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff",
+                        color: isDark ? "#60a5fa" : "#2563eb",
                         fontSize: "11px",
                         fontWeight: 700,
-                        border: "1px solid #bfdbfe",
+                        border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe"}`,
                       }}
                     >
                       {invitationData.role}
                     </span>
                   </div>
-                  <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                  <div style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
                     {invitationData.email}
                   </div>
                 </div>
@@ -314,7 +319,7 @@ export default function AdminAcceptInvitePage() {
                       style={{
                         fontSize: "12px",
                         fontWeight: 600,
-                        color: "#334155",
+                        color: tokens.textSecondary,
                       }}
                     >
                       Create Password
@@ -332,11 +337,11 @@ export default function AdminAcceptInvitePage() {
                           width: "100%",
                           height: "40px",
                           borderRadius: "8px",
-                          border: "1px solid #cbd5e1",
+                          border: `1px solid ${tokens.border}`,
                           padding: "0 36px 0 12px",
                           fontSize: "13px",
-                          color: "#0f172a",
-                          background: "#ffffff",
+                          color: tokens.textPrimary,
+                          background: tokens.elevatedSurfaceBg,
                           outline: "none",
                           boxSizing: "border-box",
                         }}
@@ -351,7 +356,7 @@ export default function AdminAcceptInvitePage() {
                           transform: "translateY(-50%)",
                           background: "none",
                           border: "none",
-                          color: "#64748b",
+                          color: tokens.textMuted,
                           fontSize: "12px",
                           cursor: "pointer",
                           padding: "4px",
@@ -369,7 +374,7 @@ export default function AdminAcceptInvitePage() {
                       style={{
                         fontSize: "12px",
                         fontWeight: 600,
-                        color: "#334155",
+                        color: tokens.textSecondary,
                       }}
                     >
                       Confirm Password
@@ -387,11 +392,11 @@ export default function AdminAcceptInvitePage() {
                           width: "100%",
                           height: "40px",
                           borderRadius: "8px",
-                          border: "1px solid #cbd5e1",
+                          border: `1px solid ${tokens.border}`,
                           padding: "0 36px 0 12px",
                           fontSize: "13px",
-                          color: "#0f172a",
-                          background: "#ffffff",
+                          color: tokens.textPrimary,
+                          background: tokens.elevatedSurfaceBg,
                           outline: "none",
                           boxSizing: "border-box",
                         }}
@@ -406,7 +411,7 @@ export default function AdminAcceptInvitePage() {
                           transform: "translateY(-50%)",
                           background: "none",
                           border: "none",
-                          color: "#64748b",
+                          color: tokens.textMuted,
                           fontSize: "12px",
                           cursor: "pointer",
                           padding: "4px",
@@ -426,7 +431,7 @@ export default function AdminAcceptInvitePage() {
                       height: "40px",
                       borderRadius: "8px",
                       border: "none",
-                      background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+                      background: tokens.accent,
                       color: "#ffffff",
                       fontSize: "13px",
                       fontWeight: 600,
@@ -446,14 +451,14 @@ export default function AdminAcceptInvitePage() {
                     marginTop: "20px",
                     textAlign: "center",
                     fontSize: "12px",
-                    color: "#64748b",
+                    color: tokens.textSecondary,
                   }}
                 >
                   Already accepted?{" "}
                   <Link
                     to="/admin/login"
                     style={{
-                      color: "#2563eb",
+                      color: tokens.accent,
                       textDecoration: "none",
                       fontWeight: 600,
                     }}

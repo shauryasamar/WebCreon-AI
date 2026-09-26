@@ -431,6 +431,7 @@ class UpdateUserRequest(BaseModel):
 class AcceptInviteRequest(BaseModel):
     token: str
     password: str
+    theme_preference: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1693,6 +1694,14 @@ def accept_invitation(
     session.commit()
     session.refresh(admin)
 
+    if payload.theme_preference:
+        mode = payload.theme_preference.strip().lower()
+        if mode in ("light", "dark", "system"):
+            admin.theme_preference = mode
+            session.add(admin)
+            session.commit()
+            session.refresh(admin)
+
     log_activity(
         session=session,
         action="user.invitation_accepted",
@@ -1717,6 +1726,16 @@ def accept_invitation(
         samesite="lax",
         path="/",
         max_age=86400,
+    )
+    theme_mode = getattr(admin, "theme_preference", "light") or "light"
+    response.set_cookie(
+        key="app_theme_mode",
+        value=theme_mode,
+        httponly=False,
+        secure=False,
+        samesite="lax",
+        path="/",
+        max_age=365 * 86400,
     )
 
     from routers.auth import serialize_admin

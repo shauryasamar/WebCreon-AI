@@ -1,4 +1,5 @@
 import React from "react";
+import { useAdminTheme } from "../context/ThemeContext";
 
 export type LegalDocType = "privacy" | "terms" | "refund" | "about" | "contact";
 
@@ -11,11 +12,12 @@ export const AdminLegalFullView: React.FC<AdminLegalFullViewProps> = ({
   initialDoc = "privacy",
   onBack,
 }) => {
+  const { isDark, tokens } = useAdminTheme();
   return (
     <div
       style={{
         width: "100%",
-        color: "#0f172a",
+        color: tokens.textPrimary,
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         boxSizing: "border-box",
       }}
@@ -35,9 +37,9 @@ export const AdminLegalFullView: React.FC<AdminLegalFullViewProps> = ({
             gap: "8px",
             padding: "8px 14px",
             borderRadius: "8px",
-            border: "1px solid #e2e8f0",
-            background: "#ffffff",
-            color: "#334155",
+            border: `1px solid ${tokens.border}`,
+            background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+            color: tokens.textPrimary,
             fontSize: "13px",
             fontWeight: 600,
             cursor: "pointer",
@@ -45,14 +47,12 @@ export const AdminLegalFullView: React.FC<AdminLegalFullViewProps> = ({
             transition: "all 0.15s ease",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#f8fafc";
-            e.currentTarget.style.borderColor = "#cbd5e1";
-            e.currentTarget.style.color = "#0f172a";
+            e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#f8fafc";
+            e.currentTarget.style.borderColor = tokens.accent;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "#ffffff";
-            e.currentTarget.style.borderColor = "#e2e8f0";
-            e.currentTarget.style.color = "#334155";
+            e.currentTarget.style.background = isDark ? tokens.elevatedSurfaceBg : "#ffffff";
+            e.currentTarget.style.borderColor = tokens.border;
           }}
         >
           <svg
@@ -75,12 +75,12 @@ export const AdminLegalFullView: React.FC<AdminLegalFullViewProps> = ({
       {/* Main Document Content Container */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+          border: `1px solid ${tokens.border}`,
           borderRadius: "12px",
           padding: "32px 36px",
           boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-          color: "#1e293b",
+          color: tokens.textPrimary,
           fontSize: "14px",
           lineHeight: 1.7,
         }}
@@ -99,22 +99,23 @@ export const AdminLegalFullView: React.FC<AdminLegalFullViewProps> = ({
 // PRIVACY POLICY (RAZORPAY & DPDP / GDPR COMPLIANT)
 // ===========================================================================
 function PrivacyPolicyDocument() {
+  const { isDark, tokens } = useAdminTheme();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
       {/* Header */}
-      <div style={{ borderBottom: "1px solid #e2e8f0", paddingBottom: "18px" }}>
+      <div style={{ borderBottom: `1px solid ${tokens.border}`, paddingBottom: "18px" }}>
         <h1
           style={{
             margin: "0 0 8px 0",
             fontSize: "22px",
             fontWeight: 700,
-            color: "#0f172a",
+            color: tokens.textPrimary,
             letterSpacing: "-0.02em",
           }}
         >
           Privacy Policy
         </h1>
-        <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+        <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
           Effective Date: September 25, 2026 &bull; WebCreon Technologies Private Limited
         </p>
       </div>
@@ -128,7 +129,7 @@ function PrivacyPolicyDocument() {
 
       {/* 1. Information Ingestion */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           1. Information We Collect & Process
         </h2>
         <p style={{ margin: "0 0 8px 0" }}>
@@ -158,7 +159,7 @@ function PrivacyPolicyDocument() {
 
       {/* 2. AI Zero-Retention Policy */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           2. Artificial Intelligence & Data Protection Safeguards
         </h2>
         <p style={{ margin: "0 0 8px 0" }}>
@@ -179,7 +180,7 @@ function PrivacyPolicyDocument() {
 
       {/* 3. Multi-Tenant Isolation & Security */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           3. Multi-Tenant Architecture & Data Security
         </h2>
         <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -200,7 +201,7 @@ function PrivacyPolicyDocument() {
 
       {/* 4. Payment Processing (PCI-DSS & Razorpay Compliance) */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           4. Payment Processing & Financial Security
         </h2>
         <p style={{ margin: 0 }}>
@@ -210,7 +211,7 @@ function PrivacyPolicyDocument() {
 
       {/* 5. Account Deletion & Right to Erasure */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           5. Account Deletion & Right to Erasure
         </h2>
         <p style={{ margin: "0 0 8px 0" }}>
@@ -244,7 +245,7 @@ function PrivacyPolicyDocument() {
 
       {/* 6. Statutory Record Retention */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           6. Statutory Tax & Compliance Retention
         </h2>
         <p style={{ margin: 0 }}>
@@ -253,14 +254,14 @@ function PrivacyPolicyDocument() {
       </div>
 
       {/* 7. Grievance Officer & Contact Information */}
-      <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "18px" }}>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 6px 0" }}>
+      <div style={{ borderTop: `1px solid ${tokens.border}`, paddingTop: "18px" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 6px 0" }}>
           7. Grievance Officer & Contact Details
         </h2>
-        <p style={{ margin: "0 0 6px 0", fontSize: "13px", color: "#475569" }}>
+        <p style={{ margin: "0 0 6px 0", fontSize: "13px", color: tokens.textSecondary }}>
           In accordance with the Information Technology Act, 2000 and the Digital Personal Data Protection Act, 2023, the details of the Grievance Officer are provided below:
         </p>
-        <div style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.6 }}>
+        <div style={{ fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.6 }}>
           <strong>Name:</strong> Grievance Redressal Officer<br />
           <strong>Company:</strong> WebCreon Technologies Private Limited<br />
           <strong>Email:</strong> <a href="mailto:grievance@webcreon.com" style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600 }}>grievance@webcreon.com</a> | <a href="mailto:privacy@webcreon.com" style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600 }}>privacy@webcreon.com</a><br />
@@ -275,22 +276,23 @@ function PrivacyPolicyDocument() {
 // TERMS OF SERVICE (100% AUDITED SAAS & COMMERCE DIRECTIVE)
 // ===========================================================================
 function TermsOfServiceDocument() {
+  const { isDark, tokens } = useAdminTheme();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
       {/* Header */}
-      <div style={{ borderBottom: "1px solid #e2e8f0", paddingBottom: "18px" }}>
+      <div style={{ borderBottom: `1px solid ${tokens.border}`, paddingBottom: "18px" }}>
         <h1
           style={{
             margin: "0 0 8px 0",
             fontSize: "22px",
             fontWeight: 700,
-            color: "#0f172a",
+            color: tokens.textPrimary,
             letterSpacing: "-0.02em",
           }}
         >
           Terms of Service & Merchant Agreement
         </h1>
-        <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+        <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
           Effective Date: September 25, 2026 &bull; WebCreon Technologies Private Limited
         </p>
       </div>
@@ -303,7 +305,7 @@ function TermsOfServiceDocument() {
 
       {/* 1. Account Governance & Workspace Roles */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           1. Account Governance & Workspace Roles
         </h2>
         <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -324,7 +326,7 @@ function TermsOfServiceDocument() {
 
       {/* 2. Acceptable Use Policy */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           2. Acceptable Use & Storefront Commerce Policy
         </h2>
         <p style={{ margin: "0 0 8px 0" }}>Merchants must not use WebCreon to:</p>
@@ -339,7 +341,7 @@ function TermsOfServiceDocument() {
 
       {/* 3. Intellectual Property Ownership */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           3. Intellectual Property Allocation
         </h2>
         <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -354,7 +356,7 @@ function TermsOfServiceDocument() {
 
       {/* 4. Autonomous AI & Co-Pilot Terms */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           4. Autonomous AI & Co-Pilot Terms
         </h2>
         <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -372,7 +374,7 @@ function TermsOfServiceDocument() {
 
       {/* 5. Merchant E-Commerce Obligations (Seller of Record) */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           5. Merchant E-Commerce Operations & Seller Responsibility
         </h2>
         <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -393,7 +395,7 @@ function TermsOfServiceDocument() {
 
       {/* 6. Subscriptions, Pricing, Platform Fees & Statutory Taxes */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           6. Subscriptions, Platform Fees, AI Credits &amp; Statutory Taxes
         </h2>
         <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -425,7 +427,7 @@ function TermsOfServiceDocument() {
 
       {/* 7. Account Termination & Anti-Fraud Order Clearance */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           7. Account Termination & Anti-Fraud Order Clearance
         </h2>
         <p style={{ margin: "0 0 8px 0" }}>
@@ -446,7 +448,7 @@ function TermsOfServiceDocument() {
 
       {/* 8. Limitation of Liability & Indemnification */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           8. Limitation of Liability & Indemnification
         </h2>
         <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -464,7 +466,7 @@ function TermsOfServiceDocument() {
 
       {/* 9. Governing Law & Dispute Resolution */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           9. Governing Law & Dispute Resolution
         </h2>
         <p style={{ margin: 0 }}>
@@ -473,11 +475,11 @@ function TermsOfServiceDocument() {
       </div>
 
       {/* 10. Legal Contact */}
-      <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "18px" }}>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 6px 0" }}>
+      <div style={{ borderTop: `1px solid ${tokens.border}`, paddingTop: "18px" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 6px 0" }}>
           10. Legal & Support Contacts
         </h2>
-        <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+        <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
           For inquiries regarding these Terms, contact{" "}
           <a href="mailto:legal@webcreon.com" style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600 }}>
             legal@webcreon.com
@@ -493,22 +495,23 @@ function TermsOfServiceDocument() {
 // REFUND, CANCELLATION & SETTLEMENT POLICY (100% AUDITED DUAL-TIER DIRECTIVE)
 // ===========================================================================
 function RefundPolicyDocument() {
+  const { isDark, tokens } = useAdminTheme();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
       {/* Header */}
-      <div style={{ borderBottom: "1px solid #e2e8f0", paddingBottom: "18px" }}>
+      <div style={{ borderBottom: `1px solid ${tokens.border}`, paddingBottom: "18px" }}>
         <h1
           style={{
             margin: "0 0 8px 0",
             fontSize: "22px",
             fontWeight: 700,
-            color: "#0f172a",
+            color: tokens.textPrimary,
             letterSpacing: "-0.02em",
           }}
         >
           Refund, Cancellation & Settlement Policy
         </h1>
-        <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+        <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
           Effective Date: September 25, 2026 &bull; WebCreon Technologies Private Limited
         </p>
       </div>
@@ -536,7 +539,7 @@ function RefundPolicyDocument() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
               1. Digital Service Fulfillment & Delivery Policy
             </h2>
             <p style={{ margin: 0 }}>
@@ -545,7 +548,7 @@ function RefundPolicyDocument() {
           </div>
 
           <div>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
               2. 7-Day Money-Back Guarantee for Plan Upgrades
             </h2>
             <p style={{ margin: 0 }}>
@@ -554,7 +557,7 @@ function RefundPolicyDocument() {
           </div>
 
           <div>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
               3. Platform Non-Refundable Items & Exceptions
             </h2>
             <p style={{ margin: "0 0 6px 0" }}>The following platform purchases are strictly non-refundable:</p>
@@ -566,7 +569,7 @@ function RefundPolicyDocument() {
           </div>
 
           <div>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
               4. Subscription Refund Turnaround & Method
             </h2>
             <p style={{ margin: 0 }}>
@@ -575,7 +578,7 @@ function RefundPolicyDocument() {
           </div>
 
           <div>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
               5. How to Request a Platform Subscription Refund
             </h2>
             <p style={{ margin: 0 }}>
@@ -612,7 +615,7 @@ function RefundPolicyDocument() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
               6. Storefront Return Windows &amp; Inspection
             </h2>
             <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -629,10 +632,10 @@ function RefundPolicyDocument() {
           </div>
 
           <div>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
               7. Settlement Finality &amp; Post-Return Window Merchant Liability
             </h2>
-            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px 18px", color: "#334155" }}>
+            <div style={{ background: isDark ? tokens.surfaceBg : "#f8fafc", border: `1px solid ${tokens.border}`, borderRadius: "10px", padding: "14px 18px", color: tokens.textPrimary }}>
               <p style={{ margin: "0 0 8px 0", fontWeight: 600 }}>
                 Post-Settlement Responsibility Rule:
               </p>
@@ -643,7 +646,7 @@ function RefundPolicyDocument() {
           </div>
 
           <div>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
               8. Payment Gateway Processing Fees (Non-Refundable MDR)
             </h2>
             <p style={{ margin: 0 }}>
@@ -652,7 +655,7 @@ function RefundPolicyDocument() {
           </div>
 
           <div>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
               9. Statutory GST Rule 54 Tax Credit Notes
             </h2>
             <p style={{ margin: 0 }}>
@@ -661,7 +664,7 @@ function RefundPolicyDocument() {
           </div>
 
           <div>
-            <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: "0 0 8px 0" }}>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
               10. Shiprocket &amp; Third-Party Shipping Logistics &amp; Fee Policy
             </h2>
             <p style={{ margin: "0 0 8px 0" }}>
@@ -692,29 +695,30 @@ function RefundPolicyDocument() {
 // ABOUT WEBCREON & CONTACT US (RAZORPAY COMPLIANT)
 // ===========================================================================
 function AboutWebCreonDocument() {
+  const { isDark, tokens } = useAdminTheme();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
       {/* Header */}
-      <div style={{ borderBottom: "1px solid #e2e8f0", paddingBottom: "18px" }}>
+      <div style={{ borderBottom: `1px solid ${tokens.border}`, paddingBottom: "18px" }}>
         <h1
           style={{
             margin: "0 0 8px 0",
             fontSize: "22px",
             fontWeight: 700,
-            color: "#0f172a",
+            color: tokens.textPrimary,
             letterSpacing: "-0.02em",
           }}
         >
           About WebCreon &amp; Corporate Information
         </h1>
-        <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+        <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
           Autonomous Website &amp; E-Commerce Creation Platform &bull; WebCreon Technologies Private Limited
         </p>
       </div>
 
       {/* 1. Mission & Vision */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           1. Our Mission &amp; Vision
         </h2>
         <p style={{ margin: "0 0 8px 0" }}>
@@ -727,7 +731,7 @@ function AboutWebCreonDocument() {
 
       {/* 2. Who We Cater To */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           2. Who We Cater To (Target Customer Segments)
         </h2>
         <p style={{ margin: "0 0 10px 0" }}>
@@ -751,7 +755,7 @@ function AboutWebCreonDocument() {
 
       {/* 3. Core Architectural Capabilities */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           3. Core Architectural Capabilities
         </h2>
         <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -778,7 +782,7 @@ function AboutWebCreonDocument() {
 
       {/* 4. Trust & Security Standards */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           4. Security, Trust &amp; Privacy Guarantees
         </h2>
         <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -795,11 +799,11 @@ function AboutWebCreonDocument() {
       </div>
 
       {/* 5. Corporate & Contact Matrix */}
-      <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "18px" }}>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+      <div style={{ borderTop: `1px solid ${tokens.border}`, paddingTop: "18px" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           5. Corporate Contact &amp; Registered Entity Details
         </h2>
-        <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.8 }}>
+        <div style={{ fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.8 }}>
           <div><strong>Legal Entity Name:</strong> WebCreon Technologies Private Limited</div>
           <div><strong>Nature of Business:</strong> Cloud Software-as-a-Service (SaaS) &amp; Autonomous E-Commerce Technology</div>
           <div><strong>Operational &amp; Registered Office:</strong> WebCreon Technologies Private Limited, Mumbai, Maharashtra 400001, India</div>
@@ -817,22 +821,23 @@ function AboutWebCreonDocument() {
 // CONTACT US & STATUTORY HELPDESK (RAZORPAY & DPDP COMPLIANT)
 // ===========================================================================
 function ContactUsDocument() {
+  const { isDark, tokens } = useAdminTheme();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
       {/* Header */}
-      <div style={{ borderBottom: "1px solid #e2e8f0", paddingBottom: "18px" }}>
+      <div style={{ borderBottom: `1px solid ${tokens.border}`, paddingBottom: "18px" }}>
         <h1
           style={{
             margin: "0 0 8px 0",
             fontSize: "22px",
             fontWeight: 700,
-            color: "#0f172a",
+            color: tokens.textPrimary,
             letterSpacing: "-0.02em",
           }}
         >
           Contact Us &amp; Support Matrix
         </h1>
-        <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+        <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary }}>
           Official Communication Channels &bull; WebCreon Technologies Private Limited
         </p>
       </div>
@@ -845,10 +850,10 @@ function ContactUsDocument() {
 
       {/* 1. Official Corporate & Registered Office */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           1. Corporate Entity &amp; Physical Office
         </h2>
-        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "16px 20px", fontSize: "13.5px", color: "#334155", lineHeight: 1.8 }}>
+        <div style={{ background: isDark ? tokens.surfaceBg : "#f8fafc", border: `1px solid ${tokens.border}`, borderRadius: "10px", padding: "16px 20px", fontSize: "13.5px", color: tokens.textPrimary, lineHeight: 1.8 }}>
           <div><strong>Legal Entity Name:</strong> WebCreon Technologies Private Limited</div>
           <div><strong>Nature of Business:</strong> Autonomous E-Commerce Platform &amp; Cloud Website Builder (SaaS)</div>
           <div><strong>Registered &amp; Operational Address:</strong> WebCreon Technologies Private Limited, Mumbai, Maharashtra 400001, India</div>
@@ -858,7 +863,7 @@ function ContactUsDocument() {
 
       {/* 2. Specialized Support Channels */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           2. Specialized Communication Desks
         </h2>
         <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -883,7 +888,7 @@ function ContactUsDocument() {
 
       {/* 3. Business Hours & SLA */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           3. Operating Hours &amp; Response Service Level Agreement (SLA)
         </h2>
         <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -895,21 +900,21 @@ function ContactUsDocument() {
 
       {/* 4. Support Escalation Matrix */}
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px 0" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 10px 0" }}>
           4. Three-Tier Support Escalation Matrix
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "12px 16px" }}>
-            <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>Tier 1: Frontline Operations Desk</div>
-            <div style={{ fontSize: "13px", color: "#475569" }}>Handles general platform inquiries, catalog management, theme settings, and documentation walk-throughs via the in-app support ticket form.</div>
+          <div style={{ background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "12px 16px" }}>
+            <div style={{ fontWeight: 700, color: tokens.textPrimary, marginBottom: "4px" }}>Tier 1: Frontline Operations Desk</div>
+            <div style={{ fontSize: "13px", color: tokens.textSecondary }}>Handles general platform inquiries, catalog management, theme settings, and documentation walk-throughs via the in-app support ticket form.</div>
           </div>
-          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "12px 16px" }}>
-            <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>Tier 2: Technical &amp; Billing Engineering</div>
-            <div style={{ fontSize: "13px", color: "#475569" }}>Handles payment gateway webhook investigations, custom domain DNS verifications, API integrations, and tax invoice corrections.</div>
+          <div style={{ background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "12px 16px" }}>
+            <div style={{ fontWeight: 700, color: tokens.textPrimary, marginBottom: "4px" }}>Tier 2: Technical &amp; Billing Engineering</div>
+            <div style={{ fontSize: "13px", color: tokens.textSecondary }}>Handles payment gateway webhook investigations, custom domain DNS verifications, API integrations, and tax invoice corrections.</div>
           </div>
-          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "12px 16px" }}>
-            <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>Tier 3: Statutory Grievance Redressal Officer</div>
-            <div style={{ fontSize: "13px", color: "#475569" }}>Final authority for statutory escalations, data deletion requests under DPDP Act 2023, and unresolved commercial disputes.</div>
+          <div style={{ background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", border: `1px solid ${tokens.border}`, borderRadius: "8px", padding: "12px 16px" }}>
+            <div style={{ fontWeight: 700, color: tokens.textPrimary, marginBottom: "4px" }}>Tier 3: Statutory Grievance Redressal Officer</div>
+            <div style={{ fontSize: "13px", color: tokens.textSecondary }}>Final authority for statutory escalations, data deletion requests under DPDP Act 2023, and unresolved commercial disputes.</div>
           </div>
         </div>
       </div>
@@ -918,3 +923,5 @@ function ContactUsDocument() {
 }
 
 export default AdminLegalFullView;
+
+

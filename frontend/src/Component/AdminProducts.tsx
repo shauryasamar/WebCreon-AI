@@ -4,8 +4,11 @@ import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
 import { optimizeImageUrl, getThumbnailUrl, compressImageFile } from "../utils/imageOptimizer";
 import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme, ADMIN_LIGHT_TOKENS } from "../context/ThemeContext";
 import { AccessDeniedView } from "./AccessDeniedView";
 import { GlassToast } from "./GlassToast";
+
+const tokens = ADMIN_LIGHT_TOKENS;
 
 
 type VariantValue = {
@@ -209,6 +212,87 @@ const getVariantDiscountPercent = (price: string, comparePrice: string) => {
   }
 
   return Math.round(((original - finalPrice) / original) * 100);
+};
+
+export const AdminCheckbox = ({
+  checked,
+  onChange,
+  ariaLabel,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  ariaLabel?: string;
+  disabled?: boolean;
+}) => {
+  const { isDark } = useAdminTheme();
+  return (
+    <label
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: disabled ? "not-allowed" : "pointer",
+        position: "relative",
+        userSelect: "none",
+        width: "16px",
+        height: "16px",
+        flexShrink: 0,
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        style={{
+          position: "absolute",
+          opacity: 0,
+          width: 0,
+          height: 0,
+          margin: 0,
+        }}
+      />
+      <div
+        style={{
+          width: "16px",
+          height: "16px",
+          borderRadius: "4px",
+          border: checked
+            ? "1.5px solid #2563eb"
+            : `1.5px solid ${isDark ? "rgba(255, 255, 255, 0.25)" : "#cbd5e1"}`,
+          background: checked
+            ? "#2563eb"
+            : isDark
+            ? "rgba(255, 255, 255, 0.06)"
+            : "#ffffff",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "all 0.15s ease",
+          boxShadow: checked
+            ? "0 1px 2px rgba(37, 99, 235, 0.3)"
+            : "none",
+        }}
+      >
+        {checked && (
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )}
+      </div>
+    </label>
+  );
 };
 
 export const ToggleSwitch = ({
@@ -461,8 +545,8 @@ function invalidateAdminProductsCache(targetSiteId?: string) {
 }
 
 const plainCardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
+  background: tokens.surfaceBg,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "8px",
   boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
 };
@@ -470,15 +554,15 @@ const plainCardStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   fontSize: "12px",
   fontWeight: 600,
-  color: "#475569",
+  color: tokens.textSecondary,
 };
 
 const inputStyle: React.CSSProperties = {
   padding: "7px 10px",
   borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
+  border: `1px solid ${tokens.border}`,
+  background: tokens.surfaceBg,
+  color: tokens.textPrimary,
   fontSize: "13px",
   width: "100%",
   boxSizing: "border-box",
@@ -491,24 +575,24 @@ const thStyle: React.CSSProperties = {
   fontWeight: 700,
   letterSpacing: "0.04em",
   textTransform: "uppercase",
-  color: "#64748b",
-  borderBottom: "1px solid #e2e8f0",
+  color: tokens.textSecondary,
+  borderBottom: `1px solid ${tokens.border}`,
 };
 
 const tdStyle: React.CSSProperties = {
   padding: "12px 16px",
-  borderTop: "1px solid #f1f5f9",
+  borderTop: `1px solid ${tokens.border}`,
   fontSize: "13px",
-  color: "#0f172a",
+  color: tokens.textPrimary,
   verticalAlign: "middle",
 };
 
 const ghostButtonStyle: React.CSSProperties = {
   padding: "8px 12px",
   borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
+  border: `1px solid ${tokens.border}`,
+  background: tokens.surfaceBg,
+  color: tokens.textPrimary,
   fontWeight: 600,
   cursor: "pointer",
 };
@@ -516,9 +600,9 @@ const ghostButtonStyle: React.CSSProperties = {
 const secondaryButtonStyle: React.CSSProperties = {
   padding: "8px 12px",
   borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#f8fafc",
-  color: "#334155",
+  border: `1px solid ${tokens.border}`,
+  background: tokens.elevatedSurfaceBg,
+  color: tokens.textSecondary,
   fontWeight: 600,
   cursor: "pointer",
 };
@@ -566,6 +650,88 @@ export const extractErrorMessage = (errData: any, fallback: string = "An error o
 const AdminProducts = () => {
   const { siteId } = useParams();
   const { hasPermission, isOwner } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
+
+  const plainCardStyle: React.CSSProperties = {
+    background: tokens.surfaceBg,
+    border: `1px solid ${tokens.border}`,
+    borderRadius: "8px",
+    boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.35)" : "0 1px 3px rgba(0,0,0,0.04)",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: tokens.textSecondary,
+  };
+
+  const inputStyle: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: "8px",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+    color: tokens.textPrimary,
+    fontSize: "13px",
+    width: "100%",
+    boxSizing: "border-box",
+    colorScheme: isDark ? "dark" : "light",
+    outline: "none",
+  };
+
+  const thStyle: React.CSSProperties = {
+    textAlign: "left",
+    padding: "10px 16px",
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    color: tokens.textSecondary,
+    borderBottom: `1px solid ${tokens.border}`,
+    background: tokens.surfaceBg,
+  };
+
+  const tdStyle: React.CSSProperties = {
+    padding: "12px 16px",
+    borderTop: `1px solid ${tokens.border}`,
+    fontSize: "13px",
+    color: tokens.textPrimary,
+    verticalAlign: "middle",
+  };
+
+  const ghostButtonStyle: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: "6px",
+    border: `1px solid ${tokens.border}`,
+    background: tokens.surfaceBg,
+    color: tokens.textPrimary,
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+
+  const secondaryButtonStyle: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: "6px",
+    border: `1px solid ${tokens.border}`,
+    background: tokens.elevatedSurfaceBg,
+    color: tokens.textSecondary,
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+
+  const dangerButtonStyle: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: "6px",
+    border: isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca",
+    background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+    color: isDark ? "#fca5a5" : "#b91c1c",
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+
+  const errorStyle: React.CSSProperties = {
+    color: isDark ? "#f87171" : "#b91c1c",
+    fontSize: "12px",
+  };
   const canViewProducts = isOwner || hasPermission("products:view");
   const canCreateProducts = isOwner || hasPermission("products:create");
   const canEditProducts = isOwner || hasPermission("products:edit");
@@ -607,6 +773,8 @@ const AdminProducts = () => {
   const filterPopoverRef = useRef<HTMLDivElement | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showFilterPopover, setShowFilterPopover] = useState(false);
+  const [showReturnPolicyMenu, setShowReturnPolicyMenu] = useState(false);
+  const returnPolicyMenuRef = useRef<HTMLDivElement | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("");
   const [filterCollection, setFilterCollection] = useState<string>("");
   const [filterBrand, setFilterBrand] = useState<string>("");
@@ -629,6 +797,31 @@ const AdminProducts = () => {
     });
     return Array.from(set).sort();
   }, [products, storeBrands]);
+
+  const chipStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "5px",
+    fontSize: "11.5px",
+    fontWeight: 600,
+    padding: "3px 9px",
+    borderRadius: "6px",
+    background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+    color: isDark ? "#93c5fd" : "#1d4ed8",
+    border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
+    lineHeight: 1.3,
+  };
+
+  const chipCloseStyle: React.CSSProperties = {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    color: isDark ? "#93c5fd" : "#1d4ed8",
+    padding: 0,
+    display: "grid",
+    placeItems: "center",
+    opacity: 0.85,
+  };
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -2202,7 +2395,7 @@ const AdminProducts = () => {
   }
 
   return (
-    <div style={{ width: "100%", color: "#0f172a", display: "flex", flexDirection: "column", gap: "10px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+    <div style={{ width: "100%", color: tokens.textPrimary, display: "flex", flexDirection: "column", gap: "10px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
       <style>{`
         @keyframes storeShimmer {
           0% { background-position: 200% 0; }
@@ -2220,8 +2413,8 @@ const AdminProducts = () => {
       {/* Top Header Card (Mode Switcher + Search & Filter Button) */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: tokens.surfaceBg,
+          border: `1px solid ${tokens.border}`,
           borderRadius: "10px",
           padding: "10px 14px",
           boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
@@ -2245,10 +2438,10 @@ const AdminProducts = () => {
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: tokens.elevatedSurfaceBg,
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
             }}
           >
             <button
@@ -2257,8 +2450,8 @@ const AdminProducts = () => {
                 borderRadius: "6px",
                 padding: "6px 16px",
                 border: "none",
-                background: "#ffffff",
-                color: "#0f172a",
+                background: tokens.surfaceBg,
+                color: tokens.textPrimary,
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
                 fontSize: "13px",
                 fontWeight: 700,
@@ -2289,7 +2482,7 @@ const AdminProducts = () => {
                   left: "11px",
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   display: "grid",
                   placeItems: "center",
                 }}
@@ -2323,8 +2516,8 @@ const AdminProducts = () => {
                   fontSize: "13px",
                   height: "36px",
                   borderRadius: "7px",
-                  border: "1px solid #cbd5e1",
-                  background: "#f8fafc",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.elevatedSurfaceBg,
                   width: "100%",
                   boxSizing: "border-box",
                 }}
@@ -2346,7 +2539,7 @@ const AdminProducts = () => {
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "#94a3b8",
+                    color: tokens.textMuted,
                     padding: "2px",
                     display: "grid",
                     placeItems: "center",
@@ -2359,7 +2552,7 @@ const AdminProducts = () => {
             </div>
 
             {/* Filter Toggle Button */}
-            <div style={{ position: "relative" }} ref={filterPopoverRef}>
+            <div style={{ position: "relative" }}>
               <button
                 type="button"
                 onClick={() => setShowFilterPopover(!showFilterPopover)}
@@ -2370,9 +2563,15 @@ const AdminProducts = () => {
                   height: "36px",
                   padding: "0 12px",
                   borderRadius: "7px",
-                  border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                  background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                  color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
+                  border: activeFilterCount > 0
+                    ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}`
+                    : `1px solid ${tokens.border}`,
+                  background: activeFilterCount > 0
+                    ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                    : tokens.surfaceBg,
+                  color: activeFilterCount > 0
+                    ? (isDark ? "#93c5fd" : "#1d4ed8")
+                    : tokens.textPrimary,
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -2400,30 +2599,380 @@ const AdminProducts = () => {
                 )}
               </button>
 
-              {/* Rich Filter Popover Dropdown */}
+              {/* Floating Filter Popover Modal */}
               {showFilterPopover && (
                 <div
+                  ref={filterPopoverRef}
                   style={{
                     position: "absolute",
-                    top: "44px",
+                    top: "40px",
                     right: 0,
                     width: "320px",
-                    background: "#ffffff",
-                    border: "1px solid #cbd5e1",
+                    background: isDark ? tokens.surfaceBg : "#ffffff",
                     borderRadius: "10px",
-                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+                    border: `1px solid ${tokens.border}`,
+                    boxShadow: isDark
+                      ? "0 10px 30px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.1)"
+                      : "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
                     padding: "16px",
-                    zIndex: 60,
+                    zIndex: 100,
                     display: "flex",
                     flexDirection: "column",
-                    gap: "12px",
-                    maxHeight: "85vh",
+                    gap: "14px",
+                    maxHeight: "80vh",
                     overflowY: "auto",
                   }}
                 >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Filter Products</span>
-                  {activeFilterCount > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      borderBottom: `1px solid ${tokens.border}`,
+                      paddingBottom: "10px",
+                    }}
+                  >
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
+                      Filter Products
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowFilterPopover(false)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: tokens.textSecondary,
+                        cursor: "pointer",
+                        padding: "2px",
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                      title="Close filters"
+                    >
+                      <XMarkIcon />
+                    </button>
+                  </div>
+
+                  {/* Filter by Category */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Category
+                    </label>
+                    <select
+                      value={filterCategory}
+                      onChange={(e) => {
+                        setFilterCategory(e.target.value);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, catId: e.target.value });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Categories</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Filter by Collection */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Collection / Badge
+                    </label>
+                    <select
+                      value={filterCollection}
+                      onChange={(e) => {
+                        setFilterCollection(e.target.value);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, colId: e.target.value });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Collections</option>
+                      {collections.map((col) => (
+                        <option key={col.id} value={col.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                          {col.name} {col.is_badge ? "(Badge)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Filter by Brand */}
+                  {availableBrands.length > 0 && (
+                    <div>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                        Brand
+                      </label>
+                      <select
+                        value={filterBrand}
+                        onChange={(e) => {
+                          setFilterBrand(e.target.value);
+                          setCurrentPage(1);
+                          loadProducts({ page: 1, brand: e.target.value });
+                        }}
+                        style={{
+                          width: "100%",
+                          height: "34px",
+                          padding: "0 8px",
+                          borderRadius: "6px",
+                          border: `1px solid ${tokens.border}`,
+                          fontSize: "13px",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          color: tokens.textPrimary,
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      >
+                        <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Brands</option>
+                        {availableBrands.map((b) => (
+                          <option key={b} value={b} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                            {b}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Price Range */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Price Range (₹)
+                    </label>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <input
+                        type="number"
+                        placeholder="Min ₹"
+                        value={filterMinPrice}
+                        onChange={(e) => {
+                          setFilterMinPrice(e.target.value);
+                          setCurrentPage(1);
+                          loadProducts({ page: 1, minP: e.target.value });
+                        }}
+                        style={{
+                          width: "100%",
+                          height: "34px",
+                          padding: "0 8px",
+                          borderRadius: "6px",
+                          border: `1px solid ${tokens.border}`,
+                          fontSize: "13px",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          color: tokens.textPrimary,
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <span style={{ color: tokens.textMuted, fontSize: "12px" }}>–</span>
+                      <input
+                        type="number"
+                        placeholder="Max ₹"
+                        value={filterMaxPrice}
+                        onChange={(e) => {
+                          setFilterMaxPrice(e.target.value);
+                          setCurrentPage(1);
+                          loadProducts({ page: 1, maxP: e.target.value });
+                        }}
+                        style={{
+                          width: "100%",
+                          height: "34px",
+                          padding: "0 8px",
+                          borderRadius: "6px",
+                          border: `1px solid ${tokens.border}`,
+                          fontSize: "13px",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          color: tokens.textPrimary,
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Discount Status */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Discount / Offer
+                    </label>
+                    <select
+                      value={filterDiscount}
+                      onChange={(e) => {
+                        setFilterDiscount(e.target.value as any);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, discount: e.target.value as any });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Products</option>
+                      <option value="discounted" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Discounted Only (On Sale)</option>
+                      <option value="regular" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Regular Price Only</option>
+                    </select>
+                  </div>
+
+                  {/* Return Policy Filter */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Return Policy
+                    </label>
+                    <select
+                      value={filterReturnPolicy}
+                      onChange={(e) => {
+                        setFilterReturnPolicy(e.target.value as any);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, retPol: e.target.value as any });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Policies</option>
+                      <option value="returnable" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Returnable</option>
+                      <option value="non_returnable" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Non-Returnable</option>
+                    </select>
+                  </div>
+
+                  {/* COD Payment Policy Filter */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Cash on Delivery (COD)
+                    </label>
+                    <select
+                      value={filterCod}
+                      onChange={(e) => {
+                        setFilterCod(e.target.value as any);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, codPol: e.target.value as any });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All (COD & Prepaid)</option>
+                      <option value="cod_allowed" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>COD Allowed</option>
+                      <option value="prepaid_only" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Prepaid Only (COD Disabled)</option>
+                    </select>
+                  </div>
+
+                  {/* Video Media Filter */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Media / Video
+                    </label>
+                    <select
+                      value={filterHasVideo}
+                      onChange={(e) => {
+                        setFilterHasVideo(e.target.value as any);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, hasVid: e.target.value as any });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Media</option>
+                      <option value="with_video" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Has Product Video</option>
+                      <option value="images_only" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Photos Only</option>
+                    </select>
+                  </div>
+
+                  {/* Sort Order */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Sort By
+                    </label>
+                    <select
+                      value={filterSortBy}
+                      onChange={(e) => {
+                        setFilterSortBy(e.target.value);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, sortB: e.target.value });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="newest" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Newest Added</option>
+                      <option value="oldest" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Oldest Added</option>
+                      <option value="price_asc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Price: Low to High</option>
+                      <option value="price_desc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Price: High to Low</option>
+                      <option value="stock_asc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Stock: Low to High</option>
+                      <option value="stock_desc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Stock: High to Low</option>
+                      <option value="name_asc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Name: A to Z</option>
+                      <option value="name_desc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Name: Z to A</option>
+                    </select>
+                  </div>
+
+                  {/* Popover Footer */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: `1px solid ${tokens.border}` }}>
                     <button
                       type="button"
                       onClick={() => {
@@ -2451,213 +3000,43 @@ const AdminProducts = () => {
                           hasVid: "all",
                           sortB: "newest",
                         });
-                        setShowFilterPopover(false);
                       }}
                       style={{
                         background: "none",
                         border: "none",
-                        color: "#dc2626",
-                        fontSize: "11px",
+                        color: tokens.textSecondary,
+                        fontSize: "12px",
                         fontWeight: 600,
                         cursor: "pointer",
-                        padding: 0,
+                        padding: "4px",
                       }}
                     >
                       Reset All
                     </button>
-                  )}
-                </div>
-
-                {/* Filter by Category */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Category</label>
-                  <select
-                    value={filterCategory}
-                    onChange={(e) => setFilterCategory(e.target.value)}
-                    style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
-                  >
-                    <option value="">All Categories</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Filter by Collection */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Collection / Badge</label>
-                  <select
-                    value={filterCollection}
-                    onChange={(e) => setFilterCollection(e.target.value)}
-                    style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
-                  >
-                    <option value="">All Collections</option>
-                    {collections.map((col) => (
-                      <option key={col.id} value={col.id}>
-                        {col.name} {col.is_badge ? "(Badge)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Filter by Brand */}
-                {availableBrands.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Brand</label>
-                    <select
-                      value={filterBrand}
-                      onChange={(e) => setFilterBrand(e.target.value)}
-                      style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
+                    <button
+                      type="button"
+                      onClick={() => setShowFilterPopover(false)}
+                      style={{
+                        background: tokens.accent || "#2563eb",
+                        border: "none",
+                        color: "#ffffff",
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        padding: "5px 14px",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                      }}
                     >
-                      <option value="">All Brands</option>
-                      {availableBrands.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Price Range */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Price Range (₹)</label>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input
-                      type="number"
-                      placeholder="Min"
-                      value={filterMinPrice}
-                      onChange={(e) => setFilterMinPrice(e.target.value)}
-                      style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
-                    />
-                    <span style={{ color: "#94a3b8", fontSize: "12px" }}>–</span>
-                    <input
-                      type="number"
-                      placeholder="Max"
-                      value={filterMaxPrice}
-                      onChange={(e) => setFilterMaxPrice(e.target.value)}
-                      style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
-                    />
+                      Done
+                    </button>
                   </div>
                 </div>
-
-                {/* Discount Status */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Discount / Offer</label>
-                  <select
-                    value={filterDiscount}
-                    onChange={(e) => setFilterDiscount(e.target.value as any)}
-                    style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
-                  >
-                    <option value="all">All Products</option>
-                    <option value="discounted">Discounted Only (On Sale)</option>
-                    <option value="regular">Regular Price Only</option>
-                  </select>
-                </div>
-
-                {/* Return Policy Filter */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Returns</label>
-                  <select
-                    value={filterReturnPolicy}
-                    onChange={(e) => setFilterReturnPolicy(e.target.value as any)}
-                    style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
-                  >
-                    <option value="all">All</option>
-                    <option value="returnable">Returnable</option>
-                    <option value="non_returnable">Non-Returnable</option>
-                  </select>
-                </div>
-
-                {/* COD Payment Policy Filter */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Cash on Delivery (COD)</label>
-                  <select
-                    value={filterCod}
-                    onChange={(e) => setFilterCod(e.target.value as any)}
-                    style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
-                  >
-                    <option value="all">All (COD & Prepaid)</option>
-                    <option value="cod_allowed">COD Allowed</option>
-                    <option value="prepaid_only">Prepaid Only (COD Disabled)</option>
-                  </select>
-                </div>
-
-                {/* Video Media Filter */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Media / Video</label>
-                  <select
-                    value={filterHasVideo}
-                    onChange={(e) => setFilterHasVideo(e.target.value as any)}
-                    style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
-                  >
-                    <option value="all">All Media</option>
-                    <option value="with_video">Has Product Video</option>
-                    <option value="images_only">Photos Only</option>
-                  </select>
-                </div>
-
-                {/* Sort Order */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569" }}>Sort By</label>
-                  <select
-                    value={filterSortBy}
-                    onChange={(e) => setFilterSortBy(e.target.value)}
-                    style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
-                  >
-                    <option value="newest">Newest Added</option>
-                    <option value="oldest">Oldest Added</option>
-                    <option value="price_asc">Price: Low to High</option>
-                    <option value="price_desc">Price: High to Low</option>
-                    <option value="stock_asc">Stock: Low to High</option>
-                    <option value="stock_desc">Stock: High to Low</option>
-                    <option value="name_asc">Name: A to Z</option>
-                    <option value="name_desc">Name: Z to A</option>
-                  </select>
-                </div>
-
-                {/* Apply Filters Button */}
-                <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentPage(1);
-                      loadProducts({
-                        page: 1,
-                        catId: filterCategory,
-                        colId: filterCollection,
-                        brand: filterBrand,
-                        minP: filterMinPrice,
-                        maxP: filterMaxPrice,
-                        discount: filterDiscount,
-                        retPol: filterReturnPolicy,
-                        codPol: filterCod,
-                        hasVid: filterHasVideo,
-                        sortB: filterSortBy,
-                      });
-                      setShowFilterPopover(false);
-                    }}
-                    style={{ ...primaryButtonStyle, flex: 1, padding: "7px", fontSize: "12px" }}
-                  >
-                    Apply Filters
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowFilterPopover(false)}
-                    style={{ ...ghostButtonStyle, padding: "7px 12px", fontSize: "12px" }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Active Filter Chips (if any filters active) */}
+        {/* Active Filter Chips Bar */}
         {activeFilterCount > 0 && (
           <div
             style={{
@@ -2666,29 +3045,16 @@ const AdminProducts = () => {
               alignItems: "center",
               gap: "6px",
               flexWrap: "wrap",
-              paddingTop: "6px",
-              borderTop: "1px solid #f1f5f9",
+              paddingTop: "8px",
+              borderTop: `1px solid ${tokens.border}`,
             }}
           >
-            <span style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 600, marginRight: "2px" }}>
+            <span style={{ fontSize: "11.5px", color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>
               Active:
             </span>
 
             {filterCategory && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
-                }}
-              >
+              <span style={chipStyle}>
                 <span>Category: {categories.find((c) => c.id === filterCategory)?.name || filterCategory}</span>
                 <button
                   type="button"
@@ -2697,7 +3063,8 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, catId: "" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={chipCloseStyle}
+                  title="Remove category filter"
                 >
                   <XMarkIcon />
                 </button>
@@ -2705,20 +3072,7 @@ const AdminProducts = () => {
             )}
 
             {filterCollection && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
-                }}
-              >
+              <span style={chipStyle}>
                 <span>Collection: {collections.find((c) => c.id === filterCollection)?.name || filterCollection}</span>
                 <button
                   type="button"
@@ -2727,7 +3081,8 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, colId: "" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={chipCloseStyle}
+                  title="Remove collection filter"
                 >
                   <XMarkIcon />
                 </button>
@@ -2735,20 +3090,7 @@ const AdminProducts = () => {
             )}
 
             {filterBrand && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
-                }}
-              >
+              <span style={chipStyle}>
                 <span>Brand: {filterBrand}</span>
                 <button
                   type="button"
@@ -2757,7 +3099,8 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, brand: "" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={chipCloseStyle}
+                  title="Remove brand filter"
                 >
                   <XMarkIcon />
                 </button>
@@ -2765,20 +3108,7 @@ const AdminProducts = () => {
             )}
 
             {(filterMinPrice || filterMaxPrice) && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
-                }}
-              >
+              <span style={chipStyle}>
                 <span>Price: ₹{filterMinPrice || "0"} – ₹{filterMaxPrice || "∞"}</span>
                 <button
                   type="button"
@@ -2788,7 +3118,8 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, minP: "", maxP: "" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={chipCloseStyle}
+                  title="Remove price range filter"
                 >
                   <XMarkIcon />
                 </button>
@@ -2796,20 +3127,7 @@ const AdminProducts = () => {
             )}
 
             {filterDiscount !== "all" && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
-                }}
-              >
+              <span style={chipStyle}>
                 <span>{filterDiscount === "discounted" ? "Discounted Only" : "Regular Price"}</span>
                 <button
                   type="button"
@@ -2818,7 +3136,8 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, discount: "all" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={chipCloseStyle}
+                  title="Remove discount filter"
                 >
                   <XMarkIcon />
                 </button>
@@ -2826,20 +3145,7 @@ const AdminProducts = () => {
             )}
 
             {filterReturnPolicy !== "all" && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
-                }}
-              >
+              <span style={chipStyle}>
                 <span>{filterReturnPolicy === "non_returnable" ? "Non-Returnable Only" : "Returnable Only"}</span>
                 <button
                   type="button"
@@ -2848,7 +3154,8 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, retPol: "all" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={chipCloseStyle}
+                  title="Remove return policy filter"
                 >
                   <XMarkIcon />
                 </button>
@@ -2856,20 +3163,7 @@ const AdminProducts = () => {
             )}
 
             {filterCod !== "all" && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
-                }}
-              >
+              <span style={chipStyle}>
                 <span>COD: {filterCod === "cod_allowed" ? "COD Allowed" : "Prepaid Only"}</span>
                 <button
                   type="button"
@@ -2878,7 +3172,8 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, codPol: "all" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={chipCloseStyle}
+                  title="Remove COD filter"
                 >
                   <XMarkIcon />
                 </button>
@@ -2886,20 +3181,7 @@ const AdminProducts = () => {
             )}
 
             {filterHasVideo !== "all" && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
-                }}
-              >
+              <span style={chipStyle}>
                 <span>{filterHasVideo === "with_video" ? "With Video" : "Photos Only"}</span>
                 <button
                   type="button"
@@ -2908,7 +3190,8 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, hasVid: "all" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={chipCloseStyle}
+                  title="Remove video filter"
                 >
                   <XMarkIcon />
                 </button>
@@ -2916,20 +3199,7 @@ const AdminProducts = () => {
             )}
 
             {filterSortBy !== "newest" && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
-                }}
-              >
+              <span style={chipStyle}>
                 <span>Sort: {filterSortBy}</span>
                 <button
                   type="button"
@@ -2938,7 +3208,8 @@ const AdminProducts = () => {
                     setCurrentPage(1);
                     loadProducts({ page: 1, sortB: "newest" });
                   }}
-                  style={{ background: "none", border: "none", color: "#1d4ed8", cursor: "pointer", padding: 0 }}
+                  style={chipCloseStyle}
+                  title="Reset sort"
                 >
                   <XMarkIcon />
                 </button>
@@ -2955,6 +3226,7 @@ const AdminProducts = () => {
                 setFilterMaxPrice("");
                 setFilterDiscount("all");
                 setFilterReturnPolicy("all");
+                setFilterCod("all");
                 setFilterHasVideo("all");
                 setFilterSortBy("newest");
                 setCurrentPage(1);
@@ -2967,6 +3239,7 @@ const AdminProducts = () => {
                   maxP: "",
                   discount: "all",
                   retPol: "all",
+                  codPol: "all",
                   hasVid: "all",
                   sortB: "newest",
                 });
@@ -2974,12 +3247,12 @@ const AdminProducts = () => {
               style={{
                 background: "none",
                 border: "none",
-                color: "#dc2626",
-                fontSize: "11px",
+                color: isDark ? "#fca5a5" : "#dc2626",
+                fontSize: "11.5px",
                 fontWeight: 700,
                 cursor: "pointer",
                 marginLeft: "2px",
-                padding: "2px 4px",
+                padding: "2px 6px",
               }}
             >
               Clear All
@@ -2999,7 +3272,7 @@ const AdminProducts = () => {
       >
         {/* Total Products */}
         <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 600, color: "#334155", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: tokens.textSecondary, lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {totalProducts}
           </div>
           <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
@@ -3009,7 +3282,7 @@ const AdminProducts = () => {
 
         {/* Active on Store */}
         <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 600, color: "#334155", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: tokens.textSecondary, lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
             {activeCount}
           </div>
           <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
@@ -3074,16 +3347,17 @@ const AdminProducts = () => {
         >
           <div
             style={{
-              background: "#ffffff",
-              borderRadius: "12px",
+              background: tokens.surfaceBg,
+              borderRadius: "14px",
               width: "100%",
               maxWidth: "1100px",
-              boxShadow: "0 24px 48px rgba(0,0,0,0.25)",
+              boxShadow: isDark ? "0 24px 48px rgba(0,0,0,0.7)" : "0 24px 48px rgba(0,0,0,0.25)",
               marginBottom: "32px",
               overflow: "hidden",
-              border: "1px solid #cbd5e1",
+              border: `1px solid ${tokens.border}`,
               display: "flex",
               flexDirection: "column",
+              colorScheme: isDark ? "dark" : "light",
             }}
           >
             {/* Sticky Header */}
@@ -3096,8 +3370,8 @@ const AdminProducts = () => {
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "12px 20px",
-                borderBottom: "1px solid #e2e8f0",
-                background: "#ffffff",
+                borderBottom: `1px solid ${tokens.border}`,
+                background: tokens.surfaceBg,
                 boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
               }}
             >
@@ -3106,7 +3380,7 @@ const AdminProducts = () => {
                   style={{
                     margin: 0,
                     fontSize: "16px",
-                    color: "#0f172a",
+                    color: tokens.textPrimary,
                     fontWeight: 700,
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -3119,9 +3393,9 @@ const AdminProducts = () => {
                   <span
                     style={{
                       fontSize: "11px",
-                      color: "#475569",
-                      background: "#f1f5f9",
-                      border: "1px solid #e2e8f0",
+                      color: tokens.textSecondary,
+                      background: tokens.elevatedSurfaceBg,
+                      border: `1px solid ${tokens.border}`,
                       padding: "2px 7px",
                       borderRadius: "4px",
                       fontWeight: 600,
@@ -3140,17 +3414,17 @@ const AdminProducts = () => {
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
-                    background: "#f8fafc",
+                    background: tokens.elevatedSurfaceBg,
                     padding: "4px 10px",
                     borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
+                    border: `1px solid ${tokens.border}`,
                   }}
                 >
                   <span
                     style={{
                       fontSize: "12px",
                       fontWeight: 600,
-                      color: formValues.is_active ? "#15803d" : "#64748b",
+                      color: formValues.is_active ? (isDark ? "#4ade80" : "#15803d") : tokens.textSecondary,
                     }}
                   >
                     {formValues.is_active ? "● Live on Store" : "○ Draft (Hidden)"}
@@ -3172,7 +3446,7 @@ const AdminProducts = () => {
                     border: "none",
                     fontSize: "18px",
                     cursor: "pointer",
-                    color: "#64748b",
+                    color: tokens.textSecondary,
                     padding: "4px",
                     lineHeight: 1,
                     display: "grid",
@@ -3200,7 +3474,7 @@ const AdminProducts = () => {
                   gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
                   gap: "14px",
                   padding: "16px 20px",
-                  background: "#f8fafc",
+                  background: tokens.elevatedSurfaceBg,
                 }}
               >
                 {/* Left Main Column: Basic Info, Media, Highlights & Sub-Variants */}
@@ -3208,9 +3482,9 @@ const AdminProducts = () => {
                   {/* Card 1: Basic Information */}
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "14px 16px",
                       display: "flex",
                       flexDirection: "column",
@@ -3222,10 +3496,10 @@ const AdminProducts = () => {
                       style={{
                         fontSize: "13px",
                         fontWeight: 700,
-                        color: "#0f172a",
+                        color: tokens.textPrimary,
                         textTransform: "uppercase",
                         letterSpacing: "0.04em",
-                        borderBottom: "1px solid #f1f5f9",
+                        borderBottom: `1px solid ${tokens.border}`,
                         paddingBottom: "8px",
                       }}
                     >
@@ -3260,9 +3534,9 @@ const AdminProducts = () => {
                   {/* Card 2: Photos & Media Gallery */}
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "14px 16px",
                       display: "flex",
                       flexDirection: "column",
@@ -3275,7 +3549,7 @@ const AdminProducts = () => {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        borderBottom: "1px solid #f1f5f9",
+                        borderBottom: `1px solid ${tokens.border}`,
                         paddingBottom: "8px",
                         flexWrap: "wrap",
                         gap: "6px",
@@ -3286,14 +3560,14 @@ const AdminProducts = () => {
                           style={{
                             fontSize: "13px",
                             fontWeight: 700,
-                            color: "#0f172a",
+                            color: tokens.textPrimary,
                             textTransform: "uppercase",
                             letterSpacing: "0.04em",
                           }}
                         >
                           Product Photos & Gallery
                         </span>
-                        <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>
+                        <span style={{ fontSize: "11px", color: tokens.textSecondary, display: "block" }}>
                           First photo is the default cover on catalog cards.
                         </span>
                       </div>
@@ -3326,7 +3600,7 @@ const AdminProducts = () => {
                     </div>
 
                     {isUploadingImage && (
-                      <div style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600 }}>
+                      <div style={{ fontSize: "12px", color: isDark ? "#60a5fa" : "#2563eb", fontWeight: 600 }}>
                         Uploading images, please wait...
                       </div>
                     )}
@@ -3347,7 +3621,7 @@ const AdminProducts = () => {
                               style={{
                                 borderRadius: "6px",
                                 border: isCover ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                                background: "#f8fafc",
+                                background: tokens.elevatedSurfaceBg,
                                 padding: "4px",
                                 display: "flex",
                                 flexDirection: "column",
@@ -3384,7 +3658,7 @@ const AdminProducts = () => {
                                   height: "90px",
                                   objectFit: "cover",
                                   borderRadius: "4px",
-                                  background: "#ffffff",
+                                  background: tokens.surfaceBg,
                                 }}
                               />
                               <div
@@ -3416,15 +3690,15 @@ const AdminProducts = () => {
                                     title="Set as Cover Photo"
                                     onClick={() => setAsCoverImage(index)}
                                     style={{
-                                      border: "1px solid #cbd5e1",
-                                      background: "#ffffff",
+                                      border: `1px solid ${tokens.border}`,
+                                      background: tokens.surfaceBg,
                                       fontSize: "10px",
                                       fontWeight: 600,
                                       padding: "2px 5px",
                                       borderRadius: "4px",
                                       cursor: "pointer",
                                       height: "24px",
-                                      color: "#334155",
+                                      color: tokens.textSecondary,
                                     }}
                                   >
                                     Set Cover
@@ -3481,10 +3755,10 @@ const AdminProducts = () => {
                         gridTemplateColumns: formValues.video_url.trim() ? "1fr 160px" : "1fr",
                         gap: "10px",
                         alignItems: "end",
-                        background: "#f8fafc",
+                        background: tokens.elevatedSurfaceBg,
                         padding: "10px 12px",
                         borderRadius: "6px",
-                        border: "1px solid #e2e8f0",
+                        border: `1px solid ${tokens.border}`,
                       }}
                     >
                       <FormField
@@ -3518,9 +3792,9 @@ const AdminProducts = () => {
                   {/* Card 3: Highlights & Detailed Description */}
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "14px 16px",
                       display: "flex",
                       flexDirection: "column",
@@ -3532,10 +3806,10 @@ const AdminProducts = () => {
                       style={{
                         fontSize: "13px",
                         fontWeight: 700,
-                        color: "#0f172a",
+                        color: tokens.textPrimary,
                         textTransform: "uppercase",
                         letterSpacing: "0.04em",
-                        borderBottom: "1px solid #f1f5f9",
+                        borderBottom: `1px solid ${tokens.border}`,
                         paddingBottom: "8px",
                       }}
                     >
@@ -3558,9 +3832,9 @@ const AdminProducts = () => {
                                 fontWeight: 700,
                                 padding: "2px 7px",
                                 borderRadius: "999px",
-                                background: isOver ? "#fee2e2" : "#f1f5f9",
-                                color: isOver ? "#b91c1c" : "#64748b",
-                                border: isOver ? "1px solid #fca5a5" : "1px solid #e2e8f0",
+                                background: isOver ? (isDark ? "rgba(239, 68, 68, 0.2)" : "#fee2e2") : tokens.elevatedSurfaceBg,
+                                color: isOver ? (isDark ? "#fca5a5" : "#b91c1c") : tokens.textSecondary,
+                                border: isOver ? (isDark ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid #fca5a5") : `1px solid ${tokens.border}`,
                               }}
                             >
                               {words} / 50 words {isOver ? "(Exceeded)" : ""}
@@ -3600,8 +3874,8 @@ const AdminProducts = () => {
                         error={errors.description}
                         placeholder="Detailed product features, specifications, box contents, warranty information..."
                       />
-                      <span style={{ fontSize: "11px", color: "#64748b", marginTop: "3px", display: "block" }}>
-                        Supports Markdown headings (<code>#</code>, <code>##</code>), paragraphs, and bullet lists.
+                      <span style={{ fontSize: "11px", color: tokens.textSecondary, marginTop: "3px", display: "block" }}>
+                        Supports Markdown headings (<code style={{ background: tokens.elevatedSurfaceBg, color: tokens.textPrimary, padding: "1px 5px", borderRadius: "3px", border: `1px solid ${tokens.border}` }}>#</code>, <code style={{ background: tokens.elevatedSurfaceBg, color: tokens.textPrimary, padding: "1px 5px", borderRadius: "3px", border: `1px solid ${tokens.border}` }}>##</code>), paragraphs, and bullet lists.
                       </span>
                     </div>
                   </div>
@@ -3609,9 +3883,9 @@ const AdminProducts = () => {
                   {/* Card 4: Sub-Variants (Size / Storage / Specs) */}
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "14px 16px",
                       display: "flex",
                       flexDirection: "column",
@@ -3624,7 +3898,7 @@ const AdminProducts = () => {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        borderBottom: "1px solid #f1f5f9",
+                        borderBottom: `1px solid ${tokens.border}`,
                         paddingBottom: "8px",
                         flexWrap: "wrap",
                         gap: "6px",
@@ -3635,14 +3909,14 @@ const AdminProducts = () => {
                           style={{
                             fontSize: "13px",
                             fontWeight: 700,
-                            color: "#0f172a",
+                            color: tokens.textPrimary,
                             textTransform: "uppercase",
                             letterSpacing: "0.04em",
                           }}
                         >
                           Sub-Variant Options (Size / Storage / Specs)
                         </span>
-                        <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>
+                        <span style={{ fontSize: "11px", color: tokens.textSecondary, display: "block" }}>
                           Optional. Use if product has sizes or spec tiers. Leave empty for color-only products.
                         </span>
                       </div>
@@ -3650,11 +3924,11 @@ const AdminProducts = () => {
                         style={{
                           fontSize: "10.5px",
                           fontWeight: 700,
-                          color: "#64748b",
-                          background: "#f1f5f9",
+                          color: tokens.textSecondary,
+                          background: tokens.elevatedSurfaceBg,
                           padding: "2px 8px",
                           borderRadius: "999px",
-                          border: "1px solid #e2e8f0",
+                          border: `1px solid ${tokens.border}`,
                         }}
                       >
                         Optional
@@ -3671,12 +3945,12 @@ const AdminProducts = () => {
                           }
                           style={{ ...inputStyle, height: "34px", fontSize: "12px", padding: "4px 8px" }}
                         >
-                          <option value="custom">Custom (or None)</option>
-                          <option value="size">Size</option>
-                          <option value="weight">Weight</option>
-                          <option value="shoe_size">Shoe Size</option>
-                          <option value="volume">Volume</option>
-                          <option value="pack_size">Pack Size</option>
+                          <option value="custom" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Custom (or None)</option>
+                          <option value="size" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Size</option>
+                          <option value="weight" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Weight</option>
+                          <option value="shoe_size" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Shoe Size</option>
+                          <option value="volume" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Volume</option>
+                          <option value="pack_size" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Pack Size</option>
                         </select>
                       </label>
 
@@ -3699,7 +3973,7 @@ const AdminProducts = () => {
 
                     {variantRows.length > 0 && (
                       <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
-                        <div style={{ fontSize: "12px", fontWeight: 700, color: "#334155" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textSecondary }}>
                           Variant Pricing & Inventory Matrix
                         </div>
 
@@ -3717,8 +3991,8 @@ const AdminProducts = () => {
                                   alignItems: "center",
                                   padding: "8px 10px",
                                   borderRadius: "6px",
-                                  border: "1px solid #e2e8f0",
-                                  background: "#f8fafc",
+                                  border: `1px solid ${tokens.border}`,
+                                  background: tokens.elevatedSurfaceBg,
                                 }}
                               >
                                 <FormField
@@ -3749,14 +4023,13 @@ const AdminProducts = () => {
                                     display: "flex",
                                     alignItems: "center",
                                     gap: "6px",
-                                    color: "#334155",
+                                    color: tokens.textSecondary,
                                     fontSize: "12px",
                                     cursor: "pointer",
                                     paddingTop: "14px",
                                   }}
                                 >
-                                  <input
-                                    type="checkbox"
+                                  <AdminCheckbox
                                     checked={row.inStock}
                                     onChange={(e) => handleVariantRowChange(index, "inStock", e.target.checked)}
                                   />
@@ -3790,9 +4063,9 @@ const AdminProducts = () => {
                   {/* Card 5: Base Pricing & Inventory */}
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "14px 16px",
                       display: "flex",
                       flexDirection: "column",
@@ -3805,7 +4078,7 @@ const AdminProducts = () => {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        borderBottom: "1px solid #f1f5f9",
+                        borderBottom: `1px solid ${tokens.border}`,
                         paddingBottom: "8px",
                       }}
                     >
@@ -3813,7 +4086,7 @@ const AdminProducts = () => {
                         style={{
                           fontSize: "13px",
                           fontWeight: 700,
-                          color: "#0f172a",
+                          color: tokens.textPrimary,
                           textTransform: "uppercase",
                           letterSpacing: "0.04em",
                         }}
@@ -3830,9 +4103,9 @@ const AdminProducts = () => {
                               style={{
                                 fontSize: "11px",
                                 fontWeight: 700,
-                                color: "#15803d",
-                                background: "#dcfce7",
-                                border: "1px solid #bbf7d0",
+                                color: isDark ? "#4ade80" : "#15803d",
+                                background: isDark ? "rgba(34, 197, 94, 0.2)" : "#dcfce7",
+                                border: isDark ? "1px solid rgba(34, 197, 94, 0.4)" : "1px solid #bbf7d0",
                                 padding: "2px 7px",
                                 borderRadius: "999px",
                               }}
@@ -3872,7 +4145,7 @@ const AdminProducts = () => {
                       error={errors.stock}
                       placeholder="50"
                     />
-                    <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
                       Set stock to 0 to mark product as Out of Stock.
                     </span>
                   </div>
@@ -3880,9 +4153,9 @@ const AdminProducts = () => {
                   {/* Card 5a: Cash on Delivery (COD) Setup */}
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "12px 14px",
                       display: "flex",
                       alignItems: "center",
@@ -3893,10 +4166,10 @@ const AdminProducts = () => {
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
                         Cash on Delivery (COD)
                       </div>
-                      <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "2px" }}>
+                      <div style={{ fontSize: "11.5px", color: tokens.textSecondary, marginTop: "2px" }}>
                         {formValues.is_cod_allowed === null
                           ? `Store default (${storeEnableCod ? "COD active" : "Prepaid only"})`
                           : formValues.is_cod_allowed
@@ -3908,10 +4181,10 @@ const AdminProducts = () => {
                     <div
                       style={{
                         display: "inline-flex",
-                        background: "#f1f5f9",
+                        background: tokens.elevatedSurfaceBg,
                         padding: "3px",
                         borderRadius: "8px",
-                        border: "1px solid #e2e8f0",
+                        border: `1px solid ${tokens.border}`,
                         gap: "2px",
                         flexShrink: 0,
                       }}
@@ -3923,8 +4196,8 @@ const AdminProducts = () => {
                           padding: "5px 12px",
                           borderRadius: "6px",
                           border: "none",
-                          background: formValues.is_cod_allowed === null ? "#ffffff" : "transparent",
-                          color: formValues.is_cod_allowed === null ? "#0f172a" : "#64748b",
+                          background: formValues.is_cod_allowed === null ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                          color: formValues.is_cod_allowed === null ? tokens.textPrimary : tokens.textSecondary,
                           fontSize: "12px",
                           fontWeight: formValues.is_cod_allowed === null ? 700 : 500,
                           boxShadow: formValues.is_cod_allowed === null ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
@@ -3942,8 +4215,8 @@ const AdminProducts = () => {
                           padding: "5px 12px",
                           borderRadius: "6px",
                           border: "none",
-                          background: formValues.is_cod_allowed === true ? "#ffffff" : "transparent",
-                          color: formValues.is_cod_allowed === true ? "#0f172a" : "#64748b",
+                          background: formValues.is_cod_allowed === true ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                          color: formValues.is_cod_allowed === true ? tokens.textPrimary : tokens.textSecondary,
                           fontSize: "12px",
                           fontWeight: formValues.is_cod_allowed === true ? 700 : 500,
                           boxShadow: formValues.is_cod_allowed === true ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
@@ -3961,8 +4234,8 @@ const AdminProducts = () => {
                           padding: "5px 12px",
                           borderRadius: "6px",
                           border: "none",
-                          background: formValues.is_cod_allowed === false ? "#ffffff" : "transparent",
-                          color: formValues.is_cod_allowed === false ? "#0f172a" : "#64748b",
+                          background: formValues.is_cod_allowed === false ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                          color: formValues.is_cod_allowed === false ? tokens.textPrimary : tokens.textSecondary,
                           fontSize: "12px",
                           fontWeight: formValues.is_cod_allowed === false ? 700 : 500,
                           boxShadow: formValues.is_cod_allowed === false ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
@@ -3979,9 +4252,9 @@ const AdminProducts = () => {
                   {/* Card 5b: Pre-Order Setup */}
                   <div
                     style={{
-                      background: formValues.is_preorder ? "#eff6ff" : "#ffffff",
+                      background: formValues.is_preorder ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: formValues.is_preorder ? "1.5px solid #3b82f6" : "1px solid #e2e8f0",
+                      border: formValues.is_preorder ? "1.5px solid #3b82f6" : `1px solid ${tokens.border}`,
                       padding: "14px 16px",
                       display: "flex",
                       flexDirection: "column",
@@ -3995,7 +4268,7 @@ const AdminProducts = () => {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        borderBottom: "1px solid #e2e8f0",
+                        borderBottom: `1px solid ${tokens.border}`,
                         paddingBottom: "8px",
                       }}
                     >
@@ -4004,7 +4277,7 @@ const AdminProducts = () => {
                           style={{
                             fontSize: "13px",
                             fontWeight: 700,
-                            color: formValues.is_preorder ? "#1d4ed8" : "#0f172a",
+                            color: formValues.is_preorder ? (isDark ? "#60a5fa" : "#1d4ed8") : tokens.textPrimary,
                             textTransform: "uppercase",
                             letterSpacing: "0.04em",
                           }}
@@ -4013,7 +4286,7 @@ const AdminProducts = () => {
                         </span>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: "12px", fontWeight: 600, color: formValues.is_preorder ? "#2563eb" : "#64748b" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 600, color: formValues.is_preorder ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary }}>
                           {formValues.is_preorder ? "Enabled" : "Disabled"}
                         </span>
                         <ToggleSwitch
@@ -4047,7 +4320,7 @@ const AdminProducts = () => {
                           onChange={(v) => handleFormChange("preorder_message", v)}
                           placeholder="e.g. Official Launch Oct 25 — Ships immediately upon launch!"
                         />
-                        <div style={{ fontSize: "11px", color: "#475569", lineHeight: 1.4, background: "#ffffff", padding: "8px 10px", borderRadius: "6px", border: "1px solid #bfdbfe" }}>
+                        <div style={{ fontSize: "11px", color: tokens.textSecondary, lineHeight: 1.4, background: tokens.surfaceBg, padding: "8px 10px", borderRadius: "6px", border: isDark ? "1px solid rgba(59, 130, 246, 0.35)" : "1px solid #bfdbfe" }}>
                           <b>How it works:</b> Customers can order now before stock arrives. Orders are collected under the <b>Pre-Orders</b> tab. When launch date arrives, it automatically reverts to a standard product with remaining available stock.
                         </div>
                       </div>
@@ -4057,9 +4330,9 @@ const AdminProducts = () => {
                   {/* Card 6: Organization, Taxonomy & Policies */}
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "14px 16px",
                       display: "flex",
                       flexDirection: "column",
@@ -4071,10 +4344,10 @@ const AdminProducts = () => {
                       style={{
                         fontSize: "13px",
                         fontWeight: 700,
-                        color: "#0f172a",
+                        color: tokens.textPrimary,
                         textTransform: "uppercase",
                         letterSpacing: "0.04em",
-                        borderBottom: "1px solid #f1f5f9",
+                        borderBottom: `1px solid ${tokens.border}`,
                         paddingBottom: "8px",
                       }}
                     >
@@ -4110,8 +4383,8 @@ const AdminProducts = () => {
                           style={{
                             padding: "4px 10px",
                             borderRadius: "6px",
-                            border: "1px solid #cbd5e1",
-                            background: "#f8fafc",
+                            border: `1px solid ${tokens.border}`,
+                            background: tokens.elevatedSurfaceBg,
                             fontSize: "12px",
                             fontWeight: 600,
                             cursor: "pointer",
@@ -4130,9 +4403,9 @@ const AdminProducts = () => {
                             style={{
                               padding: "4px 8px",
                               borderRadius: "6px",
-                              border: "1px solid #fecaca",
-                              background: "#fef2f2",
-                              color: "#dc2626",
+                              border: isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca",
+                              background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                              color: isDark ? "#fca5a5" : "#dc2626",
                               fontSize: "11px",
                               fontWeight: 600,
                               cursor: "pointer",
@@ -4192,7 +4465,7 @@ const AdminProducts = () => {
                           style={{
                             background: "none",
                             border: "none",
-                            color: "#2563eb",
+                            color: isDark ? "#60a5fa" : "#2563eb",
                             fontSize: "11px",
                             fontWeight: 700,
                             cursor: "pointer",
@@ -4209,10 +4482,10 @@ const AdminProducts = () => {
                             display: "flex",
                             flexDirection: "column",
                             gap: "6px",
-                            background: "#f8fafc",
+                            background: tokens.elevatedSurfaceBg,
                             padding: "8px",
                             borderRadius: "6px",
-                            border: "1px solid #cbd5e1",
+                            border: `1px solid ${tokens.border}`,
                           }}
                         >
                           <div style={{ display: "flex", gap: "6px" }}>
@@ -4237,7 +4510,7 @@ const AdminProducts = () => {
                               alignItems: "center",
                               gap: "6px",
                               fontSize: "11px",
-                              color: "#334155",
+                              color: tokens.textSecondary,
                               cursor: "pointer",
                             }}
                           >
@@ -4257,8 +4530,8 @@ const AdminProducts = () => {
                                 display: "inline-flex",
                                 alignItems: "center",
                                 borderRadius: "999px",
-                                border: selected ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
-                                background: selected ? "#eff6ff" : "#ffffff",
+                                border: selected ? "1.5px solid #2563eb" : `1px solid ${tokens.border}`,
+                                background: selected ? (isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff") : tokens.surfaceBg,
                                 padding: "2px 4px 2px 10px",
                                 gap: "4px",
                                 transition: "all 0.15s ease",
@@ -4274,7 +4547,7 @@ const AdminProducts = () => {
                                 style={{
                                   fontSize: "12px",
                                   fontWeight: selected ? 700 : 500,
-                                  color: selected ? "#2563eb" : "#334155",
+                                  color: selected ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textPrimary,
                                   cursor: "pointer",
                                   userSelect: "none",
                                 }}
@@ -4290,14 +4563,14 @@ const AdminProducts = () => {
                                   handleToggleCollectionBadge(col.id);
                                 }}
                                 style={{
-                                  border: col.is_badge ? "1px solid #fcd34d" : "1px solid #e2e8f0",
+                                  border: col.is_badge ? (isDark ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid #fcd34d") : `1px solid ${tokens.border}`,
                                   borderRadius: "999px",
                                   padding: "1px 6px",
                                   fontSize: "9.5px",
                                   fontWeight: 700,
                                   cursor: "pointer",
-                                  background: col.is_badge ? "#fef3c7" : "#f8fafc",
-                                  color: col.is_badge ? "#92400e" : "#64748b",
+                                  background: col.is_badge ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7") : tokens.elevatedSurfaceBg,
+                                  color: col.is_badge ? (isDark ? "#fcd34d" : "#92400e") : tokens.textSecondary,
                                 }}
                                 title={col.is_badge ? "Badge active on card" : "Click to set as card badge"}
                               >
@@ -4313,7 +4586,7 @@ const AdminProducts = () => {
                                 style={{
                                   border: "none",
                                   background: "transparent",
-                                  color: "#94a3b8",
+                                  color: tokens.textMuted,
                                   padding: "1px 4px",
                                   fontSize: "11px",
                                   cursor: "pointer",
@@ -4326,7 +4599,7 @@ const AdminProducts = () => {
                           );
                         })}
                         {collections.length === 0 && (
-                          <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                          <span style={{ fontSize: "12px", color: tokens.textMuted }}>
                             No collections yet. Click "+ New Collection" above.
                           </span>
                         )}
@@ -4337,9 +4610,9 @@ const AdminProducts = () => {
                   {/* Card 7: Shipping Dimensions, SKU & Tax */}
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "14px 16px",
                       display: "flex",
                       flexDirection: "column",
@@ -4351,10 +4624,10 @@ const AdminProducts = () => {
                       style={{
                         fontSize: "13px",
                         fontWeight: 700,
-                        color: "#0f172a",
+                        color: tokens.textPrimary,
                         textTransform: "uppercase",
                         letterSpacing: "0.04em",
-                        borderBottom: "1px solid #f1f5f9",
+                        borderBottom: `1px solid ${tokens.border}`,
                         paddingBottom: "8px",
                       }}
                     >
@@ -4412,9 +4685,9 @@ const AdminProducts = () => {
                   {/* Card 8: Color Family & Sibling Variations */}
                   <div
                     style={{
-                      background: "#ffffff",
+                      background: tokens.surfaceBg,
                       borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${tokens.border}`,
                       padding: "14px 16px",
                       display: "flex",
                       flexDirection: "column",
@@ -4427,7 +4700,7 @@ const AdminProducts = () => {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        borderBottom: "1px solid #f1f5f9",
+                        borderBottom: `1px solid ${tokens.border}`,
                         paddingBottom: "8px",
                       }}
                     >
@@ -4435,7 +4708,7 @@ const AdminProducts = () => {
                         style={{
                           fontSize: "13px",
                           fontWeight: 700,
-                          color: "#0f172a",
+                          color: tokens.textPrimary,
                           textTransform: "uppercase",
                           letterSpacing: "0.04em",
                         }}
@@ -4446,9 +4719,9 @@ const AdminProducts = () => {
                         style={{
                           fontSize: "10px",
                           fontWeight: 700,
-                          color: "#6d28d9",
-                          background: "#f5f3ff",
-                          border: "1px solid #ddd6fe",
+                          color: isDark ? "#c084fc" : "#6d28d9",
+                          background: isDark ? "rgba(168, 85, 247, 0.2)" : "#f5f3ff",
+                          border: isDark ? "1px solid rgba(168, 85, 247, 0.4)" : "1px solid #ddd6fe",
                           padding: "1px 6px",
                           borderRadius: "4px",
                         }}
@@ -4457,8 +4730,8 @@ const AdminProducts = () => {
                       </span>
                     </div>
 
-                    <span style={{ fontSize: "11px", color: "#64748b" }}>
-                      Group different color variants under the same Family Tag (e.g. <code>iphone-17-series</code>) to let customers switch colors on the storefront.
+                    <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
+                      Group different color variants under the same Family Tag (e.g. <code style={{ background: tokens.elevatedSurfaceBg, color: tokens.textPrimary, padding: "1px 5px", borderRadius: "3px", border: `1px solid ${tokens.border}` }}>iphone-17-series</code>) to let customers switch colors on the storefront.
                     </span>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
@@ -4489,13 +4762,17 @@ const AdminProducts = () => {
                   justifyContent: "space-between",
                   alignItems: "center",
                   padding: "12px 20px",
-                  borderTop: "1px solid #e2e8f0",
-                  background: "#ffffff",
+                  borderTop: `1px solid ${tokens.border}`,
+                  background: tokens.surfaceBg,
                   boxShadow: "0 -2px 8px rgba(0,0,0,0.04)",
                 }}
               >
-                <div style={{ fontSize: "12px", color: "#64748b" }}>
-                  {editingProduct ? "Editing existing catalog product" : "Ready to publish to storefront catalog"}
+                <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
+                  {editingProduct
+                    ? "Editing existing catalog product"
+                    : formValues.is_active
+                    ? "Product will be published live to store"
+                    : "Product will be saved as a draft (hidden from store)"}
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -4518,7 +4795,11 @@ const AdminProducts = () => {
                     }}
                     disabled={isUploadingImage}
                   >
-                    {editingProduct ? "Save Changes" : "Publish / Create Product"}
+                    {editingProduct
+                      ? "Save Changes"
+                      : formValues.is_active
+                      ? "Create Product"
+                      : "Save as Draft"}
                   </button>
                 </div>
               </div>
@@ -4534,7 +4815,7 @@ const AdminProducts = () => {
           justifyContent: "space-between",
           alignItems: "center",
           gap: "16px",
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: `1px solid ${tokens.border}`,
           marginTop: "4px",
         }}
       >
@@ -4587,9 +4868,9 @@ const AdminProducts = () => {
                   gap: "6px",
                   padding: "8px 12px",
                   border: "none",
-                  borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                  borderBottom: isActive ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : "2px solid transparent",
                   background: "transparent",
-                  color: isActive ? "#2563eb" : "#64748b",
+                  color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
                   fontSize: "13px",
                   fontWeight: isActive ? 700 : 500,
                   cursor: "pointer",
@@ -4606,8 +4887,8 @@ const AdminProducts = () => {
                     fontWeight: 700,
                     padding: "1px 6px",
                     borderRadius: "10px",
-                    background: isActive ? "#dbeafe" : "#f1f5f9",
-                    color: isActive ? "#1e40af" : "#64748b",
+                    background: isActive ? (isDark ? "rgba(59, 130, 246, 0.25)" : "#dbeafe") : tokens.elevatedSurfaceBg,
+                    color: isActive ? (isDark ? "#93c5fd" : "#1e40af") : tokens.textSecondary,
                   }}
                 >
                   {tab.count}
@@ -4625,8 +4906,8 @@ const AdminProducts = () => {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
-                background: "#ffffff",
-                border: "1px solid #cbd5e1",
+                background: tokens.surfaceBg,
+                border: `1px solid ${tokens.border}`,
                 borderRadius: "8px",
                 padding: "3px 4px",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
@@ -4638,20 +4919,20 @@ const AdminProducts = () => {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.18)" : "#eff6ff",
+                  border: isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe",
                   borderRadius: "5px",
                   padding: "4px 8px",
                   fontSize: "12px",
                   fontWeight: 700,
-                  color: "#1d4ed8",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
                   whiteSpace: "nowrap",
                 }}
               >
                 <span>{selectedProductIds.size} Selected</span>
               </div>
 
-              <div style={{ width: "1px", height: "16px", background: "#e2e8f0", margin: "0 2px" }} />
+              <div style={{ width: "1px", height: "16px", background: tokens.border, margin: "0 2px" }} />
 
               {/* Bulk Publish */}
               {canEditProducts && (
@@ -4668,12 +4949,11 @@ const AdminProducts = () => {
                     fontSize: "12px",
                     fontWeight: 600,
                     borderRadius: "5px",
-                    border: "1px solid #bbf7d0",
-                    background: "#f0fdf4",
-                    color: "#166534",
+                    border: isDark ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid #bbf7d0",
+                    background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4",
+                    color: isDark ? "#4ade80" : "#166534",
                     cursor: bulkActionLoading ? "not-allowed" : "pointer",
                     whiteSpace: "nowrap",
-                    transition: "all 0.15s ease",
                   }}
                 >
                   <CheckCircleIcon />
@@ -4696,12 +4976,11 @@ const AdminProducts = () => {
                     fontSize: "12px",
                     fontWeight: 600,
                     borderRadius: "5px",
-                    border: "1px solid #e2e8f0",
-                    background: "#f8fafc",
-                    color: "#334155",
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.elevatedSurfaceBg,
+                    color: tokens.textSecondary,
                     cursor: bulkActionLoading ? "not-allowed" : "pointer",
                     whiteSpace: "nowrap",
-                    transition: "all 0.15s ease",
                   }}
                 >
                   <EyeOffIcon />
@@ -4724,12 +5003,11 @@ const AdminProducts = () => {
                     fontSize: "12px",
                     fontWeight: 600,
                     borderRadius: "5px",
-                    border: "1px solid #bbf7d0",
-                    background: "#f0fdf4",
-                    color: "#15803d",
+                    border: isDark ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid #bbf7d0",
+                    background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4",
+                    color: isDark ? "#4ade80" : "#15803d",
                     cursor: isUpdatingBulkCod ? "not-allowed" : "pointer",
                     whiteSpace: "nowrap",
-                    transition: "all 0.15s ease",
                   }}
                 >
                   <span>{isUpdatingBulkCod ? "Updating..." : "COD: Enable"}</span>
@@ -4751,12 +5029,11 @@ const AdminProducts = () => {
                     fontSize: "12px",
                     fontWeight: 600,
                     borderRadius: "5px",
-                    border: "1px solid #e2e8f0",
-                    background: "#f8fafc",
-                    color: "#64748b",
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.elevatedSurfaceBg,
+                    color: tokens.textSecondary,
                     cursor: isUpdatingBulkCod ? "not-allowed" : "pointer",
                     whiteSpace: "nowrap",
-                    transition: "all 0.15s ease",
                   }}
                 >
                   <span>{isUpdatingBulkCod ? "Updating..." : "COD: Disable"}</span>
@@ -4778,12 +5055,11 @@ const AdminProducts = () => {
                     fontSize: "12px",
                     fontWeight: 600,
                     borderRadius: "5px",
-                    border: "1px solid #e2e8f0",
-                    background: "#f8fafc",
-                    color: "#334155",
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.elevatedSurfaceBg,
+                    color: tokens.textSecondary,
                     cursor: bulkActionLoading ? "not-allowed" : "pointer",
                     whiteSpace: "nowrap",
-                    transition: "all 0.15s ease",
                   }}
                 >
                   <CopyIcon />
@@ -4806,12 +5082,11 @@ const AdminProducts = () => {
                     fontSize: "12px",
                     fontWeight: 600,
                     borderRadius: "5px",
-                    border: "1px solid #e2e8f0",
-                    background: "#f8fafc",
-                    color: "#334155",
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.elevatedSurfaceBg,
+                    color: tokens.textSecondary,
                     cursor: isExportingCSV ? "not-allowed" : "pointer",
                     whiteSpace: "nowrap",
-                    transition: "all 0.15s ease",
                   }}
                 >
                   <DownloadIcon />
@@ -4834,12 +5109,11 @@ const AdminProducts = () => {
                     fontSize: "12px",
                     fontWeight: 600,
                     borderRadius: "5px",
-                    border: "1px solid #fecaca",
-                    background: "#fef2f2",
-                    color: "#dc2626",
+                    border: isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca",
+                    background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                    color: isDark ? "#fca5a5" : "#dc2626",
                     cursor: bulkActionLoading ? "not-allowed" : "pointer",
                     whiteSpace: "nowrap",
-                    transition: "all 0.15s ease",
                   }}
                 >
                   <TrashIcon />
@@ -4847,7 +5121,7 @@ const AdminProducts = () => {
                 </button>
               )}
 
-              <div style={{ width: "1px", height: "16px", background: "#e2e8f0", margin: "0 2px" }} />
+              <div style={{ width: "1px", height: "16px", background: tokens.border, margin: "0 2px" }} />
 
               {/* Clear Selection */}
               <button
@@ -4863,18 +5137,18 @@ const AdminProducts = () => {
                   borderRadius: "4px",
                   border: "none",
                   background: "transparent",
-                  color: "#64748b",
+                  color: tokens.textSecondary,
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                   padding: 0,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#fee2e2";
-                  e.currentTarget.style.color = "#b91c1c";
+                  e.currentTarget.style.background = isDark ? "rgba(239, 68, 68, 0.2)" : "#fee2e2";
+                  e.currentTarget.style.color = isDark ? "#fca5a5" : "#b91c1c";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = "#64748b";
+                  e.currentTarget.style.color = tokens.textSecondary;
                 }}
               >
                 <XMarkIcon />
@@ -4882,46 +5156,87 @@ const AdminProducts = () => {
             </div>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, flexWrap: "nowrap" }}>
-              {/* Store Default Return Policy Selector (Compact) */}
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  background: canEditProducts ? "#ffffff" : "#f8fafc",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "6px",
-                  padding: "4px 8px",
-                  whiteSpace: "nowrap",
-                  height: "32px",
-                  boxSizing: "border-box",
-                }}
-              >
-                <span style={{ fontSize: "11.5px", fontWeight: 600, color: "#64748b", whiteSpace: "nowrap" }}>
-                  Return:
-                </span>
-                <select
-                  value={defaultReturnWindowDays}
+              {/* Store Default Return Policy Selector (Modern Dropdown) */}
+              <div style={{ position: "relative" }} ref={returnPolicyMenuRef}>
+                <button
+                  type="button"
                   disabled={isUpdatingReturnPolicy || !canEditProducts}
-                  onChange={(e) => handleUpdateDefaultReturnPolicy(Number(e.target.value))}
+                  onClick={() => setShowReturnPolicyMenu(!showReturnPolicyMenu)}
+                  title="Configure store default return window"
                   style={{
-                    border: "none",
-                    background: "transparent",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    background: tokens.surfaceBg,
+                    border: `1px solid ${tokens.border}`,
+                    borderRadius: "6px",
+                    padding: "4px 9px",
+                    height: "32px",
                     fontSize: "11.5px",
-                    fontWeight: 700,
-                    color: canEditProducts ? "#1e293b" : "#64748b",
+                    fontWeight: 600,
+                    color: tokens.textSecondary,
                     cursor: canEditProducts ? "pointer" : "not-allowed",
-                    outline: "none",
-                    padding: 0,
+                    boxSizing: "border-box",
+                    transition: "all 0.15s ease",
                   }}
                 >
-                  <option value={0}>No Return</option>
-                  <option value={2}>2 Days</option>
-                  <option value={7}>7 Days</option>
-                  <option value={10}>10 Days</option>
-                  <option value={14}>14 Days</option>
-                  <option value={30}>30 Days</option>
-                </select>
+                  <span style={{ fontWeight: 700, color: tokens.textSecondary }}>Return:</span>
+                  <span style={{ color: tokens.textPrimary, fontWeight: 700 }}>
+                    {defaultReturnWindowDays === 0 ? "No Return" : `${defaultReturnWindowDays} Days`}
+                  </span>
+                  <ChevronDownIcon />
+                </button>
+                {showReturnPolicyMenu && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "38px",
+                      right: 0,
+                      background: tokens.surfaceBg,
+                      border: `1px solid ${tokens.border}`,
+                      borderRadius: "8px",
+                      boxShadow: isDark ? "0 10px 25px rgba(0,0,0,0.5)" : "0 10px 25px rgba(0,0,0,0.1)",
+                      padding: "4px",
+                      zIndex: 50,
+                      minWidth: "130px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                    }}
+                  >
+                    {[
+                      { value: 0, label: "No Return" },
+                      { value: 2, label: "2 Days Return" },
+                      { value: 7, label: "7 Days Return" },
+                      { value: 10, label: "10 Days Return" },
+                      { value: 14, label: "14 Days Return" },
+                      { value: 30, label: "30 Days Return" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          handleUpdateDefaultReturnPolicy(opt.value);
+                          setShowReturnPolicyMenu(false);
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          textAlign: "left",
+                          fontSize: "12px",
+                          fontWeight: defaultReturnWindowDays === opt.value ? 700 : 500,
+                          color: defaultReturnWindowDays === opt.value ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textPrimary,
+                          background: defaultReturnWindowDays === opt.value ? (isDark ? "rgba(37,99,235,0.18)" : "#eff6ff") : "transparent",
+                          border: "none",
+                          borderRadius: "5px",
+                          cursor: "pointer",
+                          transition: "background 0.1s ease",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* COD Max Limit Quick Button */}
@@ -4933,21 +5248,21 @@ const AdminProducts = () => {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "5px",
-                  background: "#ffffff",
-                  border: "1px solid #cbd5e1",
+                  background: tokens.surfaceBg,
+                  border: `1px solid ${tokens.border}`,
                   borderRadius: "6px",
                   padding: "4px 8px",
                   whiteSpace: "nowrap",
                   height: "32px",
                   fontSize: "11.5px",
                   fontWeight: 600,
-                  color: "#334155",
+                  color: tokens.textSecondary,
                   cursor: "pointer",
                   boxSizing: "border-box",
                   transition: "all 0.15s ease",
                 }}
               >
-                <span style={{ color: "#334155", fontWeight: 700 }}>COD:</span>
+                <span style={{ color: tokens.textSecondary, fontWeight: 700 }}>COD:</span>
                 <span>{!storeEnableCod ? "Prepaid Only" : `Max ₹${maxCodLimit.toLocaleString("en-IN")}`}</span>
               </button>
 
@@ -4964,9 +5279,9 @@ const AdminProducts = () => {
                       padding: "4px 9px",
                       height: "32px",
                       borderRadius: "6px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
-                      color: "#334155",
+                      border: `1px solid ${tokens.border}`,
+                      background: tokens.surfaceBg,
+                      color: tokens.textSecondary,
                       fontSize: "12px",
                       fontWeight: 600,
                       cursor: "pointer",
@@ -4985,10 +5300,10 @@ const AdminProducts = () => {
                         position: "absolute",
                         right: 0,
                         top: "calc(100% + 4px)",
-                        background: "#ffffff",
-                        border: "1px solid #cbd5e1",
+                        background: tokens.surfaceBg,
+                        border: `1px solid ${tokens.border}`,
                         borderRadius: "8px",
-                        boxShadow: "0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.08)",
+                        boxShadow: isDark ? "0 10px 25px rgba(0,0,0,0.5)" : "0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.08)",
                         minWidth: "170px",
                         zIndex: 50,
                         padding: "4px 0",
@@ -5010,7 +5325,7 @@ const AdminProducts = () => {
                             border: "none",
                             textAlign: "left",
                             fontSize: "13px",
-                            color: "#1e293b",
+                            color: tokens.textPrimary,
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
@@ -5020,75 +5335,6 @@ const AdminProducts = () => {
                           <UploadIcon /> Import CSV
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowActionsMenu(false);
-                          openCodSettingsModal();
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "8px 14px",
-                          background: "none",
-                          border: "none",
-                          textAlign: "left",
-                          fontSize: "13px",
-                          color: "#1e293b",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          borderTop: "1px solid #f1f5f9",
-                        }}
-                      >
-                        ⚙️ COD Settings & Limit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowActionsMenu(false);
-                          handleBulkCod(true);
-                        }}
-                        disabled={isUpdatingBulkCod}
-                        style={{
-                          width: "100%",
-                          padding: "8px 14px",
-                          background: "none",
-                          border: "none",
-                          textAlign: "left",
-                          fontSize: "13px",
-                          color: "#15803d",
-                          cursor: isUpdatingBulkCod ? "not-allowed" : "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
-                        ✓ Enable COD for All
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowActionsMenu(false);
-                          handleBulkCod(false);
-                        }}
-                        disabled={isUpdatingBulkCod}
-                        style={{
-                          width: "100%",
-                          padding: "8px 14px",
-                          background: "none",
-                          border: "none",
-                          textAlign: "left",
-                          fontSize: "13px",
-                          color: "#64748b",
-                          cursor: isUpdatingBulkCod ? "not-allowed" : "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
-                        ✕ Disable COD for All
-                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -5103,12 +5349,11 @@ const AdminProducts = () => {
                           border: "none",
                           textAlign: "left",
                           fontSize: "13px",
-                          color: "#1e293b",
+                          color: tokens.textPrimary,
                           cursor: "pointer",
                           display: "flex",
                           alignItems: "center",
                           gap: "8px",
-                          borderTop: "1px solid #f1f5f9",
                         }}
                       >
                         <DownloadIcon />{" "}
@@ -5175,12 +5420,11 @@ const AdminProducts = () => {
         )}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
-            <thead style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-              <tr style={{ color: "#64748b" }}>
+            <thead style={{ background: tokens.elevatedSurfaceBg, borderBottom: `1px solid ${tokens.border}` }}>
+              <tr style={{ color: tokens.textSecondary }}>
                 <th style={{ ...thStyle, width: "36px", textAlign: "center", padding: "10px 12px" }}>
-                  <input
-                    type="checkbox"
-                    aria-label="Select All Visible Products"
+                  <AdminCheckbox
+                    ariaLabel="Select All Visible Products"
                     checked={products.length > 0 && products.every((p) => selectedProductIds.has(p.id))}
                     onChange={(e) => {
                       if (e.target.checked) {
@@ -5193,7 +5437,6 @@ const AdminProducts = () => {
                         setSelectedProductIds(next);
                       }
                     }}
-                    style={{ cursor: "pointer", width: "15px", height: "15px" }}
                   />
                 </th>
                 <th style={thStyle}>Product</th>
@@ -5207,30 +5450,30 @@ const AdminProducts = () => {
             <tbody style={{ opacity: isLoading && products.length > 0 ? 0.6 : 1, transition: "opacity 0.12s ease" }}>
               {isLoading && products.length === 0 && (
                 [...Array(6)].map((_, idx) => (
-                  <tr key={`skel-row-${idx}`} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <tr key={`skel-row-${idx}`} style={{ borderBottom: `1px solid ${tokens.border}` }}>
                     <td style={{ ...tdStyle, width: "36px", textAlign: "center" }}>
-                      <div style={{ width: "15px", height: "15px", background: "#f1f5f9", borderRadius: "4px", margin: "0 auto" }} />
+                      <div style={{ width: "15px", height: "15px", background: tokens.elevatedSurfaceBg, borderRadius: "4px", margin: "0 auto" }} />
                     </td>
                     <td style={tdStyle}>
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div style={{ width: "42px", height: "42px", borderRadius: "6px", background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                        <div style={{ width: "42px", height: "42px", borderRadius: "6px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
                         <div style={{ display: "grid", gap: "6px", flex: 1 }}>
-                          <div style={{ height: "14px", width: `${130 + (idx % 3) * 45}px`, borderRadius: "4px", background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
-                          <div style={{ height: "10px", width: "80px", borderRadius: "4px", background: "#f1f5f9" }} />
+                          <div style={{ height: "14px", width: `${130 + (idx % 3) * 45}px`, borderRadius: "4px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                          <div style={{ height: "10px", width: "80px", borderRadius: "4px", background: tokens.elevatedSurfaceBg }} />
                         </div>
                       </div>
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ height: "14px", width: "55px", borderRadius: "4px", background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                      <div style={{ height: "14px", width: "55px", borderRadius: "4px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ height: "14px", width: "90px", borderRadius: "4px", background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                      <div style={{ height: "14px", width: "90px", borderRadius: "4px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ height: "20px", width: "70px", borderRadius: "12px", background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                      <div style={{ height: "20px", width: "70px", borderRadius: "12px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
                     </td>
                     <td style={{ ...tdStyle, textAlign: "right" }}>
-                      <div style={{ height: "28px", width: "80px", borderRadius: "6px", background: "#f1f5f9", marginLeft: "auto" }} />
+                      <div style={{ height: "28px", width: "80px", borderRadius: "6px", background: tokens.elevatedSurfaceBg, marginLeft: "auto" }} />
                     </td>
                   </tr>
                 ))
@@ -5245,20 +5488,20 @@ const AdminProducts = () => {
                           width: "42px",
                           height: "42px",
                           borderRadius: "50%",
-                          background: "#f1f5f9",
-                          color: "#64748b",
+                          background: tokens.elevatedSurfaceBg,
+                          color: tokens.textSecondary,
                           display: "grid",
                           placeItems: "center",
                         }}
                       >
                         <SearchIcon />
                       </div>
-                      <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                         No products found
                       </div>
                       {searchQuery || activeFilterCount > 0 ? (
                         <>
-                          <div style={{ fontSize: "12px", color: "#64748b" }}>
+                          <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
                             Try clearing search keywords or active filters.
                           </div>
                           <button
@@ -5297,7 +5540,7 @@ const AdminProducts = () => {
                               fontSize: "12px",
                               fontWeight: 600,
                               borderRadius: "6px",
-                              border: "1px solid #cbd5e1",
+                              border: `1px solid ${tokens.border}`,
                               marginTop: "4px",
                             }}
                           >
@@ -5305,7 +5548,7 @@ const AdminProducts = () => {
                           </button>
                         </>
                       ) : (
-                        <div style={{ fontSize: "12px", color: "#64748b" }}>
+                        <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
                           No products available in this category or view.
                         </div>
                       )}
@@ -5343,21 +5586,20 @@ const AdminProducts = () => {
                   <tr
                     key={product.id}
                     style={{
-                      borderBottom: "1px solid #f1f5f9",
+                      borderBottom: `1px solid ${tokens.border}`,
                       transition: "background 0.1s ease",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = "#f8fafc";
+                      e.currentTarget.style.background = isDark ? tokens.elevatedSurfaceBg : "#f8fafc";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = "#ffffff";
+                      e.currentTarget.style.background = "transparent";
                     }}
                   >
                     {/* Multi-Select Checkbox */}
                     <td style={{ ...tdStyle, width: "36px", textAlign: "center" }}>
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${product.name}`}
+                      <AdminCheckbox
+                        ariaLabel={`Select ${product.name}`}
                         checked={selectedProductIds.has(product.id)}
                         onChange={(e) => {
                           const next = new Set(selectedProductIds);
@@ -5368,7 +5610,6 @@ const AdminProducts = () => {
                           }
                           setSelectedProductIds(next);
                         }}
-                        style={{ cursor: "pointer", width: "15px", height: "15px" }}
                       />
                     </td>
 
@@ -5393,8 +5634,8 @@ const AdminProducts = () => {
                               height: "48px",
                               borderRadius: "6px",
                               objectFit: "cover",
-                              background: "#f8fafc",
-                              border: "1px solid #e2e8f0",
+                              background: tokens.elevatedSurfaceBg,
+                              border: `1px solid ${tokens.border}`,
                               display: "block",
                             }}
                           />
@@ -5423,7 +5664,7 @@ const AdminProducts = () => {
                             style={{
                               fontSize: "13px",
                               fontWeight: 600,
-                              color: "#0f172a",
+                              color: tokens.textPrimary,
                               marginBottom: "2px",
                               display: "flex",
                               alignItems: "center",
@@ -5438,9 +5679,9 @@ const AdminProducts = () => {
                                   fontSize: "10px",
                                   padding: "1px 6px",
                                   borderRadius: "4px",
-                                  background: "#eff6ff",
-                                  color: "#1d4ed8",
-                                  border: "1px solid #bfdbfe",
+                                  background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                                  color: isDark ? "#60a5fa" : "#1d4ed8",
+                                  border: isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe",
                                   fontWeight: 700,
                                 }}
                               >
@@ -5453,8 +5694,8 @@ const AdminProducts = () => {
                                   fontSize: "10px",
                                   padding: "1px 5px",
                                   borderRadius: "4px",
-                                  background: "#f1f5f9",
-                                  color: "#64748b",
+                                  background: tokens.elevatedSurfaceBg,
+                                  color: tokens.textSecondary,
                                   fontWeight: 600,
                                 }}
                               >
@@ -5465,7 +5706,7 @@ const AdminProducts = () => {
                           <div
                             style={{
                               fontSize: "11px",
-                              color: "#64748b",
+                              color: tokens.textSecondary,
                               display: "flex",
                               gap: "6px",
                               alignItems: "center",
@@ -5474,7 +5715,7 @@ const AdminProducts = () => {
                           >
                             {product.brand && <span>{product.brand}</span>}
                             {product.sku && (
-                              <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                              <span style={{ fontSize: "11px", color: tokens.textMuted }}>
                                 SKU: {product.sku}
                               </span>
                             )}
@@ -5482,9 +5723,9 @@ const AdminProducts = () => {
                               <span
                                 style={{
                                   fontSize: "10px",
-                                  color: "#6d28d9",
-                                  background: "#f5f3ff",
-                                  border: "1px solid #ddd6fe",
+                                  color: isDark ? "#c084fc" : "#6d28d9",
+                                  background: isDark ? "rgba(124, 58, 237, 0.2)" : "#f5f3ff",
+                                  border: isDark ? "1px solid rgba(124, 58, 237, 0.4)" : "1px solid #ddd6fe",
                                   padding: "0 5px",
                                   borderRadius: "4px",
                                   fontWeight: 600,
@@ -5494,7 +5735,7 @@ const AdminProducts = () => {
                                 }}
                                 title={`Color Family: ${product.sibling_group}`}
                               >
-                                <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "#7c3aed" }} />
+                                <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: isDark ? "#c084fc" : "#7c3aed" }} />
                                 {product.sibling_label || product.sibling_group}
                               </span>
                             )}
@@ -5502,9 +5743,9 @@ const AdminProducts = () => {
                               <span
                                 style={{
                                   fontSize: "10px",
-                                  color: "#2563eb",
-                                  background: "#eff6ff",
-                                  border: "1px solid #bfdbfe",
+                                  color: isDark ? "#60a5fa" : "#2563eb",
+                                  background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                                  border: isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe",
                                   padding: "0 5px",
                                   borderRadius: "4px",
                                   fontWeight: 600,
@@ -5538,10 +5779,10 @@ const AdminProducts = () => {
                         </div>
                       ) : (
                         <div style={{ display: "grid", gap: "2px" }}>
-                          <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>
+                          <span style={{ fontWeight: 700, color: tokens.textPrimary, fontSize: "13px" }}>
                             ₹{displayPrice}
                             {hasVariants && (
-                              <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 500, marginLeft: "3px" }}>
+                              <span style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 500, marginLeft: "3px" }}>
                                 (from)
                               </span>
                             )}
@@ -5550,7 +5791,7 @@ const AdminProducts = () => {
                             <span
                               style={{
                                 fontSize: "11px",
-                                color: "#94a3b8",
+                                color: tokens.textMuted,
                                 textDecoration: "line-through",
                               }}
                             >
@@ -5563,7 +5804,7 @@ const AdminProducts = () => {
 
                     {/* Category & Badge Collections */}
                     <td style={tdStyle}>
-                      <div style={{ fontWeight: 600, color: "#1e293b", fontSize: "12.5px" }}>
+                      <div style={{ fontWeight: 600, color: tokens.textPrimary, fontSize: "12.5px" }}>
                         {product.category || "General"}
                       </div>
                       {product.collections && product.collections.length > 0 && (
@@ -5577,9 +5818,9 @@ const AdminProducts = () => {
                                 borderRadius: "4px",
                                 fontSize: "10px",
                                 fontWeight: 600,
-                                background: col.is_badge ? "#fef3c7" : "#f1f5f9",
-                                color: col.is_badge ? "#b45309" : "#475569",
-                                border: col.is_badge ? "1px solid #fde68a" : "1px solid #e2e8f0",
+                                background: col.is_badge ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7") : tokens.elevatedSurfaceBg,
+                                color: col.is_badge ? (isDark ? "#fcd34d" : "#b45309") : tokens.textSecondary,
+                                border: col.is_badge ? (isDark ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid #fde68a") : `1px solid ${tokens.border}`,
                               }}
                             >
                               {col.name}
@@ -5597,9 +5838,9 @@ const AdminProducts = () => {
                               borderRadius: "4px",
                               fontSize: "10px",
                               fontWeight: 600,
-                              background: "#fef2f2",
-                              color: "#991b1b",
-                              border: "1px solid #fecaca",
+                              background: isDark ? "rgba(239, 68, 68, 0.2)" : "#fef2f2",
+                              color: isDark ? "#fca5a5" : "#991b1b",
+                              border: isDark ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid #fecaca",
                             }}
                           >
                             Non-Returnable
@@ -5612,9 +5853,9 @@ const AdminProducts = () => {
                               borderRadius: "4px",
                               fontSize: "10px",
                               fontWeight: 600,
-                              background: "#eff6ff",
-                              color: "#2563eb",
-                              border: "1px solid #bfdbfe",
+                              background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                              color: isDark ? "#60a5fa" : "#2563eb",
+                              border: isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe",
                             }}
                           >
                             {product.return_window_days}d Return
@@ -5630,9 +5871,9 @@ const AdminProducts = () => {
                               borderRadius: "4px",
                               fontSize: "10px",
                               fontWeight: 600,
-                              background: "#fef2f2",
-                              color: "#991b1b",
-                              border: "1px solid #fecaca",
+                              background: isDark ? "rgba(239, 68, 68, 0.2)" : "#fef2f2",
+                              color: isDark ? "#fca5a5" : "#991b1b",
+                              border: isDark ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid #fecaca",
                             }}
                             title="Product has manual exception: Prepaid Only (Store overall accepts COD)"
                           >
@@ -5646,9 +5887,9 @@ const AdminProducts = () => {
                               borderRadius: "4px",
                               fontSize: "10px",
                               fontWeight: 600,
-                              background: "#f0fdf4",
-                              color: "#166534",
-                              border: "1px solid #bbf7d0",
+                              background: isDark ? "rgba(22, 163, 74, 0.2)" : "#f0fdf4",
+                              color: isDark ? "#4ade80" : "#166534",
+                              border: isDark ? "1px solid rgba(22, 163, 74, 0.4)" : "1px solid #bbf7d0",
                             }}
                             title="Product has manual exception: COD Allowed (Store overall is Prepaid Only)"
                           >
@@ -5685,8 +5926,9 @@ const AdminProducts = () => {
                                 alignItems: "center",
                                 padding: "2px 7px",
                                 borderRadius: "4px",
-                                background: product.in_stock ? "#f0fdf4" : "#fef2f2",
-                                color: product.in_stock ? "#15803d" : "#b91c1c",
+                                background: product.in_stock ? (isDark ? "rgba(22, 163, 74, 0.2)" : "#f0fdf4") : (isDark ? "rgba(239, 68, 68, 0.2)" : "#fef2f2"),
+                                color: product.in_stock ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#fca5a5" : "#b91c1c"),
+                                border: product.in_stock ? (isDark ? "1px solid rgba(22, 163, 74, 0.35)" : "1px solid #bbf7d0") : (isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca"),
                                 fontWeight: 600,
                                 fontSize: "11px",
                               }}
@@ -5700,11 +5942,11 @@ const AdminProducts = () => {
                                   alignItems: "center",
                                   padding: "2px 6px",
                                   borderRadius: "4px",
-                                  background: "#fef3c7",
-                                  color: "#b45309",
+                                  background: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7",
+                                  color: isDark ? "#fcd34d" : "#b45309",
                                   fontWeight: 600,
                                   fontSize: "10.5px",
-                                  border: "1px solid #fde68a",
+                                  border: isDark ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid #fde68a",
                                 }}
                               >
                                 Low ({product.stock} left)
@@ -5717,11 +5959,11 @@ const AdminProducts = () => {
                                   alignItems: "center",
                                   padding: "2px 6px",
                                   borderRadius: "4px",
-                                  background: "#fef3c7",
-                                  color: "#b45309",
+                                  background: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7",
+                                  color: isDark ? "#fcd34d" : "#b45309",
                                   fontWeight: 600,
                                   fontSize: "10.5px",
-                                  border: "1px solid #fde68a",
+                                  border: isDark ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid #fde68a",
                                   cursor: "help",
                                 }}
                               >
@@ -5729,7 +5971,7 @@ const AdminProducts = () => {
                               </span>
                             ) : null}
                           </div>
-                          <span style={{ fontSize: "11.5px", color: "#64748b" }}>
+                          <span style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
                             Total Stock: {product.stock}
                           </span>
                         </div>
@@ -5780,9 +6022,9 @@ const AdminProducts = () => {
                                 padding: 0,
                                 display: "inline-grid",
                                 placeItems: "center",
-                                color: "#2563eb",
-                                background: "#eff6ff",
-                                border: "1px solid #bfdbfe",
+                                color: isDark ? "#60a5fa" : "#2563eb",
+                                background: isDark ? "rgba(37, 99, 235, 0.18)" : "#eff6ff",
+                                border: isDark ? "1px solid rgba(59, 130, 246, 0.35)" : "1px solid #bfdbfe",
                                 borderRadius: "5px",
                                 cursor: "pointer",
                                 flexShrink: 0,
@@ -5813,9 +6055,9 @@ const AdminProducts = () => {
                                 padding: 0,
                                 display: "inline-grid",
                                 placeItems: "center",
-                                color: "#334155",
-                                background: "#f8fafc",
-                                border: "1px solid #cbd5e1",
+                                color: tokens.textSecondary,
+                                background: tokens.elevatedSurfaceBg,
+                                border: `1px solid ${tokens.border}`,
                                 borderRadius: "5px",
                                 cursor: "pointer",
                                 flexShrink: 0,
@@ -5838,9 +6080,9 @@ const AdminProducts = () => {
                                 padding: 0,
                                 display: "inline-grid",
                                 placeItems: "center",
-                                color: "#4f46e5",
-                                background: "#eef2ff",
-                                border: "1px solid #c7d2fe",
+                                color: isDark ? "#a5b4fc" : "#4f46e5",
+                                background: isDark ? "rgba(79, 70, 229, 0.18)" : "#eef2ff",
+                                border: isDark ? "1px solid rgba(99, 102, 241, 0.35)" : "1px solid #c7d2fe",
                                 borderRadius: "5px",
                                 cursor: "pointer",
                                 flexShrink: 0,
@@ -5863,9 +6105,9 @@ const AdminProducts = () => {
                                 padding: 0,
                                 display: "inline-grid",
                                 placeItems: "center",
-                                color: "#dc2626",
-                                background: "#fef2f2",
-                                border: "1px solid #fecaca",
+                                color: isDark ? "#fca5a5" : "#dc2626",
+                                background: isDark ? "rgba(239, 68, 68, 0.18)" : "#fef2f2",
+                                border: isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca",
                                 borderRadius: "5px",
                                 cursor: "pointer",
                                 flexShrink: 0,
@@ -5940,7 +6182,7 @@ const AdminProducts = () => {
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "12px",
               maxWidth: "680px",
               width: "100%",
@@ -5954,18 +6196,18 @@ const AdminProducts = () => {
             <div
               style={{
                 padding: "16px 20px",
-                borderBottom: "1px solid #e2e8f0",
+                borderBottom: `1px solid ${tokens.border}`,
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                background: "#f8fafc",
+                background: tokens.elevatedSurfaceBg,
               }}
             >
               <div>
-                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
                   Quick Edit Variants: {quickEditProduct.name}
                 </h3>
-                <span style={{ fontSize: "12px", color: "#64748b" }}>
+                <span style={{ fontSize: "12px", color: tokens.textSecondary }}>
                   Option: {quickEditProduct.variant_option?.optionName || "Variant Values"}
                 </span>
               </div>
@@ -5977,7 +6219,7 @@ const AdminProducts = () => {
                   border: "none",
                   fontSize: "18px",
                   cursor: "pointer",
-                  color: "#64748b",
+                  color: tokens.textSecondary,
                 }}
               >
                 ✕
@@ -5987,7 +6229,7 @@ const AdminProducts = () => {
             <div style={{ padding: "16px 20px", overflowY: "auto", display: "grid", gap: "12px" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ background: "#f1f5f9", textAlign: "left", fontSize: "12px" }}>
+                  <tr style={{ background: tokens.elevatedSurfaceBg, textAlign: "left", fontSize: "12px" }}>
                     <th style={{ padding: "8px 10px" }}>Variant Value</th>
                     <th style={{ padding: "8px 10px" }}>Selling Price (₹)</th>
                     <th style={{ padding: "8px 10px" }}>Original MRP (₹)</th>
@@ -5997,8 +6239,8 @@ const AdminProducts = () => {
                 </thead>
                 <tbody>
                   {quickEditVariantRows.map((row, idx) => (
-                    <tr key={idx} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "10px", fontWeight: 700, color: "#1e293b", fontSize: "13px" }}>
+                    <tr key={idx} style={{ borderBottom: `1px solid ${tokens.border}` }}>
+                      <td style={{ padding: "10px", fontWeight: 700, color: tokens.textPrimary, fontSize: "13px" }}>
                         {row.value}
                       </td>
                       <td style={{ padding: "10px" }}>
@@ -6059,11 +6301,11 @@ const AdminProducts = () => {
             <div
               style={{
                 padding: "12px 20px",
-                borderTop: "1px solid #e2e8f0",
+                borderTop: `1px solid ${tokens.border}`,
                 display: "flex",
                 justifyContent: "flex-end",
                 gap: "10px",
-                background: "#f8fafc",
+                background: tokens.elevatedSurfaceBg,
               }}
             >
               <button
@@ -6106,7 +6348,7 @@ const AdminProducts = () => {
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "16px",
               maxWidth: "560px",
               width: "100%",
@@ -6117,18 +6359,18 @@ const AdminProducts = () => {
             <div
               style={{
                 padding: "16px 20px",
-                borderBottom: "1px solid #e2e8f0",
+                borderBottom: `1px solid ${tokens.border}`,
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                background: "#f8fafc",
+                background: tokens.elevatedSurfaceBg,
               }}
             >
               <div>
-                <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 800, color: "#0f172a" }}>
+                <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 800, color: tokens.textPrimary }}>
                   Import Products via CSV
                 </h3>
-                <span style={{ fontSize: "12px", color: "#64748b" }}>
+                <span style={{ fontSize: "12px", color: tokens.textSecondary }}>
                   Upload spreadsheets to bulk create or update catalog products.
                 </span>
               </div>
@@ -6144,7 +6386,7 @@ const AdminProducts = () => {
                   border: "none",
                   fontSize: "18px",
                   cursor: "pointer",
-                  color: "#64748b",
+                  color: tokens.textSecondary,
                 }}
               >
                 ✕
@@ -6156,7 +6398,7 @@ const AdminProducts = () => {
               <div
                 style={{
                   background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
+                  border: isDark ? "1px solid rgba(59, 130, 246, 0.35)" : "1px solid #bfdbfe",
                   borderRadius: "8px",
                   padding: "12px 14px",
                   display: "flex",
@@ -6176,7 +6418,7 @@ const AdminProducts = () => {
                     padding: "5px 12px",
                     fontSize: "12px",
                     whiteSpace: "nowrap",
-                    background: "#ffffff",
+                    background: tokens.surfaceBg,
                     borderColor: "#93c5fd",
                     color: "#1d4ed8",
                     fontWeight: 700,
@@ -6193,7 +6435,7 @@ const AdminProducts = () => {
                   borderRadius: "10px",
                   padding: "24px 16px",
                   textAlign: "center",
-                  background: "#f8fafc",
+                  background: tokens.elevatedSurfaceBg,
                   cursor: "pointer",
                   display: "grid",
                   gap: "8px",
@@ -6201,11 +6443,11 @@ const AdminProducts = () => {
                 }}
                 onClick={() => document.getElementById("csv-file-input")?.click()}
               >
-                <span style={{ fontSize: "28px", color: "#94a3b8" }}>↑</span>
-                <span style={{ fontSize: "14px", fontWeight: 700, color: "#1e293b" }}>
+                <span style={{ fontSize: "28px", color: tokens.textMuted }}>↑</span>
+                <span style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                   {importFile ? importFile.name : "Click to select or drag & drop CSV file"}
                 </span>
-                <span style={{ fontSize: "12px", color: "#64748b" }}>
+                <span style={{ fontSize: "12px", color: tokens.textSecondary }}>
                   {importFile
                     ? importFile.size > 1024 * 1024
                       ? `${(importFile.size / (1024 * 1024)).toFixed(2)} MB`
@@ -6228,7 +6470,7 @@ const AdminProducts = () => {
 
               {/* Default Import Status Choice */}
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <label style={{ fontSize: "12.5px", fontWeight: 700, color: "#334155" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: 700, color: tokens.textSecondary }}>
                   Default Status for Uploaded Products:
                 </label>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
@@ -6238,8 +6480,8 @@ const AdminProducts = () => {
                     style={{
                       padding: "8px 10px",
                       borderRadius: "8px",
-                      border: defaultImportStatus === "draft" ? "2px solid #f59e0b" : "1px solid #cbd5e1",
-                      background: defaultImportStatus === "draft" ? "#fffbeb" : "#ffffff",
+                      border: defaultImportStatus === "draft" ? "2px solid #f59e0b" : `1px solid ${tokens.border}`,
+                      background: defaultImportStatus === "draft" ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#fffbeb") : tokens.surfaceBg,
                       color: defaultImportStatus === "draft" ? "#b45309" : "#475569",
                       fontWeight: defaultImportStatus === "draft" ? 700 : 500,
                       fontSize: "12px",
@@ -6251,7 +6493,7 @@ const AdminProducts = () => {
                     }}
                   >
                     <span><strong>Save as Draft</strong></span>
-                    <span style={{ fontSize: "10.5px", color: "#64748b" }}>Safe review before publishing</span>
+                    <span style={{ fontSize: "10.5px", color: tokens.textSecondary }}>Safe review before publishing</span>
                   </button>
 
                   <button
@@ -6260,8 +6502,8 @@ const AdminProducts = () => {
                     style={{
                       padding: "8px 10px",
                       borderRadius: "8px",
-                      border: defaultImportStatus === "active" ? "2px solid #16a34a" : "1px solid #cbd5e1",
-                      background: defaultImportStatus === "active" ? "#f0fdf4" : "#ffffff",
+                      border: defaultImportStatus === "active" ? "2px solid #16a34a" : `1px solid ${tokens.border}`,
+                      background: defaultImportStatus === "active" ? (isDark ? "rgba(22, 163, 74, 0.2)" : "#f0fdf4") : tokens.surfaceBg,
                       color: defaultImportStatus === "active" ? "#15803d" : "#475569",
                       fontWeight: defaultImportStatus === "active" ? 700 : 500,
                       fontSize: "12px",
@@ -6273,7 +6515,7 @@ const AdminProducts = () => {
                     }}
                   >
                     <span><strong>Publish Live</strong></span>
-                    <span style={{ fontSize: "10.5px", color: "#64748b" }}>Directly visible on store</span>
+                    <span style={{ fontSize: "10.5px", color: tokens.textSecondary }}>Directly visible on store</span>
                   </button>
 
                   <button
@@ -6282,8 +6524,8 @@ const AdminProducts = () => {
                     style={{
                       padding: "8px 10px",
                       borderRadius: "8px",
-                      border: defaultImportStatus === "csv" ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                      background: defaultImportStatus === "csv" ? "#eff6ff" : "#ffffff",
+                      border: defaultImportStatus === "csv" ? "2px solid #2563eb" : `1px solid ${tokens.border}`,
+                      background: defaultImportStatus === "csv" ? (isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff") : tokens.surfaceBg,
                       color: defaultImportStatus === "csv" ? "#1d4ed8" : "#475569",
                       fontWeight: defaultImportStatus === "csv" ? 700 : 500,
                       fontSize: "12px",
@@ -6295,7 +6537,7 @@ const AdminProducts = () => {
                     }}
                   >
                     <span><strong>From CSV Column</strong></span>
-                    <span style={{ fontSize: "10.5px", color: "#64748b" }}>Follow 'is_active' column</span>
+                    <span style={{ fontSize: "10.5px", color: tokens.textSecondary }}>Follow 'is_active' column</span>
                   </button>
                 </div>
               </div>
@@ -6397,12 +6639,12 @@ const AdminProducts = () => {
         >
           <div
             style={{
-              background: "#ffffff",
+              background: tokens.surfaceBg,
               borderRadius: "12px",
               width: "100%",
               maxWidth: "440px",
               boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${tokens.border}`,
               overflow: "hidden",
             }}
           >
@@ -6413,11 +6655,11 @@ const AdminProducts = () => {
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "14px 18px",
-                borderBottom: "1px solid #e2e8f0",
-                background: "#f8fafc",
+                borderBottom: `1px solid ${tokens.border}`,
+                background: tokens.elevatedSurfaceBg,
               }}
             >
-              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
                 Cash on Delivery (COD) Settings
               </h3>
               <button
@@ -6427,7 +6669,7 @@ const AdminProducts = () => {
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   padding: "4px",
                   display: "grid",
                   placeItems: "center",
@@ -6441,7 +6683,7 @@ const AdminProducts = () => {
             <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: "16px" }}>
               {/* Max COD Amount Input */}
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#1e293b" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textPrimary }}>
                   Max COD Order Limit
                 </label>
                 <div style={{ position: "relative" }}>
@@ -6453,7 +6695,7 @@ const AdminProducts = () => {
                       transform: "translateY(-50%)",
                       fontSize: "14px",
                       fontWeight: 700,
-                      color: "#64748b",
+                      color: tokens.textSecondary,
                     }}
                   >
                     ₹
@@ -6484,9 +6726,9 @@ const AdminProducts = () => {
                       style={{
                         padding: "3px 9px",
                         borderRadius: "5px",
-                        border: Number(tempMaxCodLimit) === preset ? "1.5px solid #2563eb" : "1px solid #e2e8f0",
-                        background: Number(tempMaxCodLimit) === preset ? "#eff6ff" : "#f8fafc",
-                        color: Number(tempMaxCodLimit) === preset ? "#1d4ed8" : "#475569",
+                        border: Number(tempMaxCodLimit) === preset ? "1.5px solid #2563eb" : `1px solid ${tokens.border}`,
+                        background: Number(tempMaxCodLimit) === preset ? (isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff") : tokens.elevatedSurfaceBg,
+                        color: Number(tempMaxCodLimit) === preset ? (isDark ? "#60a5fa" : "#1d4ed8") : tokens.textSecondary,
                         fontSize: "11.5px",
                         fontWeight: 600,
                         cursor: "pointer",
@@ -6500,7 +6742,7 @@ const AdminProducts = () => {
 
               {/* Store Default Policy */}
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#1e293b" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textPrimary }}>
                   Store Default COD Policy
                 </label>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
@@ -6510,9 +6752,9 @@ const AdminProducts = () => {
                     style={{
                       padding: "10px 12px",
                       borderRadius: "8px",
-                      border: tempStoreEnableCod ? "2px solid #16a34a" : "1px solid #e2e8f0",
-                      background: tempStoreEnableCod ? "#f0fdf4" : "#ffffff",
-                      color: tempStoreEnableCod ? "#15803d" : "#334155",
+                      border: tempStoreEnableCod ? "2px solid #16a34a" : `1px solid ${tokens.border}`,
+                      background: tempStoreEnableCod ? (isDark ? "rgba(22, 163, 74, 0.2)" : "#f0fdf4") : tokens.surfaceBg,
+                      color: tempStoreEnableCod ? (isDark ? "#4ade80" : "#15803d") : tokens.textPrimary,
                       textAlign: "left",
                       cursor: "pointer",
                       transition: "all 0.15s ease",
@@ -6532,9 +6774,9 @@ const AdminProducts = () => {
                     style={{
                       padding: "10px 12px",
                       borderRadius: "8px",
-                      border: !tempStoreEnableCod ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                      background: !tempStoreEnableCod ? "#eff6ff" : "#ffffff",
-                      color: !tempStoreEnableCod ? "#1d4ed8" : "#334155",
+                      border: !tempStoreEnableCod ? "2px solid #2563eb" : `1px solid ${tokens.border}`,
+                      background: !tempStoreEnableCod ? (isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff") : tokens.surfaceBg,
+                      color: !tempStoreEnableCod ? (isDark ? "#60a5fa" : "#1d4ed8") : tokens.textPrimary,
                       textAlign: "left",
                       cursor: "pointer",
                       transition: "all 0.15s ease",
@@ -6554,8 +6796,8 @@ const AdminProducts = () => {
               {exceptionCount > 0 && (
                 <div
                   style={{
-                    background: "#f8fafc",
-                    border: "1px solid #e2e8f0",
+                    background: tokens.elevatedSurfaceBg,
+                    border: `1px solid ${tokens.border}`,
                     borderRadius: "8px",
                     padding: "10px 12px",
                     display: "flex",
@@ -6564,8 +6806,8 @@ const AdminProducts = () => {
                     gap: "10px",
                   }}
                 >
-                  <div style={{ fontSize: "12px", color: "#475569" }}>
-                    <strong style={{ color: "#0f172a" }}>{exceptionCount} product(s)</strong> have manual exceptions preserved.
+                  <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
+                    <strong style={{ color: tokens.textPrimary }}>{exceptionCount} product(s)</strong> have manual exceptions preserved.
                   </div>
                   <button
                     type="button"
@@ -6573,7 +6815,7 @@ const AdminProducts = () => {
                     onClick={handleResetAllCodExceptions}
                     style={{
                       background: "none",
-                      border: "1px solid #cbd5e1",
+                      border: `1px solid ${tokens.border}`,
                       borderRadius: "5px",
                       padding: "4px 8px",
                       fontSize: "11.5px",
@@ -6597,8 +6839,8 @@ const AdminProducts = () => {
                 alignItems: "center",
                 gap: "10px",
                 padding: "12px 18px",
-                borderTop: "1px solid #e2e8f0",
-                background: "#f8fafc",
+                borderTop: `1px solid ${tokens.border}`,
+                background: tokens.elevatedSurfaceBg,
               }}
             >
               <button
@@ -6644,37 +6886,65 @@ const FormField = ({
   multiline?: boolean;
   placeholder?: string;
   error?: string;
-}) => (
-  <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-    <span style={labelStyle}>{label}</span>
-    {multiline ? (
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        rows={4}
-        style={inputStyle}
-      />
-    ) : (
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={inputStyle}
-      />
-    )}
-    {error ? <span style={errorStyle}>{error}</span> : null}
-  </label>
-);
+}) => {
+  const { tokens, isDark } = useAdminTheme();
+  const inputStyleLocal: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: "8px",
+    border: `1px solid ${error ? "#ef4444" : tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+    color: tokens.textPrimary,
+    fontSize: "13px",
+    width: "100%",
+    boxSizing: "border-box",
+    colorScheme: isDark ? "dark" : "light",
+    outline: "none",
+  };
+  const labelStyleLocal: React.CSSProperties = {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: tokens.textSecondary,
+    marginBottom: "2px",
+  };
+  const errorStyleLocal: React.CSSProperties = {
+    color: isDark ? "#f87171" : "#b91c1c",
+    fontSize: "12px",
+  };
 
-const StatCard = ({ label, value }: { label: string; value: string | number }) => (
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+      <span style={labelStyleLocal}>{label}</span>
+      {multiline ? (
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          rows={4}
+          style={inputStyleLocal}
+        />
+      ) : (
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={inputStyleLocal}
+        />
+      )}
+      {error ? <span style={errorStyleLocal}>{error}</span> : null}
+    </label>
+  );
+};
+
+const StatCard = ({ label, value }: { label: string; value: string | number }) => {
+  const { tokens } = useAdminTheme();
+  return (
   <div
     style={{
       padding: "10px 12px",
       borderRadius: "8px",
-      background: "#ffffff",
-      border: "1px solid #e2e8f0",
+      background: tokens.surfaceBg,
+      border: `1px solid ${tokens.border}`,
       minWidth: 0,
       boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
     }}
@@ -6684,7 +6954,7 @@ const StatCard = ({ label, value }: { label: string; value: string | number }) =
         margin: "0 0 3px",
         fontSize: "11px",
         fontWeight: 600,
-        color: "#64748b",
+        color: tokens.textSecondary,
         whiteSpace: "nowrap",
         overflow: "hidden",
         textOverflow: "ellipsis",
@@ -6697,7 +6967,7 @@ const StatCard = ({ label, value }: { label: string; value: string | number }) =
         margin: 0,
         fontSize: "17px",
         fontWeight: 700,
-        color: "#0f172a",
+        color: tokens.textPrimary,
         lineHeight: 1.1,
       }}
     >
@@ -6705,5 +6975,6 @@ const StatCard = ({ label, value }: { label: string; value: string | number }) =
     </h3>
   </div>
 );
+};
 
 export default AdminProducts;

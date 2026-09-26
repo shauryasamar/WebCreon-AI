@@ -1,5 +1,6 @@
 import React from "react";
 import { useDeviceMode } from "../context/DeviceModeContext";
+import { useAdminTheme } from "../context/ThemeContext";
 
 export type PaginationProps = {
   currentPage?: number;
@@ -67,42 +68,7 @@ export const Pagination: React.FC<PaginationProps> = ({
   accentColor: customAccent,
   style,
 }) => {
-  if (totalPages <= 1 && (!showRangeText || !totalItems) && !pageSizeOptions) {
-    return null;
-  }
-
-  // Ground-Truth Luminance Darkness Detection (never trust stale theme.mode)
-  const isDarkCanvas =
-    ((theme as any)?.pagination_bg ? isColorDarkHex((theme as any).pagination_bg) : false) ||
-    (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
-    (theme?.secondary_bg ? isColorDarkHex(theme.secondary_bg) : false) ||
-    ((theme as any)?.pagination_text_color ? !isColorDarkHex((theme as any).pagination_text_color) : false) ||
-    (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
-    theme?.mode === "dark";
-
-  // Resolved dynamic theme tokens with guaranteed contrast
-  const resolvedAccent = (theme as any)?.pagination_active_bg || customAccent || theme?.accent_color || "#2563eb";
-  const activeBtnTextColor = isColorDarkHex(resolvedAccent) ? "#ffffff" : "#0f172a";
-
-  const btnBg = (theme as any)?.pagination_bg || (isDarkCanvas
-    ? "rgba(255, 255, 255, 0.10)"
-    : "#ffffff");
-
-  const btnHoverBg = isDarkCanvas
-    ? "rgba(255, 255, 255, 0.20)"
-    : "#f1f5f9";
-
-  const borderColor = (theme as any)?.pagination_border_color || (isDarkCanvas
-    ? "rgba(255, 255, 255, 0.18)"
-    : (theme?.border_color || "rgba(15, 23, 42, 0.14)"));
-
-  const btnTextColor = (theme as any)?.pagination_text_color || (isDarkCanvas
-    ? "#ffffff"
-    : (theme?.text_color && isColorDarkHex(theme.text_color) ? theme.text_color : "#0f172a"));
-
-  const mutedText = isDarkCanvas ? "rgba(255, 255, 255, 0.85)" : "#475569";
-  const disabledText = isDarkCanvas ? "rgba(255, 255, 255, 0.35)" : "#94a3b8";
-
+  const { isDark: isDarkAdmin, tokens: adminTokens } = useAdminTheme();
   const deviceMode = useDeviceMode();
   const [isMobile, setIsMobile] = React.useState(
     typeof window !== "undefined" ? window.innerWidth <= 640 : false
@@ -114,6 +80,58 @@ export const Pagination: React.FC<PaginationProps> = ({
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  if (totalPages <= 1 && (!showRangeText || !totalItems) && !pageSizeOptions) {
+    return null;
+  }
+
+  // Detect whether Pagination is being rendered in Storefront context vs Admin context
+  const isStorefront = Boolean(
+    theme && (theme.primary_bg || theme.secondary_bg || theme.text_color || theme.accent_color || theme.mode || (theme as any).pagination_bg)
+  );
+
+  // Ground-Truth Luminance Darkness Detection (storefront never inherits admin theme toggle)
+  const isDarkCanvas = isStorefront
+    ? Boolean(
+        ((theme as any)?.pagination_bg ? isColorDarkHex((theme as any).pagination_bg) : false) ||
+        (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
+        (theme?.secondary_bg ? isColorDarkHex(theme.secondary_bg) : false) ||
+        ((theme as any)?.pagination_text_color ? !isColorDarkHex((theme as any).pagination_text_color) : false) ||
+        (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
+        theme?.mode === "dark"
+      )
+    : isDarkAdmin;
+
+  // Resolved dynamic theme tokens with guaranteed contrast
+  const resolvedAccent = isStorefront
+    ? ((theme as any)?.pagination_active_bg || customAccent || theme?.accent_color || "#2563eb")
+    : (customAccent || adminTokens?.accent || "#2563eb");
+
+  const activeBtnTextColor = isColorDarkHex(resolvedAccent) ? "#ffffff" : "#0f172a";
+
+  const btnBg = (theme as any)?.pagination_bg || (isStorefront
+    ? (isDarkCanvas ? (theme?.secondary_bg || "#1e293b") : (theme?.secondary_bg || "#ffffff"))
+    : (isDarkCanvas ? (adminTokens?.elevatedSurfaceBg || "#242429") : "#ffffff"));
+
+  const btnHoverBg = isStorefront
+    ? (isDarkCanvas ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9")
+    : (isDarkCanvas ? (adminTokens?.hoverBg || "rgba(255, 255, 255, 0.08)") : "#f1f5f9");
+
+  const borderColor = (theme as any)?.pagination_border_color || (isStorefront
+    ? (theme?.border_color || (isDarkCanvas ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.14)"))
+    : (isDarkCanvas ? (adminTokens?.border || "rgba(255, 255, 255, 0.08)") : (adminTokens?.border || "rgba(15, 23, 42, 0.14)")));
+
+  const btnTextColor = (theme as any)?.pagination_text_color || (isStorefront
+    ? (theme?.text_color || (isDarkCanvas ? "#f4f4f5" : "#0f172a"))
+    : (isDarkCanvas ? (adminTokens?.textPrimary || "#f4f4f5") : (adminTokens?.textPrimary || "#0f172a")));
+
+  const mutedText = isStorefront
+    ? (isDarkCanvas ? "rgba(255, 255, 255, 0.6)" : "rgba(15, 23, 42, 0.6)")
+    : (isDarkCanvas ? (adminTokens?.textSecondary || "#a1a1aa") : (adminTokens?.textSecondary || "#475569"));
+
+  const disabledText = isStorefront
+    ? (isDarkCanvas ? "rgba(255, 255, 255, 0.3)" : "rgba(15, 23, 42, 0.3)")
+    : (isDarkCanvas ? (adminTokens?.textDisabled || "#52525b") : "#94a3b8");
 
   const getPageNumbers = (): number[] => {
     const WINDOW_SIZE = effectiveIsMobile ? 3 : 10;
@@ -323,7 +341,7 @@ export const Pagination: React.FC<PaginationProps> = ({
       {/* Optional Range Text */}
       {showRangeText && totalItems !== undefined && totalItems > 0 && pageSize && (
         <div style={{ fontSize: "12px", color: mutedText, fontWeight: 500 }}>
-          Showing <strong style={{ color: isDarkCanvas ? "#f8fafc" : "#0f172a" }}>{Math.min((currentPage - 1) * pageSize + 1, totalItems)}</strong>–<strong style={{ color: isDarkCanvas ? "#f8fafc" : "#0f172a" }}>{Math.min(currentPage * pageSize, totalItems)}</strong> of <strong style={{ color: isDarkCanvas ? "#f8fafc" : "#0f172a" }}>{totalItems}</strong>
+          Showing <strong style={{ color: isDarkCanvas ? "#f4f4f5" : "#0f172a" }}>{Math.min((currentPage - 1) * pageSize + 1, totalItems)}</strong>–<strong style={{ color: isDarkCanvas ? "#f4f4f5" : "#0f172a" }}>{Math.min(currentPage * pageSize, totalItems)}</strong> of <strong style={{ color: isDarkCanvas ? "#f4f4f5" : "#0f172a" }}>{totalItems}</strong>
         </div>
       )}
 
@@ -347,7 +365,18 @@ export const Pagination: React.FC<PaginationProps> = ({
             }}
           >
             {pageSizeOptions.map((opt) => (
-              <option key={opt} value={opt} style={{ background: isDarkCanvas ? "#1e293b" : "#ffffff", color: isDarkCanvas ? "#ffffff" : "#0f172a" }}>
+              <option
+                key={opt}
+                value={opt}
+                style={{
+                  background: isStorefront
+                    ? (isDarkCanvas ? (theme?.secondary_bg || "#18181b") : (theme?.secondary_bg || "#ffffff"))
+                    : (isDarkCanvas ? (adminTokens?.surfaceBg || "#18181b") : "#ffffff"),
+                  color: isStorefront
+                    ? (theme?.text_color || (isDarkCanvas ? "#f4f4f5" : "#0f172a"))
+                    : (isDarkCanvas ? (adminTokens?.textPrimary || "#f4f4f5") : "#0f172a"),
+                }}
+              >
                 {opt}
               </option>
             ))}
