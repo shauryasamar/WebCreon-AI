@@ -1,5 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { isColorDarkHex } from "../context/ThemeContext";
+import { useDeviceMode } from "../context/DeviceModeContext";
+import { useCart } from "../CartContext";
 
 type ThemeInput =
   | "dark"
@@ -37,7 +39,35 @@ type PaymentMethodsProps = {
   field_radius?: number;
   padding?: number;
   gap?: number;
-  max_width?: number;
+  max_width?: number | string;
+  subtitle?: string;
+  continue_button_label?: string;
+  back_button_label?: string;
+  // Method Toggles
+  enable_upi?: boolean;
+  enable_card?: boolean;
+  enable_netbanking?: boolean;
+  enable_cod?: boolean;
+  // Custom Labels & Badges
+  upi_title?: string;
+  upi_subtitle?: string;
+  upi_badge?: string;
+  card_title?: string;
+  card_subtitle?: string;
+  netbanking_title?: string;
+  netbanking_subtitle?: string;
+  cod_title?: string;
+  cod_subtitle?: string;
+  // Custom Colors & Radii
+  card_color?: string;
+  selected_card_bg?: string;
+  button_bg_color?: string;
+  button_text_color?: string;
+  back_button_bg?: string;
+  back_button_text?: string;
+  back_button_border?: string;
+  button_border_radius?: number;
+  badge_border_radius?: number;
   paymentData?: PaymentData;
   onPaymentDataChange?: (data: PaymentData) => void;
   onBack?: () => void;
@@ -109,24 +139,51 @@ const emptyPaymentData: PaymentData = {
   upiId: "",
 };
 
+const DEFAULT_PAYMENT_METHODS = ["COD", "UPI"];
+
 export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
   sectionLabel = "Payment",
   title = "Payment method",
-  paymentMethods = ["COD", "UPI"],
+  subtitle,
+  continue_button_label,
+  back_button_label,
+  enable_upi = true,
+  enable_card = true,
+  enable_netbanking = true,
+  enable_cod = true,
+  upi_title,
+  upi_subtitle,
+  upi_badge,
+  card_title,
+  card_subtitle,
+  netbanking_title,
+  netbanking_subtitle,
+  cod_title,
+  cod_subtitle,
+  paymentMethods = DEFAULT_PAYMENT_METHODS,
   theme = "dark",
   accentColor,
   compact = false,
   background_color,
   panel_color,
+  card_color,
+  selected_card_bg,
   input_color,
   text_color,
   muted_text_color,
   placeholder_color,
   border_color,
   soft_border_color,
+  button_bg_color,
+  button_text_color,
+  back_button_bg,
+  back_button_text,
+  back_button_border,
   border_radius,
   item_radius,
   field_radius,
+  button_border_radius,
+  badge_border_radius,
   padding,
   gap,
   max_width,
@@ -136,20 +193,117 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
   onContinue,
   continueDisabled = false,
 }) => {
-  const [selectedMethod, setSelectedMethod] = useState(
-    paymentData.method || paymentMethods[0] || "COD"
-  );
+  let cartItems: any[] = [];
+  let storeProducts: any[] = [];
+  let cartTotal = 0;
+  let storeEnableCod = true;
+  let maxCodLimit = 5000;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const cart = useCart();
+    cartItems = cart?.cartItems || [];
+    storeProducts = cart?.products || [];
+    cartTotal = cart?.cartTotal ?? 0;
+    if (cart?.enableCod !== undefined) {
+      storeEnableCod = Boolean(cart.enableCod);
+    }
+    if (cart?.maxCodAmount !== undefined) {
+      maxCodLimit = Number(cart.maxCodAmount);
+    }
+  } catch {
+    // outside CartProvider
+  }
+
+  // Calculate gross subtotal from items if cartTotal is not yet computed
+  const calculatedTotal = useMemo(() => {
+    if (cartTotal > 0) return cartTotal;
+    if (!cartItems || cartItems.length === 0) return 0;
+    return cartItems.reduce(
+      (sum, it) => sum + (Number(it.price || it.unit_price || 0) * (it.quantity || 1)),
+      0
+    );
+  }, [cartTotal, cartItems]);
+
+  const isUpiEnabled = enable_upi !== false;
+  const isCardEnabled = enable_card !== false;
+  const isNetbankingEnabled = enable_netbanking !== false;
+  const isCodGloballyEnabled = enable_cod !== false && storeEnableCod !== false;
+
+  // Check if order total exceeds store max COD limit (when limit > 0)
+  const isOrderExceedingCodLimit = maxCodLimit > 0 && calculatedTotal > maxCodLimit;
+
+  const codIneligibleProducts = useMemo(() => {
+    if (!cartItems || cartItems.length === 0) return [];
+    return cartItems.filter((it) => {
+      const matching = storeProducts.find(
+        (p) =>
+          String(p.id) === String(it.id) ||
+          (it.slug && p.slug && String(p.slug) === String(it.slug)) ||
+          (p.id && it.slug && String(p.id) === String(it.slug)) ||
+          (p.slug && it.id && String(p.slug) === String(it.id))
+      );
+      // Explicit product exception overrides store default
+      if (matching && typeof matching.is_cod_allowed === "boolean") {
+        return matching.is_cod_allowed === false;
+      }
+      if (typeof it.is_cod_allowed === "boolean") {
+        return it.is_cod_allowed === false;
+      }
+      // Product inherits store overall default
+      return !isCodGloballyEnabled;
+    });
+  }, [cartItems, storeProducts, isCodGloballyEnabled]);
+
+  const isCodBlockedByProducts = codIneligibleProducts.length > 0;
+  const isCodAllowedForOrder = isCodGloballyEnabled && !isCodBlockedByProducts && !isOrderExceedingCodLimit;
+
+  const methodsToDisplay = useMemo(() => {
+    const list: string[] = [];
+    if (isUpiEnabled) list.push("UPI");
+    if (isCardEnabled) list.push("CARD");
+    if (isNetbankingEnabled) list.push("NETBANKING");
+    if (isCodAllowedForOrder) {
+      list.push("COD");
+    }
+    return list;
+  }, [isUpiEnabled, isCardEnabled, isNetbankingEnabled, isCodAllowedForOrder]);
+
+  const initialMethod = useMemo(() => {
+    if (paymentData.method) {
+      if (methodsToDisplay.includes(paymentData.method)) {
+        return paymentData.method;
+      }
+    }
+    return methodsToDisplay[0] || "UPI";
+  }, [paymentData.method, methodsToDisplay]);
+
+  const [selectedMethod, setSelectedMethod] = useState(initialMethod);
   const [upiId, setUpiId] = useState(paymentData.upiId || "");
-  const [isMobile, setIsMobile] = useState(false);
+  const deviceMode = useDeviceMode();
+  const [innerIsMobile, setInnerIsMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
+  const isMobile = deviceMode === "mobile" || innerIsMobile;
 
   useEffect(() => {
-    setSelectedMethod(paymentData.method || paymentMethods[0] || "COD");
+    if (methodsToDisplay.length > 0 && !methodsToDisplay.includes(selectedMethod)) {
+      const fallback = methodsToDisplay[0] || "UPI";
+      setSelectedMethod(fallback);
+      onPaymentDataChange?.({
+        method: fallback,
+        upiId: fallback === "UPI" ? upiId : "",
+      });
+    }
+  }, [methodsToDisplay, selectedMethod, upiId, onPaymentDataChange]);
+
+  useEffect(() => {
+    if (paymentData.method && methodsToDisplay.includes(paymentData.method)) {
+      setSelectedMethod(paymentData.method);
+    }
     setUpiId(paymentData.upiId || "");
-  }, [paymentData.method, paymentData.upiId, paymentMethods]);
+  }, [paymentData.method, paymentData.upiId, methodsToDisplay]);
 
   useEffect(() => {
     const syncViewport = () => {
-      setIsMobile(window.innerWidth < 768);
+      setInnerIsMobile(window.innerWidth < 768);
     };
 
     syncViewport();
@@ -188,6 +342,8 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
   const resolvedBorderRadius = border_radius ?? 14;
   const resolvedItemRadius = item_radius ?? 12;
   const resolvedFieldRadius = field_radius ?? 8;
+  const resolvedButtonRadius = button_border_radius ?? 10;
+  const resolvedBadgeRadius = badge_border_radius ?? 12;
 
   const palette = useMemo(() => {
     if (!isDark) {
@@ -196,7 +352,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
       const surfaceBg = background_color || (themeObject as any)?.payment_bg || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.7);
       const cardBgFinal = background_color || (themeObject as any)?.payment_bg || (isPureWhiteBg ? (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || "#ffffff" : surfaceBg);
       const panelBgFinal = panel_color || (themeObject as any)?.payment_card_bg || cardBgFinal;
-      const optionBgFinal = (themeObject as any)?.payment_card_bg || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.3));
+      const optionBgFinal = card_color || panel_color || (themeObject as any)?.payment_card_bg || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.3));
       const inputBgFinal = input_color || (isPureWhiteBg ? "#ffffff" : mixHex(cardBgFinal, "#ffffff", 0.5));
       const borderFinal = border_color || (themeObject as any)?.payment_border_color || (isPureWhiteBg ? "#e5e7eb" : mixHex(resolvedText, cardBgFinal, 0.15));
 
@@ -204,7 +360,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
         cardBg: cardBgFinal,
         panelBg: panelBgFinal,
         optionBg: optionBgFinal,
-        optionSelectedBg: alpha(resolvedAccent, 0.08),
+        optionSelectedBg: selected_card_bg || alpha(resolvedAccent, 0.08),
         inputBg: inputBgFinal,
         border: borderFinal,
         softBorder: soft_border_color || mixHex(borderFinal, cardBgFinal, 0.5),
@@ -215,12 +371,12 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
         shadow: "0 2px 8px rgba(0,0,0,0.05)",
         selectedRing: `0 0 0 3px ${resolvedAccent}22`,
         inputRing: `0 0 0 3px ${resolvedAccent}22`,
-        backButtonBg: inputBgFinal,
-        backButtonText: resolvedText,
-        backButtonBorder: borderFinal,
-        primaryButtonBg: resolvedAccent,
+        backButtonBg: back_button_bg || inputBgFinal,
+        backButtonText: back_button_text || resolvedText,
+        backButtonBorder: back_button_border || borderFinal,
+        primaryButtonBg: button_bg_color || resolvedAccent,
         primaryButtonDisabledBg: mixHex(resolvedAccent, cardBgFinal, 0.3),
-        primaryButtonText: "#ffffff",
+        primaryButtonText: button_text_color || "#ffffff",
         radioBorder: borderFinal,
       };
     }
@@ -229,16 +385,16 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
     const cardBgDark = background_color || (themeObject as any)?.payment_bg || (themeObject as any)?.surface_bg || (themeObject as any)?.card_bg || (themeObject as any)?.secondary_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.06);
     const panelBgDark = panel_color || (themeObject as any)?.payment_card_bg || mixHex(resolvedPrimaryBg, "#ffffff", 0.07);
     const isPaymentCardDark = isColorDarkHex(panelBgDark) || isColorDarkHex(cardBgDark);
-    const optionBgDark = (themeObject as any)?.payment_card_bg || (isPaymentCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.04) : "#f8fafc");
+    const optionBgDark = card_color || panel_color || (themeObject as any)?.payment_card_bg || (isPaymentCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.04) : "#f8fafc");
     const inputBgDark = input_color || (isPaymentCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.09) : "#ffffff");
     const borderDark = border_color || (themeObject as any)?.payment_border_color || (isPaymentCardDark ? mixHex(resolvedText, resolvedPrimaryBg, 0.15) : "#e2e8f0");
-    const paymentTextFinal = (themeObject as any)?.payment_text_color || (isPaymentCardDark ? resolvedText : "#0f172a");
+    const paymentTextFinal = text_color || (themeObject as any)?.payment_text_color || (isPaymentCardDark ? resolvedText : "#0f172a");
 
     return {
       cardBg: cardBgDark,
       panelBg: panelBgDark,
       optionBg: optionBgDark,
-      optionSelectedBg: alpha(resolvedAccent, 0.16),
+      optionSelectedBg: selected_card_bg || alpha(resolvedAccent, 0.16),
       inputBg: inputBgDark,
       border: borderDark,
       softBorder: soft_border_color || mixHex(borderDark, cardBgDark, 0.5),
@@ -249,12 +405,12 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
       shadow: "0 8px 22px rgba(0,0,0,0.25)",
       selectedRing: `0 0 0 3px ${resolvedAccent}2e`,
       inputRing: `0 0 0 3px ${resolvedAccent}2e`,
-      backButtonBg: isPaymentCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.07) : "#f1f5f9",
-      backButtonText: paymentTextFinal,
-      backButtonBorder: borderDark,
-      primaryButtonBg: resolvedAccent,
+      backButtonBg: back_button_bg || (isPaymentCardDark ? mixHex(resolvedPrimaryBg, "#ffffff", 0.07) : "#f1f5f9"),
+      backButtonText: back_button_text || paymentTextFinal,
+      backButtonBorder: back_button_border || borderDark,
+      primaryButtonBg: button_bg_color || resolvedAccent,
       primaryButtonDisabledBg: "rgba(148,163,184,0.28)",
-      primaryButtonText: (themeObject as any)?.place_order_btn_text || "#ffffff",
+      primaryButtonText: button_text_color || (themeObject as any)?.place_order_btn_text || "#ffffff",
       radioBorder: borderDark,
     };
   }, [
@@ -264,6 +420,13 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
     isDark,
     muted_text_color,
     panel_color,
+    card_color,
+    selected_card_bg,
+    button_bg_color,
+    button_text_color,
+    back_button_bg,
+    back_button_text,
+    back_button_border,
     placeholder_color,
     resolvedAccent,
     resolvedPrimaryBg,
@@ -345,7 +508,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
               color: palette.textMuted,
             }}
           >
-            Choose how you want to complete payment for this order.
+            {subtitle || "Choose how you want to complete payment for this order."}
           </p>
         </div>
 
@@ -364,39 +527,52 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
               gap: `${resolvedGap}px`,
             }}
           >
-            {(() => {
-              const methodsToDisplay =
-                paymentMethods && paymentMethods.length > 0 && !paymentMethods.includes("CARD") && paymentMethods.includes("UPI")
-                  ? ["UPI", "CARD", "NETBANKING", ...(paymentMethods.includes("COD") ? ["COD"] : [])]
-                  : paymentMethods || ["UPI", "CARD", "NETBANKING", "COD"];
-
-              return methodsToDisplay.map((methodKey) => {
-                const isSelected = (selectedMethod || "").toUpperCase() === methodKey.toUpperCase();
+            {methodsToDisplay.length === 0 ? (
+              <div
+                style={{
+                  padding: "24px 16px",
+                  textAlign: "center",
+                  borderRadius: `${resolvedItemRadius}px`,
+                  border: `1px dashed ${palette.border}`,
+                  background: palette.optionBg,
+                  color: palette.textMuted,
+                  fontSize: "13px",
+                }}
+              >
+                No payment methods are currently enabled. Please enable at least one payment method in the editor sidebar.
+              </div>
+            ) : (
+              methodsToDisplay.map((methodKey) => {
+                const isCodMethod = methodKey.toUpperCase() === "COD" || methodKey.toUpperCase() === "CASH_ON_DELIVERY";
+                const isMethodDisabled = isCodMethod && isCodBlockedByProducts;
+                const isSelected = !isMethodDisabled && (selectedMethod || "").toUpperCase() === methodKey.toUpperCase();
                 const inputId = `payment-method-${methodKey.toLowerCase()}`;
                 
-                let title = methodKey;
-                let subtitle = "";
+                let methodLabel = methodKey;
+                let methodDesc = "";
                 let tag = "";
 
                 if (methodKey.toUpperCase() === "UPI") {
-                  title = "UPI (Google Pay, PhonePe, Paytm, QR)";
-                  subtitle = "Instant payment via any UPI App or QR code";
-                  tag = "Fastest";
+                  methodLabel = upi_title || "UPI (Google Pay, PhonePe, Paytm, QR)";
+                  methodDesc = upi_subtitle || "Instant payment via any UPI App or QR code";
+                  tag = upi_badge !== undefined ? upi_badge : "Fastest";
                 } else if (methodKey.toUpperCase() === "CARD" || methodKey.toUpperCase() === "CARDS") {
-                  title = "Credit / Debit Card";
-                  subtitle = "Visa, Mastercard, RuPay, Maestro";
+                  methodLabel = card_title || "Credit / Debit Card";
+                  methodDesc = card_subtitle || "Visa, Mastercard, RuPay, Maestro";
                 } else if (methodKey.toUpperCase() === "NETBANKING" || methodKey.toUpperCase() === "NET_BANKING") {
-                  title = "Netbanking";
-                  subtitle = "HDFC, SBI, ICICI, Axis & 50+ Indian banks";
-                } else if (methodKey.toUpperCase() === "COD" || methodKey.toUpperCase() === "CASH_ON_DELIVERY") {
-                  title = "Cash on Delivery (COD)";
-                  subtitle = "Pay with cash upon package delivery";
+                  methodLabel = netbanking_title || "Netbanking";
+                  methodDesc = netbanking_subtitle || "HDFC, SBI, ICICI, Axis & 50+ Indian banks";
+                } else if (isCodMethod) {
+                  methodLabel = cod_title || "Cash on Delivery (COD)";
+                  methodDesc = isMethodDisabled
+                    ? `Unavailable: ${codIneligibleProducts.map((p) => p.name).slice(0, 2).join(", ")}${codIneligibleProducts.length > 2 ? " and other items" : ""} require online prepaid payment.`
+                    : cod_subtitle || "Pay with cash upon package delivery";
                 }
 
                 return (
                   <label
                     key={methodKey}
-                    htmlFor={inputId}
+                    htmlFor={isMethodDisabled ? undefined : inputId}
                     style={{
                       display: "flex",
                       flexDirection: "column",
@@ -409,7 +585,8 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                       background: isSelected
                         ? palette.optionSelectedBg
                         : palette.optionBg,
-                      cursor: "pointer",
+                      cursor: isMethodDisabled ? "not-allowed" : "pointer",
+                      opacity: isMethodDisabled ? 0.65 : 1,
                       boxShadow: isSelected ? palette.selectedRing : "none",
                       transition: "all 180ms ease",
                     }}
@@ -435,14 +612,20 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                           id={inputId}
                           type="radio"
                           name="payment-method"
+                          disabled={isMethodDisabled}
                           checked={isSelected}
-                          onChange={() => handleMethodChange(methodKey)}
+                          onChange={() => {
+                            if (!isMethodDisabled) {
+                              handleMethodChange(methodKey);
+                            }
+                          }}
                           style={{
                             accentColor: resolvedAccent,
                             width: "16px",
                             height: "16px",
                             margin: 0,
                             flexShrink: 0,
+                            cursor: isMethodDisabled ? "not-allowed" : "pointer",
                           }}
                         />
 
@@ -458,24 +641,38 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                               lineHeight: 1.2,
                             }}
                           >
-                            <span>{title}</span>
-                            {tag && (
+                            <span>{methodLabel}</span>
+                            {isMethodDisabled ? (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  fontWeight: 600,
+                                  padding: "2px 6px",
+                                  borderRadius: `${resolvedBadgeRadius}px`,
+                                  background: "#f1f5f9",
+                                  color: "#475569",
+                                  border: "1px solid #e2e8f0",
+                                }}
+                              >
+                                Prepaid Only
+                              </span>
+                            ) : tag ? (
                               <span
                                 style={{
                                   fontSize: "10px",
                                   fontWeight: 800,
                                   textTransform: "uppercase",
                                   padding: "2px 6px",
-                                  borderRadius: "4px",
+                                  borderRadius: `${resolvedBadgeRadius}px`,
                                   background: alpha(resolvedAccent, 0.15),
                                   color: resolvedAccent,
                                 }}
                               >
                                 {tag}
                               </span>
-                            )}
+                            ) : null}
                           </div>
-                          {subtitle && (
+                          {methodDesc && (
                             <div
                               style={{
                                 fontSize: "12px",
@@ -483,7 +680,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                                 lineHeight: 1.3,
                               }}
                             >
-                              {subtitle}
+                              {methodDesc}
                             </div>
                           )}
                         </div>
@@ -491,8 +688,8 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                     </div>
                   </label>
                 );
-              });
-            })()}
+              })
+            )}
           </div>
         </fieldset>
 
@@ -501,27 +698,32 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
             marginTop: "16px",
             display: "flex",
             justifyContent: "space-between",
-            gap: "12px",
-            flexDirection: isMobile ? "column-reverse" : "row",
+            gap: "10px",
+            alignItems: "center",
           }}
         >
           <button
             type="button"
             onClick={onBack}
             style={{
-              minHeight: "42px",
-              borderRadius: "8px",
+              minHeight: isMobile ? "44px" : "42px",
+              height: isMobile ? "44px" : "42px",
+              borderRadius: `${resolvedButtonRadius}px`,
               border: `1px solid ${palette.backButtonBorder}`,
               background: palette.backButtonBg,
               color: palette.backButtonText,
-              padding: "0 18px",
+              padding: isMobile ? "0 14px" : "0 18px",
               fontSize: "13px",
               fontWeight: 700,
               cursor: "pointer",
-              width: isMobile ? "100%" : "auto",
+              width: "auto",
+              whiteSpace: "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            Back
+            {back_button_label || "← Back"}
           </button>
 
           <button
@@ -529,23 +731,28 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
             onClick={onContinue}
             disabled={continueDisabled}
             style={{
-              minHeight: "42px",
-              minWidth: isMobile ? "100%" : "160px",
-              width: isMobile ? "100%" : "auto",
+              minHeight: isMobile ? "44px" : "42px",
+              height: isMobile ? "44px" : "42px",
+              minWidth: isMobile ? "0" : "160px",
+              flex: isMobile ? 1 : "initial",
+              width: isMobile ? "auto" : "auto",
               border: "none",
-              borderRadius: "8px",
+              borderRadius: `${resolvedButtonRadius}px`,
               background: continueDisabled
                 ? palette.primaryButtonDisabledBg
                 : palette.primaryButtonBg,
               color: palette.primaryButtonText,
-              padding: "0 18px",
-              fontSize: "13px",
+              padding: isMobile ? "0 16px" : "0 18px",
+              fontSize: isMobile ? "14px" : "13px",
               fontWeight: 700,
               cursor: continueDisabled ? "not-allowed" : "pointer",
-              opacity: continueDisabled ? 0.8 : 1,
+              opacity: continueDisabled ? 0.7 : 1,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            Review order
+            {continue_button_label || "Review order →"}
           </button>
         </div>
       </div>
@@ -560,15 +767,6 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
           input[type="text"]:focus {
             border-color: ${resolvedAccent};
             box-shadow: ${palette.inputRing};
-          }
-
-          @media (max-width: 767px) {
-            select,
-            input,
-            textarea,
-            button {
-              font-size: 16px !important;
-            }
           }
         `}
       </style>

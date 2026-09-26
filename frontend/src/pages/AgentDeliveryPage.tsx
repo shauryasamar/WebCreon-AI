@@ -8,6 +8,8 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { usePublicSiteTheme, cleanSiteName } from "../hooks/usePublicSiteTheme";
+import GlassToast from "../Component/GlassToast";
+import { getRiderStorageKey } from "./RiderLoginPage";
 
 type DeliveryItem = {
   id?: string;
@@ -70,6 +72,7 @@ type RiderProfile = {
   cash_in_hand: number;
   current_order_count: number;
   total_deliveries: number;
+  allow_open_pickup?: boolean;
   site_id: string;
   site_name: string;
   site_slug?: string;
@@ -187,6 +190,40 @@ const CloseIcon = () => (
   </svg>
 );
 
+const AlertTriangleIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, display: "inline-block", verticalAlign: "middle" }}>
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+const CheckIcon = ({ size = 14, strokeWidth = 2.5 }: { size?: number; strokeWidth?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, display: "inline-block", verticalAlign: "middle" }}>
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const NavigationIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, display: "inline-block", verticalAlign: "middle" }}>
+    <polygon points="3 11 22 2 13 21 11 13 3 11" />
+  </svg>
+);
+
+const BuildingIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, display: "inline-block", verticalAlign: "middle" }}>
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>
+);
+
+const LockIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, display: "inline-block", verticalAlign: "middle" }}>
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
 const RESCHEDULE_REASONS = [
   "Customer did not answer phone call",
   "Customer requested delivery at later date/time",
@@ -195,6 +232,15 @@ const RESCHEDULE_REASONS = [
   "Incomplete or incorrect address provided",
   "Severe weather / Route blocked",
   "Other delivery challenge",
+];
+
+const RETURN_TO_WAREHOUSE_REASONS = [
+  "Customer unreachable after multiple delivery attempts",
+  "Customer refused delivery at doorstep",
+  "Incorrect or untraceable address provided",
+  "Customer requested cancellation / return to store",
+  "Unable to collect COD payment",
+  "Other delivery failure (returning parcel to warehouse)",
 ];
 
 const DECLINE_REASONS = [
@@ -240,6 +286,10 @@ export default function AgentDeliveryPage() {
   const [rescheduleReason, setRescheduleReason] = useState<string>(RESCHEDULE_REASONS[0]);
   const [rescheduleDateTime, setRescheduleDateTime] = useState<string>("");
   const [rescheduleNote, setRescheduleNote] = useState<string>("");
+
+  const [warehouseDropTask, setWarehouseDropTask] = useState<Task | null>(null);
+  const [warehouseDropReason, setWarehouseDropReason] = useState<string>(RETURN_TO_WAREHOUSE_REASONS[0]);
+  const [warehouseDropNote, setWarehouseDropNote] = useState<string>("");
 
   const [declineTask, setDeclineTask] = useState<Task | null>(null);
   const [declineReason, setDeclineReason] = useState<string>(DECLINE_REASONS[0]);
@@ -288,6 +338,13 @@ export default function AgentDeliveryPage() {
     setRescheduleDateTime(localIso);
   }, []);
 
+  // Auto-switch to tasks tab if open pickup is disabled
+  useEffect(() => {
+    if (profile?.allow_open_pickup === false && activeTab === "pool") {
+      setActiveTab("tasks");
+    }
+  }, [profile?.allow_open_pickup, activeTab]);
+
   // Load session or token
   useEffect(() => {
     bootstrap();
@@ -304,9 +361,10 @@ export default function AgentDeliveryPage() {
       return;
     }
 
-    // Otherwise load full rider portal session
-    const stored = localStorage.getItem("rider_session");
-    const storedToken = localStorage.getItem("rider_token");
+    // Otherwise load full rider portal session scoped to this store
+    const { sessionKey, tokenKey } = getRiderStorageKey(slug);
+    const stored = localStorage.getItem(sessionKey);
+    const storedToken = localStorage.getItem(tokenKey);
     if (!stored || !storedToken) {
       navigate(slug ? `/store/${slug}/rider/login` : "/rider/login");
       return;
@@ -318,6 +376,8 @@ export default function AgentDeliveryPage() {
       await Promise.all([loadTasks(storedToken), loadPool(storedToken), loadProfile(storedToken)]);
     } catch {
       setError("Session expired. Please log in again.");
+      localStorage.removeItem(sessionKey);
+      localStorage.removeItem(tokenKey);
       localStorage.removeItem("rider_session");
       localStorage.removeItem("rider_token");
       navigate(slug ? `/store/${slug}/rider/login` : "/rider/login");
@@ -412,6 +472,12 @@ export default function AgentDeliveryPage() {
     }
   };
 
+  const getRiderAuthToken = (): string | null => {
+    const targetSlug = slug || profile?.site_slug;
+    const { tokenKey } = getRiderStorageKey(targetSlug);
+    return localStorage.getItem(tokenKey) || localStorage.getItem("rider_token");
+  };
+
   const handleUpdateStatus = async (
     targetShipmentId: string,
     action: string,
@@ -428,7 +494,7 @@ export default function AgentDeliveryPage() {
     setSuccessMsg(null);
 
     try {
-      const authToken = localStorage.getItem("rider_token");
+      const authToken = getRiderAuthToken();
       let res;
       const bodyData = {
         action,
@@ -507,7 +573,7 @@ export default function AgentDeliveryPage() {
     setActionLoadingId(orderId);
     setError(null);
     try {
-      const authToken = localStorage.getItem("rider_token");
+      const authToken = getRiderAuthToken();
       if (!authToken) throw new Error("Please log in to claim orders");
 
       const res = await fetch(`${API_BASE_URL}/delivery/rider/claim/${orderId}`, {
@@ -542,9 +608,12 @@ export default function AgentDeliveryPage() {
     } catch {
       // ignore
     }
+    const targetSlug = profile?.site_slug || slug;
+    const { sessionKey, tokenKey } = getRiderStorageKey(targetSlug);
+    localStorage.removeItem(sessionKey);
+    localStorage.removeItem(tokenKey);
     localStorage.removeItem("rider_session");
     localStorage.removeItem("rider_token");
-    const targetSlug = profile?.site_slug || slug;
     navigate(targetSlug ? `/store/${targetSlug}/rider/login` : "/rider/login");
   };
 
@@ -683,15 +752,20 @@ export default function AgentDeliveryPage() {
       <div style={{ maxWidth: "520px", margin: "0 auto", padding: "16px" }}>
         {/* Toast / Status Alerts */}
         {error && (
-          <div style={{ padding: "10px 14px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", fontSize: "13px", marginBottom: "14px", fontWeight: 500 }}>
-            {error}
-          </div>
+          <GlassToast
+            message={error}
+            type="error"
+            onClose={() => setError(null)}
+            top="76px"
+          />
         )}
         {successMsg && (
-          <div style={{ padding: "10px 14px", borderRadius: "8px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", fontSize: "13px", marginBottom: "14px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
-            <CheckCircleIcon />
-            <span>{successMsg}</span>
-          </div>
+          <GlassToast
+            message={successMsg}
+            type="success"
+            onClose={() => setSuccessMsg(null)}
+            top="76px"
+          />
         )}
 
         {/* Pure White Bento Shift Summary Card */}
@@ -792,90 +866,118 @@ export default function AgentDeliveryPage() {
           </div>
         </div>
 
-        {/* Segmented Tab Switcher */}
-        <div
-          style={{
-            display: "flex",
-            gap: "4px",
-            background: "#f1f5f9",
-            border: "1px solid #e2e8f0",
-            padding: "3px",
-            borderRadius: "10px",
-            marginBottom: "16px",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setActiveTab("tasks")}
+        {/* Segmented Tab Switcher / Header */}
+        {profile?.allow_open_pickup !== false ? (
+          <div
             style={{
-              flex: 1,
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: "none",
-              background: activeTab === "tasks" ? "#ffffff" : "transparent",
-              color: activeTab === "tasks" ? "#0f172a" : "#64748b",
-              fontWeight: activeTab === "tasks" ? 700 : 600,
-              fontSize: "13px",
-              cursor: "pointer",
-              boxShadow: activeTab === "tasks" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              transition: "all 0.15s ease",
+              gap: "4px",
+              background: "#f1f5f9",
+              border: "1px solid #e2e8f0",
+              padding: "3px",
+              borderRadius: "10px",
+              marginBottom: "16px",
             }}
           >
-            <span>Assigned Tasks</span>
-            <span
+            <button
+              type="button"
+              onClick={() => setActiveTab("tasks")}
               style={{
-                padding: "1px 6px",
-                borderRadius: "10px",
-                fontSize: "11px",
-                fontWeight: 700,
-                background: activeTab === "tasks" ? "#eff6ff" : "#e2e8f0",
-                color: activeTab === "tasks" ? "#2563eb" : "#64748b",
+                flex: 1,
+                padding: "8px 12px",
+                borderRadius: "8px",
+                border: "none",
+                background: activeTab === "tasks" ? "#ffffff" : "transparent",
+                color: activeTab === "tasks" ? "#0f172a" : "#64748b",
+                fontWeight: activeTab === "tasks" ? 700 : 600,
+                fontSize: "13px",
+                cursor: "pointer",
+                boxShadow: activeTab === "tasks" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                transition: "all 0.15s ease",
               }}
             >
-              {tasks.length}
-            </span>
-          </button>
+              <span>Assigned Tasks</span>
+              <span
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: "10px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  background: activeTab === "tasks" ? "#eff6ff" : "#e2e8f0",
+                  color: activeTab === "tasks" ? "#2563eb" : "#64748b",
+                }}
+              >
+                {tasks.length}
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("pool")}
-            style={{
-              flex: 1,
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: "none",
-              background: activeTab === "pool" ? "#ffffff" : "transparent",
-              color: activeTab === "pool" ? "#0f172a" : "#64748b",
-              fontWeight: activeTab === "pool" ? 700 : 600,
-              fontSize: "13px",
-              cursor: "pointer",
-              boxShadow: activeTab === "pool" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <span>Open Pickups</span>
-            <span
+            <button
+              type="button"
+              onClick={() => setActiveTab("pool")}
               style={{
-                padding: "1px 6px",
-                borderRadius: "10px",
-                fontSize: "11px",
-                fontWeight: 700,
-                background: activeTab === "pool" ? "#eff6ff" : "#e2e8f0",
-                color: activeTab === "pool" ? "#2563eb" : "#64748b",
+                flex: 1,
+                padding: "8px 12px",
+                borderRadius: "8px",
+                border: "none",
+                background: activeTab === "pool" ? "#ffffff" : "transparent",
+                color: activeTab === "pool" ? "#0f172a" : "#64748b",
+                fontWeight: activeTab === "pool" ? 700 : 600,
+                fontSize: "13px",
+                cursor: "pointer",
+                boxShadow: activeTab === "pool" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                transition: "all 0.15s ease",
               }}
             >
-              {pool.length}
+              <span>Open Pickups</span>
+              <span
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: "10px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  background: activeTab === "pool" ? "#eff6ff" : "#e2e8f0",
+                  color: activeTab === "pool" ? "#2563eb" : "#64748b",
+                }}
+              >
+                {pool.length}
+              </span>
+            </button>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "16px",
+              padding: "0 2px",
+            }}
+          >
+            <span style={{ fontSize: "15px", fontWeight: 800, color: "#0f172a" }}>
+              Assigned Tasks
             </span>
-          </button>
-        </div>
+            <span
+              style={{
+                padding: "2px 8px",
+                borderRadius: "12px",
+                fontSize: "11px",
+                fontWeight: 700,
+                background: "#eff6ff",
+                color: "#2563eb",
+              }}
+            >
+              {tasks.length} active
+            </span>
+          </div>
+        )}
 
         {/* TAB 1: ACTIVE DELIVERIES */}
         {activeTab === "tasks" && (
@@ -894,26 +996,30 @@ export default function AgentDeliveryPage() {
                 <div style={{ fontSize: "15px", fontWeight: 800, color: "#0f172a", marginBottom: "4px" }}>
                   All Assigned Tasks Completed
                 </div>
-                <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px" }}>
-                  You have completed all active deliveries. Check the Open Pickups tab to claim new orders.
+                <p style={{ fontSize: "13px", color: "#64748b", margin: profile?.allow_open_pickup !== false ? "0 0 16px" : "0" }}>
+                  {profile?.allow_open_pickup !== false
+                    ? "You have completed all active deliveries. Check the Open Pickups tab to claim new orders."
+                    : "You have completed all active deliveries. New orders will appear here when assigned by store management."}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("pool")}
-                  style={{
-                    padding: "9px 18px",
-                    borderRadius: "8px",
-                    background: "#2563eb",
-                    color: "#ffffff",
-                    fontWeight: 700,
-                    fontSize: "13px",
-                    border: "none",
-                    cursor: "pointer",
-                    boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
-                  }}
-                >
-                  View Open Pickups →
-                </button>
+                {profile?.allow_open_pickup !== false && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("pool")}
+                    style={{
+                      padding: "9px 18px",
+                      borderRadius: "8px",
+                      background: "#2563eb",
+                      color: "#ffffff",
+                      fontWeight: 700,
+                      fontSize: "13px",
+                      border: "none",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
+                    }}
+                  >
+                    View Open Pickups →
+                  </button>
+                )}
               </div>
             ) : (
               tasks.map((task, index) => {
@@ -922,7 +1028,7 @@ export default function AgentDeliveryPage() {
                 const isRescheduled = task.status === "rescheduled";
                 const isAssigned = task.status === "assigned";
                 const isAccepted = task.status === "accepted" || task.status === "shipped";
-                const isOutForDelivery = task.status === "out_for_delivery";
+                const isOutForDelivery = task.status === "out_for_delivery" || task.status === "in_transit" || task.order_status === "replacement_dispatched";
                 const isPickedUpReturn = isReturnPickup && task.status === "picked_up";
 
                 return (
@@ -930,261 +1036,290 @@ export default function AgentDeliveryPage() {
                     key={task.shipment_id}
                     style={{
                       background: "#ffffff",
-                      borderRadius: "14px",
-                      padding: "16px",
+                      borderRadius: "16px",
+                      padding: "14px 16px",
                       border: isCancelled
-                        ? "1.5px solid #fca5a5"
+                        ? "1px solid #fca5a5"
                         : isReturnPickup
-                        ? "1px solid #ddd6fe"
+                        ? "1px solid #e9d5ff"
                         : isRescheduled
                         ? "1px solid #fde68a"
                         : "1px solid #e2e8f0",
-                      boxShadow: isCancelled
-                        ? "0 4px 12px -1px rgba(239, 68, 68, 0.12)"
-                        : isReturnPickup
-                        ? "0 4px 10px -1px rgba(124, 58, 237, 0.08)"
-                        : "0 4px 6px -1px rgba(0, 0, 0, 0.04)",
+                      boxShadow: "0 2px 8px -2px rgba(15, 23, 42, 0.05)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
                       position: "relative",
                     }}
                   >
-                    {/* Sequence Header */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                    {/* Header Strip: Stop & Order ID + Status & Payment Badge */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                         <span
                           style={{
                             fontSize: "11px",
                             fontWeight: 800,
-                            color: isCancelled ? "#991b1b" : isReturnPickup ? "#6b21a8" : "#1d4ed8",
+                            letterSpacing: "0.03em",
+                            color: isCancelled ? "#991b1b" : isReturnPickup ? "#6b21a8" : "#1e40af",
                             background: isCancelled ? "#fef2f2" : isReturnPickup ? "#f5f3ff" : "#eff6ff",
                             border: `1px solid ${isCancelled ? "#fca5a5" : isReturnPickup ? "#ddd6fe" : "#bfdbfe"}`,
-                            padding: "2px 7px",
-                            borderRadius: "4px",
+                            padding: "2px 8px",
+                            borderRadius: "6px",
                           }}
                         >
-                          {isCancelled ? `CANCELLED #${index + 1}` : isReturnPickup ? `RETURN PICKUP #${index + 1}` : `STOP #${index + 1}`}
+                          {isCancelled ? `CANCELLED #${index + 1}` : isReturnPickup ? `RETURN #${index + 1}` : `STOP #${index + 1}`}
                         </span>
                         <span
                           style={{
-                            fontSize: "11px",
+                            fontSize: "12px",
                             fontWeight: 700,
-                            color: isCancelled ? "#b91c1c" : isReturnPickup ? "#7c3aed" : "#64748b",
-                            background: isCancelled ? "#fff1f2" : isReturnPickup ? "#f5f3ff" : "#f1f5f9",
+                            fontFamily: "monospace",
+                            color: "#475569",
+                            background: "#f1f5f9",
                             padding: "2px 6px",
-                            borderRadius: "4px",
+                            borderRadius: "6px",
                           }}
                         >
                           #{task.order_id.slice(0, 8).toUpperCase()}
                         </span>
                       </div>
 
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          padding: "3px 8px",
-                          borderRadius: "4px",
-                          background: isCancelled
-                            ? "#fef2f2"
-                            : isReturnPickup
-                            ? isPickedUpReturn
-                              ? "#ecfdf5"
-                              : "#f5f3ff"
-                            : isRescheduled
-                            ? "#fffbeb"
-                            : isOutForDelivery
-                            ? "#eff6ff"
-                            : isAssigned
-                            ? "#f1f5f9"
-                            : "#eff6ff",
-                          color: isCancelled
-                            ? "#b91c1c"
-                            : isReturnPickup
-                            ? isPickedUpReturn
-                              ? "#059669"
-                              : "#6b21a8"
-                            : isRescheduled
-                            ? "#d97706"
-                            : isOutForDelivery
-                            ? "#2563eb"
-                            : isAssigned
-                            ? "#475569"
-                            : "#1d4ed8",
-                          border: `1px solid ${
-                            isCancelled
-                              ? "#fca5a5"
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        {/* Status chip */}
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            padding: "2px 8px",
+                            borderRadius: "6px",
+                            background: isCancelled
+                              ? "#fef2f2"
                               : isReturnPickup
                               ? isPickedUpReturn
-                                ? "#a7f3d0"
-                                : "#ddd6fe"
+                                ? "#ecfdf5"
+                                : "#f5f3ff"
                               : isRescheduled
-                              ? "#fde68a"
+                              ? "#fffbeb"
                               : isOutForDelivery
-                              ? "#bfdbfe"
+                              ? "#ecfdf5"
                               : isAssigned
-                              ? "#cbd5e1"
-                              : "#bfdbfe"
-                          }`,
-                          textTransform: "capitalize",
-                        }}
-                      >
-                        {isCancelled
-                          ? "Cancelled by Customer"
-                          : isReturnPickup
-                          ? isPickedUpReturn
-                            ? "Picked Up & Inspected"
-                            : isAccepted
-                            ? "Pickup Accepted"
-                            : "Assigned for Pickup"
-                          : isRescheduled
-                          ? "Rescheduled"
-                          : task.status.replace("_", " ")}
-                      </span>
+                              ? "#f8fafc"
+                              : "#eff6ff",
+                            color: isCancelled
+                              ? "#b91c1c"
+                              : isReturnPickup
+                              ? isPickedUpReturn
+                                ? "#059669"
+                                : "#6b21a8"
+                              : isRescheduled
+                              ? "#b45309"
+                              : isOutForDelivery
+                              ? "#15803d"
+                              : isAssigned
+                              ? "#64748b"
+                              : "#1d4ed8",
+                            border: `1px solid ${
+                              isCancelled
+                                ? "#fca5a5"
+                                : isReturnPickup
+                                ? isPickedUpReturn
+                                  ? "#a7f3d0"
+                                  : "#ddd6fe"
+                                : isRescheduled
+                                ? "#fde68a"
+                                : isOutForDelivery
+                                ? "#bbf7d0"
+                                : isAssigned
+                                ? "#e2e8f0"
+                                : "#bfdbfe"
+                            }`,
+                            textTransform: "capitalize",
+                          }}
+                        >
+                          {isCancelled
+                            ? "Cancelled"
+                            : isReturnPickup
+                            ? isPickedUpReturn
+                              ? "Picked Up"
+                              : isAccepted
+                              ? "Pickup Accepted"
+                              : "Assigned"
+                            : isRescheduled
+                            ? "Rescheduled"
+                            : task.status.replace("_", " ")}
+                        </span>
+
+                        {/* Amount & Payment mode chip */}
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 800,
+                            padding: "2px 8px",
+                            borderRadius: "6px",
+                            background: isReturnPickup ? "#f5f3ff" : task.is_cod ? "#fffbeb" : "#f0fdf4",
+                            border: `1px solid ${isReturnPickup ? "#ddd6fe" : task.is_cod ? "#fde68a" : "#bbf7d0"}`,
+                            color: isReturnPickup ? "#7c3aed" : task.is_cod ? "#b45309" : "#15803d",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <span>{formatPrice(task.total_amount)}</span>
+                          <span style={{ fontSize: "10px", fontWeight: 700, opacity: 0.85 }}>
+                            {isReturnPickup ? "Refund" : task.is_cod ? "COD" : "Prepaid"}
+                          </span>
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Cancelled Alert Banner */}
+                    {/* Alerts (if cancelled or rescheduled) */}
                     {isCancelled && (
                       <div
                         style={{
-                          padding: "10px 12px",
+                          padding: "8px 12px",
                           borderRadius: "8px",
                           background: "#fef2f2",
                           border: "1px solid #fecaca",
                           color: "#991b1b",
                           fontSize: "12px",
-                          marginBottom: "12px",
                           lineHeight: 1.4,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
                         }}
                       >
-                        <div style={{ fontWeight: 800, marginBottom: "2px" }}>
-                          Order Cancelled by Customer
-                        </div>
-                        <div>
-                          Customer cancelled this order. Do not deliver. Please return the parcel to the store warehouse.
-                        </div>
+                        <AlertTriangleIcon />
+                        <span><strong>Cancelled by Customer:</strong> Do not deliver. Hand over package to warehouse.</span>
                       </div>
                     )}
 
-                    {/* Rescheduled Notice Banner */}
                     {isRescheduled && (
                       <div
                         style={{
-                          padding: "10px 12px",
+                          padding: "8px 12px",
                           borderRadius: "8px",
                           background: "#fffbeb",
                           border: "1px solid #fde68a",
                           color: "#92400e",
                           fontSize: "12px",
-                          marginBottom: "12px",
                           lineHeight: 1.4,
                         }}
                       >
                         <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: "5px" }}>
                           <CalendarIcon />
-                          <span>Attempt Rescheduled</span>
+                          <span>Delivery Rescheduled</span>
+                          {task.estimated_delivery_at && (
+                            <span style={{ marginLeft: "auto", fontWeight: 700, color: "#b45309" }}>
+                              {formatDisplayDateTime(task.estimated_delivery_at)}
+                            </span>
+                          )}
                         </div>
-                        {task.notes && <div style={{ marginTop: "3px", color: "#78350f" }}>{task.notes}</div>}
-                        {task.estimated_delivery_at && (
-                          <div style={{ marginTop: "4px", fontWeight: 700, color: "#b45309" }}>
-                            Next Slot: {formatDisplayDateTime(task.estimated_delivery_at)}
-                          </div>
-                        )}
+                        {task.notes && <div style={{ marginTop: "2px", color: "#78350f", fontSize: "11.5px" }}>{task.notes}</div>}
                       </div>
                     )}
 
-                    {/* Customer Details */}
-                    <div style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a", marginBottom: "3px" }}>
-                      {task.customer_name}
-                    </div>
-                    <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.5, marginBottom: "12px", display: "flex", alignItems: "flex-start", gap: "6px" }}>
-                      <MapPinIcon />
-                      <span>{task.address.full}</span>
-                    </div>
+                    {/* Customer & Address Panel with Crisp Direct Action Buttons */}
+                    <div
+                      style={{
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "12px",
+                        padding: "12px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "15px", fontWeight: 800, color: "#0f172a", marginBottom: "2px" }}>
+                          {task.customer_name}
+                        </div>
+                        <div style={{ fontSize: "12.5px", color: "#475569", lineHeight: 1.4, display: "flex", alignItems: "flex-start", gap: "5px" }}>
+                          <span style={{ marginTop: "2px", color: "#64748b" }}><MapPinIcon /></span>
+                          <span>{task.address.full}</span>
+                        </div>
+                      </div>
 
-                    {/* One-Tap Action Row (Call + Maps) */}
-                    <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-                      {task.customer_phone && (
+                      {/* Quick Contact & Navigation Row */}
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        {task.customer_phone ? (
+                          <a
+                            href={`tel:${formatPhoneDialable(task.customer_phone)}`}
+                            style={{
+                              flex: 1,
+                              padding: "8px 10px",
+                              borderRadius: "8px",
+                              background: "#ffffff",
+                              border: "1px solid #bbf7d0",
+                              color: "#15803d",
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              textDecoration: "none",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "5px",
+                              boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                            }}
+                          >
+                            <PhoneIcon />
+                            <span>Call Customer</span>
+                          </a>
+                        ) : null}
+
                         <a
-                          href={`tel:${formatPhoneDialable(task.customer_phone)}`}
+                          href={task.google_maps_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           style={{
                             flex: 1,
-                            padding: "9px 10px",
+                            padding: "8px 10px",
                             borderRadius: "8px",
-                            background: "#f0fdf4",
-                            border: "1px solid #bbf7d0",
-                            color: "#15803d",
+                            background: "#ffffff",
+                            border: "1px solid #bfdbfe",
+                            color: "#1d4ed8",
                             fontSize: "12px",
                             fontWeight: 700,
-                            textAlign: "center",
                             textDecoration: "none",
-                            display: "flex",
+                            display: "inline-flex",
                             alignItems: "center",
                             justifyContent: "center",
                             gap: "5px",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                           }}
                         >
-                          <PhoneIcon />
-                          <span>Call Customer</span>
+                          <MapPinIcon />
+                          <span>Navigate Maps</span>
+                          <ExternalLinkIcon />
                         </a>
-                      )}
-
-                      <a
-                        href={task.google_maps_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          flex: 1,
-                          padding: "9px 10px",
-                          borderRadius: "8px",
-                          background: "#eff6ff",
-                          border: "1px solid #bfdbfe",
-                          color: "#1d4ed8",
-                          fontSize: "12px",
-                          fontWeight: 700,
-                          textAlign: "center",
-                          textDecoration: "none",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "5px",
-                        }}
-                      >
-                        <MapPinIcon />
-                        <span>Navigate Maps</span>
-                        <ExternalLinkIcon />
-                      </a>
+                      </div>
                     </div>
 
-                    {/* Payment / Refund Value */}
+                    {/* Compact Item Badge summary */}
                     <div
                       style={{
-                        padding: "10px 12px",
+                        fontSize: "12px",
+                        color: "#475569",
+                        background: "#f1f5f9",
+                        padding: "6px 10px",
                         borderRadius: "8px",
-                        background: isReturnPickup ? "#f5f3ff" : task.is_cod ? "#fffbeb" : "#f0fdf4",
-                        border: `1px solid ${isReturnPickup ? "#ddd6fe" : task.is_cod ? "#fde68a" : "#bbf7d0"}`,
                         display: "flex",
-                        justifyContent: "space-between",
                         alignItems: "center",
-                        marginBottom: "12px",
+                        gap: "6px",
+                        flexWrap: "wrap",
                       }}
                     >
-                      <span style={{ fontSize: "12px", fontWeight: 700, color: isReturnPickup ? "#6b21a8" : task.is_cod ? "#b45309" : "#15803d" }}>
-                        {isReturnPickup ? "Customer Return Refund (Do not collect cash)" : task.is_cod ? "COD — Collect Cash" : "Prepaid (Do Not Collect Cash)"}
+                      <span style={{ fontWeight: 700, color: "#0f172a", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        <PackageIcon />
+                        <span>{task.items.length} {task.items.length === 1 ? "Item" : "Items"}:</span>
                       </span>
-                      <span style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a" }}>
-                        {formatPrice(task.total_amount)}
+                      <span style={{ color: "#334155" }}>
+                        {task.items.map((i) => `${i.product_name} ×${i.quantity}${i.reason ? ` (${i.reason})` : ""}`).join(", ")}
                       </span>
                     </div>
 
-                    {/* Items Summary */}
-                    <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "14px", background: "#f8fafc", padding: "8px 10px", borderRadius: "6px" }}>
-                      <strong style={{ color: "#334155" }}>
-                        {isReturnPickup ? "Items to Inspect & Pick Up" : "Package Contents"} ({task.items.length}):
-                      </strong>{" "}
-                      {task.items.map((i) => `${i.product_name} ×${i.quantity}${i.reason ? ` (${i.reason})` : ""}`).join(", ")}
-                    </div>
-
-                    {/* Action Buttons Grid */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {/* Compact Action Toolbar */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "2px" }}>
                       {/* Return Pickup Actions */}
                       {isReturnPickup ? (
                         <>
@@ -1195,19 +1330,24 @@ export default function AgentDeliveryPage() {
                                 onClick={() => handleUpdateStatus(task.shipment_id, "accept")}
                                 disabled={actionLoadingId === task.shipment_id}
                                 style={{
-                                  flex: 1,
-                                  padding: "12px",
+                                  flex: 2,
+                                  padding: "10px 14px",
                                   borderRadius: "8px",
                                   background: "#7c3aed",
                                   color: "#ffffff",
-                                  fontSize: "14px",
+                                  fontSize: "13px",
                                   fontWeight: 700,
                                   border: "none",
                                   cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
                                   boxShadow: "0 2px 4px rgba(124, 58, 237, 0.2)",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: "6px",
                                 }}
                               >
-                                {actionLoadingId === task.shipment_id ? "Accepting..." : "Accept Return Pickup"}
+                                <CheckIcon />
+                                <span>{actionLoadingId === task.shipment_id ? "Accepting..." : "Accept Pickup"}</span>
                               </button>
                               <button
                                 type="button"
@@ -1218,15 +1358,15 @@ export default function AgentDeliveryPage() {
                                 }}
                                 disabled={actionLoadingId === task.shipment_id}
                                 style={{
-                                  padding: "12px 14px",
+                                  flex: 1,
+                                  padding: "10px",
                                   borderRadius: "8px",
-                                  background: "#fef2f2",
+                                  background: "#ffffff",
                                   color: "#b91c1c",
-                                  fontSize: "13px",
+                                  fontSize: "12.5px",
                                   fontWeight: 700,
                                   border: "1px solid #fecaca",
                                   cursor: "pointer",
-                                  whiteSpace: "nowrap",
                                 }}
                               >
                                 Decline
@@ -1235,7 +1375,7 @@ export default function AgentDeliveryPage() {
                           )}
 
                           {isAccepted && (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1251,21 +1391,26 @@ export default function AgentDeliveryPage() {
                                 disabled={actionLoadingId === task.shipment_id}
                                 style={{
                                   width: "100%",
-                                  padding: "13px",
+                                  padding: "11px 14px",
                                   borderRadius: "8px",
                                   background: "#16a34a",
                                   color: "#ffffff",
-                                  fontSize: "14px",
+                                  fontSize: "13.5px",
                                   fontWeight: 700,
                                   border: "none",
                                   cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
-                                  boxShadow: "0 4px 6px -1px rgba(22, 163, 74, 0.2)",
+                                  boxShadow: "0 2px 4px rgba(22, 163, 74, 0.2)",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: "6px",
                                 }}
                               >
-                                ✓ Verify Items & Pick Up
+                                <CheckIcon />
+                                <span>Verify Items & Doorstep Pickup</span>
                               </button>
 
-                              <div style={{ display: "flex", gap: "8px" }}>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1275,19 +1420,22 @@ export default function AgentDeliveryPage() {
                                   }}
                                   disabled={actionLoadingId === task.shipment_id}
                                   style={{
-                                    flex: 1,
-                                    padding: "10px 12px",
+                                    padding: "8px 10px",
                                     borderRadius: "8px",
-                                    background: "#fef2f2",
+                                    background: "#ffffff",
                                     color: "#b91c1c",
-                                    fontSize: "12.5px",
+                                    fontSize: "12px",
                                     fontWeight: 700,
                                     border: "1px solid #fecaca",
                                     cursor: "pointer",
-                                    whiteSpace: "nowrap",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "4px",
                                   }}
                                 >
-                                  ✕ Reject at Doorstep
+                                  <CloseIcon />
+                                  <span>Reject at Doorstep</span>
                                 </button>
 
                                 <button
@@ -1299,19 +1447,18 @@ export default function AgentDeliveryPage() {
                                   }}
                                   disabled={actionLoadingId === task.shipment_id}
                                   style={{
-                                    flex: 1,
-                                    padding: "10px 12px",
+                                    padding: "8px 10px",
                                     borderRadius: "8px",
                                     background: "#fffbeb",
                                     color: "#b45309",
-                                    fontSize: "12.5px",
+                                    fontSize: "12px",
                                     fontWeight: 700,
                                     border: "1px solid #fde68a",
                                     cursor: "pointer",
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
-                                    gap: "5px",
+                                    gap: "4px",
                                   }}
                                 >
                                   <CalendarIcon />
@@ -1328,18 +1475,23 @@ export default function AgentDeliveryPage() {
                               disabled={actionLoadingId === task.shipment_id}
                               style={{
                                 width: "100%",
-                                padding: "13px",
+                                padding: "11px 14px",
                                 borderRadius: "8px",
                                 background: "#2563eb",
                                 color: "#ffffff",
-                                fontSize: "14px",
+                                fontSize: "13.5px",
                                 fontWeight: 700,
                                 border: "none",
                                 cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
-                                boxShadow: "0 4px 6px -1px rgba(37, 99, 235, 0.2)",
+                                boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "6px",
                               }}
                             >
-                              {actionLoadingId === task.shipment_id ? "Handing over..." : "Handover Return Package at Store / Hub"}
+                              <BuildingIcon />
+                              <span>{actionLoadingId === task.shipment_id ? "Handing over..." : "Handover at Store / Hub"}</span>
                             </button>
                           )}
                         </>
@@ -1353,18 +1505,23 @@ export default function AgentDeliveryPage() {
                               disabled={actionLoadingId === task.shipment_id}
                               style={{
                                 width: "100%",
-                                padding: "13px",
+                                padding: "10px 14px",
                                 borderRadius: "8px",
                                 background: "#dc2626",
                                 color: "#ffffff",
-                                fontSize: "14px",
+                                fontSize: "13px",
                                 fontWeight: 700,
                                 border: "none",
                                 cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
-                                boxShadow: "0 4px 6px -1px rgba(220, 38, 38, 0.2)",
+                                boxShadow: "0 2px 4px rgba(220, 38, 38, 0.2)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "6px",
                               }}
                             >
-                              {actionLoadingId === task.shipment_id ? "Updating..." : "Return Parcel to Store Warehouse"}
+                              <BuildingIcon />
+                              <span>{actionLoadingId === task.shipment_id ? "Updating..." : "Drop Parcel to Warehouse"}</span>
                             </button>
                           ) : (
                             <>
@@ -1375,19 +1532,24 @@ export default function AgentDeliveryPage() {
                                     onClick={() => handleUpdateStatus(task.shipment_id, "accept")}
                                     disabled={actionLoadingId === task.shipment_id}
                                     style={{
-                                      flex: 1,
-                                      padding: "12px",
+                                      flex: 2,
+                                      padding: "10px 14px",
                                       borderRadius: "8px",
                                       background: "#2563eb",
                                       color: "#ffffff",
-                                      fontSize: "14px",
+                                      fontSize: "13px",
                                       fontWeight: 700,
                                       border: "none",
                                       cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
                                       boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      gap: "6px",
                                     }}
                                   >
-                                    {actionLoadingId === task.shipment_id ? "Accepting..." : "Accept Order"}
+                                    <CheckIcon />
+                                    <span>{actionLoadingId === task.shipment_id ? "Accepting..." : "Accept Order"}</span>
                                   </button>
 
                                   <button
@@ -1399,15 +1561,15 @@ export default function AgentDeliveryPage() {
                                     }}
                                     disabled={actionLoadingId === task.shipment_id}
                                     style={{
-                                      padding: "12px 14px",
+                                      flex: 1,
+                                      padding: "10px",
                                       borderRadius: "8px",
-                                      background: "#fef2f2",
+                                      background: "#ffffff",
                                       color: "#b91c1c",
-                                      fontSize: "13px",
+                                      fontSize: "12.5px",
                                       fontWeight: 700,
                                       border: "1px solid #fecaca",
                                       cursor: "pointer",
-                                      whiteSpace: "nowrap",
                                     }}
                                   >
                                     Decline
@@ -1422,19 +1584,24 @@ export default function AgentDeliveryPage() {
                                     onClick={() => handleUpdateStatus(task.shipment_id, "out_for_delivery")}
                                     disabled={actionLoadingId === task.shipment_id}
                                     style={{
-                                      flex: 1,
-                                      padding: "13px",
+                                      flex: 2,
+                                      padding: "11px 14px",
                                       borderRadius: "8px",
                                       background: "#2563eb",
                                       color: "#ffffff",
-                                      fontSize: "14px",
+                                      fontSize: "13.5px",
                                       fontWeight: 700,
                                       border: "none",
                                       cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
-                                      boxShadow: "0 4px 6px -1px rgba(37, 99, 235, 0.2)",
+                                      boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      gap: "6px",
                                     }}
                                   >
-                                    {actionLoadingId === task.shipment_id ? "Starting Trip..." : "Start Trip / Out for Delivery"}
+                                    <NavigationIcon />
+                                    <span>{actionLoadingId === task.shipment_id ? "Starting Trip..." : "Start Delivery Trip"}</span>
                                   </button>
                                   <button
                                     type="button"
@@ -1445,15 +1612,15 @@ export default function AgentDeliveryPage() {
                                     }}
                                     disabled={actionLoadingId === task.shipment_id}
                                     style={{
-                                      padding: "12px 14px",
+                                      flex: 1,
+                                      padding: "10px",
                                       borderRadius: "8px",
-                                      background: "#fef2f2",
+                                      background: "#ffffff",
                                       color: "#b91c1c",
-                                      fontSize: "13px",
+                                      fontSize: "12.5px",
                                       fontWeight: 700,
                                       border: "1px solid #fecaca",
                                       cursor: "pointer",
-                                      whiteSpace: "nowrap",
                                     }}
                                   >
                                     Decline
@@ -1462,7 +1629,8 @@ export default function AgentDeliveryPage() {
                               )}
 
                               {(isOutForDelivery || isRescheduled) && (
-                                <>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                  {/* Primary Action Button */}
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1477,56 +1645,95 @@ export default function AgentDeliveryPage() {
                                     disabled={actionLoadingId === task.shipment_id}
                                     style={{
                                       width: "100%",
-                                      padding: "13px",
+                                      padding: "11px 14px",
                                       borderRadius: "8px",
                                       background: isOutForDelivery ? "#16a34a" : "#2563eb",
                                       color: "#ffffff",
-                                      fontSize: "14px",
-                                      fontWeight: 700,
+                                      fontSize: "13.5px",
+                                      fontWeight: 800,
                                       border: "none",
                                       cursor: actionLoadingId === task.shipment_id ? "wait" : "pointer",
-                                      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.15)",
-                                      transition: "all 0.15s ease",
-                                    }}
-                                  >
-                                    {actionLoadingId === task.shipment_id
-                                      ? "Updating..."
-                                      : isRescheduled
-                                      ? "Resume / Start Trip"
-                                      : "Mark Delivered (Verify OTP)"}
-                                  </button>
-
-                                  {/* Unable to deliver / Reschedule Trigger Button */}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setRescheduleTask(task);
-                                      setRescheduleReason(RESCHEDULE_REASONS[0]);
-                                      setRescheduleNote("");
-                                    }}
-                                    disabled={actionLoadingId === task.shipment_id}
-                                    style={{
-                                      width: "100%",
-                                      padding: "10px",
-                                      borderRadius: "8px",
-                                      background: "#fffbeb",
-                                      color: "#b45309",
-                                      fontSize: "13px",
-                                      fontWeight: 700,
-                                      border: "1px solid #fde68a",
-                                      cursor: "pointer",
+                                      boxShadow: isOutForDelivery
+                                        ? "0 2px 6px rgba(22, 163, 74, 0.25)"
+                                        : "0 2px 6px rgba(37, 99, 235, 0.25)",
                                       display: "flex",
                                       alignItems: "center",
                                       justifyContent: "center",
                                       gap: "6px",
                                     }}
                                   >
-                                    <CalendarIcon />
-                                    <span>
-                                      {isRescheduled ? "Update Reschedule Slot / Notes" : "Unable to Deliver? Reschedule"}
-                                    </span>
+                                    {actionLoadingId === task.shipment_id ? (
+                                      "Updating..."
+                                    ) : isRescheduled ? (
+                                      <>
+                                        <NavigationIcon />
+                                        <span>Resume / Start Trip</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckIcon size={16} strokeWidth={2.5} />
+                                        <span>Deliver Order (Enter OTP)</span>
+                                      </>
+                                    )}
                                   </button>
-                                </>
+
+                                  {/* Secondary Helper Actions Grid (Reschedule + Return to Warehouse) */}
+                                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setRescheduleTask(task);
+                                        setRescheduleReason(RESCHEDULE_REASONS[0]);
+                                        setRescheduleNote("");
+                                      }}
+                                      disabled={actionLoadingId === task.shipment_id}
+                                      style={{
+                                        padding: "8px 10px",
+                                        borderRadius: "8px",
+                                        background: "#fffbeb",
+                                        color: "#b45309",
+                                        fontSize: "12px",
+                                        fontWeight: 700,
+                                        border: "1px solid #fde68a",
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        gap: "4px",
+                                      }}
+                                    >
+                                      <CalendarIcon />
+                                      <span>{isRescheduled ? "Edit Slot" : "Reschedule"}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setWarehouseDropTask(task);
+                                        setWarehouseDropReason(RETURN_TO_WAREHOUSE_REASONS[0]);
+                                        setWarehouseDropNote("");
+                                      }}
+                                      disabled={actionLoadingId === task.shipment_id}
+                                      style={{
+                                        padding: "8px 10px",
+                                        borderRadius: "8px",
+                                        background: "#fef2f2",
+                                        color: "#b91c1c",
+                                        fontSize: "12px",
+                                        fontWeight: 700,
+                                        border: "1px solid #fecaca",
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        gap: "4px",
+                                      }}
+                                    >
+                                      <BuildingIcon />
+                                      <span>Return to Hub</span>
+                                    </button>
+                                  </div>
+                                </div>
                               )}
                             </>
                           )}
@@ -1541,7 +1748,7 @@ export default function AgentDeliveryPage() {
         )}
 
         {/* TAB 2: OPEN PICKUPS POOL */}
-        {activeTab === "pool" && (
+        {profile?.allow_open_pickup !== false && activeTab === "pool" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {pool.length === 0 ? (
               <div style={{ textAlign: "center", padding: "44px 20px", background: "#ffffff", borderRadius: "14px", border: "1px solid #e2e8f0" }}>
@@ -1759,6 +1966,158 @@ export default function AgentDeliveryPage() {
                   }}
                 >
                   {actionLoadingId === rescheduleTask.shipment_id ? "Saving..." : "Confirm Reschedule"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DROP / RETURN TO STORE WAREHOUSE MODAL */}
+      {warehouseDropTask && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: "0",
+          }}
+          onClick={() => setWarehouseDropTask(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "500px",
+              background: "#ffffff",
+              borderRadius: "20px 20px 0 0",
+              padding: "24px 20px 32px",
+              boxShadow: "0 -10px 25px rgba(0, 0, 0, 0.15)",
+              boxSizing: "border-box",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 800, color: "#991b1b" }}>
+                  Return Parcel to Store Warehouse
+                </h3>
+                <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
+                  Order #{warehouseDropTask.order_id.slice(0, 8).toUpperCase()} • {warehouseDropTask.customer_name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWarehouseDropTask(null)}
+                style={{
+                  background: "#f1f5f9",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#64748b",
+                  cursor: "pointer",
+                }}
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <div
+              style={{
+                background: "#fef2f2",
+                borderRadius: "8px",
+                border: "1px solid #fecaca",
+                padding: "10px 12px",
+                marginBottom: "14px",
+                fontSize: "12.5px",
+                color: "#991b1b",
+                lineHeight: 1.4,
+              }}
+            >
+              Use this option when the order could not be delivered after repeated attempts or the customer cannot be reached. Hand over the physical package back to the store warehouse.
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleUpdateStatus(warehouseDropTask.shipment_id, "return_to_warehouse", {
+                  reason: warehouseDropReason,
+                  notes: warehouseDropNote.trim() ? `${warehouseDropReason} • Note: ${warehouseDropNote.trim()}` : warehouseDropReason,
+                });
+                setWarehouseDropTask(null);
+              }}
+              style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+            >
+              <div>
+                <label style={modalLabelStyle}>Reason for Warehouse Return</label>
+                <select
+                  value={warehouseDropReason}
+                  onChange={(e) => setWarehouseDropReason(e.target.value)}
+                  style={modalInputStyle}
+                  required
+                >
+                  {RETURN_TO_WAREHOUSE_REASONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={modalLabelStyle}>Rider Handover Note (Store / Admin Record)</label>
+                <textarea
+                  rows={2}
+                  value={warehouseDropNote}
+                  onChange={(e) => setWarehouseDropNote(e.target.value)}
+                  placeholder="e.g. Attempted 3 calls, customer unreachable. Dropped package with store hub manager."
+                  style={{ ...modalInputStyle, resize: "none", fontFamily: "inherit" }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setWarehouseDropTask(null)}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    borderRadius: "8px",
+                    background: "#f1f5f9",
+                    border: "1px solid #cbd5e1",
+                    color: "#475569",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoadingId === warehouseDropTask.shipment_id}
+                  style={{
+                    flex: 2,
+                    padding: "12px",
+                    borderRadius: "8px",
+                    background: "#dc2626",
+                    border: "none",
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: actionLoadingId === warehouseDropTask.shipment_id ? "wait" : "pointer",
+                    boxShadow: "0 2px 4px rgba(220, 38, 38, 0.2)",
+                  }}
+                >
+                  {actionLoadingId === warehouseDropTask.shipment_id ? "Submitting..." : "Confirm Warehouse Return"}
                 </button>
               </div>
             </form>
@@ -2304,10 +2663,9 @@ export default function AgentDeliveryPage() {
                     color: "#16a34a",
                     display: "grid",
                     placeItems: "center",
-                    fontSize: "18px",
                   }}
                 >
-                  🔒
+                  <LockIcon />
                 </div>
                 <div>
                   <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 800, color: "#0f172a" }}>
@@ -2353,7 +2711,7 @@ export default function AgentDeliveryPage() {
                 }}
               >
                 <span style={{ fontSize: "13px", fontWeight: 700, color: "#b45309" }}>
-                  💵 Cash to Collect:
+                  Cash to Collect (COD):
                 </span>
                 <span style={{ fontSize: "17px", fontWeight: 800, color: "#92400e" }}>
                   {formatPrice(deliverOtpTask.total_amount)}
@@ -2419,9 +2777,13 @@ export default function AgentDeliveryPage() {
                     color: "#dc2626",
                     fontSize: "12.5px",
                     fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
                   }}
                 >
-                  ⚠️ {deliverOtpError}
+                  <AlertTriangleIcon />
+                  <span>{deliverOtpError}</span>
                 </div>
               )}
 
@@ -2497,29 +2859,28 @@ export default function AgentDeliveryPage() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Big Animated Success Badge */}
+            {/* Big Clean Success Badge */}
             <div
               style={{
-                width: "68px",
-                height: "68px",
+                width: "64px",
+                height: "64px",
                 borderRadius: "50%",
-                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                background: "#16a34a",
                 color: "#ffffff",
                 display: "grid",
                 placeItems: "center",
-                fontSize: "32px",
                 margin: "0 auto 14px",
-                boxShadow: "0 10px 20px rgba(16, 185, 129, 0.35)",
+                boxShadow: "0 10px 20px rgba(22, 163, 74, 0.3)",
               }}
             >
-              ✓
+              <CheckIcon size={32} strokeWidth={3} />
             </div>
 
             <h2 style={{ margin: "0 0 6px", fontSize: "20px", fontWeight: 900, color: "#0f172a" }}>
-              Delivery Confirmed!
+              Delivery Confirmed
             </h2>
             <p style={{ margin: "0 0 18px", fontSize: "13px", color: "#64748b" }}>
-              OTP verified successfully. Order is marked as delivered.
+              OTP verified successfully. Order marked as delivered.
             </p>
 
             {/* Order Summary Details Card */}
@@ -2563,7 +2924,7 @@ export default function AgentDeliveryPage() {
                     fontWeight: 800,
                   }}
                 >
-                  ● Delivered
+                  Delivered
                 </div>
               </div>
 
@@ -2601,7 +2962,7 @@ export default function AgentDeliveryPage() {
                       textTransform: "uppercase",
                     }}
                   >
-                    {deliverySuccessTask.is_cod ? "💵 Cash Collected" : "💳 Prepaid (Paid Online)"}
+                    {deliverySuccessTask.is_cod ? "Cash Collected" : "Prepaid (Paid Online)"}
                   </div>
                   <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
                     {deliverySuccessTask.is_cod ? "Credited to Cash in Hand" : "No cash collected"}

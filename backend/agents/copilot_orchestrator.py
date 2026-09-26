@@ -20,7 +20,7 @@ from agents.seo_health_agent import audit_store_health, check_low_stock_inventor
 from agents.copilot_knowledge import search_knowledge_base
 from agents.response_synthesizer import synthesize_agent_response, stream_synthesize_agent_response
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0, request_timeout=20, max_retries=2)
 
 
 class IntentAnalysis(BaseModel):

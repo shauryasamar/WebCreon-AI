@@ -61,7 +61,7 @@ class PaletteOption(BaseModel):
 
 
 class PaletteResponse(BaseModel):
-    palettes: List[PaletteOption] = Field(description="List of 4-5 distinct color palette options")
+    palettes: List[PaletteOption] = Field(description="List of distinct, WCAG AA compliant color palette options")
 
 
 # ==========================================
@@ -95,7 +95,7 @@ def hex_to_hsl(hex_str: str) -> Tuple[float, float, float]:
 
 def hsl_to_hex(h: float, s: float, l: float) -> str:
     r, g, b = colorsys.hls_to_rgb((h % 360) / 360.0, max(0.0, min(1.0, l)), max(0.0, min(1.0, s)))
-    return rgb_to_hex(int(round(r * 255)), int(round(g * 255)), int(round(g * 255)))
+    return rgb_to_hex(int(round(r * 255)), int(round(g * 255)), int(round(b * 255)))
 
 
 def get_relative_luminance(hex_str: str) -> float:
@@ -146,6 +146,31 @@ def calculate_contrast_color(bg_val: str) -> str:
     ratio_dark = calculate_contrast_ratio(hex_clean, "#0f172a")
     ratio_light = calculate_contrast_ratio(hex_clean, "#ffffff")
     return "#0f172a" if ratio_dark >= ratio_light else "#ffffff"
+
+
+def ensure_accessible_contrast(text_hex: Optional[str], bg_hex: str, min_ratio: float = 4.5) -> str:
+    """
+    Guarantees WCAG AA readability with zero camouflage:
+    - If the provided text_hex passes the contrast threshold (>= min_ratio:1), keeps the rich designer shade (e.g. warm charcoal, rich slate, espresso).
+    - If it fails (< min_ratio:1), automatically selects a guaranteed high-contrast tone (#0f172a or #ffffff) to prevent any camouflage.
+    """
+    if not text_hex or not isinstance(text_hex, str) or not text_hex.strip():
+        return calculate_contrast_color(bg_hex)
+
+    t_clean = text_hex.strip()
+    b_clean = str(bg_hex or "").strip()
+
+    try:
+        if re.search(r"#[0-9a-fA-F]{3,6}", t_clean) and re.search(r"#[0-9a-fA-F]{3,6}", b_clean):
+            t_hex = re.search(r"#[0-9a-fA-F]{3,6}", t_clean).group(0)
+            b_hex = re.search(r"#[0-9a-fA-F]{3,6}", b_clean).group(0)
+            ratio = calculate_contrast_ratio(t_hex, b_hex)
+            if ratio >= min_ratio:
+                return t_clean
+    except Exception:
+        pass
+
+    return calculate_contrast_color(bg_hex)
 
 
 def generate_tonal_harmony(base_hex: str, is_dark: bool = False) -> Dict[str, str]:
@@ -355,7 +380,7 @@ def generate_palettes_from_hex(base_hex: str, brand_name: str = "Store") -> List
 # ==========================================
 
 # High-creativity GPT-4o-mini for rich, diverse, fast and cost-effective color palette generation
-creative_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.85)
+creative_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.85, request_timeout=20, max_retries=2)
 
 
 async def generate_color_palettes(
@@ -363,29 +388,43 @@ async def generate_color_palettes(
     domain: str = "E-Commerce",
     color_description: Optional[str] = None,
     session_id: Optional[str] = None,
+    count: int = 3,
 ) -> List[Dict[str, Any]]:
-    """Generates 4-5 WCAG AA compliant, highly creative color palettes based on brand description and domain."""
+    """Generates 3 (default) or more WCAG AA compliant, highly creative color palettes based on brand description and domain."""
     from agents.token_tracker import TokenCostCallback
+
+    # Determine target count: default is 3 to save tokens; boost to 5 if user asks for more/all
+    desc_lower = str(color_description or "").lower()
+    more_keywords = ["more", "5", "five", "all", "extra", "many", "refresh", "different options", "more options"]
+    target_count = 5 if any(k in desc_lower for k in more_keywords) else count
+
+    option_lines = [
+        "1. OPTION 1 (Light Studio Minimal): Crisp alabaster/white primary_bg (#ffffff, #fffbf7), floating navbar, vivid action accent buttons.",
+        "2. OPTION 2 (Deep Dark Luxury): Rich obsidian/midnight primary_bg (e.g. #0c0a14, #0f172a), elevated card_bg container, dark navbar.",
+        "3. OPTION 3 (Warm Tinted / Earthy Editorial): Soft organic linen/oat/blush primary_bg (e.g. #faf7f2, #fdf4f4), natural toned navbar.",
+    ]
+    if target_count > 3:
+        option_lines.append("4. OPTION 4 (Bold High-Contrast Neo-Modern): Striking contrast header with saturated CTA accents.")
+    if target_count > 4:
+        option_lines.append("5. OPTION 5 (Vibrant Gradient / Atmospheric): Dynamic gradient hero_bg and luminous accents.")
+
+    options_text = "\n  ".join(option_lines)
+
     palette_prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are an elite color theory director for luxury & modern e-commerce brands.
-Your job is to craft 4-5 DISTINCT, UNFORGETTABLE, and WCAG AA compliant color palettes tailored specifically to the user's brand name, domain, and exact aesthetic preference.
+        ("system", f"""You are a world-class color theory director for luxury, boutique, and modern e-commerce brands (inspired by Stripe, Apple, Aesop, Nike, Linear, and high-end design systems).
+Your job is to craft exactly {target_count} DISTINCT, SOPHISTICATED, and WCAG AA compliant color palettes tailored specifically to the user's brand name, niche/domain, and aesthetic preference.
 
-CREATIVITY & ARCHETYPAL DIVERSITY RULES:
-- NEVER generate 5 repetitive palettes that all use basic white backgrounds with only the navbar color swapped!
-- Each of the 4-5 generated palettes MUST represent a completely DIFFERENT structural design archetype:
-  1. OPTION 1 (Light Studio Minimal): Crisp alabaster/white primary_bg (#ffffff, #fffbf7), crisp floating navbar, vivid action accent buttons.
-  2. OPTION 2 (Deep Dark Luxury): Rich atmospheric obsidian/midnight/slate primary_bg (e.g. #0c0a14, #120a0d, #0f172a), elevated card_bg container, matching dark navbar and footer.
-  3. OPTION 3 (Warm Tinted / Earthy Editorial): Soft organic linen/oat/blush primary_bg (e.g. #faf7f2, #fdf4f4, #f4f7f4), natural toned navbar, elegant secondary surface containers.
-  4. OPTION 4 (Bold High-Contrast Neo-Modern): Striking contrast (e.g. deep carbon black header against vivid saturated CTA accents and sharp typography).
-  5. OPTION 5 (Vibrant Gradient / Atmospheric): Rich modern linear-gradient hero_bg, luminous accent colors, and dynamic surface containers.
+CREATIVE DESIGN & SHADE HARMONY GUIDELINES:
+- Generate exactly {target_count} diverse, distinct design directions:
+  {options_text}
 
-- THEMATIC COLOR HARMONY & DYNAMIC VARIETY:
-  - Explore the full gamut of color nuances (e.g. for Red: crimson, scarlet, burgundy, terracotta, coral, ruby, wine, brick, rosewood).
-  - When a color is requested (e.g. "Red", "Green", "Pastel", "Cyber"), apply that color theme across DIFFERENT roles in each palette (e.g. one uses it as high-contrast CTA accents, another as deep burgundy dark mode, another as warm terracotta/rose, another as bold saturated header, another as rich gradient hero).
-  - Every generation must feel fresh, tailor-fit to the brand's industry, and uniquely named with creative concept storytelling.
-- PRODUCT CARDS (CRITICAL): Always give `card_bg` an elevated, distinctive surface background hex that harmonizes with the brand palette (e.g. if primary_bg is dark, card_bg must be elevated container hex; if primary_bg is light, card_bg can be crisp #ffffff or subtle surface tone).
-- Ensure all text_color and navbar_text_color combinations pass strict WCAG AA readability against their respective background colors."""),
-        ("user", "Brand: {brand_name}\nDomain/Niche: {domain}\nSpecific Vibe/Request: {color_description}"),
+- TONAL SOPHISTICATION & RICH SHADES:
+  - Avoid crude stark #000000 or generic primary colors. Use refined, designer-grade tones (e.g. rich warm charcoals #1c1917, deep slate #0f172a, midnight navy #0a0f1d, espresso #1c1411, soft warm ivory #fdfbf7, crisp zinc #fafafa).
+  - Secondary containers & subtle borders: Use harmonizing tints (e.g. #f4f4f5, #f5f3ef, #18181b) that elevate product cards and give natural visual depth.
+  - Buttons & CTAs: Provide vibrant, premium action accents with coordinated hover states and crisp high-contrast text.
+  - ZERO CAMOUFLAGE: Ensure text_color, muted_text, navbar_text_color, footer_text_color, and card_text_color all maintain strong contrast (WCAG AA 4.5:1+) against their respective background surfaces.
+- PRODUCT CARDS: Always give `card_bg` an elevated, distinctive surface hex that harmonizes with the brand palette."""),
+        ("user", "Brand: {brand_name}\nDomain/Niche: {domain}\nSpecific Vibe/Request: {color_description}\nTarget Count: {target_count}"),
     ])
 
     try:
@@ -395,25 +434,32 @@ CREATIVITY & ARCHETYPAL DIVERSITY RULES:
                 "brand_name": brand_name,
                 "domain": domain,
                 "color_description": color_description or "Modern clean minimalist",
+                "target_count": target_count,
             },
             config={"callbacks": [TokenCostCallback("ColorAgent.PaletteGenerator", session_id=session_id)]}
         )
         output_palettes = []
         for p in res.palettes:
             p_dict = p.model_dump()
-            # Enforce strict WCAG AA contrast for generated text colors vs background colors
+            # Smart WCAG AA contrast preservation: keeps designer shades, eliminates camouflage
             if "primary_bg" in p_dict:
-                p_dict["text_color"] = calculate_contrast_color(p_dict["primary_bg"])
+                p_dict["text_color"] = ensure_accessible_contrast(p_dict.get("text_color"), p_dict["primary_bg"], min_ratio=4.5)
+                if p_dict.get("muted_text"):
+                    p_dict["muted_text"] = ensure_accessible_contrast(p_dict.get("muted_text"), p_dict["primary_bg"], min_ratio=3.0)
             if "navbar_bg" in p_dict:
-                p_dict["navbar_text_color"] = calculate_contrast_color(p_dict["navbar_bg"])
+                p_dict["navbar_text_color"] = ensure_accessible_contrast(p_dict.get("navbar_text_color"), p_dict["navbar_bg"], min_ratio=4.5)
                 if not p_dict.get("navbar_outer_bg"):
                     p_dict["navbar_outer_bg"] = p_dict["navbar_bg"]
             if "footer_bg" in p_dict:
-                p_dict["footer_text_color"] = calculate_contrast_color(p_dict["footer_bg"])
+                p_dict["footer_text_color"] = ensure_accessible_contrast(p_dict.get("footer_text_color"), p_dict["footer_bg"], min_ratio=4.5)
+                if p_dict.get("footer_muted_color"):
+                    p_dict["footer_muted_color"] = ensure_accessible_contrast(p_dict.get("footer_muted_color"), p_dict["footer_bg"], min_ratio=3.0)
             if "hero_bg" in p_dict:
-                p_dict["hero_text_color"] = calculate_contrast_color(p_dict["hero_bg"])
+                p_dict["hero_text_color"] = ensure_accessible_contrast(p_dict.get("hero_text_color"), p_dict["hero_bg"], min_ratio=4.5)
             if "card_bg" in p_dict:
-                p_dict["card_text_color"] = calculate_contrast_color(p_dict["card_bg"])
+                p_dict["card_text_color"] = ensure_accessible_contrast(p_dict.get("card_text_color"), p_dict["card_bg"], min_ratio=4.5)
+            if "accent_color" in p_dict:
+                p_dict["accent_text"] = ensure_accessible_contrast(p_dict.get("accent_text"), p_dict["accent_color"], min_ratio=4.5)
             output_palettes.append(p_dict)
         return output_palettes
     except Exception as e:
@@ -1095,7 +1141,7 @@ async def handle_color_and_design_request(
 
     if is_match_site_query or is_card_match_query:
         source_bg = theme.get("navbar_bg") or theme.get("secondary_bg") or theme.get("primary_bg") or "#ffffff"
-        source_text = theme.get("navbar_text_color") or calculate_contrast_color(source_bg)
+        source_text = ensure_accessible_contrast(theme.get("navbar_text_color"), source_bg)
         source_border = theme.get("navbar_border_color") or source_bg
 
         if is_card_match_query:
@@ -1147,48 +1193,48 @@ async def handle_color_and_design_request(
     raw_keys = color_res.get("raw_patch") or {}
 
     if ai_color_patch:
-        # Guarantee High-Contrast Accessibility ONLY when text color is not explicitly specified by user!
+        # Guarantee High-Contrast Accessibility without camouflage!
         if "navbar_bg" in ai_color_patch:
             if "navbar_outer_bg" not in raw_keys:
                 ai_color_patch["navbar_outer_bg"] = ai_color_patch["navbar_bg"]
             if "navbar_text_color" not in raw_keys:
-                ai_color_patch["navbar_text_color"] = calculate_contrast_color(ai_color_patch["navbar_bg"])
+                ai_color_patch["navbar_text_color"] = ensure_accessible_contrast(ai_color_patch.get("navbar_text_color"), ai_color_patch["navbar_bg"])
         elif "navbar_outer_bg" in ai_color_patch:
             if "navbar_bg" not in raw_keys:
                 ai_color_patch["navbar_bg"] = ai_color_patch["navbar_outer_bg"]
             if "navbar_text_color" not in raw_keys:
-                ai_color_patch["navbar_text_color"] = calculate_contrast_color(ai_color_patch["navbar_outer_bg"])
+                ai_color_patch["navbar_text_color"] = ensure_accessible_contrast(ai_color_patch.get("navbar_text_color"), ai_color_patch["navbar_outer_bg"])
 
         if "footer_bg" in ai_color_patch and "footer_text_color" not in raw_keys:
-            ai_color_patch["footer_text_color"] = calculate_contrast_color(ai_color_patch["footer_bg"])
+            ai_color_patch["footer_text_color"] = ensure_accessible_contrast(ai_color_patch.get("footer_text_color"), ai_color_patch["footer_bg"])
         if "card_bg" in ai_color_patch and "card_text_color" not in raw_keys:
-            ai_color_patch["card_text_color"] = calculate_contrast_color(ai_color_patch["card_bg"])
+            ai_color_patch["card_text_color"] = ensure_accessible_contrast(ai_color_patch.get("card_text_color"), ai_color_patch["card_bg"])
         if "hero_bg" in ai_color_patch and "hero_text_color" not in raw_keys:
-            ai_color_patch["hero_text_color"] = calculate_contrast_color(ai_color_patch["hero_bg"])
+            ai_color_patch["hero_text_color"] = ensure_accessible_contrast(ai_color_patch.get("hero_text_color"), ai_color_patch["hero_bg"])
         if "primary_bg" in ai_color_patch and "text_color" not in raw_keys:
-            ai_color_patch["text_color"] = calculate_contrast_color(ai_color_patch["primary_bg"])
+            ai_color_patch["text_color"] = ensure_accessible_contrast(ai_color_patch.get("text_color"), ai_color_patch["primary_bg"])
         if "grid_bg" in ai_color_patch and "grid_text_color" not in raw_keys:
-            ai_color_patch["grid_text_color"] = calculate_contrast_color(ai_color_patch["grid_bg"])
+            ai_color_patch["grid_text_color"] = ensure_accessible_contrast(ai_color_patch.get("grid_text_color"), ai_color_patch["grid_bg"])
         if "product_detail_bg" in ai_color_patch and "product_detail_text" not in raw_keys:
-            ai_color_patch["product_detail_text"] = calculate_contrast_color(ai_color_patch["product_detail_bg"])
+            ai_color_patch["product_detail_text"] = ensure_accessible_contrast(ai_color_patch.get("product_detail_text"), ai_color_patch["product_detail_bg"])
         if "cart_bg" in ai_color_patch and "cart_text_color" not in raw_keys:
-            ai_color_patch["cart_text_color"] = calculate_contrast_color(ai_color_patch["cart_bg"])
+            ai_color_patch["cart_text_color"] = ensure_accessible_contrast(ai_color_patch.get("cart_text_color"), ai_color_patch["cart_bg"])
         if "summary_bg" in ai_color_patch and "summary_text_color" not in raw_keys:
-            ai_color_patch["summary_text_color"] = calculate_contrast_color(ai_color_patch["summary_bg"])
+            ai_color_patch["summary_text_color"] = ensure_accessible_contrast(ai_color_patch.get("summary_text_color"), ai_color_patch["summary_bg"])
         if "delivery_form_bg" in ai_color_patch and "delivery_form_text" not in raw_keys:
-            ai_color_patch["delivery_form_text"] = calculate_contrast_color(ai_color_patch["delivery_form_bg"])
+            ai_color_patch["delivery_form_text"] = ensure_accessible_contrast(ai_color_patch.get("delivery_form_text"), ai_color_patch["delivery_form_bg"])
         if "payment_bg" in ai_color_patch and "payment_text_color" not in raw_keys:
-            ai_color_patch["payment_text_color"] = calculate_contrast_color(ai_color_patch["payment_bg"])
+            ai_color_patch["payment_text_color"] = ensure_accessible_contrast(ai_color_patch.get("payment_text_color"), ai_color_patch["payment_bg"])
         if "order_history_card_bg" in ai_color_patch and "order_history_text" not in raw_keys:
-            ai_color_patch["order_history_text"] = calculate_contrast_color(ai_color_patch["order_history_card_bg"])
+            ai_color_patch["order_history_text"] = ensure_accessible_contrast(ai_color_patch.get("order_history_text"), ai_color_patch["order_history_card_bg"])
         if "order_history_bg" in ai_color_patch and "order_history_text" not in raw_keys:
-            ai_color_patch["order_history_text"] = calculate_contrast_color(ai_color_patch["order_history_bg"])
+            ai_color_patch["order_history_text"] = ensure_accessible_contrast(ai_color_patch.get("order_history_text"), ai_color_patch["order_history_bg"])
         if "filter_bg" in ai_color_patch and "filter_text_color" not in raw_keys:
-            ai_color_patch["filter_text_color"] = calculate_contrast_color(ai_color_patch["filter_bg"])
+            ai_color_patch["filter_text_color"] = ensure_accessible_contrast(ai_color_patch.get("filter_text_color"), ai_color_patch["filter_bg"])
         if "pagination_bg" in ai_color_patch and "pagination_text_color" not in raw_keys:
-            ai_color_patch["pagination_text_color"] = calculate_contrast_color(ai_color_patch["pagination_bg"])
+            ai_color_patch["pagination_text_color"] = ensure_accessible_contrast(ai_color_patch.get("pagination_text_color"), ai_color_patch["pagination_bg"])
         if "review_card_bg" in ai_color_patch and "review_text_color" not in raw_keys:
-            ai_color_patch["review_text_color"] = calculate_contrast_color(ai_color_patch["review_card_bg"])
+            ai_color_patch["review_text_color"] = ensure_accessible_contrast(ai_color_patch.get("review_text_color"), ai_color_patch["review_card_bg"])
 
         if target_comp in ["overall", "webpage", "website", "site", "all", "entire", "full"]:
             for k in ALL_COMPONENT_OVERRIDE_KEYS:

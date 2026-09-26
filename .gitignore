@@ -31,3 +31,8 @@ Thumbs.db
 # Local custom/untracked build config
 fruntend/src/customizations/assetsRegistry.ts
 fruntend/tsconfig.json
+
+# Scratch & Debug
+scratch/
+backend/scratch/
+backend/test/debug_test.py

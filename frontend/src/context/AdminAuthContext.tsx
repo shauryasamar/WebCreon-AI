@@ -1,25 +1,72 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { API_BASE_URL } from "../config/api";
+import { clearSavedSitesMemoryCache } from "../utils/savedSitesCache";
 
 export type AdminUser = {
   id: string;
   email: string;
   name: string;
+  gender?: string | null;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  role?: string;
+  roleId?: string | null;
+  isOwner?: boolean;
+  permissions?: string[];
+  websiteAccessType?: "all" | "specific";
+  status?: string;
+  isActive?: boolean;
+  authProvider?: string;
+  googleId?: string | null;
+  timezone?: string;
+  hasPassword?: boolean;
+  createdAt?: string | null;
 };
 
 type AdminAuthContextType = {
   admin: AdminUser | null;
   loading: boolean;
+  isOwner: boolean;
+  hasPermission: (permissionKey: string) => boolean;
   setAdmin: (admin: AdminUser | null) => void;
   refreshAdmin: () => Promise<AdminUser | null>;
   logoutAdmin: () => Promise<void>;
+  deleteAdminAccount: () => Promise<void>;
 };
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
+const ADMIN_STORAGE_KEY = "wc_admin_profile";
+
+function getCachedAdmin(): AdminUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.id || parsed?.email) {
+      return parsed as AdminUser;
+    }
+  } catch {}
+  return null;
+}
+
 export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [admin, setAdmin] = useState<AdminUser | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [admin, setAdminState] = useState<AdminUser | null>(getCachedAdmin);
+  const [loading, setLoading] = useState<boolean>(() => !getCachedAdmin());
+
+  const setAdmin = useCallback((next: AdminUser | null) => {
+    setAdminState(next);
+    try {
+      if (typeof window !== "undefined") {
+        if (next) {
+          localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(next));
+        } else {
+          localStorage.removeItem(ADMIN_STORAGE_KEY);
+        }
+      }
+    } catch {}
+  }, []);
 
   const refreshAdmin = useCallback(async (): Promise<AdminUser | null> => {
     try {
@@ -42,7 +89,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setAdmin]);
 
   const logoutAdmin = useCallback(async () => {
     try {
@@ -56,27 +103,137 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       try {
         if (typeof window !== "undefined") {
           Object.keys(sessionStorage).forEach((key) => {
-            if (key.startsWith("webnirmaan_copilot_chat_")) {
+            if (
+              key.startsWith("webnirmaan_copilot_chat_") ||
+              key.startsWith("webnirmaan_onboarding_") ||
+              key.startsWith("wc_onboarding_")
+            ) {
               sessionStorage.removeItem(key);
             }
           });
           Object.keys(localStorage).forEach((key) => {
-            if (key.startsWith("webnirmaan_copilot_chat_")) {
+            if (
+              key.startsWith("webnirmaan_copilot_chat_") ||
+              key.startsWith("webnirmaan_onboarding_") ||
+              key.startsWith("wc_onboarding_") ||
+              key.startsWith("wc_site_snapshot_") ||
+              key.startsWith("wc_theme_") ||
+              key.startsWith("wc_admin_")
+            ) {
               localStorage.removeItem(key);
             }
           });
+          localStorage.removeItem("wc_admin_saved_sites");
+          clearSavedSitesMemoryCache();
         }
       } catch {}
       setAdmin(null);
     }
-  }, []);
+  }, [setAdmin]);
 
   useEffect(() => {
-    refreshAdmin();
+    if (typeof window === "undefined") return;
+    const path = window.location.pathname;
+    const hasAdminSession = Boolean(localStorage.getItem(ADMIN_STORAGE_KEY));
+    const isAdminRoute =
+      path.startsWith("/admin") ||
+      path.startsWith("/builder") ||
+      path.startsWith("/dashboard") ||
+      path.startsWith("/seller");
+
+    // Only query /auth/admin/me if visiting an admin route or an admin session is stored
+    if (hasAdminSession || isAdminRoute) {
+      refreshAdmin();
+    } else {
+      setLoading(false);
+    }
   }, [refreshAdmin]);
 
+  const isOwner = Boolean(
+    admin &&
+    (admin as any).isOwner !== false &&
+    (
+      (admin as any).isOwner === true ||
+      admin.role === "Owner" ||
+      (!admin.roleId && admin.role === "super_admin")
+    )
+  );
+
+  const hasPermission = useCallback(
+    (permissionKey: string): boolean => {
+      if (!admin) return false;
+      if (isOwner) {
+        return true;
+      }
+      if (!admin.permissions || !Array.isArray(admin.permissions)) return false;
+      if (admin.permissions.includes("*") || admin.permissions.includes("all")) return true;
+      if (admin.permissions.includes(permissionKey)) return true;
+      // Backward/forward compatibility aliases
+      if (permissionKey === "chat:access" && (admin.permissions.includes("chat:view") || admin.permissions.includes("chat:send"))) return true;
+      if (permissionKey === "chat:view" && admin.permissions.includes("chat:access")) return true;
+      if (permissionKey === "customize:edit" && admin.permissions.includes("customize:view")) return true;
+      if (permissionKey === "customize:view" && admin.permissions.includes("customize:edit")) return true;
+      const [cat] = permissionKey.split(":");
+      if (cat && admin.permissions.includes(`${cat}:*`)) return true;
+      return false;
+    },
+    [admin, isOwner]
+  );
+
+  const deleteAdminAccount = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/auth/admin/account`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || data.message || "Failed to delete account");
+    }
+
+    // Only clear local session and auth state on successful deletion
+    try {
+      if (typeof window !== "undefined") {
+        Object.keys(sessionStorage).forEach((key) => {
+          if (
+            key.startsWith("webnirmaan_copilot_chat_") ||
+            key.startsWith("webnirmaan_onboarding_") ||
+            key.startsWith("wc_onboarding_")
+          ) {
+            sessionStorage.removeItem(key);
+          }
+        });
+        Object.keys(localStorage).forEach((key) => {
+          if (
+            key.startsWith("webnirmaan_copilot_chat_") ||
+            key.startsWith("webnirmaan_onboarding_") ||
+            key.startsWith("wc_onboarding_") ||
+            key.startsWith("wc_site_snapshot_") ||
+            key.startsWith("wc_theme_") ||
+            key.startsWith("wc_admin_")
+          ) {
+            localStorage.removeItem(key);
+          }
+        });
+        localStorage.removeItem("wc_admin_saved_sites");
+        clearSavedSitesMemoryCache();
+      }
+    } catch {}
+    setAdmin(null);
+  }, [setAdmin]);
+
   return (
-    <AdminAuthContext.Provider value={{ admin, loading, setAdmin, refreshAdmin, logoutAdmin }}>
+    <AdminAuthContext.Provider
+      value={{
+        admin,
+        loading,
+        isOwner,
+        hasPermission,
+        setAdmin,
+        refreshAdmin,
+        logoutAdmin,
+        deleteAdminAccount,
+      }}
+    >
       {children}
     </AdminAuthContext.Provider>
   );

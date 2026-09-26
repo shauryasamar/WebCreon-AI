@@ -3,9 +3,24 @@ import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { saveThemeSnapshot, updateThemeValues, applyThemeToPages } from "../customizations/editorUtils";
 import { AiAvatar } from "./AiAvatar";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import { AccessDeniedView } from "./AccessDeniedView";
 
 type DataCard = {
-  type: "redirect_card" | "orders_card" | "returns_card" | "analytics_card" | "palette_suggestions_card" | "component_palette_suggestions_card" | "camouflage_warning_card" | "table_card";
+  type:
+    | "redirect_card"
+    | "orders_card"
+    | "returns_card"
+    | "analytics_card"
+    | "palette_suggestions_card"
+    | "component_palette_suggestions_card"
+    | "camouflage_warning_card"
+    | "table_card"
+    | "paywall_card"
+    | "product_preview_card"
+    | "order_summary_card"
+    | "sql_query_result"
+    | string;
   title?: string;
   description?: string;
   target_url?: string;
@@ -20,6 +35,9 @@ type DataCard = {
   orders?: Array<{ id: string; total: number; status: string; items_count?: number; items_summary?: string; date?: string }>;
   returns?: Array<{ id: string; order_id?: string; product?: string; reason?: string; status?: string; refund_status?: string; amount?: number }>;
   palettes?: Array<any>;
+  product?: any;
+  order?: any;
+  reset_date?: string | null;
   metrics?: {
     total_sales?: string;
     orders_count?: number;
@@ -41,14 +59,53 @@ type AdminCopilotChatProps = {
   siteId: string;
   siteDefinition?: any;
   onSiteDefinitionChange?: (nextDef: any) => void;
+  onOpenBilling?: () => void;
+};
+
+const CopilotThinkingBubble: React.FC<{ bg?: string }> = ({ bg = "#f1f5f9" }) => {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "5px",
+        padding: "12px 16px",
+        borderRadius: "14px 14px 14px 2px",
+        background: bg,
+        boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+      }}
+    >
+      <span className="copilot-thinking-dot" style={{ animationDelay: "0s" }} />
+      <span className="copilot-thinking-dot" style={{ animationDelay: "0.2s" }} />
+      <span className="copilot-thinking-dot" style={{ animationDelay: "0.4s" }} />
+    </div>
+  );
 };
 
 export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
   siteId,
   siteDefinition,
   onSiteDefinitionChange,
+  onOpenBilling,
 }) => {
   const navigate = useNavigate();
+
+  const handleUpgradeClick = () => {
+    if (onOpenBilling) {
+      onOpenBilling();
+      return;
+    }
+    if (siteId) {
+      navigate(`/builder/${siteId}/settings/billing`);
+    } else {
+      navigate("/admin/sites");
+    }
+  };
+
+  const { hasPermission, isOwner } = useAdminAuth();
+  const canAccessCopilot = isOwner || hasPermission("chat:access") || hasPermission("chat:view");
+  const canSendCopilot = canAccessCopilot;
+  const canClearCopilot = canAccessCopilot;
   const [messages, setMessages] = useState<CopilotMessage[]>(() => {
     if (typeof window !== "undefined" && siteId) {
       try {
@@ -66,6 +123,8 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [isPaywallLocked, setIsPaywallLocked] = useState(false);
+  const [paywallResetDate, setPaywallResetDate] = useState<string | null>(null);
 
   // Persist messages across drawer closing/opening
   useEffect(() => {
@@ -78,18 +137,6 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       } catch {}
     }
   }, [messages, siteId]);
-
-  const handleClearChat = () => {
-    setMessages([]);
-    if (typeof window !== "undefined" && siteId) {
-      try {
-        sessionStorage.removeItem(`webnirmaan_copilot_chat_${siteId}`);
-        localStorage.removeItem(`webnirmaan_copilot_chat_${siteId}`);
-      } catch {}
-    }
-    setToastMsg("Chat history cleared 🧹");
-    setTimeout(() => setToastMsg(null), 2500);
-  };
 
   // Clean fixed admin dashboard theme for Copilot UI
   const chatBg = "#ffffff";
@@ -123,11 +170,20 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       if (themePatch.navbar_bg && !themePatch.navbar_outer_bg) {
         themePatch.navbar_outer_bg = themePatch.navbar_bg;
       }
+      if (!themePatch.hero_bg) {
+        themePatch.hero_bg = themePatch.primary_bg || themePatch.secondary_bg;
+      }
+      if (!themePatch.hero_text_color) {
+        themePatch.hero_text_color = themePatch.text_color;
+      }
+      if (!themePatch.hero_accent) {
+        themePatch.hero_accent = themePatch.accent_color;
+      }
       const updatedDef = saveThemeSnapshot(siteDefinition as any, themeName, themePatch);
       onSiteDefinitionChange(updatedDef);
     }
 
-    setToastMsg(`Saved "${themeName}" to SAVED THEMES SNAPSHOTS in sidepanel! 📁`);
+    setToastMsg(`Saved "${themeName}" to SAVED SNAPSHOTS in sidepanel!`);
     setTimeout(() => setToastMsg(null), 3500);
   };
 
@@ -165,6 +221,15 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
     }
     if (themePatch.navbar_bg && !themePatch.navbar_outer_bg) {
       themePatch.navbar_outer_bg = themePatch.navbar_bg;
+    }
+    if (!themePatch.hero_bg) {
+      themePatch.hero_bg = themePatch.primary_bg || themePatch.secondary_bg;
+    }
+    if (!themePatch.hero_text_color) {
+      themePatch.hero_text_color = themePatch.text_color;
+    }
+    if (!themePatch.hero_accent) {
+      themePatch.hero_accent = themePatch.accent_color;
     }
 
     // Apply theme patch via updateThemeValues so all pages and components purge old block-level color locks
@@ -210,6 +275,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
   };
 
   const handleSend = async (textToSend?: string) => {
+    if (!canSendCopilot) return;
     const text = (textToSend || input).trim();
     if (!text || loading) return;
 
@@ -217,10 +283,13 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
     const assistantMsgId = `asst-${Date.now()}`;
     const timeNow = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-    const updatedHistory = [...messages, { id: userMsgId, sender: "user" as const, text, time: timeNow }];
+    // Clean history of any stale or pending placeholders
+    const cleanHistory = messages
+      .filter((m) => m.text && m.text !== "Processing..." && m.text.trim().length > 0)
+      .map((m) => ({ sender: m.sender, text: m.text }));
 
     setMessages((prev) => [
-      ...prev,
+      ...prev.filter((m) => m.text !== "Processing..."),
       { id: userMsgId, sender: "user", text, time: timeNow },
       { id: assistantMsgId, sender: "assistant", text: "Processing...", time: timeNow },
     ]);
@@ -233,19 +302,38 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       let streamedText = "";
 
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000);
+
         const streamResponse = await fetch(`${API_BASE_URL}/copilot/chat/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
+          signal: controller.signal,
           body: JSON.stringify({
             site_id: siteId,
             message: text,
-            chat_history: updatedHistory.map((m) => ({ sender: m.sender, text: m.text })),
+            chat_history: [...cleanHistory, { sender: "user", text }],
             draft_definition: siteDefinition,
           }),
         });
 
-        if (streamResponse.ok && streamResponse.body) {
+        clearTimeout(timeoutId);
+
+        if (streamResponse.status === 402) {
+          setIsPaywallLocked(true);
+          const errData = await streamResponse.json().catch(() => ({}));
+          data = {
+            type: "paywall_exhausted",
+            assistant_reply: "Monthly AI credit limit reached. Please upgrade your plan for higher monthly credit limits.",
+            data_cards: [{
+              type: "paywall_card",
+              title: "AI Credit Limit Reached",
+              description: "You have used all credits in your current monthly pool. Upgrade your subscription to continue using AI Copilot and generating stores.",
+              reset_date: errData?.detail?.reset_date,
+            }],
+          };
+        } else if (streamResponse.ok && streamResponse.body) {
           const reader = streamResponse.body.getReader();
           const decoder = new TextDecoder("utf-8");
           let buffer = "";
@@ -262,7 +350,11 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
               if (trimmed.startsWith("data:")) {
                 try {
                   const event = JSON.parse(trimmed.slice(5).trim());
-                  if (event.type === "token" && event.content) {
+                  if (event.type === "paywall_exhausted" || event.error_code === "AI_CREDIT_LIMIT_REACHED") {
+                    setIsPaywallLocked(true);
+                    if (event.reset_date) setPaywallResetDate(event.reset_date);
+                    data = event;
+                  } else if (event.type === "token" && event.content) {
                     streamedText += event.content;
                     setMessages((prev) =>
                       prev.map((msg) =>
@@ -273,6 +365,16 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                     );
                   } else if (event.type === "done") {
                     data = event;
+                    if (event.assistant_reply && !streamedText) {
+                      streamedText = event.assistant_reply;
+                      setMessages((prev) =>
+                        prev.map((msg) =>
+                          msg.id === assistantMsgId
+                            ? { ...msg, text: event.assistant_reply }
+                            : msg
+                        )
+                      );
+                    }
                   }
                 } catch {
                   // Ignore partial json in stream
@@ -286,7 +388,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       }
 
       // Fallback if stream did not return done payload
-      if (!data) {
+      if (!data && !streamedText) {
         const response = await fetch(`${API_BASE_URL}/copilot/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -294,13 +396,29 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
           body: JSON.stringify({
             site_id: siteId,
             message: text,
-            chat_history: updatedHistory.map((m) => ({ sender: m.sender, text: m.text })),
+            chat_history: [...cleanHistory, { sender: "user", text }],
             draft_definition: siteDefinition,
           }),
         });
 
-        if (!response.ok) throw new Error("Co-Pilot request failed");
-        data = await response.json();
+        if (response.status === 402) {
+          setIsPaywallLocked(true);
+          const errData = await response.json().catch(() => ({}));
+          data = {
+            type: "paywall_exhausted",
+            assistant_reply: "Monthly AI credit limit reached. Please upgrade your plan for higher monthly credit limits.",
+            data_cards: [{
+              type: "paywall_card",
+              title: "AI Credit Limit Reached",
+              description: "You have used all credits in your current monthly pool. Upgrade your subscription to continue using AI Copilot and generating stores.",
+              reset_date: errData?.detail?.reset_date,
+            }],
+          };
+        } else if (!response.ok) {
+          throw new Error("Co-Pilot request failed");
+        } else {
+          data = await response.json();
+        }
       }
 
       // Trigger Live Design Update in Builder if modified
@@ -317,13 +435,15 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
         });
       }
 
+      const finalReply = data?.assistant_reply || streamedText || (data?.data_cards?.length ? "Here are the details from your store:" : "I've processed your store request! ✨");
+
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMsgId
             ? {
                 ...msg,
-                text: data.assistant_reply || streamedText || "Done!",
-                cards: data.data_cards,
+                text: finalReply,
+                cards: data?.data_cards,
               }
             : msg
         )
@@ -345,8 +465,13 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
     }
   };
 
+  if (!canAccessCopilot) {
+    return <AccessDeniedView moduleName="AI Copilot" requiredPermission="chat:access" />;
+  }
+
   return (
     <div
+      className="copilot-chat-root"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -354,22 +479,59 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
         maxHeight: "calc(100vh - 110px)",
         background: chatBg,
         color: chatText,
-        fontFamily: "'Inter', sans-serif",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
+      <style>{`
+        .copilot-chat-root,
+        .copilot-chat-root input,
+        .copilot-chat-root button,
+        .copilot-chat-root textarea,
+        .copilot-chat-root span,
+        .copilot-chat-root div,
+        .copilot-chat-root p,
+        .copilot-chat-root h1,
+        .copilot-chat-root h2,
+        .copilot-chat-root h3 {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+
+        .copilot-thinking-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background-color: #64748b;
+          display: inline-block;
+          animation: copilotDotPulse 1.4s ease-in-out infinite both;
+        }
+
+        @keyframes copilotDotPulse {
+          0%, 80%, 100% {
+            transform: scale(0.65);
+            opacity: 0.35;
+          }
+          40% {
+            transform: scale(1);
+            opacity: 0.95;
+          }
+        }
+      `}</style>
       {/* Toast Notification Banner */}
       {toastMsg && (
         <div
           style={{
-            padding: "6px 12px",
-            background: "#10b981",
-            color: "#ffffff",
-            fontSize: "11px",
-            fontWeight: 700,
-            borderRadius: "6px",
+            padding: "8px 12px",
+            background: "rgba(240, 253, 244, 0.7)",
+            backdropFilter: "blur(12px) saturate(180%)",
+            WebkitBackdropFilter: "blur(12px) saturate(180%)",
+            color: "#14532d",
+            border: "1px solid rgba(22, 163, 74, 0.3)",
+            fontSize: "12px",
+            fontWeight: 600,
+            borderRadius: "8px",
             marginBottom: "8px",
             textAlign: "center",
-            boxShadow: "0 2px 8px rgba(16,185,129,0.2)",
+            boxShadow: "0 8px 24px 0 rgba(22, 101, 52, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.4)",
           }}
         >
           {toastMsg}
@@ -391,66 +553,127 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
         ) : (
           messages.map((msg) => {
           const isUser = msg.sender === "user";
+          const hasPaywallCard = !isUser && msg.cards?.some((c) => c.type === "paywall_card");
           return (
             <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: isUser ? "flex-end" : "flex-start" }}>
-              <div style={{ display: "flex", gap: "8px", alignItems: "flex-start", flexDirection: isUser ? "row-reverse" : "row", maxWidth: "92%" }}>
-                {!isUser && <AiAvatar size={24} style={{ marginTop: "2px" }} />}
-                <div
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: isUser ? "14px 14px 2px 14px" : "14px 14px 14px 2px",
-                    background: isUser ? userBubbleBg : assistantBubbleBg,
-                    color: isUser ? "#ffffff" : assistantBubbleText,
-                    fontSize: "13px",
-                    lineHeight: 1.55,
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                    wordBreak: "break-word" as const,
-                    whiteSpace: "pre-wrap" as const,
-                    overflowWrap: "anywhere" as const,
-                  }}
-                >
-                  {msg.text}
-                </div>
-              </div>
-
-              {/* Render Structured Data Cards */}
-              {msg.cards && msg.cards.length > 0 && (
-                <div style={{ width: "100%", marginTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {msg.cards.map((card, cIdx) => {
-                    if (card.type === "redirect_card") {
-                      return (
-                        <div
-                          key={cIdx}
-                          style={{
-                            padding: "12px",
-                            borderRadius: "10px",
-                            background: "linear-gradient(135deg, #eff6ff, #dbeafe)",
-                            border: "1px solid #bfdbfe",
-                          }}
-                        >
-                          <div style={{ fontWeight: 700, fontSize: "13px", color: "#1e40af", marginBottom: "4px" }}>{card.title}</div>
-                          <div style={{ fontSize: "11px", color: "#3b82f6", marginBottom: "8px" }}>{card.description}</div>
-                          <button
-                            type="button"
-                            onClick={() => navigate(card.target_url || "/admin/dashboard")}
+              {/* If paywall card, render as a single clean card */}
+              {hasPaywallCard ? (
+                <div style={{ display: "flex", gap: "8px", alignItems: "flex-start", width: "100%", maxWidth: "92%" }}>
+                  <AiAvatar size={24} style={{ marginTop: "2px" }} />
+                  <div style={{ flex: 1 }}>
+                    {msg.cards?.map((card, cIdx) => {
+                      if (card.type === "paywall_card") {
+                        return (
+                          <div
+                            key={cIdx}
                             style={{
-                              padding: "6px 12px",
-                              borderRadius: "6px",
-                              border: "none",
-                              background: "#2563eb",
-                              color: "#ffffff",
-                              fontSize: "11px",
-                              fontWeight: 700,
-                              cursor: "pointer",
+                              padding: "12px 14px",
+                              borderRadius: "10px",
+                              background: "#ffffff",
+                              border: "1px solid #e2e8f0",
+                              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                             }}
                           >
-                            {card.button_label || "Go to AI Dashboard"}
-                          </button>
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", marginBottom: "4px" }}>
+                              {card.title || "AI Credit Limit Reached"}
+                            </div>
+                            <div style={{ fontSize: "12px", color: "#64748b", lineHeight: 1.5, marginBottom: card.reset_date ? "6px" : "10px" }}>
+                              {card.description || "You have used all credits in your monthly pool. Upgrade your plan to continue using AI Copilot."}
+                            </div>
+                            {card.reset_date && (
+                              <div style={{ fontSize: "11px", color: "#94a3b8", marginBottom: "10px" }}>
+                                Resets on: {new Date(card.reset_date).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={handleUpgradeClick}
+                              style={{
+                                padding: "6px 14px",
+                                background: "#2563eb",
+                                color: "#ffffff",
+                                border: "none",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Upgrade Plan
+                            </button>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {msg.text && (
+                    <div style={{ display: "flex", gap: "8px", alignItems: "flex-start", flexDirection: isUser ? "row-reverse" : "row", maxWidth: "92%" }}>
+                      {!isUser && <AiAvatar size={24} style={{ marginTop: "2px" }} />}
+                      {!isUser && msg.text === "Processing..." ? (
+                        <CopilotThinkingBubble bg={assistantBubbleBg} />
+                      ) : (
+                        <div
+                          style={{
+                            padding: "10px 14px",
+                            borderRadius: isUser ? "14px 14px 2px 14px" : "14px 14px 14px 2px",
+                            background: isUser ? userBubbleBg : assistantBubbleBg,
+                            color: isUser ? "#ffffff" : assistantBubbleText,
+                            fontSize: "13px",
+                            lineHeight: 1.55,
+                            boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                            wordBreak: "break-word" as const,
+                            whiteSpace: "pre-wrap" as const,
+                            overflowWrap: "anywhere" as const,
+                          }}
+                        >
+                          {msg.text}
                         </div>
-                      );
-                    }
+                      )}
+                    </div>
+                  )}
 
-                    if (card.type === "palette_suggestions_card" && Array.isArray(card.palettes)) {
+                  {/* Render Structured Data Cards */}
+                  {msg.cards && msg.cards.length > 0 && (
+                    <div style={{ width: "100%", marginTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {msg.cards.map((card, cIdx) => {
+                        if (card.type === "redirect_card") {
+                          return (
+                            <div
+                              key={cIdx}
+                              style={{
+                                padding: "12px",
+                                borderRadius: "10px",
+                                background: "linear-gradient(135deg, #eff6ff, #dbeafe)",
+                                border: "1px solid #bfdbfe",
+                              }}
+                            >
+                              <div style={{ fontWeight: 700, fontSize: "13px", color: "#1e40af", marginBottom: "4px" }}>{card.title}</div>
+                              <div style={{ fontSize: "11px", color: "#3b82f6", marginBottom: "8px" }}>{card.description}</div>
+                              <button
+                                type="button"
+                                onClick={() => navigate(card.target_url || "/admin/dashboard")}
+                                style={{
+                                  padding: "6px 12px",
+                                  borderRadius: "6px",
+                                  border: "none",
+                                  background: "#2563eb",
+                                  color: "#ffffff",
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {card.button_label || "Go to AI Dashboard"}
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        if (card.type === "palette_suggestions_card" && Array.isArray(card.palettes)) {
                       return (
                         <div key={cIdx} style={{ padding: "10px", borderRadius: "10px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
                           <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: "#1e293b" }}>{card.title}</div>
@@ -474,7 +697,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                                         cursor: "pointer",
                                       }}
                                     >
-                                      Apply Theme ✨
+                                      Apply Theme
                                     </button>
                                     <button
                                       type="button"
@@ -490,7 +713,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                                         cursor: "pointer",
                                       }}
                                     >
-                                      Save 💾
+                                      Save Theme
                                     </button>
                                   </div>
                                 </div>
@@ -792,6 +1015,8 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
                   })}
                 </div>
               )}
+            </>
+          )}
 
               <span style={{ fontSize: "9px", color: "#94a3b8", marginTop: "2px" }}>{msg.time}</span>
             </div>
@@ -808,8 +1033,14 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Ask Co-Pilot (e.g. fix footer text, show sales...)"
-          disabled={loading}
+          placeholder={
+            !canSendCopilot
+              ? "Permission required to chat with Co-Pilot"
+              : isPaywallLocked
+              ? `Monthly limit reached. ${paywallResetDate ? `Resets on ${new Date(paywallResetDate).toLocaleDateString("en-IN", { month: "short", day: "numeric" })} or upgrade plan.` : "Upgrade plan to continue."}`
+              : "Ask Co-Pilot (e.g. fix footer text, show sales...)"
+          }
+          disabled={loading || !canSendCopilot || isPaywallLocked}
           style={{
             flex: 1,
             padding: "8px 12px",
@@ -819,21 +1050,23 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
             color: chatText,
             fontSize: "12px",
             outline: "none",
+            opacity: canSendCopilot && !isPaywallLocked ? 1 : 0.6,
+            cursor: canSendCopilot && !isPaywallLocked ? "text" : "not-allowed",
           }}
         />
         <button
           type="button"
           onClick={() => handleSend()}
-          disabled={loading || !input.trim()}
+          disabled={loading || !input.trim() || !canSendCopilot || isPaywallLocked}
           style={{
             padding: "8px 14px",
             borderRadius: "8px",
             border: "none",
-            background: loading || !input.trim() ? "#cbd5e1" : userBubbleBg,
+            background: loading || !input.trim() || !canSendCopilot || isPaywallLocked ? "#cbd5e1" : userBubbleBg,
             color: "#ffffff",
             fontSize: "12px",
             fontWeight: 700,
-            cursor: loading || !input.trim() ? "default" : "pointer",
+            cursor: loading || !input.trim() || !canSendCopilot ? "default" : "pointer",
           }}
         >
           Send
