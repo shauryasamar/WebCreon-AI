@@ -556,7 +556,8 @@ def evaluate_coupon_targeting(
         ).all()
 
         for p in matching_products:
-            if (p.category_id and p.category_id in cat_uuids) or (p.category and p.category.lower().strip() in cat_names_raw):
+            p_cat = (p.category or "").lower().strip()
+            if (p.category_id and p.category_id in cat_uuids) or any(raw == p_cat or raw in p_cat or p_cat in raw for raw in cat_names_raw):
                 qualifying_pids.add(p.id)
 
         if not qualifying_pids:

@@ -502,6 +502,10 @@ export const AdminHomeSections: React.FC = () => {
     };
 
     fetchInitialData();
+    window.addEventListener("wc_products_catalog_updated", fetchInitialData);
+    return () => {
+      window.removeEventListener("wc_products_catalog_updated", fetchInitialData);
+    };
   }, [siteId]);
 
   // Helper: Count matching products for rule preview
@@ -511,24 +515,52 @@ export const AdminHomeSections: React.FC = () => {
       let list = [...products];
 
       if ((rules as any).selected_product_ids && (rules as any).selected_product_ids.length > 0) {
-        list = list.filter((p) => (rules as any).selected_product_ids!.includes(String(p.id)));
+        const idSet = new Set((rules as any).selected_product_ids.map(String));
+        const picked = list.filter((p) => idSet.has(String(p.id)));
+        if (picked.length > 0) return picked.length;
       }
       if (rules.category) {
-        list = list.filter((p) => p.category?.toLowerCase() === rules.category!.toLowerCase());
+        const targetCat = String(rules.category).toLowerCase().trim();
+        if (targetCat && targetCat !== "all" && targetCat !== "all products" && targetCat !== "all categories") {
+          list = list.filter((p) => {
+            const pCat = String(p.category || "").toLowerCase().trim();
+            const pCatName = String(p.category_name || "").toLowerCase().trim();
+            const pCatId = String((p as any).category_id || "").toLowerCase().trim();
+            return (
+              pCat === targetCat ||
+              pCatName === targetCat ||
+              pCatId === targetCat ||
+              (pCat && pCat.includes(targetCat)) ||
+              (pCatName && pCatName.includes(targetCat))
+            );
+          });
+        }
       }
       if (rules.brand) {
-        list = list.filter((p) => p.brand?.toLowerCase() === rules.brand!.toLowerCase());
+        const targetBrand = String(rules.brand).toLowerCase().trim();
+        if (targetBrand && targetBrand !== "all" && targetBrand !== "all brands") {
+          list = list.filter((p) => {
+            const pBrand = String(p.brand || "").toLowerCase().trim();
+            return pBrand && (pBrand === targetBrand || pBrand.includes(targetBrand));
+          });
+        }
       }
       if (rules.collection_id) {
-        list = list.filter((p: any) =>
-          (p.collections || []).some((c: any) => (c.id || c.collection_id) === rules.collection_id)
-        );
+        const targetCol = String(rules.collection_id).toLowerCase().trim();
+        if (targetCol && targetCol !== "all" && targetCol !== "all collections") {
+          list = list.filter((p: any) =>
+            (p.collections || []).some((c: any) => {
+              const cid = String(c.id || c.collection_id || c.name || "").toLowerCase().trim();
+              return cid === targetCol || cid.includes(targetCol);
+            })
+          );
+        }
       }
-      if (rules.min_price !== undefined && rules.min_price !== null) {
-        list = list.filter((p) => Number(p.price) >= rules.min_price!);
+      if (rules.min_price !== undefined && rules.min_price !== null && rules.min_price > 0) {
+        list = list.filter((p) => Number(p.price || 0) >= Number(rules.min_price));
       }
-      if (rules.max_price !== undefined && rules.max_price !== null) {
-        list = list.filter((p) => Number(p.price) <= rules.max_price!);
+      if (rules.max_price !== undefined && rules.max_price !== null && rules.max_price < 100000) {
+        list = list.filter((p) => Number(p.price || 0) <= Number(rules.max_price));
       }
       if (rules.in_stock_only) {
         list = list.filter((p) => p.in_stock !== false);

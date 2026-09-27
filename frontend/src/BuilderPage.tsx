@@ -3675,6 +3675,7 @@ export default function BuilderPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const currentSiteKey = siteId || siteSlugParam || "";
 
     const resolveAndLoadProducts = async () => {
       try {
@@ -3757,8 +3758,20 @@ export default function BuilderPage() {
 
     resolveAndLoadProducts();
 
+    const handleCatalogUpdated = () => {
+      if (currentSiteKey) {
+        siteProductsMemoryCache.delete(currentSiteKey);
+        if (siteId) siteProductsMemoryCache.delete(siteId);
+        if (siteSlugParam) siteProductsMemoryCache.delete(siteSlugParam);
+      }
+      resolveAndLoadProducts();
+    };
+
+    window.addEventListener("wc_products_catalog_updated", handleCatalogUpdated);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("wc_products_catalog_updated", handleCatalogUpdated);
     };
   }, [siteId, siteSlugParam]);
 

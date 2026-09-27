@@ -253,6 +253,10 @@ const mapBackendCartItemToCartItem = (item: BackendCartItem): CartItem => ({
   hsn_code: item.hsn_code ?? null,
   tax_rate_override: item.tax_rate_override ?? null,
   is_cod_allowed: item.is_cod_allowed !== undefined ? item.is_cod_allowed : null,
+  category: (item as any).category ?? null,
+  category_id: (item as any).category_id ?? null,
+  category_name: (item as any).category_name ?? null,
+  collections: (item as any).collections ?? [],
   quantity: item.quantity,
   is_available: item.is_available ?? true,
   is_out_of_stock: item.is_out_of_stock ?? false,
@@ -472,7 +476,7 @@ export function CartProvider({
     }
   }, [cartItems]);
 
-  // Reconcile and enrich cached cart items with latest product catalog (HSN codes, tax rates, prices, COD status)
+  // Reconcile and enrich cached cart items with latest product catalog (HSN codes, tax rates, prices, COD status, categories)
   useEffect(() => {
     if (!products || products.length === 0) return;
     setCartItems((prevItems) => {
@@ -491,11 +495,20 @@ export function CartProvider({
         const nextTaxOverride = matching.tax_rate_override ?? item.tax_rate_override ?? null;
         const nextImage = matching.image || matching.imageUrl || item.image;
         const nextCod = matching.is_cod_allowed !== undefined ? Boolean(matching.is_cod_allowed) : Boolean(item.is_cod_allowed);
+        const nextCategory = matching.category ?? item.category ?? null;
+        const nextCategoryId = matching.category_id ?? item.category_id ?? null;
+        const nextCategoryName = matching.category_name ?? item.category_name ?? null;
+        const nextCollections = (matching.collections && matching.collections.length > 0) ? matching.collections : (item.collections || []);
+
         if (
           item.hsn_code !== nextHsn ||
           item.tax_rate_override !== nextTaxOverride ||
           item.is_cod_allowed !== nextCod ||
-          (!item.image && nextImage)
+          (!item.image && nextImage) ||
+          item.category !== nextCategory ||
+          item.category_id !== nextCategoryId ||
+          item.category_name !== nextCategoryName ||
+          (!item.collections && nextCollections.length > 0)
         ) {
           changed = true;
           return {
@@ -504,6 +517,10 @@ export function CartProvider({
             tax_rate_override: nextTaxOverride,
             is_cod_allowed: nextCod,
             image: nextImage,
+            category: nextCategory,
+            category_id: nextCategoryId,
+            category_name: nextCategoryName,
+            collections: nextCollections,
           };
         }
         return item;

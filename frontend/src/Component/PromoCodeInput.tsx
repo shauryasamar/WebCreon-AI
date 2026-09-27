@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { API_BASE_URL } from "../config/api";
+import { useCart } from "../CartContext";
 
 export interface ValidatedCoupon {
   id?: string;
@@ -31,12 +32,14 @@ interface PromoCodeInputProps {
   cartItems?: Array<{
     id?: string | number;
     product_id?: string | number;
+    name?: string;
+    slug?: string;
     price?: number;
     quantity?: number;
     category_id?: string | null;
     category?: string | null;
     category_name?: string | null;
-    collections?: Array<{ id: string; name?: string }>;
+    collections?: Array<{ id: string; name?: string; slug?: string }>;
     [key: string]: any;
   }>;
   deliveryFee?: number;
@@ -76,6 +79,90 @@ function isColorDark(color?: string): boolean {
   return false;
 }
 
+// Helper to check if a coupon is valid for current items in cart
+function isCouponApplicableToCart(
+  coupon: AvailableCoupon,
+  cartItems: PromoCodeInputProps["cartItems"],
+  catalogProducts: any[] = []
+): boolean {
+  if (!cartItems || cartItems.length === 0) {
+    return (coupon.appliesTo || "all") === "all";
+  }
+
+  const appliesTo = (coupon.appliesTo || "all").toLowerCase().trim();
+  const colIds = (coupon.collectionIds || []).map((id) => String(id).toLowerCase().trim()).filter(Boolean);
+  const catIds = (coupon.categoryIds || []).map((id) => String(id).toLowerCase().trim()).filter(Boolean);
+
+  // 1. Applies to All Products in store
+  if (appliesTo === "all" || (colIds.length === 0 && catIds.length === 0)) {
+    return true;
+  }
+
+  // 2. Specific Collections: check if at least one cart item belongs to target collection(s)
+  if (appliesTo === "collections" && colIds.length > 0) {
+    const hasMatchingCol = cartItems.some((item) => {
+      const matchingProd = catalogProducts.find(
+        (p) =>
+          String(p.id) === String(item.id || item.product_id) ||
+          (p.slug && item.slug && String(p.slug) === String(item.slug))
+      );
+
+      const itemCols: string[] = [];
+      const sources = [item.collections, (item as any).collection_ids, matchingProd?.collections];
+      sources.forEach((source) => {
+        if (Array.isArray(source)) {
+          source.forEach((c: any) => {
+            if (typeof c === "string") {
+              itemCols.push(c.toLowerCase().trim());
+            } else if (c && typeof c === "object") {
+              if (c.id) itemCols.push(String(c.id).toLowerCase().trim());
+              if (c.collection_id) itemCols.push(String(c.collection_id).toLowerCase().trim());
+              if (c.name) itemCols.push(String(c.name).toLowerCase().trim());
+              if (c.slug) itemCols.push(String(c.slug).toLowerCase().trim());
+            }
+          });
+        }
+      });
+
+      return colIds.some((target) =>
+        itemCols.some((col) => col === target || col.includes(target) || target.includes(col))
+      );
+    });
+    if (!hasMatchingCol) return false;
+  }
+
+  // 3. Specific Categories: check if at least one cart item belongs to target category(s)
+  if (appliesTo === "categories" && catIds.length > 0) {
+    const hasMatchingCat = cartItems.some((item) => {
+      const matchingProd = catalogProducts.find(
+        (p) =>
+          String(p.id) === String(item.id || item.product_id) ||
+          (p.slug && item.slug && String(p.slug) === String(item.slug))
+      );
+
+      const candidateStrings = [
+        item.category,
+        item.category_name,
+        (item as any).category_id,
+        matchingProd?.category,
+        matchingProd?.category_name,
+        matchingProd?.category_id,
+      ]
+        .filter(Boolean)
+        .map((s) => String(s).toLowerCase().trim());
+
+      return catIds.some((target) =>
+        candidateStrings.some(
+          (str) => str === target || str.includes(target) || target.includes(str)
+        )
+      );
+    });
+    if (!hasMatchingCat) return false;
+  }
+
+  return true;
+}
+
 export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
   siteId,
   subtotal,
@@ -101,6 +188,23 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
   const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>([]);
   const [showOffers, setShowOffers] = useState(false);
   const [applyingCode, setApplyingCode] = useState<string | null>(null);
+
+  // Look up catalog products from CartContext to guarantee category resolution
+  let catalogProducts: any[] = [];
+  try {
+    const cart = useCart();
+    if (cart && Array.isArray(cart.products)) {
+      catalogProducts = cart.products;
+    }
+  } catch (_) {}
+
+  // Filter available coupons so ONLY offers supported by items in the current cart are shown
+  const applicableCoupons = React.useMemo(() => {
+    if (!availableCoupons || availableCoupons.length === 0) return [];
+    return availableCoupons.filter((coupon) =>
+      isCouponApplicableToCart(coupon, cartItems, catalogProducts)
+    );
+  }, [availableCoupons, cartItems, catalogProducts]);
 
   const isDark = isColorDark(cardBg) || isColorDark(inputBg) || !isColorDark(textColor);
 
@@ -431,8 +535,8 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
             </div>
           )}
 
-          {/* View Available Public Offers Expandable List */}
-          {availableCoupons.length > 0 && (
+          {/* View Available Public Offers Expandable List (Filtered only to offers supported by cart items) */}
+          {applicableCoupons.length > 0 && (
             <div style={{ marginTop: "8px" }}>
               <button
                 type="button"
@@ -450,7 +554,7 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
                   gap: "5px",
                 }}
               >
-                <span>{showOffers ? "Hide Available Offers" : `View Available Offers (${availableCoupons.length})`}</span>
+                <span>{showOffers ? "Hide Available Offers" : `View Available Offers (${applicableCoupons.length})`}</span>
                 <span
                   style={{
                     fontSize: "9px",
@@ -475,7 +579,7 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
                     paddingRight: "2px",
                   }}
                 >
-                  {availableCoupons.map((coupon) => {
+                  {applicableCoupons.map((coupon) => {
                     const isMinOrderMet = subtotal >= coupon.minOrderValue;
                     const diffToMin = Math.max(0, coupon.minOrderValue - subtotal);
                     const isApplying = applyingCode === coupon.code;
@@ -524,34 +628,6 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
                                 ? "Free Delivery"
                                 : `₹${coupon.discountValue} OFF`}
                             </span>
-
-                            {coupon.appliesTo === "collections" ? (
-                              <span
-                                style={{
-                                  fontSize: "10px",
-                                  fontWeight: 700,
-                                  padding: "1px 5px",
-                                  borderRadius: "3px",
-                                  background: "rgba(124, 58, 237, 0.12)",
-                                  color: isDark ? "#c4b5fd" : "#7c3aed",
-                                }}
-                              >
-                                Specific Collections
-                              </span>
-                            ) : coupon.appliesTo === "categories" ? (
-                              <span
-                                style={{
-                                  fontSize: "10px",
-                                  fontWeight: 700,
-                                  padding: "1px 5px",
-                                  borderRadius: "3px",
-                                  background: "rgba(8, 145, 178, 0.12)",
-                                  color: isDark ? "#67e8f9" : "#0891b2",
-                                }}
-                              >
-                                Specific Categories
-                              </span>
-                            ) : null}
                           </div>
 
                           <div style={{ fontSize: "11px", color: isDark ? "rgba(255,255,255,0.6)" : "rgba(15,23,42,0.6)", marginTop: "3px", lineHeight: 1.3 }}>
@@ -572,23 +648,24 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
 
                         <button
                           type="button"
-                          disabled={isApplying}
+                          disabled={isApplying || !isMinOrderMet}
                           onClick={() => handleQuickApply(coupon.code)}
                           style={{
                             height: "28px",
                             padding: "0 12px",
                             borderRadius: "6px",
-                            border: `1px solid ${accentColor}`,
+                            border: `1px solid ${isMinOrderMet ? accentColor : borderColor}`,
                             background: isMinOrderMet ? accentColor : "transparent",
-                            color: isMinOrderMet ? "#ffffff" : accentColor,
+                            color: isMinOrderMet ? "#ffffff" : isDark ? "rgba(255,255,255,0.4)" : "rgba(15,23,42,0.4)",
                             fontSize: "11.5px",
                             fontWeight: 700,
-                            cursor: isApplying ? "not-allowed" : "pointer",
-                            opacity: isApplying ? 0.6 : 1,
+                            cursor: isApplying || !isMinOrderMet ? "not-allowed" : "pointer",
+                            opacity: isApplying ? 0.6 : isMinOrderMet ? 1 : 0.6,
                             whiteSpace: "nowrap",
                             flexShrink: 0,
                             transition: "all 0.15s ease",
                           }}
+                          title={!isMinOrderMet ? `Add ₹${diffToMin.toFixed(0)} more to apply this offer` : "Apply promo code"}
                         >
                           {isApplying ? "Applying..." : "Apply"}
                         </button>

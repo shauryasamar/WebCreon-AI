@@ -4,6 +4,7 @@ import { isColorDarkHex } from "../context/ThemeContext";
 import { useDeviceMode } from "../context/DeviceModeContext";
 import { resolveMobileDrawerTheme } from "../utils/mobileDrawerTheme";
 import { useDrawerDragToClose } from "../utils/useDrawerDragToClose";
+import { API_BASE_URL } from "../config/api";
 
 export type FilterState = {
   categoryId: string | null;
@@ -14,8 +15,17 @@ export type FilterState = {
   maxPrice: number;
 };
 
-type CategoryOption = { id: string; name: string; slug?: string };
-type CollectionOption = { id: string; name: string; slug?: string };
+type CategoryOption = { id: string; name: string; slug?: string; count?: number };
+type CollectionOption = { id: string; name: string; slug?: string; count?: number };
+
+export type ServerFacets = {
+  categories: { id: string; name: string; slug?: string; count: number }[];
+  brands: { name: string; count: number }[];
+  product_types: { name: string; count: number }[];
+  collections: { id: string; name: string; count: number }[];
+  price_range: { min: number; max: number };
+  total: number;
+};
 
 type FilterModalProps = {
   open: boolean;
@@ -31,6 +41,8 @@ type FilterModalProps = {
   theme?: Record<string, any>;
   container?: HTMLElement | null;
   isAdmin?: boolean;
+  siteId?: string;
+  searchQuery?: string;
 };
 
 type Tab = "categories" | "price" | "collection" | "type" | "brand";
@@ -132,10 +144,14 @@ const FilterModal: React.FC<FilterModalProps> = ({
   theme,
   container,
   isAdmin = false,
+  siteId,
+  searchQuery = "",
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>("categories");
   const [draft, setDraft] = useState<FilterState>(currentFilters);
   const [tabSearchQuery, setTabSearchQuery] = useState("");
+  const [serverFacets, setServerFacets] = useState<ServerFacets | null>(null);
+  const [isFacetsLoading, setIsFacetsLoading] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   const deviceMode = useDeviceMode();
@@ -228,6 +244,55 @@ const FilterModal: React.FC<FilterModalProps> = ({
     };
   }, [open, currentFilters, isInline]);
 
+  // Real-time server-side facet fetch when filters or options change
+  useEffect(() => {
+    if (!open || !siteId) return;
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        setIsFacetsLoading(true);
+        const params = new URLSearchParams();
+        if (searchQuery?.trim()) params.set("search", searchQuery.trim());
+        if (draft.categoryId) params.set("category_id", draft.categoryId);
+        draft.productTypes.forEach((pt) => params.append("product_type", pt));
+        draft.collections.forEach((cid) => params.append("collection_id", cid));
+        draft.brands.forEach((b) => params.append("brand", b));
+        if (draft.minPrice > 0) params.set("min_price", String(draft.minPrice));
+        if (draft.maxPrice < 100000) params.set("max_price", String(draft.maxPrice));
+
+        const res = await fetch(
+          `${API_BASE_URL}/sites/${siteId}/products/public/facets?${params.toString()}`
+        );
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          setServerFacets(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch dynamic facets", err);
+      } finally {
+        if (!cancelled) {
+          setIsFacetsLoading(false);
+        }
+      }
+    }, 80);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    open,
+    siteId,
+    searchQuery,
+    draft.categoryId,
+    draft.productTypes,
+    draft.collections,
+    draft.brands,
+    draft.minPrice,
+    draft.maxPrice,
+  ]);
+
   useEffect(() => {
     setTabSearchQuery("");
   }, [activeTab]);
@@ -297,9 +362,16 @@ const FilterModal: React.FC<FilterModalProps> = ({
     );
   }, [draft, priceRange]);
 
-  // Faceted option computations based on products
+  // Faceted option computations: Uses fast server facets when available, else fallback to loaded products
   const categoryCounts = useCallback(
     (catId: string) => {
+      if (serverFacets && Array.isArray(serverFacets.categories)) {
+        const target = String(catId).toLowerCase().trim();
+        const found = serverFacets.categories.find(
+          (c) => String(c.id).toLowerCase().trim() === target || String(c.name).toLowerCase().trim() === target
+        );
+        return found ? found.count : 0;
+      }
       if (!products || products.length === 0) return null;
       return products.filter(
         (p) =>
@@ -309,11 +381,41 @@ const FilterModal: React.FC<FilterModalProps> = ({
           matchesBrands(p, draft.brands)
       ).length;
     },
-    [products, draft.collections, draft.productTypes, draft.brands, categories, collections]
+    [serverFacets, products, draft.collections, draft.productTypes, draft.brands, categories, collections]
   );
+
+  const dynamicCategories = useCallback(() => {
+    if (serverFacets && Array.isArray(serverFacets.categories)) {
+      const list = [...serverFacets.categories];
+      // Keep any currently selected category visible even if count is 0 so the user can uncheck it
+      if (draft.categoryId && !list.some((c) => c.id === draft.categoryId || c.name === draft.categoryId)) {
+        const selectedCat = categories.find((c) => c.id === draft.categoryId || c.name === draft.categoryId);
+        if (selectedCat) {
+          list.push({ ...selectedCat, count: 0 });
+        }
+      }
+      return list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    const base = categories.length > 0 ? categories : productTypes.map((pt) => ({ id: pt, name: pt }));
+    if (!products || products.length === 0) {
+      return base.map((c) => ({ ...c, count: null }));
+    }
+    return base
+      .map((c) => ({ ...c, count: categoryCounts(c.id) }))
+      .filter((c) => (c.count !== null && c.count > 0) || c.id === draft.categoryId || c.name === draft.categoryId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [serverFacets, categories, productTypes, draft.categoryId, products, categoryCounts]);
 
   const collectionCounts = useCallback(
     (colId: string) => {
+      if (serverFacets && Array.isArray(serverFacets.collections)) {
+        const target = String(colId).toLowerCase().trim();
+        const found = serverFacets.collections.find(
+          (c) => String(c.id).toLowerCase().trim() === target || String(c.name).toLowerCase().trim() === target
+        );
+        return found ? found.count : 0;
+      }
       if (!products || products.length === 0) return null;
       return products.filter(
         (p) =>
@@ -323,10 +425,45 @@ const FilterModal: React.FC<FilterModalProps> = ({
           matchesBrands(p, draft.brands)
       ).length;
     },
-    [products, draft.categoryId, draft.productTypes, draft.brands, categories, collections]
+    [serverFacets, products, draft.categoryId, draft.productTypes, draft.brands, categories, collections]
   );
 
+  const dynamicCollections = useCallback(() => {
+    if (serverFacets && Array.isArray(serverFacets.collections)) {
+      const list = [...serverFacets.collections];
+      // Keep any currently checked collections visible even if count is 0 so the user can uncheck them
+      draft.collections.forEach((sc) => {
+        if (!list.some((c) => c.id === sc || c.name === sc)) {
+          const matched = collections.find((c) => c.id === sc || c.name === sc);
+          if (matched) {
+            list.push({ ...matched, count: 0 });
+          }
+        }
+      });
+      return list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    if (!products || products.length === 0) {
+      return collections.map((c) => ({ ...c, count: null }));
+    }
+    return collections
+      .map((c) => ({ ...c, count: collectionCounts(c.id) }))
+      .filter((c) => (c.count !== null && c.count > 0) || draft.collections.includes(c.id) || draft.collections.includes(c.name))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [serverFacets, collections, draft.collections, products, collectionCounts]);
+
   const dynamicProductTypes = useCallback(() => {
+    if (serverFacets && Array.isArray(serverFacets.product_types)) {
+      const typeList = [...serverFacets.product_types];
+      // Keep any currently checked types visible even if count is 0 so the user can uncheck them
+      draft.productTypes.forEach((st) => {
+        if (!typeList.some((t) => t.name.toLowerCase() === st.toLowerCase())) {
+          typeList.push({ name: st, count: 0 });
+        }
+      });
+      return typeList.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
     if (!products || products.length === 0) {
       return productTypes.map((pt) => ({ name: pt, count: null }));
     }
@@ -364,9 +501,20 @@ const FilterModal: React.FC<FilterModalProps> = ({
     });
 
     return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [products, draft.categoryId, draft.collections, draft.brands, productTypes, categories, collections]);
+  }, [serverFacets, products, draft.categoryId, draft.collections, draft.brands, draft.productTypes, productTypes, categories, collections]);
 
   const dynamicBrands = useCallback(() => {
+    if (serverFacets && Array.isArray(serverFacets.brands)) {
+      const brandList = [...serverFacets.brands];
+      // Keep any currently checked brands visible even if count is 0 so the user can uncheck them
+      draft.brands.forEach((sb) => {
+        if (!brandList.some((b) => b.name.toLowerCase() === sb.toLowerCase())) {
+          brandList.push({ name: sb, count: 0 });
+        }
+      });
+      return brandList.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
     if (!products || products.length === 0) {
       return brands.map((b) => ({ name: b, count: null }));
     }
@@ -391,44 +539,20 @@ const FilterModal: React.FC<FilterModalProps> = ({
     });
 
     return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [products, draft.categoryId, draft.collections, draft.productTypes, brands, categories, collections]);
+  }, [serverFacets, products, draft.categoryId, draft.collections, draft.productTypes, draft.brands, brands, categories, collections]);
 
   const selectCategory = (catId: string | null) => {
-    setDraft((prev) => {
-      const nextCategory = catId;
-      if (!products || products.length === 0 || !nextCategory) {
-        return { ...prev, categoryId: nextCategory };
-      }
-      const validProds = products.filter((p) => matchesCategory(p, nextCategory, categories));
-      const validTypes = prev.productTypes.filter((pt) => validProds.some((p) => matchesTypes(p, [pt])));
-      const validBrands = prev.brands.filter((b) => validProds.some((p) => matchesBrands(p, [b])));
-      const validCols = prev.collections.filter((colId) => validProds.some((p) => matchesCollections(p, [colId], collections)));
-      return {
-        ...prev,
-        categoryId: nextCategory,
-        productTypes: validTypes,
-        brands: validBrands,
-        collections: validCols,
-      };
-    });
+    setDraft((prev) => ({
+      ...prev,
+      categoryId: catId,
+    }));
   };
 
   const toggleCollection = (colId: string) => {
-    setDraft((prev) => {
-      const nextCols = toggleArray(prev.collections, colId);
-      if (!products || products.length === 0 || nextCols.length === 0) {
-        return { ...prev, collections: nextCols };
-      }
-      const validProds = products.filter((p) => matchesCollections(p, nextCols, collections));
-      const validTypes = prev.productTypes.filter((pt) => validProds.some((p) => matchesTypes(p, [pt])));
-      const validBrands = prev.brands.filter((b) => validProds.some((p) => matchesBrands(p, [b])));
-      return {
-        ...prev,
-        collections: nextCols,
-        productTypes: validTypes,
-        brands: validBrands,
-      };
-    });
+    setDraft((prev) => ({
+      ...prev,
+      collections: toggleArray(prev.collections, colId),
+    }));
   };
 
   const toggleArray = (arr: string[], val: string) =>
@@ -448,12 +572,15 @@ const FilterModal: React.FC<FilterModalProps> = ({
   }, [priceRange.max]);
 
   const priceMatchingCount = useMemo(() => {
+    if (serverFacets && typeof serverFacets.total === "number") {
+      return serverFacets.total;
+    }
     if (!products || products.length === 0) return null;
     return products.filter((p) => {
       const price = Number(p.price || p.regular_price || p.sale_price || 0);
       return price >= draft.minPrice && price <= draft.maxPrice;
     }).length;
-  }, [products, draft.minPrice, draft.maxPrice]);
+  }, [serverFacets, products, draft.minPrice, draft.maxPrice]);
 
   if (!open || !targetContainer) return null;
 
@@ -530,10 +657,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
   const renderRightPanel = () => {
     switch (activeTab) {
       case "categories": {
-        const displayCategories =
-          categories.length > 0
-            ? categories
-            : productTypes.map((pt) => ({ id: pt, name: pt }));
+        const displayCategories = dynamicCategories();
 
         const filteredCategories = displayCategories.filter((cat) =>
           cat.name.toLowerCase().includes(tabSearchQuery.toLowerCase().trim())
@@ -582,17 +706,19 @@ const FilterModal: React.FC<FilterModalProps> = ({
                   </span>
                   <div
                     style={{
-                      width: "16px",
-                      height: "16px",
+                      width: "18px",
+                      height: "18px",
                       borderRadius: "999px",
-                      border: `2px solid ${draft.categoryId === null ? accentColor : textSecondary}`,
+                      border: `2px solid ${draft.categoryId === null ? accentColor : borderColor}`,
+                      background: draft.categoryId === null ? activeBg : "transparent",
                       display: "grid",
                       placeItems: "center",
                       flexShrink: 0,
+                      transition: "all 140ms ease",
                     }}
                   >
                     {draft.categoryId === null && (
-                      <div style={{ width: "6px", height: "6px", borderRadius: "999px", background: accentColor }} />
+                      <div style={{ width: "8px", height: "8px", borderRadius: "999px", background: accentColor }} />
                     )}
                   </div>
                 </div>
@@ -654,17 +780,19 @@ const FilterModal: React.FC<FilterModalProps> = ({
                       </div>
                       <div
                         style={{
-                          width: "16px",
-                          height: "16px",
+                          width: "18px",
+                          height: "18px",
                           borderRadius: "999px",
-                          border: `2px solid ${selected ? accentColor : textSecondary}`,
+                          border: `2px solid ${selected ? accentColor : borderColor}`,
+                          background: selected ? activeBg : "transparent",
                           display: "grid",
                           placeItems: "center",
                           flexShrink: 0,
+                          transition: "all 140ms ease",
                         }}
                       >
                         {selected && (
-                          <div style={{ width: "6px", height: "6px", borderRadius: "999px", background: accentColor }} />
+                          <div style={{ width: "8px", height: "8px", borderRadius: "999px", background: accentColor }} />
                         )}
                       </div>
                     </div>
@@ -898,7 +1026,8 @@ const FilterModal: React.FC<FilterModalProps> = ({
         );
 
       case "collection": {
-        const filteredCollections = collections.filter((c) =>
+        const displayCollections = dynamicCollections();
+        const filteredCollections = displayCollections.filter((c) =>
           c.name.toLowerCase().includes(tabSearchQuery.toLowerCase().trim())
         );
 
@@ -977,12 +1106,35 @@ const FilterModal: React.FC<FilterModalProps> = ({
                           </span>
                         )}
                       </div>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => {}}
-                        style={{ accentColor: accentColor, width: "15px", height: "15px", flexShrink: 0 }}
-                      />
+                      <div
+                        style={{
+                          width: "18px",
+                          height: "18px",
+                          borderRadius: "5px",
+                          border: `2px solid ${checked ? accentColor : borderColor}`,
+                          background: checked ? accentColor : (isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"),
+                          display: "grid",
+                          placeItems: "center",
+                          flexShrink: 0,
+                          transition: "all 140ms ease",
+                          boxShadow: checked ? `0 2px 6px ${accentColor}40` : "none",
+                        }}
+                      >
+                        {checked && (
+                          <svg
+                            width="11"
+                            height="11"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke={applyTextColor}
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </div>
                     </div>
                   );
                 })
@@ -1072,12 +1224,35 @@ const FilterModal: React.FC<FilterModalProps> = ({
                           </span>
                         )}
                       </div>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => {}}
-                        style={{ accentColor: accentColor, width: "15px", height: "15px", flexShrink: 0 }}
-                      />
+                      <div
+                        style={{
+                          width: "18px",
+                          height: "18px",
+                          borderRadius: "5px",
+                          border: `2px solid ${checked ? accentColor : borderColor}`,
+                          background: checked ? accentColor : (isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"),
+                          display: "grid",
+                          placeItems: "center",
+                          flexShrink: 0,
+                          transition: "all 140ms ease",
+                          boxShadow: checked ? `0 2px 6px ${accentColor}40` : "none",
+                        }}
+                      >
+                        {checked && (
+                          <svg
+                            width="11"
+                            height="11"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke={applyTextColor}
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </div>
                     </div>
                   );
                 })
@@ -1167,12 +1342,35 @@ const FilterModal: React.FC<FilterModalProps> = ({
                           </span>
                         )}
                       </div>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => {}}
-                        style={{ accentColor: accentColor, width: "15px", height: "15px", flexShrink: 0 }}
-                      />
+                      <div
+                        style={{
+                          width: "18px",
+                          height: "18px",
+                          borderRadius: "5px",
+                          border: `2px solid ${checked ? accentColor : borderColor}`,
+                          background: checked ? accentColor : (isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"),
+                          display: "grid",
+                          placeItems: "center",
+                          flexShrink: 0,
+                          transition: "all 140ms ease",
+                          boxShadow: checked ? `0 2px 6px ${accentColor}40` : "none",
+                        }}
+                      >
+                        {checked && (
+                          <svg
+                            width="11"
+                            height="11"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke={applyTextColor}
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </div>
                     </div>
                   );
                 })
@@ -1406,7 +1604,9 @@ const FilterModal: React.FC<FilterModalProps> = ({
               transition: "transform 100ms ease, box-shadow 140ms ease",
             }}
           >
-            <span>Apply Filters</span>
+            <span>
+              Apply Filters{serverFacets && typeof serverFacets.total === "number" ? ` (${serverFacets.total.toLocaleString("en-IN")})` : ""}
+            </span>
             {totalActiveCount > 0 && (
               <span
                 style={{

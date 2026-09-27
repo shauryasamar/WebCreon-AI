@@ -430,54 +430,95 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
 
   // Execute universal multi-filter matching
   const filteredProducts = useMemo(() => {
+    if (!products || products.length === 0) return [];
     let list = [...products];
+
+    const selectedIds = rules?.selected_product_ids;
+
+    // 1. Handpicked Product IDs (if explicit product IDs are specified, use them directly)
+    if (selectedIds && selectedIds.length > 0) {
+      const idSet = new Set(selectedIds.map(String));
+      const handpicked = list.filter((p) => idSet.has(String(p.id)));
+      if (handpicked.length > 0) {
+        return handpicked.slice(0, limit);
+      }
+    }
 
     const catFilter = rules?.category || rules?.categories || (categoryName ? [categoryName] : null);
     const brandFilter = rules?.brand || rules?.brands || (brandName ? [brandName] : null);
     const colFilter = rules?.collection_id || rules?.collection_ids || (collectionId ? [collectionId] : null);
     const typesFilter = rules?.product_type || rules?.product_types;
     const activeSort = rules?.sort_by || sortBy || "newest";
-    const selectedIds = rules?.selected_product_ids;
 
-    // 1. Handpicked Product IDs
-    if (selectedIds && selectedIds.length > 0) {
-      list = list.filter((p) => selectedIds.includes(String(p.id)));
-    }
-
-    // 2. Category Filter
+    // 2. Category Filter (matches category, category_name, and category_id)
     if (catFilter) {
-      const cats = Array.isArray(catFilter) ? catFilter.map((c) => c.toLowerCase()) : [String(catFilter).toLowerCase()];
-      list = list.filter((p) => p.category && cats.includes(p.category.toLowerCase()));
+      const cats = (Array.isArray(catFilter) ? catFilter : [catFilter])
+        .map((c) => String(c).toLowerCase().trim())
+        .filter((c) => Boolean(c) && c !== "all" && c !== "all products" && c !== "all categories");
+      if (cats.length > 0) {
+        list = list.filter((p) => {
+          const pCat = String(p.category || "").toLowerCase().trim();
+          const pCatName = String(p.category_name || "").toLowerCase().trim();
+          const pCatId = String((p as any).category_id || "").toLowerCase().trim();
+          return cats.some(
+            (c) =>
+              pCat === c ||
+              pCatName === c ||
+              pCatId === c ||
+              (pCat && pCat.includes(c)) ||
+              (pCatName && pCatName.includes(c))
+          );
+        });
+      }
     }
 
     // 3. Brand Filter
     if (brandFilter) {
-      const brands = Array.isArray(brandFilter) ? brandFilter.map((b) => b.toLowerCase()) : [String(brandFilter).toLowerCase()];
-      list = list.filter((p) => p.brand && brands.includes(p.brand.toLowerCase()));
+      const brands = (Array.isArray(brandFilter) ? brandFilter : [brandFilter])
+        .map((b) => String(b).toLowerCase().trim())
+        .filter((b) => Boolean(b) && b !== "all" && b !== "all brands");
+      if (brands.length > 0) {
+        list = list.filter((p) => {
+          const pBrand = String(p.brand || "").toLowerCase().trim();
+          return pBrand && brands.some((b) => pBrand === b || pBrand.includes(b));
+        });
+      }
     }
 
     // 4. Collection Filter
     if (colFilter) {
-      const cols = Array.isArray(colFilter) ? colFilter : [colFilter];
-      list = list.filter((p: any) =>
-        (p.collections || []).some((c: any) => cols.includes(c.id || c.collection_id))
-      );
+      const cols = (Array.isArray(colFilter) ? colFilter : [colFilter])
+        .map((c) => String(c).toLowerCase().trim())
+        .filter((c) => Boolean(c) && c !== "all" && c !== "all collections");
+      if (cols.length > 0) {
+        list = list.filter((p: any) =>
+          (p.collections || []).some((c: any) => {
+            const cid = String(c.id || c.collection_id || c.name || "").toLowerCase().trim();
+            return cols.some((col) => cid === col || cid.includes(col));
+          })
+        );
+      }
     }
 
     // 5. Product Types Filter
     if (typesFilter) {
-      const types = Array.isArray(typesFilter)
-        ? typesFilter.map((t) => t.toLowerCase())
-        : [String(typesFilter).toLowerCase()];
-      list = list.filter((p: any) => p.product_type && types.includes(p.product_type.toLowerCase()));
+      const types = (Array.isArray(typesFilter) ? typesFilter : [typesFilter])
+        .map((t) => String(t).toLowerCase().trim())
+        .filter((t) => Boolean(t) && t !== "all" && t !== "all types");
+      if (types.length > 0) {
+        list = list.filter((p: any) => {
+          const pt = String(p.product_type || p.category || p.category_name || "").toLowerCase().trim();
+          return types.some((t) => pt === t || pt.includes(t));
+        });
+      }
     }
 
     // 6. Price Range
-    if (rules?.min_price !== undefined && rules.min_price !== null) {
-      list = list.filter((p) => Number(p.price) >= rules.min_price!);
+    if (rules?.min_price !== undefined && rules.min_price !== null && rules.min_price > 0) {
+      list = list.filter((p) => Number(p.price || 0) >= Number(rules.min_price));
     }
-    if (rules?.max_price !== undefined && rules.max_price !== null) {
-      list = list.filter((p) => Number(p.price) <= rules.max_price!);
+    if (rules?.max_price !== undefined && rules.max_price !== null && rules.max_price < 100000) {
+      list = list.filter((p) => Number(p.price || 0) <= Number(rules.max_price));
     }
 
     // 7. In-Stock Only
@@ -516,6 +557,11 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
       const tB = new Date((b as any).created_at || (b as any).createdAt || 0).getTime();
       return tB - tA;
     });
+
+    // Resilient fallback: If strict section rule matched 0 items (e.g. obsolete filter), fallback to all available products
+    if (list.length === 0 && products.length > 0) {
+      return products.slice(0, limit);
+    }
 
     return list.slice(0, limit);
   }, [products, rules, categoryName, brandName, collectionId, sortBy, limit]);

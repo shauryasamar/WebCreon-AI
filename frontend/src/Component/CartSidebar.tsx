@@ -766,7 +766,15 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   );
 
   const isCouponFreeShipping = appliedCoupon?.discountType === "free_shipping";
-  const promoDiscount = appliedCoupon && !isCouponFreeShipping ? appliedCoupon.discountAmount : 0;
+  const promoDiscount = useMemo(() => {
+    if (!appliedCoupon || isCouponFreeShipping || subtotal <= 0) return 0;
+    if (appliedCoupon.discountType === "percentage") {
+      const computed = (subtotal * (Number(appliedCoupon.discountValue) || 0)) / 100;
+      return Math.min(computed, subtotal);
+    }
+    const val = Number(appliedCoupon.discountAmount ?? appliedCoupon.discountValue) || 0;
+    return Math.min(val, subtotal);
+  }, [appliedCoupon, isCouponFreeShipping, subtotal]);
 
   const subtotalAfterDiscount = Math.max(subtotal - promoDiscount, 0);
   const normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);

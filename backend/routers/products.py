@@ -1678,6 +1678,258 @@ def list_products_public(
     return res
 
 
+def _build_product_filter_conditions(
+    session: Session,
+    site_id: UUID,
+    search: Optional[str] = None,
+    category_id: Optional[str] = None,
+    product_type: Optional[list[str]] = None,
+    collection_id: Optional[list[str]] = None,
+    brand: Optional[list[str]] = None,
+    min_price: Optional[Decimal] = None,
+    max_price: Optional[Decimal] = None,
+    in_stock_only: Optional[bool] = None,
+    exclude: Optional[str] = None,
+) -> list[Any]:
+    conditions = []
+
+    if exclude != "search" and search and search.strip():
+        search_term = search.strip()
+        conditions.append(
+            or_(
+                Product.name.ilike(f"%{search_term}%"),
+                Product.brand.ilike(f"%{search_term}%"),
+                Product.category.ilike(f"%{search_term}%"),
+                Product.description.ilike(f"%{search_term}%"),
+            )
+        )
+
+    if exclude != "category" and category_id and category_id.strip():
+        cat_str = category_id.strip()
+        try:
+            cat_uuid = UUID(cat_str)
+            conditions.append(Product.category_id == cat_uuid)
+        except ValueError:
+            conditions.append(
+                or_(
+                    Product.category.ilike(f"%{cat_str}%"),
+                    Product.category == cat_str,
+                )
+            )
+
+    if exclude != "product_type" and product_type:
+        clean_types = [pt.strip() for pt in product_type if pt and pt.strip()]
+        if clean_types:
+            conditions.append(Product.category.in_(clean_types))
+
+    if exclude != "brand" and brand:
+        clean_brands = [b.strip() for b in brand if b and b.strip()]
+        if clean_brands:
+            conditions.append(Product.brand.in_(clean_brands))
+
+    if exclude != "collection" and collection_id:
+        col_uuids = []
+        col_names = []
+        for cid in collection_id:
+            try:
+                col_uuids.append(UUID(str(cid).strip()))
+            except ValueError:
+                col_names.append(str(cid).strip())
+
+        col_conditions = []
+        if col_uuids:
+            product_ids_in_collections = (
+                select(ProductCollection.product_id)
+                .where(ProductCollection.collection_id.in_(col_uuids))
+                .distinct()
+            )
+            col_conditions.append(Product.id.in_(product_ids_in_collections))
+        if col_names:
+            for cn in col_names:
+                col_conditions.append(Product.category.ilike(f"%{cn}%"))
+        if col_conditions:
+            conditions.append(or_(*col_conditions))
+
+    if exclude != "price":
+        if min_price is not None:
+            conditions.append(Product.price >= min_price)
+        if max_price is not None:
+            conditions.append(Product.price <= max_price)
+
+    if in_stock_only:
+        conditions.append(Product.in_stock == True)
+
+    return conditions
+
+
+@router.get("/public/facets", include_in_schema=False)
+@router.get("/facets", include_in_schema=False)
+def get_products_facets(
+    site_id: str,
+    response: Response,
+    search: Optional[str] = Query(None, description="Search query"),
+    category_id: Optional[str] = Query(None, description="Filter by category"),
+    product_type: Optional[list[str]] = Query(None, description="Filter by product type(s)"),
+    collection_id: Optional[list[str]] = Query(None, description="Filter by collection ID(s)"),
+    brand: Optional[list[str]] = Query(None, description="Filter by brand(s)"),
+    min_price: Optional[Decimal] = Query(None, description="Minimum price"),
+    max_price: Optional[Decimal] = Query(None, description="Maximum price"),
+    in_stock_only: Optional[bool] = Query(None, description="In stock only"),
+    session: Session = Depends(get_session),
+):
+    site = get_site_or_404(session, site_id)
+    if not getattr(site, "is_online", True):
+        raise HTTPException(status_code=503, detail="Store is currently offline for maintenance.")
+
+    response.headers["Cache-Control"] = "public, max-age=15, stale-while-revalidate=60"
+
+    cache_key = (
+        f"site:{site.id}:facets:"
+        f"q={search}:c={category_id}:"
+        f"pt={','.join(sorted(product_type)) if product_type else ''}:"
+        f"col={','.join(sorted(str(cid) for cid in collection_id)) if collection_id else ''}:"
+        f"b={','.join(sorted(brand)) if brand else ''}:"
+        f"min={min_price}:max={max_price}:stk={in_stock_only}"
+    )
+    cached_val = catalog_cache.get(cache_key)
+    if cached_val is not None:
+        response.headers["X-Cache"] = "HIT"
+        return cached_val
+
+    # 1. Categories Facets (Grouped by Category table and/or Product.category_id)
+    cat_conds = _build_product_filter_conditions(
+        session, site.id, search, category_id, product_type, collection_id, brand, min_price, max_price, in_stock_only, exclude="category"
+    )
+    cat_id_counts_query = (
+        select(Product.category_id, func.count(Product.id))
+        .where(Product.site_id == site.id, Product.is_active == True, Product.category_id.is_not(None), *cat_conds)
+        .group_by(Product.category_id)
+    )
+    cat_id_counts = dict(session.exec(cat_id_counts_query).all())
+
+    site_categories = session.exec(
+        select(Category).where(Category.site_id == site.id).order_by(Category.name.asc())
+    ).all()
+    categories_result = []
+    seen_cat_ids = set()
+    for c in site_categories:
+        cnt = cat_id_counts.get(c.id, 0)
+        seen_cat_ids.add(c.id)
+        if cnt > 0:
+            categories_result.append({
+                "id": str(c.id),
+                "name": c.name,
+                "slug": getattr(c, "slug", str(c.id)),
+                "count": cnt,
+            })
+
+    # Also include any product category string counts that aren't mapped to Category entity
+    extra_cat_query = (
+        select(Product.category, func.count(Product.id))
+        .where(
+            Product.site_id == site.id,
+            Product.is_active == True,
+            Product.category_id.is_(None),
+            Product.category.is_not(None),
+            func.trim(Product.category) != "",
+            *cat_conds
+        )
+        .group_by(Product.category)
+        .order_by(Product.category.asc())
+    )
+    for cat_name, cnt in session.exec(extra_cat_query).all():
+        if cnt > 0 and not any(cr["name"].lower() == cat_name.lower() for cr in categories_result):
+            categories_result.append({
+                "id": cat_name,
+                "name": cat_name,
+                "slug": cat_name.lower().replace(" ", "-"),
+                "count": cnt,
+            })
+
+    # 2. Brands Facets (Contextual: only brands with count > 0 under active category/type/price filters!)
+    brand_conds = _build_product_filter_conditions(
+        session, site.id, search, category_id, product_type, collection_id, brand, min_price, max_price, in_stock_only, exclude="brand"
+    )
+    brand_query = (
+        select(Product.brand, func.count(Product.id))
+        .where(
+            Product.site_id == site.id,
+            Product.is_active == True,
+            Product.brand.is_not(None),
+            func.trim(Product.brand) != "",
+            *brand_conds
+        )
+        .group_by(Product.brand)
+        .order_by(func.count(Product.id).desc(), Product.brand.asc())
+    )
+    brands_result = [{"name": str(b).strip(), "count": int(cnt)} for b, cnt in session.exec(brand_query).all() if cnt > 0]
+
+    # 3. Product Types / Subcategories Facets (Contextual: only types with count > 0!)
+    type_conds = _build_product_filter_conditions(
+        session, site.id, search, category_id, product_type, collection_id, brand, min_price, max_price, in_stock_only, exclude="product_type"
+    )
+    type_query = (
+        select(Product.category, func.count(Product.id))
+        .where(
+            Product.site_id == site.id,
+            Product.is_active == True,
+            Product.category.is_not(None),
+            func.trim(Product.category) != "",
+            *type_conds
+        )
+        .group_by(Product.category)
+        .order_by(func.count(Product.id).desc(), Product.category.asc())
+    )
+    types_result = [{"name": str(t).strip(), "count": int(cnt)} for t, cnt in session.exec(type_query).all() if cnt > 0]
+
+    # 4. Collections Facets
+    col_conds = _build_product_filter_conditions(
+        session, site.id, search, category_id, product_type, collection_id, brand, min_price, max_price, in_stock_only, exclude="collection"
+    )
+    col_query = (
+        select(Collection.id, Collection.name, func.count(ProductCollection.product_id))
+        .join(ProductCollection, ProductCollection.collection_id == Collection.id)
+        .join(Product, and_(Product.id == ProductCollection.product_id, Product.site_id == site.id, Product.is_active == True, *col_conds))
+        .where(Collection.site_id == site.id)
+        .group_by(Collection.id, Collection.name)
+        .order_by(Collection.name.asc())
+    )
+    collections_result = [
+        {"id": str(cid), "name": cname, "count": int(cnt)}
+        for cid, cname, cnt in session.exec(col_query).all()
+        if cnt > 0
+    ]
+
+    # 5. Price Min / Max Bounds (Storewide active)
+    price_stats_query = select(
+        func.coalesce(func.min(Product.price), 0),
+        func.coalesce(func.max(Product.price), 100000),
+    ).where(Product.site_id == site.id, Product.is_active == True)
+    min_p_val, max_p_val = session.exec(price_stats_query).one()
+
+    # 6. Total Matching Products with ALL active filters applied
+    all_conds = _build_product_filter_conditions(
+        session, site.id, search, category_id, product_type, collection_id, brand, min_price, max_price, in_stock_only, exclude=None
+    )
+    total_matching = session.exec(
+        select(func.count(Product.id)).where(Product.site_id == site.id, Product.is_active == True, *all_conds)
+    ).one() or 0
+
+    res = {
+        "categories": categories_result,
+        "brands": brands_result,
+        "product_types": types_result,
+        "collections": collections_result,
+        "price_range": {
+            "min": float(min_p_val or 0),
+            "max": float(max_p_val or 100000),
+        },
+        "total": int(total_matching),
+    }
+    catalog_cache.set(cache_key, res, ttl=30.0)
+    return res
+
+
 @router.get("/public/by-slug/{slug_or_id}")
 def get_public_product_by_slug_or_id(
     site_id: str,

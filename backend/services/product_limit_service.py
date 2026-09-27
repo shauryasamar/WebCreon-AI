@@ -289,6 +289,11 @@ def restore_system_drafted_products(
         )
         result = session.exec(stmt)
         session.commit()
+        try:
+            from routers.products import catalog_cache
+            catalog_cache.invalidate_site(website_id)
+        except Exception:
+            pass
         return getattr(result, "rowcount", len(target_ids))
     else:
         # Unlimited restoration (Pro upgrade)
@@ -307,6 +312,11 @@ def restore_system_drafted_products(
         )
         result = session.exec(stmt)
         session.commit()
+        try:
+            from routers.products import catalog_cache
+            catalog_cache.invalidate_site(website_id)
+        except Exception:
+            pass
         return getattr(result, "rowcount", 0)
 
 
@@ -367,5 +377,10 @@ def cap_active_products_for_website(
         drafted_count += getattr(result, "rowcount", len(chunk))
 
     session.commit()
+    try:
+        from routers.products import catalog_cache
+        catalog_cache.invalidate_site(website_id)
+    except Exception:
+        pass
     return drafted_count
 

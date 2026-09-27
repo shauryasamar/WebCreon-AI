@@ -609,27 +609,38 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                           minWidth: 0,
                         }}
                       >
-                        <input
-                          id={inputId}
-                          type="radio"
-                          name="payment-method"
-                          disabled={isMethodDisabled}
-                          checked={isSelected}
-                          onChange={() => {
-                            if (!isMethodDisabled) {
-                              handleMethodChange(methodKey);
-                            }
-                          }}
+                        <div
+                          role="radio"
+                          aria-checked={isSelected}
+                          aria-disabled={isMethodDisabled}
                           style={{
-                            accentColor: resolvedAccent,
-                            colorScheme: isDark ? "dark" : "light",
-                            width: "16px",
-                            height: "16px",
-                            margin: 0,
+                            width: "18px",
+                            height: "18px",
+                            borderRadius: "999px",
+                            border: `2px solid ${
+                              isSelected ? resolvedAccent : palette.radioBorder || palette.border
+                            }`,
+                            background: isSelected ? `${resolvedAccent}18` : "transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                             flexShrink: 0,
                             cursor: isMethodDisabled ? "not-allowed" : "pointer",
+                            transition: "all 140ms ease",
+                            boxShadow: isSelected ? `0 0 0 3px ${resolvedAccent}22` : "none",
                           }}
-                        />
+                        >
+                          {isSelected && (
+                            <div
+                              style={{
+                                width: "8px",
+                                height: "8px",
+                                borderRadius: "999px",
+                                background: resolvedAccent,
+                              }}
+                            />
+                          )}
+                        </div>
 
                         <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                           <div
