@@ -942,6 +942,15 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       ? rawTextMuted
       : (isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)"));
 
+  const isPageDark = isColorDarkHex(pageBg);
+  const pageHeaderTextColor = (rawTextPrimary && (isColorDarkHex(rawTextPrimary) !== isPageDark))
+    ? rawTextPrimary
+    : (isPageDark ? "#f8fafc" : "#0f172a");
+
+  const pageHeaderMuted = (rawTextMuted && (isColorDarkHex(rawTextMuted) !== isPageDark))
+    ? rawTextMuted
+    : (isPageDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
+
   const customBorderColor = customProps.border_color || (theme as any)?.order_history_border;
   const cardBorder = `1px solid ${customBorderColor || (isCardDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)")}`;
   const divider = cardBorder;
@@ -3206,8 +3215,8 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     <div
       style={{
         minHeight: "calc(100vh - 140px)",
-        background: isLight ? pageBg : "transparent",
-        color: textPrimary,
+        background: pageBg,
+        color: pageHeaderTextColor,
         padding: isMobile ? "8px 12px 28px" : "16px 16px 40px",
         boxSizing: "border-box",
         width: "100%",
@@ -3243,7 +3252,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                 alignItems: "center",
                 gap: "5px",
                 fontSize: "12.5px",
-                color: textMuted,
+                color: pageHeaderMuted,
                 fontWeight: 600,
               }}
             >
@@ -3268,10 +3277,10 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  color: textMuted,
+                  color: pageHeaderMuted,
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
-                onMouseLeave={(e) => (e.currentTarget.style.color = textMuted)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = pageHeaderMuted)}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="19" y1="12" x2="5" y2="12" />
@@ -3280,7 +3289,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                 <span>Store</span>
               </span>
               <span>/</span>
-              <span style={{ color: textPrimary, fontWeight: 700 }}>Orders</span>
+              <span style={{ color: pageHeaderTextColor, fontWeight: 700 }}>Orders</span>
             </div>
           </div>
         )}
@@ -3435,17 +3444,18 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           ? (isLight ? `${accentColor}12` : `${accentColor}25`)
                           : (isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)"),
                         color: textPrimary,
+                        colorScheme: isCardDark ? "dark" : "light",
                         fontSize: "12.5px",
                         fontWeight: 700,
                         cursor: "pointer",
                         outline: "none",
                       }}
                     >
-                      <option value="all">Status: All Orders ({statusCounts.all})</option>
-                      <option value="active">Status: In Transit / Active ({statusCounts.active})</option>
-                      <option value="delivered">Status: Delivered ({statusCounts.delivered})</option>
-                      <option value="returns">Status: Returns & Refunds ({statusCounts.returns})</option>
-                      <option value="cancelled">Status: Cancelled ({statusCounts.cancelled})</option>
+                      <option value="all" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Status: All Orders ({statusCounts.all})</option>
+                      <option value="active" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Status: In Transit / Active ({statusCounts.active})</option>
+                      <option value="delivered" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Status: Delivered ({statusCounts.delivered})</option>
+                      <option value="returns" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Status: Returns & Refunds ({statusCounts.returns})</option>
+                      <option value="cancelled" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Status: Cancelled ({statusCounts.cancelled})</option>
                     </select>
                     <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
@@ -3469,6 +3479,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
                           background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
                           color: textPrimary,
+                          colorScheme: isCardDark ? "dark" : "light",
                           fontSize: "12px",
                           fontWeight: 600,
                           cursor: "pointer",
@@ -3477,11 +3488,11 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           whiteSpace: "nowrap",
                         }}
                       >
-                        <option value="30_days">Last 30 days</option>
-                        <option value="60_days">Last 60 days</option>
-                        <option value="6_months">Last 6 months</option>
-                        <option value="this_year">This year ({new Date().getFullYear()})</option>
-                        <option value="custom">Custom dates...</option>
+                        <option value="30_days" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Last 30 days</option>
+                        <option value="60_days" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Last 60 days</option>
+                        <option value="6_months" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Last 6 months</option>
+                        <option value="this_year" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>This year ({new Date().getFullYear()})</option>
+                        <option value="custom" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Custom dates...</option>
                       </select>
                       <div style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
@@ -3503,6 +3514,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
                           background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
                           color: textPrimary,
+                          colorScheme: isCardDark ? "dark" : "light",
                           fontSize: "12px",
                           fontWeight: 600,
                           cursor: "pointer",
@@ -3511,10 +3523,10 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                           whiteSpace: "nowrap",
                         }}
                       >
-                        <option value="newest">Newest first</option>
-                        <option value="oldest">Oldest first</option>
-                        <option value="amount_high">Total: High to Low</option>
-                        <option value="amount_low">Total: Low to High</option>
+                        <option value="newest" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Newest first</option>
+                        <option value="oldest" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Oldest first</option>
+                        <option value="amount_high" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Total: High to Low</option>
+                        <option value="amount_low" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Total: Low to High</option>
                       </select>
                       <div style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
@@ -4935,6 +4947,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                                   },
                                                 }))
                                               }
+                                              style={{
+                                                accentColor: accentColor,
+                                                width: "16px",
+                                                height: "16px",
+                                                cursor: "pointer",
+                                                flexShrink: 0,
+                                              }}
                                             />
                                             Return this item
                                           </label>
@@ -5003,11 +5022,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                                 border: cardBorder,
                                                 background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)",
                                                 color: textPrimary,
+                                                colorScheme: isCardDark ? "dark" : "light",
                                                 padding: "10px 12px",
                                               }}
                                             >
                                               {RETURN_REASONS.map((reason) => (
-                                                <option key={reason.value} value={reason.value}>
+                                                <option key={reason.value} value={reason.value} style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>
                                                   {reason.label}
                                                 </option>
                                               ))}

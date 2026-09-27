@@ -1,4 +1,4 @@
-import { isColorDarkHex } from "../context/ThemeContext";
+import { isColorDarkHex, resolveThemeTokens } from "../context/ThemeContext";
 
 export interface MobileDrawerThemeTokens {
   isDark: boolean;
@@ -19,58 +19,49 @@ export interface MobileDrawerThemeTokens {
 /**
  * Resolves a unified visual theme for all mobile phone bottom sheet drawers
  * (Filter drawer, Sort By drawer, and Notification drawer).
- * Ensures exact aesthetic consistency across colors, surfaces, borders, and controls.
+ * Directly matches the webpage's AI-generated theme colors, cards, and styling.
  */
 export function resolveMobileDrawerTheme(theme?: any): MobileDrawerThemeTokens {
-  const isDark =
-    theme?.mode === "dark" ||
-    (theme?.dialog_bg ? isColorDarkHex(theme.dialog_bg) : false) ||
-    (theme?.surface_bg ? isColorDarkHex(theme.surface_bg) : false) ||
-    (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
-    (theme?.card_bg ? isColorDarkHex(theme.card_bg) : false) ||
-    (theme?.text_color ? !isColorDarkHex(theme.text_color) : false);
+  const tokens = resolveThemeTokens(theme);
+  const isThemeDark = tokens.isDark;
 
-  // Consistent surface background for phone drawers
+  // Derive drawer background directly from the site's card/surface theme
   const drawerBg =
     theme?.drawer_bg ||
     theme?.dialog_bg ||
     theme?.surface_bg ||
-    (isDark
-      ? (theme?.card_bg && isColorDarkHex(theme.card_bg)
-          ? theme.card_bg
-          : (theme?.primary_bg && isColorDarkHex(theme.primary_bg) ? theme.primary_bg : "#0f172a"))
-      : (theme?.card_bg && !isColorDarkHex(theme.card_bg) && theme.card_bg !== "transparent" && theme.card_bg !== "#ffffff"
-          ? theme.card_bg
-          : (theme?.primary_bg && !isColorDarkHex(theme.primary_bg) && theme.primary_bg !== "transparent" && theme.primary_bg !== "#ffffff"
-              ? theme.primary_bg
-              : "#ffffff")));
+    theme?.card_bg ||
+    (isThemeDark ? tokens.cardBg || tokens.secondaryBg || "#1e293b" : tokens.cardBg || tokens.primaryBg || "#ffffff");
 
   const isDrawerDark = isColorDarkHex(drawerBg);
 
+  // Border colors matching the site's design tokens
   const drawerBorder =
     theme?.filter_border_color ||
     theme?.border_color ||
+    tokens.borderColor ||
     (isDrawerDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.10)");
 
-  const cardBorder = isDrawerDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.07)";
+  const cardBorder =
+    tokens.softBorderColor ||
+    (isDrawerDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.07)");
 
+  // Primary & secondary text safely adapting to the drawer background
   const textPrimary =
-    (isDrawerDark
-      ? (theme?.text_color && !isColorDarkHex(theme.text_color) ? theme.text_color : "#f8fafc")
-      : (theme?.text_color && isColorDarkHex(theme.text_color) ? theme.text_color : "#0f172a"));
+    (tokens.textColor && (isColorDarkHex(tokens.textColor) !== isDrawerDark))
+      ? tokens.textColor
+      : (isDrawerDark ? "#f8fafc" : "#0f172a");
 
   const textSecondary =
-    (isDrawerDark
-      ? (theme?.muted_text_color && !isColorDarkHex(theme.muted_text_color)
-          ? theme.muted_text_color
-          : "rgba(248, 250, 252, 0.65)")
-      : (theme?.muted_text_color && isColorDarkHex(theme.muted_text_color)
-          ? theme.muted_text_color
-          : "rgba(15, 23, 42, 0.60)"));
+    (tokens.mutedTextColor && (isColorDarkHex(tokens.mutedTextColor) !== isDrawerDark))
+      ? tokens.mutedTextColor
+      : (isDrawerDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.60)");
 
+  // Accent color directly from the site's AI palette
   const accentColor =
     theme?.filter_accent_color ||
     theme?.accent_color ||
+    tokens.accentColor ||
     (isDrawerDark ? "#60a5fa" : "#2563eb");
 
   const pillColor = isDrawerDark ? "rgba(255, 255, 255, 0.25)" : "rgba(0, 0, 0, 0.18)";

@@ -1,6 +1,7 @@
 import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
+import { isColorDarkHex } from "../context/ThemeContext";
 import {
   cleanSiteName,
   getAccessibleAccentColor,
@@ -146,7 +147,7 @@ export default function CustomerProfilePage({
     siteData?.navbar?.brandName ||
     (activeSlug && !isHexId(activeSlug) ? cleanSiteName("", activeSlug) : "") ||
     "Store";
-  const activeTheme = propTheme || siteData?.theme || {};
+  const activeTheme: Record<string, any> = (propTheme || siteData?.theme || {}) as Record<string, any>;
   const isLight = activeTheme.mode !== "dark";
 
   const primaryBg = activeTheme.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
@@ -159,25 +160,34 @@ export default function CustomerProfilePage({
       : baseCardBg;
 
   const cardBg = customProps.card_bg || customProps.background_color || fallbackCardBg;
+  const isDarkCard = isColorDarkHex(cardBg);
+  const isDarkPrimary = isColorDarkHex(primaryBg);
 
-  const computedContrastText = getContrastTextColor(cardBg);
-  const rawThemeTextColor = activeTheme.text_color;
-  const isDarkCard = computedContrastText === "#ffffff";
+  const rawTextColor = customProps.title_color || customProps.text_color || activeTheme.text_color;
+  const textColor = (rawTextColor && (isColorDarkHex(rawTextColor) !== isDarkCard))
+    ? rawTextColor
+    : (isDarkCard ? "#f8fafc" : "#0f172a");
 
-  const fallbackTextColor =
-    rawThemeTextColor && Math.abs(getLuminance(rawThemeTextColor) - getLuminance(cardBg)) > 45
-      ? rawThemeTextColor
-      : computedContrastText;
-
-  const textColor = customProps.title_color || customProps.text_color || fallbackTextColor;
-  const subtextColor =
+  const rawSubtext =
     customProps.subtext_color ||
     customProps.muted_text_color ||
-    (isDarkCard ? "rgba(226, 232, 240, 0.75)" : "rgba(51, 65, 85, 0.75)");
+    (activeTheme as any)?.muted_text ||
+    (activeTheme as any)?.muted_text_color;
+  const subtextColor = (rawSubtext && (isColorDarkHex(rawSubtext) !== isDarkCard))
+    ? rawSubtext
+    : (isDarkCard ? "rgba(226, 232, 240, 0.75)" : "rgba(51, 65, 85, 0.75)");
+
+  const pageHeaderTextColor = (rawTextColor && (isColorDarkHex(rawTextColor) !== isDarkPrimary))
+    ? rawTextColor
+    : (isDarkPrimary ? "#f8fafc" : "#0f172a");
+
+  const pageHeaderSubtextColor = (rawSubtext && (isColorDarkHex(rawSubtext) !== isDarkPrimary))
+    ? rawSubtext
+    : (isDarkPrimary ? "rgba(226, 232, 240, 0.75)" : "rgba(51, 65, 85, 0.75)");
 
   const accentColor = customProps.button_bg_color || activeTheme.accent_color || "#2563eb";
   const accessibleAccentColor = getAccessibleAccentColor(accentColor, cardBg);
-  const buttonTextColor = customProps.button_text_color || getContrastTextColor(accentColor);
+  const buttonTextColor = customProps.button_text_color || (isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a");
   const borderColor = customProps.border_color
     ? customProps.border_color
     : isDarkCard
@@ -210,11 +220,14 @@ export default function CustomerProfilePage({
   const inputRadius = parseDimension(customProps.input_radius, "10px");
   const buttonRadius = parseDimension(customProps.button_radius, "10px");
 
-  const inputBg = customProps.input_bg || (isDarkCard ? "#0a0f1d" : "#ffffff");
-  const inputTextColor = customProps.input_text_color || (isDarkCard ? "#f8fafc" : "#0f172a");
+  const inputBg = customProps.input_bg || (isDarkCard ? "rgba(255, 255, 255, 0.05)" : "#ffffff");
+  const isInputDark = isColorDarkHex(inputBg);
+  const inputTextColor = (customProps.input_text_color && (isColorDarkHex(customProps.input_text_color) !== isInputDark))
+    ? customProps.input_text_color
+    : (isInputDark ? "#f8fafc" : "#0f172a");
   const inputBorder = customProps.input_border
     ? `1px solid ${customProps.input_border}`
-    : isDarkCard
+    : isInputDark
     ? "rgba(255, 255, 255, 0.16)"
     : "rgba(15, 23, 42, 0.16)";
 
@@ -350,8 +363,8 @@ export default function CustomerProfilePage({
           alignItems: "center",
           justifyContent: "center",
           padding: isMobile ? "8px 12px 28px" : "16px 16px 40px",
-          background: isLight ? primaryBg : "transparent",
-          color: textColor,
+          background: primaryBg,
+          color: pageHeaderTextColor,
         }}
       >
         <div style={{ maxWidth: "420px", width: "100%", marginBottom: "12px" }}>
@@ -361,7 +374,7 @@ export default function CustomerProfilePage({
               alignItems: "center",
               gap: "5px",
               fontSize: "12.5px",
-              color: subtextColor,
+              color: pageHeaderSubtextColor,
               fontWeight: 600,
             }}
           >
@@ -386,10 +399,10 @@ export default function CustomerProfilePage({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
-                color: subtextColor,
+                color: pageHeaderSubtextColor,
               }}
               onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
-              onMouseLeave={(e) => (e.currentTarget.style.color = subtextColor)}
+              onMouseLeave={(e) => (e.currentTarget.style.color = pageHeaderSubtextColor)}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="19" y1="12" x2="5" y2="12" />
@@ -398,7 +411,7 @@ export default function CustomerProfilePage({
               <span>Store</span>
             </span>
             <span>/</span>
-            <span style={{ color: textColor, fontWeight: 700 }}>Profile</span>
+            <span style={{ color: pageHeaderTextColor, fontWeight: 700 }}>Profile</span>
           </div>
         </div>
 
@@ -463,7 +476,7 @@ export default function CustomerProfilePage({
     <div
       style={{
         minHeight: "calc(100vh - 140px)",
-        background: isLight ? primaryBg : "transparent",
+        background: primaryBg,
         color: textColor,
         padding: isMobile ? "8px 12px 28px" : "16px 16px 40px",
         boxSizing: "border-box",
@@ -499,7 +512,7 @@ export default function CustomerProfilePage({
               alignItems: "center",
               gap: "5px",
               fontSize: "12.5px",
-              color: subtextColor,
+              color: pageHeaderSubtextColor,
               fontWeight: 600,
             }}
           >
@@ -524,10 +537,10 @@ export default function CustomerProfilePage({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
-                color: subtextColor,
+                color: pageHeaderSubtextColor,
               }}
               onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
-              onMouseLeave={(e) => (e.currentTarget.style.color = subtextColor)}
+              onMouseLeave={(e) => (e.currentTarget.style.color = pageHeaderSubtextColor)}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="19" y1="12" x2="5" y2="12" />
@@ -536,7 +549,7 @@ export default function CustomerProfilePage({
               <span>Store</span>
             </span>
             <span>/</span>
-            <span style={{ color: textColor, fontWeight: 700 }}>Profile</span>
+            <span style={{ color: pageHeaderTextColor, fontWeight: 700 }}>Profile</span>
           </div>
 
           <button
@@ -823,12 +836,12 @@ export default function CustomerProfilePage({
                       cursor: "pointer",
                     }}
                   >
-                    <option value="">Select Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Non-Binary">Non-Binary</option>
-                    <option value="Other">Other</option>
-                    <option value="Prefer not to say">Prefer not to say</option>
+                    <option value="" style={{ background: inputBg, color: inputTextColor }}>Select Gender</option>
+                    <option value="Male" style={{ background: inputBg, color: inputTextColor }}>Male</option>
+                    <option value="Female" style={{ background: inputBg, color: inputTextColor }}>Female</option>
+                    <option value="Non-Binary" style={{ background: inputBg, color: inputTextColor }}>Non-Binary</option>
+                    <option value="Other" style={{ background: inputBg, color: inputTextColor }}>Other</option>
+                    <option value="Prefer not to say" style={{ background: inputBg, color: inputTextColor }}>Prefer not to say</option>
                   </select>
                 </div>
               )}

@@ -114,16 +114,23 @@ export const FilterSidebar = ({
     theme?.mode === "dark";
   const accentColor = (theme as any)?.filter_accent_color || theme?.accent_color || (isDark ? "#60a5fa" : "#2563eb");
   const resolvedPrimaryBg = (theme as any)?.filter_bg || theme?.primary_bg || (isDark ? "#0f172a" : "#f8fafc");
+  const isSectionDark = isColorDarkHex(resolvedPrimaryBg);
 
-  const textPrimary = (theme as any)?.filter_text_color || theme?.text_color || (isDark ? "#f1f5f9" : "#0f172a");
-  const textSecondary = (theme as any)?.muted_text_color || (isDark ? "rgba(241, 245, 249, 0.65)" : "rgba(15, 23, 42, 0.65)");
-  const borderColor = (theme as any)?.filter_border_color || (theme as any)?.border_color || (isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
+  const textPrimary = (theme as any)?.filter_text_color || (theme?.text_color && (isColorDarkHex(theme.text_color) !== isSectionDark) ? theme.text_color : (isSectionDark ? "#f1f5f9" : "#0f172a"));
+  const textSecondary = (theme as any)?.muted_text_color && (isColorDarkHex((theme as any).muted_text_color) !== isSectionDark)
+    ? (theme as any).muted_text_color
+    : (isSectionDark ? "rgba(241, 245, 249, 0.65)" : "rgba(15, 23, 42, 0.65)");
+  const borderColor = (theme as any)?.filter_border_color || (theme as any)?.border_color || (isSectionDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
 
-  const btnBg = (theme as any)?.filter_card_bg || (isDark
+  const btnBg = (theme as any)?.filter_card_bg || (isSectionDark
     ? "rgba(255, 255, 255, 0.08)"
     : (resolvedPrimaryBg === "#ffffff" ? "rgba(0, 0, 0, 0.04)" : "rgba(255, 255, 255, 0.65)"));
 
-  const dropdownBg = (theme as any)?.filter_card_bg || (theme as any)?.dialog_bg || (theme as any)?.surface_bg || (theme as any)?.card_bg || resolvedPrimaryBg;
+  const dropdownBg = (theme as any)?.filter_card_bg || (theme as any)?.dialog_bg || (theme as any)?.surface_bg || (theme as any)?.card_bg || (isSectionDark ? "#1e293b" : "#ffffff");
+  const isDropdownDark = isColorDarkHex(dropdownBg);
+  const dropdownTextColor = isDropdownDark ? "#f1f5f9" : "#0f172a";
+  const dropdownMutedText = isDropdownDark ? "rgba(241, 245, 249, 0.65)" : "rgba(15, 23, 42, 0.65)";
+  const dropdownBorderColor = isDropdownDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)";
   const hoverBg = `${accentColor}1c`;
 
   const mobileTheme = resolveMobileDrawerTheme(theme);
@@ -277,8 +284,8 @@ export const FilterSidebar = ({
 
             {/* Desktop Popover Dropdown */}
             {sortOpen && !isMobile && (
-              <div className="product-sort-dropdown">
-                <div className="product-sort-header">
+              <div className="product-sort-dropdown" style={{ background: dropdownBg, border: `1px solid ${dropdownBorderColor}` }}>
+                <div className="product-sort-header" style={{ color: dropdownMutedText, borderBottom: `1px solid ${dropdownBorderColor}` }}>
                   Sort by
                 </div>
                 {SORT_OPTIONS.map((opt) => {
@@ -297,10 +304,10 @@ export const FilterSidebar = ({
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: "13px", fontWeight: isActive ? 700 : 500, color: isActive ? accentColor : textPrimary }}>
+                        <div style={{ fontSize: "13px", fontWeight: isActive ? 700 : 500, color: isActive ? accentColor : dropdownTextColor }}>
                           {opt.label}
                         </div>
-                        <div style={{ fontSize: "11px", color: textSecondary, marginTop: "1px" }}>
+                        <div style={{ fontSize: "11px", color: dropdownMutedText, marginTop: "1px" }}>
                           {opt.description}
                         </div>
                       </div>

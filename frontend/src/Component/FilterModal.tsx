@@ -153,26 +153,44 @@ const FilterModal: React.FC<FilterModalProps> = ({
 
   const isInline = Boolean(container);
   const targetContainer = container || document.body;
-
   const isDark =
     (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
     (theme?.secondary_bg ? isColorDarkHex(theme.secondary_bg) : false) ||
     (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
     theme?.mode === "dark";
 
-  const rawBg = (theme as any)?.dialog_bg || (theme as any)?.surface_bg || theme?.primary_bg;
-  const bg = rawBg || (isDark ? "#0f172a" : "#ffffff");
-  const navBg = (theme as any)?.nav_bg || (theme as any)?.secondary_bg || (isDark ? "rgba(0, 0, 0, 0.35)" : "rgba(0, 0, 0, 0.025)");
-  const panelBg = bg;
-  const cardBg = (theme as any)?.card_bg || (isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.035)");
-  const textPrimary = theme?.text_color || (isDark ? "#f8fafc" : "#0f172a");
-  const textSecondary = (theme as any)?.muted_text_color || (isDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)");
-  const borderColor = (theme as any)?.border_color || (isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
-
-  const accentColor = theme?.accent_color || "#3b82f6";
-  const activeBg = `${accentColor}1c`;
-
   const mobileTheme = resolveMobileDrawerTheme(theme);
+
+  const rawBg = (theme as any)?.dialog_bg || (theme as any)?.surface_bg || theme?.primary_bg;
+  const desktopBg = rawBg || (isDark ? "#0f172a" : "#ffffff");
+  const bg = isMobile ? mobileTheme.drawerBg : desktopBg;
+  const isModalDark = isColorDarkHex(bg);
+
+  const navBg = isMobile
+    ? (isModalDark ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)")
+    : ((theme as any)?.nav_bg || (theme as any)?.secondary_bg || (isModalDark ? "rgba(0, 0, 0, 0.35)" : "rgba(0, 0, 0, 0.025)"));
+  const panelBg = bg;
+  const cardBg = isModalDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.035)";
+
+  const textPrimary = isMobile
+    ? mobileTheme.textPrimary
+    : ((theme?.text_color && (isColorDarkHex(theme.text_color) !== isModalDark))
+        ? theme.text_color
+        : (isModalDark ? "#f8fafc" : "#0f172a"));
+
+  const textSecondary = isMobile
+    ? mobileTheme.textSecondary
+    : ((theme as any)?.muted_text_color && (isColorDarkHex((theme as any).muted_text_color) !== isModalDark)
+        ? (theme as any).muted_text_color
+        : (isModalDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)"));
+
+  const borderColor = isMobile
+    ? mobileTheme.cardBorder
+    : ((theme as any)?.border_color || (isModalDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)"));
+
+  const accentColor = isMobile ? mobileTheme.accentColor : (theme?.accent_color || "#3b82f6");
+  const activeBg = `${accentColor}1c`;
+  const applyTextColor = isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a";
 
   const { dragHandleProps, drawerStyle, isDragging } = useDrawerDragToClose({
     onClose,
@@ -437,7 +455,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
     }).length;
   }, [products, draft.minPrice, draft.maxPrice]);
 
-  if (!open) return null;
+  if (!open || !targetContainer) return null;
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "categories", label: "Categories" },
@@ -1206,7 +1224,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
         {/* --- Header --- */}
         <div className="filter-modal-header">
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: isMobile ? 700 : 800, color: isMobile ? mobileTheme.textPrimary : textPrimary, letterSpacing: "-0.01em" }}>
+            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: isMobile ? 700 : 800, color: textPrimary, letterSpacing: "-0.01em" }}>
               Filters
             </h2>
             {totalActiveCount > 0 && (
@@ -1218,8 +1236,8 @@ const FilterModal: React.FC<FilterModalProps> = ({
                   height: "18px",
                   padding: "0 6px",
                   borderRadius: "999px",
-                  background: isMobile ? mobileTheme.accentColor : accentColor,
-                  color: "#ffffff",
+                  background: accentColor,
+                  color: applyTextColor,
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -1241,7 +1259,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                   border: "none",
                   fontSize: "12px",
                   fontWeight: 600,
-                  color: isMobile ? mobileTheme.accentColor : accentColor,
+                  color: accentColor,
                   cursor: "pointer",
                   padding: "4px 6px",
                 }}
@@ -1252,11 +1270,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
             <button
               onClick={onClose}
               style={{
-                background: isMobile ? mobileTheme.closeBtnBg : (isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)"),
+                background: isMobile ? mobileTheme.closeBtnBg : (isModalDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)"),
                 border: "none",
                 fontSize: "14px",
                 fontWeight: 700,
-                color: isMobile ? mobileTheme.textPrimary : textSecondary,
+                color: textPrimary,
                 cursor: "pointer",
                 width: "28px",
                 height: "28px",
@@ -1321,7 +1339,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                         height: "18px",
                         borderRadius: "999px",
                         background: accentColor,
-                        color: "#ffffff",
+                        color: applyTextColor,
                         fontSize: "10px",
                         fontWeight: 800,
                         display: "inline-flex",
@@ -1376,7 +1394,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
               borderRadius: "9px",
               border: "none",
               background: accentColor,
-              color: "#ffffff",
+              color: applyTextColor,
               fontSize: "13px",
               fontWeight: 700,
               cursor: "pointer",
@@ -1392,7 +1410,8 @@ const FilterModal: React.FC<FilterModalProps> = ({
             {totalActiveCount > 0 && (
               <span
                 style={{
-                  background: "rgba(255, 255, 255, 0.25)",
+                  background: isColorDarkHex(accentColor) ? "rgba(255, 255, 255, 0.25)" : "rgba(0, 0, 0, 0.15)",
+                  color: applyTextColor,
                   minWidth: "18px",
                   height: "18px",
                   padding: "0 6px",

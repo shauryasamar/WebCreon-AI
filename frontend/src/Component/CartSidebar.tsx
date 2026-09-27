@@ -985,7 +985,14 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     type="checkbox"
                     checked={checked}
                     onChange={() => toggleOptionalCharge(charge.id)}
-                    style={{ marginTop: "3px" }}
+                    style={{
+                      accentColor: resolvedAccentColor,
+                      width: "16px",
+                      height: "16px",
+                      cursor: "pointer",
+                      marginTop: "3px",
+                      flexShrink: 0,
+                    }}
                   />
                   <div>
                     <div

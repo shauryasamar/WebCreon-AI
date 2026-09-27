@@ -533,14 +533,52 @@ export default function CustomerSupportPage({
   const cardBg = blockProps?.card_bg || activeTheme.card_bg || themeTokens.cardBg;
   const surfaceBg = blockProps?.surface_bg || activeTheme.secondary_bg || themeTokens.secondaryBg;
   const chatBg = blockProps?.chat_bg || cardBg;
-  const textColor = blockProps?.text_color || activeTheme.text_color || themeTokens.textColor;
-  const titleColor = blockProps?.title_color || activeTheme.text_color || themeTokens.textColor;
-  const textMuted = blockProps?.subtext_color || activeTheme.muted_text || activeTheme.muted_text_color || themeTokens.mutedTextColor;
-  const borderColor = blockProps?.border_color || activeTheme.border_color || themeTokens.borderColor;
+
+  const isPrimaryDark = isColorDarkHex(primaryBg);
+  const isCardDark = isColorDarkHex(cardBg);
+  const isSurfaceDark = isColorDarkHex(surfaceBg);
+  const isChatDark = isColorDarkHex(chatBg);
+
+  const rawTextColor = blockProps?.text_color || activeTheme.text_color || themeTokens.textColor;
+  const textColor = (rawTextColor && (isColorDarkHex(rawTextColor) !== isCardDark))
+    ? rawTextColor
+    : (isCardDark ? "#f8fafc" : "#0f172a");
+
+  const pageHeaderTextColor = (rawTextColor && (isColorDarkHex(rawTextColor) !== isPrimaryDark))
+    ? rawTextColor
+    : (isPrimaryDark ? "#f8fafc" : "#0f172a");
+
+  const titleColor = blockProps?.title_color || textColor;
+
+  const rawTextMuted = blockProps?.subtext_color || activeTheme.muted_text || activeTheme.muted_text_color || themeTokens.mutedTextColor;
+  const textMuted = (rawTextMuted && (isColorDarkHex(rawTextMuted) !== isCardDark))
+    ? rawTextMuted
+    : (isCardDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)");
+
+  const pageHeaderMuted = (rawTextMuted && (isColorDarkHex(rawTextMuted) !== isPrimaryDark))
+    ? rawTextMuted
+    : (isPrimaryDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)");
+
+  const borderColor = blockProps?.border_color || activeTheme.border_color || (isCardDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
   const buttonTextColor = blockProps?.button_text_color || activeTheme.accent_text || themeTokens.accentText || "#ffffff";
-  const inputBg = blockProps?.input_bg || (isLight ? "#ffffff" : (activeTheme.secondary_bg || themeTokens.inputBg));
-  const inputBorder = blockProps?.input_border || borderColor;
-  const inputTextColor = blockProps?.input_text_color || textColor;
+
+  const isLightInput = isLight && !isCardDark;
+  const inputBg = blockProps?.input_bg || (isLightInput ? "#ffffff" : (activeTheme.secondary_bg || (isCardDark ? "rgba(255, 255, 255, 0.06)" : "#ffffff")));
+  const isInputDark = isColorDarkHex(inputBg);
+  const inputBorder = blockProps?.input_border || (isInputDark ? "rgba(255, 255, 255, 0.16)" : "rgba(15, 23, 42, 0.16)");
+
+  const rawInputTextColor = blockProps?.input_text_color || textColor;
+  const inputTextColor = (rawInputTextColor && (isColorDarkHex(rawInputTextColor) !== isInputDark))
+    ? rawInputTextColor
+    : (isInputDark ? "#f8fafc" : "#0f172a");
+
+  // Dropdown Popovers contrast
+  const dropdownPopoverBg = cardBg || surfaceBg || (isCardDark ? "#1e293b" : "#ffffff");
+  const isDropdownDark = isColorDarkHex(dropdownPopoverBg);
+  const dropdownTextColor = isDropdownDark ? "#f8fafc" : "#0f172a";
+  const dropdownMutedText = isDropdownDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)";
+  const dropdownBorder = isDropdownDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)";
+
   const customerBubbleBg = blockProps?.customer_bubble_bg || accentColor;
   const customerBubbleText = blockProps?.customer_bubble_text || (isColorDarkHex(customerBubbleBg) ? "#ffffff" : "#0f172a");
   const agentBubbleBg = blockProps?.agent_bubble_bg || surfaceBg;
@@ -1795,7 +1833,7 @@ export default function CustomerSupportPage({
                     alignItems: "center",
                     gap: "6px",
                     fontSize: "12.5px",
-                    color: textMuted,
+                    color: pageHeaderMuted,
                     fontWeight: 600,
                   }}
                 >
@@ -1819,11 +1857,11 @@ export default function CustomerSupportPage({
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "4px",
-                      color: textMuted,
+                      color: pageHeaderMuted,
                       transition: "color 0.15s ease",
                     }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = textMuted)}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = pageHeaderMuted)}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="19" y1="12" x2="5" y2="12" />
@@ -1832,19 +1870,19 @@ export default function CustomerSupportPage({
                     <span>Store</span>
                   </span>
                   <span>/</span>
-                  <span style={{ color: titleColor, fontWeight: 700 }}>Customer Support Desk</span>
+                  <span style={{ color: pageHeaderTextColor, fontWeight: 700 }}>Customer Support Desk</span>
                 </div>
 
                 {!isMobile && showContactInfo && (supportEmail || siteContactEmail || supportPhone || siteContactPhone || supportHours) && (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "11px", color: textMuted, flexWrap: "wrap" }}>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "11px", color: pageHeaderMuted, flexWrap: "wrap" }}>
                     {(supportEmail || siteContactEmail) && (
-                      <span>Email: <strong style={{ color: textColor }}>{supportEmail || siteContactEmail}</strong></span>
+                      <span>Email: <strong style={{ color: pageHeaderTextColor }}>{supportEmail || siteContactEmail}</strong></span>
                     )}
                     {(supportPhone || siteContactPhone) && (
-                      <span>{(supportEmail || siteContactEmail) ? "• " : ""}Phone: <strong style={{ color: textColor }}>{supportPhone || siteContactPhone}</strong></span>
+                      <span>{(supportEmail || siteContactEmail) ? "• " : ""}Phone: <strong style={{ color: pageHeaderTextColor }}>{supportPhone || siteContactPhone}</strong></span>
                     )}
                     {supportHours && (
-                      <span>{((supportEmail || siteContactEmail) || (supportPhone || siteContactPhone)) ? "• " : ""}Hours: <strong style={{ color: textColor }}>{supportHours}</strong></span>
+                      <span>{((supportEmail || siteContactEmail) || (supportPhone || siteContactPhone)) ? "• " : ""}Hours: <strong style={{ color: pageHeaderTextColor }}>{supportHours}</strong></span>
                     )}
                   </div>
                 )}
@@ -3517,8 +3555,8 @@ export default function CustomerSupportPage({
                               top: "calc(100% + 6px)",
                               left: 0,
                               right: 0,
-                              background: cardBg,
-                              border: `1px solid ${borderColor}`,
+                              background: dropdownPopoverBg,
+                              border: `1px solid ${dropdownBorder}`,
                               borderRadius: cardRadius,
                               boxShadow: "0 12px 28px rgba(0, 0, 0, 0.2)",
                               zIndex: 100,
@@ -3554,7 +3592,7 @@ export default function CustomerSupportPage({
                                   alignItems: "center",
                                   justifyContent: "space-between",
                                   background: !selectedOrderId ? `${accentColor}14` : "transparent",
-                                  color: textColor,
+                                  color: dropdownTextColor,
                                   fontSize: "12.5px",
                                 }}
                               >
@@ -3567,7 +3605,7 @@ export default function CustomerSupportPage({
                               </div>
 
                               {ordersLoading && orders.length === 0 ? (
-                                <div style={{ padding: "16px", textAlign: "center", fontSize: "12px", color: textMuted }}>
+                                <div style={{ padding: "16px", textAlign: "center", fontSize: "12px", color: dropdownMutedText }}>
                                   Loading recent orders...
                                 </div>
                               ) : orders.length === 0 ? (
@@ -3778,8 +3816,8 @@ export default function CustomerSupportPage({
                                 top: "calc(100% + 6px)",
                                 left: 0,
                                 right: 0,
-                                background: cardBg,
-                                border: `1px solid ${borderColor}`,
+                                background: dropdownPopoverBg,
+                                border: `1px solid ${dropdownBorder}`,
                                 borderRadius: cardRadius,
                                 boxShadow: "0 10px 25px rgba(0, 0, 0, 0.18)",
                                 zIndex: 100,
@@ -3805,7 +3843,7 @@ export default function CustomerSupportPage({
                                   alignItems: "center",
                                   justifyContent: "space-between",
                                   background: !selectedOrderItemId ? `${accentColor}14` : "transparent",
-                                  color: textColor,
+                                  color: dropdownTextColor,
                                   fontSize: "12.5px",
                                 }}
                               >
@@ -3947,8 +3985,8 @@ export default function CustomerSupportPage({
                             top: "calc(100% + 6px)",
                             left: 0,
                             right: 0,
-                            background: cardBg,
-                            border: `1px solid ${borderColor}`,
+                            background: dropdownPopoverBg,
+                            border: `1px solid ${dropdownBorder}`,
                             borderRadius: cardRadius,
                             boxShadow: "0 10px 25px rgba(0, 0, 0, 0.18)",
                             zIndex: 90,
@@ -3979,15 +4017,15 @@ export default function CustomerSupportPage({
                                   justifyContent: "space-between",
                                   gap: "8px",
                                   background: isSelected ? `${accentColor}14` : "transparent",
-                                  color: textColor,
+                                  color: dropdownTextColor,
                                   fontSize: "12.5px",
                                 }}
                               >
                                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                  <span style={{ color: isSelected ? accentColor : textMuted }}>
+                                  <span style={{ color: isSelected ? accentColor : dropdownMutedText }}>
                                     {renderCategoryIcon(cat.id, 14)}
                                   </span>
-                                  <span style={{ fontWeight: isSelected ? 700 : 500, color: isSelected ? accentColor : textColor }}>
+                                  <span style={{ fontWeight: isSelected ? 700 : 500, color: isSelected ? accentColor : dropdownTextColor }}>
                                     {cat.label}
                                   </span>
                                 </div>

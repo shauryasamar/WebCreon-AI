@@ -93,6 +93,7 @@ export type Product = {
   image?: string;
   image_url?: string;
   imageUrl?: string;
+  default_image_url?: string;
   sizes?: string[];
   inStock?: boolean;
   selectedVariantValue?: string | null;

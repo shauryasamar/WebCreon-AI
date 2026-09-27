@@ -683,6 +683,12 @@ def create_db_and_tables():
                         FOR EACH ROW EXECUTE FUNCTION prevent_audit_update_delete();
                     END IF;
                 END $$;
+
+                -- PostgreSQL Trigram Extension & GIN Indexes for Zero-Cost High-Speed Typo-Tolerant Search
+                CREATE EXTENSION IF NOT EXISTS pg_trgm;
+                CREATE INDEX IF NOT EXISTS ix_products_name_trgm ON products USING gin (name gin_trgm_ops);
+                CREATE INDEX IF NOT EXISTS ix_products_brand_trgm ON products USING gin (brand gin_trgm_ops);
+                CREATE INDEX IF NOT EXISTS ix_products_category_trgm ON products USING gin (category gin_trgm_ops);
             """))
             conn.commit()
     except Exception as e:

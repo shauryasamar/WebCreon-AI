@@ -12,6 +12,7 @@ import {
   ChristmasGraphics,
   EidGraphics,
 } from "./FestiveGraphics";
+import { API_BASE_URL } from "../config/api";
 import { NotificationCenter } from "./NotificationCenter";
 
 export type NavbarTheme = {
@@ -132,6 +133,15 @@ const iconStyle: React.CSSProperties = {
 
 function isColorDarkHex(colorHex?: string): boolean {
   if (!colorHex || typeof colorHex !== "string") return false;
+  if (colorHex.startsWith("rgb")) {
+    const match = colorHex.match(/\d+/g);
+    if (match && match.length >= 3) {
+      const r = parseInt(match[0], 10);
+      const g = parseInt(match[1], 10);
+      const b = parseInt(match[2], 10);
+      return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+    }
+  }
   const hex = colorHex.replace("#", "").trim();
   if (hex.length === 3) {
     const r = parseInt(hex[0] + hex[0], 16);
@@ -264,7 +274,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     isSelected = false,
     onSelect,
   } = props;
-  const { cartCount = 0 } = useCart();
+  const { cartCount = 0, products: localProducts = [] } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
   const { siteId, slug } = useParams<{ siteId?: string; slug?: string }>();
@@ -281,6 +291,28 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchActive, setSearchActive] = useState(false);
+  const [autocompleteData, setAutocompleteData] = useState<{
+    query: string;
+    did_you_mean?: string | null;
+    suggestions: string[];
+    categories: Array<{ name: string; count: number }>;
+    products: Array<{
+      id: string;
+      name: string;
+      slug: string;
+      price: number;
+      compare_price?: number | null;
+      category?: string;
+      brand?: string;
+      default_image_url?: string;
+      in_stock: boolean;
+    }>;
+    total_matches: number;
+  } | null>(null);
+  const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
+  const [isAutocompleteLoading, setIsAutocompleteLoading] = useState(false);
+  const isSearchFocusedRef = useRef(false);
+  const autocompleteContainerRef = useRef<HTMLDivElement | null>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsUnreadCount, setNotificationsUnreadCount] = useState(0);
@@ -1383,6 +1415,11 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   };
 
   const executeGlobalSearch = (query: string) => {
+    isSearchFocusedRef.current = false;
+    setIsAutocompleteOpen(false);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     const trimmed = query.trim();
     if (onSearch) {
       onSearch(trimmed);
@@ -1416,8 +1453,161 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    isSearchFocusedRef.current = false;
+    setIsAutocompleteOpen(false);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     executeGlobalSearch(searchQuery);
   };
+
+  // Instant 0ms local preview + debounced backend autocomplete fetch (< 5ms response)
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed || trimmed.length < 1) {
+      setAutocompleteData(null);
+      setIsAutocompleteOpen(false);
+      return;
+    }
+
+    // 1. Instant client-side preview for 0ms dropdown responsiveness
+    if (localProducts && localProducts.length > 0) {
+      const qLower = trimmed.toLowerCase();
+      const rawTokens = qLower.split(/\s+/).filter((t) => t.length > 0);
+      const matchedProds: any[] = [];
+      const matchedCategories = new Map<string, number>();
+      const keywordSet = new Set<string>();
+
+      const isSubsequenceMatch = (sub: string, full: string) => {
+        if (sub.length < 2 || sub.length > full.length) return false;
+        if (sub[0] !== full[0] && sub.length <= 3) return false;
+        let sIdx = 0;
+        for (let i = 0; i < full.length && sIdx < sub.length; i++) {
+          if (full[i] === sub[sIdx]) sIdx++;
+        }
+        return sIdx === sub.length;
+      };
+
+      for (const prod of localProducts) {
+        const name = (prod.name || "").toLowerCase();
+        const brand = (prod.brand || "").toLowerCase();
+        const cat = (prod.category || prod.category_name || "").toLowerCase();
+        const fullText = `${name} ${brand} ${cat}`;
+        const textWords = fullText.split(/[^a-z0-9]+/);
+
+        let matchesAny = fullText.includes(qLower);
+
+        if (!matchesAny) {
+          for (const token of rawTokens) {
+            if (fullText.includes(token)) {
+              matchesAny = true;
+              break;
+            }
+            if (token.length >= 2) {
+              if (textWords.some((tw) => isSubsequenceMatch(token, tw))) {
+                matchesAny = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (matchesAny) {
+          if (matchedProds.length < 6) {
+            matchedProds.push({
+              id: String(prod.id),
+              name: prod.name,
+              slug: (prod as any).slug || String(prod.id),
+              price: Number(prod.price) || 0,
+              compare_price: prod.compare_price ? Number(prod.compare_price) : null,
+              category: prod.category || prod.category_name,
+              brand: prod.brand,
+              default_image_url:
+                (prod as any).default_image_url ||
+                prod.image ||
+                prod.image_url ||
+                prod.imageUrl ||
+                (prod.images && prod.images[0]) ||
+                "",
+              in_stock: prod.in_stock !== false,
+            });
+          }
+          if (prod.category || prod.category_name) {
+            const catName = prod.category || prod.category_name!;
+            matchedCategories.set(catName, (matchedCategories.get(catName) || 0) + 1);
+          }
+          keywordSet.add(prod.name);
+        }
+      }
+
+      if (matchedProds.length > 0 || matchedCategories.size > 0 || keywordSet.size > 0) {
+        setAutocompleteData({
+          query: trimmed,
+          did_you_mean: null,
+          suggestions: Array.from(keywordSet).slice(0, 5),
+          categories: Array.from(matchedCategories.entries()).map(([name, count]) => ({ name, count })).slice(0, 3),
+          products: matchedProds,
+          total_matches: matchedProds.length,
+        });
+        if (isSearchFocusedRef.current) {
+          setIsAutocompleteOpen(true);
+        }
+      }
+    }
+
+    const effectiveSite =
+      siteId ||
+      props.siteId ||
+      slug ||
+      siteSlug ||
+      props.siteSlug ||
+      (location.pathname.startsWith("/builder/") ? location.pathname.split("/")[2] : undefined) ||
+      (location.pathname.startsWith("/store/") ? location.pathname.split("/")[2] : undefined) ||
+      "1";
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsAutocompleteLoading(true);
+        const res = await fetch(
+          `${API_BASE_URL}/sites/${effectiveSite}/products/autocomplete?q=${encodeURIComponent(trimmed)}&limit=6`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data) {
+            setAutocompleteData(data);
+            if (
+              isSearchFocusedRef.current &&
+              ((data.products && data.products.length > 0) ||
+                data.did_you_mean ||
+                (data.categories && data.categories.length > 0) ||
+                (data.suggestions && data.suggestions.length > 0))
+            ) {
+              setIsAutocompleteOpen(true);
+            }
+          }
+        }
+      } catch (e) {
+        console.debug("Autocomplete fetch error:", e);
+      } finally {
+        setIsAutocompleteLoading(false);
+      }
+    }, 120);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, siteId, siteSlug, slug, props.siteId, props.siteSlug, location.pathname, localProducts]);
+
+  // Click outside to dismiss autocomplete dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || !target.closest || !target.closest(".navbar-search-autocomplete-wrap")) {
+        isSearchFocusedRef.current = false;
+        setIsAutocompleteOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
 
   const isSiteThemeDark =
@@ -1507,6 +1697,202 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     flexShrink: 0,
   };
 
+
+  const renderAutocompleteDropdown = () => {
+    if (!isAutocompleteOpen || !autocompleteData) return null;
+    const hasDidYouMean = Boolean(
+      autocompleteData.did_you_mean &&
+      autocompleteData.did_you_mean.trim().toLowerCase() !== searchQuery.trim().toLowerCase()
+    );
+
+    // Build deduplicated clean list of pure text recommendations
+    const textSuggestions: string[] = [];
+    const seen = new Set<string>();
+
+    if (autocompleteData.suggestions) {
+      for (const s of autocompleteData.suggestions) {
+        const clean = s?.trim();
+        if (clean && !seen.has(clean.toLowerCase())) {
+          seen.add(clean.toLowerCase());
+          textSuggestions.push(clean);
+        }
+      }
+    }
+    if (autocompleteData.products) {
+      for (const p of autocompleteData.products) {
+        const clean = p?.name?.trim();
+        if (clean && !seen.has(clean.toLowerCase())) {
+          seen.add(clean.toLowerCase());
+          textSuggestions.push(clean);
+        }
+      }
+    }
+    if (autocompleteData.categories) {
+      for (const c of autocompleteData.categories) {
+        const clean = c?.name?.trim();
+        if (clean && !seen.has(clean.toLowerCase())) {
+          seen.add(clean.toLowerCase());
+          textSuggestions.push(clean);
+        }
+      }
+    }
+
+    const visibleSuggestions = textSuggestions.slice(0, 6);
+    if (!hasDidYouMean && visibleSuggestions.length === 0) return null;
+
+    // Alignment based on search placement
+    const alignStyle: React.CSSProperties =
+      searchPlacement === "right"
+        ? { right: 0, left: "auto" }
+        : searchPlacement === "left"
+        ? { left: 0, right: "auto" }
+        : { left: 0, right: 0 };
+
+    return (
+      <div
+        className="navbar-autocomplete-dropdown-panel"
+        style={{
+          position: "absolute",
+          top: "calc(100% + 6px)",
+          ...alignStyle,
+          width: "100%",
+          minWidth: isMobile ? "240px" : "280px",
+          maxWidth: isMobile ? "calc(100vw - 32px)" : "460px",
+          background: dropdownBg,
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          borderRadius: "14px",
+          border: `1px solid ${dropdownBorderColor}`,
+          boxShadow: isDialogDark
+            ? "0 16px 36px -8px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.06)"
+            : "0 14px 32px -8px rgba(15,23,42,0.12), 0 0 0 1px rgba(15,23,42,0.04)",
+          zIndex: 9999999,
+          overflow: "hidden",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* Subtle Did-You-Mean Spell Correction */}
+        {hasDidYouMean && (
+          <div
+            style={{
+              padding: "9px 14px",
+              borderBottom: visibleSuggestions.length > 0 ? `1px solid ${dropdownBorderColor}` : "none",
+              background: isDialogDark ? "rgba(255,255,255,0.03)" : "rgba(15,23,42,0.02)",
+              fontSize: "12px",
+              color: dropdownMutedText,
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <span>Did you mean</span>
+            <button
+              type="button"
+              onClick={() => {
+                const corrected = autocompleteData.did_you_mean || "";
+                setSearchQuery(corrected);
+                executeGlobalSearch(corrected);
+                setIsAutocompleteOpen(false);
+              }}
+              style={{
+                fontWeight: 600,
+                textDecoration: "underline",
+                textUnderlineOffset: "2px",
+                background: "none",
+                border: "none",
+                color: theme?.accent_color || (isDialogDark ? "#93c5fd" : "#2563eb"),
+                cursor: "pointer",
+                padding: 0,
+                fontSize: "12px",
+                fontFamily: "inherit",
+              }}
+            >
+              "{autocompleteData.did_you_mean}"
+            </button>
+            <span>?</span>
+          </div>
+        )}
+
+        {/* Clean Minimal Text Recommendations */}
+        {visibleSuggestions.length > 0 && (
+          <div style={{ padding: "4px 0" }}>
+            {visibleSuggestions.map((text, idx) => (
+              <div
+                key={idx}
+                onClick={() => {
+                  setSearchQuery(text);
+                  executeGlobalSearch(text);
+                  setIsAutocompleteOpen(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "10px",
+                  padding: "9px 14px",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  color: dropdownTextColor,
+                  transition: "background 120ms ease",
+                  userSelect: "none",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = isDialogDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(15,23,42,0.04)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1 }}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    style={{
+                      width: "14px",
+                      height: "14px",
+                      stroke: dropdownMutedText,
+                      strokeWidth: 2,
+                      fill: "none",
+                      flexShrink: 0,
+                      opacity: 0.65,
+                    }}
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="M20 20L16.65 16.65" />
+                  </svg>
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {text}
+                  </span>
+                </div>
+                <svg
+                  viewBox="0 0 24 24"
+                  style={{
+                    width: "12px",
+                    height: "12px",
+                    stroke: dropdownMutedText,
+                    strokeWidth: 2,
+                    fill: "none",
+                    flexShrink: 0,
+                    opacity: 0.35,
+                  }}
+                >
+                  <path d="M7 17L17 7M17 7H9M17 7V15" />
+                </svg>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const leftIconBtnBase: React.CSSProperties = {
     width: "42px",
@@ -1926,67 +2312,82 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
             if (searchActive || mobileSearchOpen) {
               return (
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "4px 8px 4px 14px",
-                    borderRadius: "999px",
-                    background: searchPillBg,
-                    border: searchPillBorder,
-                    boxSizing: "border-box",
-                    position: "relative",
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: searchTextColor, strokeWidth: 2, fill: "none", flexShrink: 0 }}>
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="M20 20L16.65 16.65" />
-                  </svg>
-                  <input
-                    ref={mobileSearchInputRef}
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearchInputChange(e.target.value)}
+                <div className="navbar-search-autocomplete-wrap" style={{ width: "100%", position: "relative", zIndex: 99999 }}>
+                  <form
+                    onSubmit={handleSearchSubmit}
                     style={{
-                      flex: 1,
-                      border: "none",
-                      outline: "none",
-                      background: "transparent",
-                      color: searchTextColor,
-                      fontSize: "13px",
-                      fontWeight: 500,
-                      minWidth: 0,
-                      paddingRight: searchQuery ? "28px" : "64px",
-                    }}
-                  />
-                  {renderSearchFestiveGraphic()}
-                  <button
-                    type="button"
-                    onClick={closeSearch}
-                    aria-label="Close search"
-                    style={{
-                      width: "32px",
-                      height: "32px",
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "4px 8px 4px 14px",
                       borderRadius: "999px",
-                      border: "none",
-                      background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)",
-                      color: searchTextColor,
-                      display: "grid",
-                      placeItems: "center",
-                      cursor: "pointer",
-                      flexShrink: 0,
+                      background: searchPillBg,
+                      border: searchPillBorder,
+                      boxSizing: "border-box",
+                      position: "relative",
                     }}
                   >
-                    <svg viewBox="0 0 24 24" style={{ width: "14px", height: "14px", stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
-                      <path d="M18 6L6 18" />
-                      <path d="M6 6L18 18" />
+                    <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: searchTextColor, strokeWidth: 2, fill: "none", flexShrink: 0 }}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
                     </svg>
-                  </button>
-                </form>
+                    <input
+                      ref={mobileSearchInputRef}
+                      type="text"
+                      placeholder="Search products..."
+                      value={searchQuery}
+                      onFocus={() => {
+                        isSearchFocusedRef.current = true;
+                        if (searchQuery.trim().length > 0 || autocompleteData) {
+                          setIsAutocompleteOpen(true);
+                        }
+                      }}
+                      onChange={(e) => {
+                        isSearchFocusedRef.current = true;
+                        handleSearchInputChange(e.target.value);
+                        if (e.target.value.trim().length > 0) {
+                          setIsAutocompleteOpen(true);
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        border: "none",
+                        outline: "none",
+                        background: "transparent",
+                        color: searchTextColor,
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        minWidth: 0,
+                        paddingRight: searchQuery ? "28px" : "64px",
+                      }}
+                    />
+                    {renderSearchFestiveGraphic()}
+                    <button
+                      type="button"
+                      onClick={closeSearch}
+                      aria-label="Close search"
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "999px",
+                        border: "none",
+                        background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)",
+                        color: searchTextColor,
+                        display: "grid",
+                        placeItems: "center",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: "14px", height: "14px", stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
+                        <path d="M18 6L6 18" />
+                        <path d="M6 6L18 18" />
+                      </svg>
+                    </button>
+                  </form>
+                  {renderAutocompleteDropdown()}
+                </div>
               );
             }
 
@@ -2324,54 +2725,69 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               };
 
               const renderGlassSearch = () => (
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    width: "100%",
-                    maxWidth: "100%",
-                    height: `${searchHeightNum}px`,
-                    minWidth: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "0 4px 0 14px",
-                    borderRadius: "999px",
-                    background: searchPillBg,
-                    backdropFilter: "blur(10px)",
-                    border: searchPillBorder,
-                    position: "relative",
-                    boxSizing: "border-box",
-                    overflow: "hidden",
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearchInputChange(e.target.value)}
-                    style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
-                  />
-                  {renderSearchFestiveGraphic()}
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={handleClearSearch}
-                      style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
-                      title="Clear search"
-                    >
-                      ✕
-                    </button>
-                  )}
-                  <button
-                    type="submit"
-                    style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                <div className="navbar-search-autocomplete-wrap" style={{ width: "100%", maxWidth: "100%", minWidth: 0, position: "relative", zIndex: 99999 }}>
+                  <form
+                    onSubmit={handleSearchSubmit}
+                    style={{
+                      width: "100%",
+                      maxWidth: "100%",
+                      height: `${searchHeightNum}px`,
+                      minWidth: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "0 4px 0 14px",
+                      borderRadius: "999px",
+                      background: searchPillBg,
+                      backdropFilter: "blur(10px)",
+                      border: searchPillBorder,
+                      position: "relative",
+                      boxSizing: "border-box",
+                      overflow: "hidden",
+                    }}
                   >
-                    <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20L16.65 16.65" />
-                    </svg>
-                  </button>
-                </form>
+                    <input
+                      type="text"
+                      placeholder="Search products..."
+                      value={searchQuery}
+                      onFocus={() => {
+                        isSearchFocusedRef.current = true;
+                        if (searchQuery.trim().length > 0 || autocompleteData) {
+                          setIsAutocompleteOpen(true);
+                        }
+                      }}
+                      onChange={(e) => {
+                        isSearchFocusedRef.current = true;
+                        handleSearchInputChange(e.target.value);
+                        if (e.target.value.trim().length > 0) {
+                          setIsAutocompleteOpen(true);
+                        }
+                      }}
+                      style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
+                    />
+                    {renderSearchFestiveGraphic()}
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={handleClearSearch}
+                        style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M20 20L16.65 16.65" />
+                      </svg>
+                    </button>
+                  </form>
+                  {renderAutocompleteDropdown()}
+                </div>
               );
 
               const renderGlassActions = () => (
@@ -2536,51 +2952,66 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               };
 
               const renderMarketplaceSearch = () => (
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    width: "100%",
-                    maxWidth: "100%",
-                    height: `${searchHeightNum}px`,
-                    minWidth: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    borderRadius: "8px",
-                    border: searchPillBorder,
-                    background: searchPillBg,
-                    overflow: "hidden",
-                    position: "relative",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearchInputChange(e.target.value)}
-                    style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", padding: "0 12px", paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
-                  />
-                  {renderSearchFestiveGraphic()}
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={handleClearSearch}
-                      style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
-                      title="Clear search"
-                    >
-                      ✕
-                    </button>
-                  )}
-                  <button
-                    type="submit"
-                    style={{ width: `${Math.max(34, searchHeightNum + 4)}px`, height: `${searchHeightNum}px`, border: "none", background: accentColor, color: "#ffffff", display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                <div className="navbar-search-autocomplete-wrap" style={{ width: "100%", maxWidth: "100%", minWidth: 0, position: "relative", zIndex: 99999 }}>
+                  <form
+                    onSubmit={handleSearchSubmit}
+                    style={{
+                      width: "100%",
+                      maxWidth: "100%",
+                      height: `${searchHeightNum}px`,
+                      minWidth: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      borderRadius: "8px",
+                      border: searchPillBorder,
+                      background: searchPillBg,
+                      overflow: "hidden",
+                      position: "relative",
+                      boxSizing: "border-box",
+                    }}
                   >
-                    <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20L16.65 16.65" />
-                    </svg>
-                  </button>
-                </form>
+                    <input
+                      type="text"
+                      placeholder="Search products..."
+                      value={searchQuery}
+                      onFocus={() => {
+                        isSearchFocusedRef.current = true;
+                        if (searchQuery.trim().length > 0 || autocompleteData) {
+                          setIsAutocompleteOpen(true);
+                        }
+                      }}
+                      onChange={(e) => {
+                        isSearchFocusedRef.current = true;
+                        handleSearchInputChange(e.target.value);
+                        if (e.target.value.trim().length > 0) {
+                          setIsAutocompleteOpen(true);
+                        }
+                      }}
+                      style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", padding: "0 12px", paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
+                    />
+                    {renderSearchFestiveGraphic()}
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={handleClearSearch}
+                        style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      style={{ width: `${Math.max(34, searchHeightNum + 4)}px`, height: `${searchHeightNum}px`, border: "none", background: accentColor, color: "#ffffff", display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2.2, fill: "none" }}>
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M20 20L16.65 16.65" />
+                      </svg>
+                    </button>
+                  </form>
+                  {renderAutocompleteDropdown()}
+                </div>
               );
 
               const renderMarketplaceActions = () => (
@@ -2758,53 +3189,68 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               };
 
               const renderLuxurySearch = () => (
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    width: "100%",
-                    maxWidth: "100%",
-                    height: `${searchHeightNum}px`,
-                    minWidth: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "0 4px 0 14px",
-                    borderRadius: "999px",
-                    background: searchPillBg,
-                    border: searchPillBorder,
-                    position: "relative",
-                    boxSizing: "border-box",
-                    overflow: "hidden",
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearchInputChange(e.target.value)}
-                    style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontFamily: "serif", paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
-                  />
-                  {renderSearchFestiveGraphic()}
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={handleClearSearch}
-                      style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
-                      title="Clear search"
-                    >
-                      ✕
-                    </button>
-                  )}
-                  <button
-                    type="submit"
-                    style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: "transparent", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                <div className="navbar-search-autocomplete-wrap" style={{ width: "100%", maxWidth: "100%", minWidth: 0, position: "relative", zIndex: 99999 }}>
+                  <form
+                    onSubmit={handleSearchSubmit}
+                    style={{
+                      width: "100%",
+                      maxWidth: "100%",
+                      height: `${searchHeightNum}px`,
+                      minWidth: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "0 4px 0 14px",
+                      borderRadius: "999px",
+                      background: searchPillBg,
+                      border: searchPillBorder,
+                      position: "relative",
+                      boxSizing: "border-box",
+                      overflow: "hidden",
+                    }}
                   >
-                    <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20L16.65 16.65" />
-                    </svg>
-                  </button>
-                </form>
+                    <input
+                      type="text"
+                      placeholder="Search products..."
+                      value={searchQuery}
+                      onFocus={() => {
+                        isSearchFocusedRef.current = true;
+                        if (searchQuery.trim().length > 0 || autocompleteData) {
+                          setIsAutocompleteOpen(true);
+                        }
+                      }}
+                      onChange={(e) => {
+                        isSearchFocusedRef.current = true;
+                        handleSearchInputChange(e.target.value);
+                        if (e.target.value.trim().length > 0) {
+                          setIsAutocompleteOpen(true);
+                        }
+                      }}
+                      style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontFamily: "serif", paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
+                    />
+                    {renderSearchFestiveGraphic()}
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={handleClearSearch}
+                        style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: "transparent", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M20 20L16.65 16.65" />
+                      </svg>
+                    </button>
+                  </form>
+                  {renderAutocompleteDropdown()}
+                </div>
               );
 
               const renderLuxuryActions = () => (
@@ -2998,54 +3444,69 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               };
 
               const renderNeoSearch = () => (
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    width: "100%",
-                    maxWidth: "100%",
-                    height: `${searchHeightNum}px`,
-                    minWidth: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "0 4px 0 14px",
-                    borderRadius: "999px",
-                    background: searchCustomBg || neoBg,
-                    boxShadow: insetShadow,
-                    border: searchCustomBorder ? `1px solid ${searchCustomBorder}` : "none",
-                    position: "relative",
-                    boxSizing: "border-box",
-                    overflow: "hidden",
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearchInputChange(e.target.value)}
-                    style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
-                  />
-                  {renderSearchFestiveGraphic()}
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={handleClearSearch}
-                      style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
-                      title="Clear search"
-                    >
-                      ✕
-                    </button>
-                  )}
-                  <button
-                    type="submit"
-                    style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                <div className="navbar-search-autocomplete-wrap" style={{ width: "100%", maxWidth: "100%", minWidth: 0, position: "relative", zIndex: 99999 }}>
+                  <form
+                    onSubmit={handleSearchSubmit}
+                    style={{
+                      width: "100%",
+                      maxWidth: "100%",
+                      height: `${searchHeightNum}px`,
+                      minWidth: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "0 4px 0 14px",
+                      borderRadius: "999px",
+                      background: searchCustomBg || neoBg,
+                      boxShadow: insetShadow,
+                      border: searchCustomBorder ? `1px solid ${searchCustomBorder}` : "none",
+                      position: "relative",
+                      boxSizing: "border-box",
+                      overflow: "hidden",
+                    }}
                   >
-                    <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20L16.65 16.65" />
-                    </svg>
-                  </button>
-                </form>
+                    <input
+                      type="text"
+                      placeholder="Search products..."
+                      value={searchQuery}
+                      onFocus={() => {
+                        isSearchFocusedRef.current = true;
+                        if (searchQuery.trim().length > 0 || autocompleteData) {
+                          setIsAutocompleteOpen(true);
+                        }
+                      }}
+                      onChange={(e) => {
+                        isSearchFocusedRef.current = true;
+                        handleSearchInputChange(e.target.value);
+                        if (e.target.value.trim().length > 0) {
+                          setIsAutocompleteOpen(true);
+                        }
+                      }}
+                      style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
+                    />
+                    {renderSearchFestiveGraphic()}
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={handleClearSearch}
+                        style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M20 20L16.65 16.65" />
+                      </svg>
+                    </button>
+                  </form>
+                  {renderAutocompleteDropdown()}
+                </div>
               );
 
               const renderNeoActions = () => (
@@ -3208,53 +3669,68 @@ const Navbar: React.FC<NavbarProps> = (props) => {
             };
 
             const renderDefaultSearch = () => (
-              <form
-                onSubmit={handleSearchSubmit}
-                style={{
-                  width: "100%",
-                  maxWidth: "100%",
-                  height: `${searchHeightNum}px`,
-                  minWidth: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "0 4px 0 14px",
-                  borderRadius: "999px",
-                  background: searchPillBg,
-                  border: searchPillBorder,
-                  position: "relative",
-                  boxSizing: "border-box",
-                  overflow: "hidden",
-                }}
-              >
-                <input
-                  type="text"
-                  placeholder="Search products..."
-                  value={searchQuery}
-                  onChange={(e) => handleSearchInputChange(e.target.value)}
-                  style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
-                />
-                {renderSearchFestiveGraphic()}
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={handleClearSearch}
-                    style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
-                    title="Clear search"
-                  >
-                    ✕
-                  </button>
-                )}
-                <button
-                  type="submit"
-                  style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+              <div className="navbar-search-autocomplete-wrap" style={{ width: "100%", maxWidth: "100%", minWidth: 0, position: "relative", zIndex: 99999 }}>
+                <form
+                  onSubmit={handleSearchSubmit}
+                  style={{
+                    width: "100%",
+                    maxWidth: "100%",
+                    height: `${searchHeightNum}px`,
+                    minWidth: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "0 4px 0 14px",
+                    borderRadius: "999px",
+                    background: searchPillBg,
+                    border: searchPillBorder,
+                    position: "relative",
+                    boxSizing: "border-box",
+                    overflow: "hidden",
+                  }}
                 >
-                  <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="M20 20L16.65 16.65" />
-                  </svg>
-                </button>
-              </form>
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onFocus={() => {
+                      isSearchFocusedRef.current = true;
+                      if (searchQuery.trim().length > 0 || autocompleteData) {
+                        setIsAutocompleteOpen(true);
+                      }
+                    }}
+                    onChange={(e) => {
+                      isSearchFocusedRef.current = true;
+                      handleSearchInputChange(e.target.value);
+                      if (e.target.value.trim().length > 0) {
+                        setIsAutocompleteOpen(true);
+                      }
+                    }}
+                    style={{ flex: 1, minWidth: 0, width: "100%", height: "100%", border: "none", outline: "none", background: "transparent", color: searchTextColor, fontSize: "13px", fontWeight: 500, paddingRight: searchQuery ? "4px" : "8px", boxSizing: "border-box" }}
+                  />
+                  {renderSearchFestiveGraphic()}
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={handleClearSearch}
+                      style={{ width: `${searchClearSize}px`, height: `${searchClearSize}px`, border: "none", background: "transparent", color: searchPlaceholderColor, opacity: 0.8, display: "grid", placeItems: "center", cursor: "pointer", fontSize: `${Math.max(11, searchClearSize - 10)}px`, flexShrink: 0 }}
+                      title="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20L16.65 16.65" />
+                    </svg>
+                  </button>
+                </form>
+                {renderAutocompleteDropdown()}
+              </div>
             );
 
             const renderDefaultActions = () => (

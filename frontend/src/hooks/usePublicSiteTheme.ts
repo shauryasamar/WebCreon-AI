@@ -15,13 +15,17 @@ export type PublicSiteData = {
     logoUrl?: string;
   };
   theme: {
-    mode?: "light" | "dark";
+    mode?: "light" | "dark" | string;
     primary_bg?: string;
     secondary_bg?: string;
     card_bg?: string;
     text_color?: string;
+    muted_text?: string;
+    muted_text_color?: string;
     accent_color?: string;
+    accent_text?: string;
     border_color?: string;
+    [key: string]: any;
   };
   [key: string]: any;
 };

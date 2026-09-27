@@ -230,6 +230,90 @@ function mapSavedAddressToDeliveryData(address: SavedAddress): DeliveryData {
   };
 }
 
+const STOP_WORDS = new Set(["for", "in", "with", "and", "the", "a", "an", "of", "to", "by", "on", "at", "from"]);
+
+const SYNONYMS_MAP: Record<string, string[]> = {
+  sneakers: ["shoes", "trainers", "footwear"],
+  sneaker: ["shoes", "trainers", "shoe"],
+  trainers: ["shoes", "sneakers"],
+  shoes: ["sneakers", "footwear"],
+  shoe: ["sneaker", "footwear"],
+  tee: ["t-shirt", "tshirt", "shirt"],
+  tshirt: ["t-shirt", "tee", "shirt"],
+  "t-shirt": ["tshirt", "tee", "shirt"],
+  trousers: ["pants", "slacks", "jeans"],
+  pants: ["trousers", "jeans", "slacks"],
+  specs: ["sunglasses", "glasses", "shades"],
+  sunglasses: ["specs", "glasses", "shades"],
+  pullover: ["sweater", "jumper", "hoodie"],
+  sweater: ["pullover", "jumper", "cardigan"],
+  hoodie: ["sweatshirt", "jacket"],
+  jacket: ["coat", "blazer", "hoodie"],
+  purse: ["handbag", "bag"],
+  handbag: ["bag", "purse"],
+  dress: ["frock", "gown"],
+  frock: ["dress", "gown"],
+  cap: ["hat"],
+  hat: ["cap"],
+  perfume: ["fragrance", "cologne"],
+  fragrance: ["perfume", "cologne"],
+  earphones: ["headphones", "earbuds", "airpods"],
+  earbuds: ["earphones", "headphones", "airpods"],
+  headphones: ["earphones", "headset"],
+};
+
+const getWordStems = (word: string): string[] => {
+  const w = word.toLowerCase();
+  const variants = [w];
+  if (w.endsWith("ies") && w.length > 4) variants.push(w.slice(0, -3) + "y");
+  else if (w.endsWith("y") && w.length > 3) variants.push(w.slice(0, -1) + "ies");
+
+  if (w.endsWith("es") && w.length > 3) {
+    variants.push(w.slice(0, -2));
+    variants.push(w.slice(0, -1));
+  } else if (w.endsWith("ch") || w.endsWith("sh") || w.endsWith("ss") || w.endsWith("x") || w.endsWith("z")) {
+    variants.push(w + "es");
+  }
+
+  if (w.endsWith("s") && w.length > 3 && !w.endsWith("ss")) {
+    variants.push(w.slice(0, -1));
+  } else if (!w.endsWith("s") && w.length >= 3) {
+    variants.push(w + "s");
+  }
+  return Array.from(new Set(variants.filter((v) => v.length >= 2)));
+};
+
+const getLevenshteinDistance = (a: string, b: string): number => {
+  const al = a.length;
+  const bl = b.length;
+  if (al === 0) return bl;
+  if (bl === 0) return al;
+  if (Math.abs(al - bl) > 2) return 99;
+
+  const matrix: number[][] = [];
+  for (let i = 0; i <= al; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= bl; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= al; i++) {
+    for (let j = 1; j <= bl; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[al][bl];
+};
+
 const RenderPage: React.FC<RenderPageProps> = ({
   page,
   siteId,
@@ -268,6 +352,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
     minPrice: initialMinP ? Number(initialMinP) : 0,
     maxPrice: initialMaxP ? Number(initialMaxP) : 100000,
   });
+  const isThemeDark = theme?.mode === "dark" || isColorDarkHex(theme?.primary_bg);
   const [sortBy, setSortBy] = useState(initialSortBy);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [currentPage, setCurrentPage] = useState(1);
@@ -275,6 +360,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const [serverProducts, setServerProducts] = useState<Product[] | null>(null);
   const [serverTotal, setServerTotal] = useState<number | null>(null);
   const [serverTotalPages, setServerTotalPages] = useState<number | null>(null);
+  const [didYouMean, setDidYouMean] = useState<string | null>(null);
   const [isServerLoading, setIsServerLoading] = useState<boolean>(false);
   const [isCompactCheckout, setIsCompactCheckout] = useState(false);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
@@ -312,8 +398,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
     });
   }, [location.search]);
 
+  const effectiveSiteId = siteId || siteSlug;
+
   useEffect(() => {
-    if (!siteId) return;
+    if (!effectiveSiteId) return;
 
     let cancelled = false;
     const fetchServerProducts = async () => {
@@ -342,7 +430,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
         }
 
         const res = await fetch(
-          `${API_BASE_URL}/sites/${siteId}/products/public?${params.toString()}`
+          `${API_BASE_URL}/sites/${effectiveSiteId}/products/public?${params.toString()}`
         );
 
         if (!cancelled && res.ok) {
@@ -353,6 +441,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
             setServerProducts(norm);
             setServerTotal(typeof data.total === "number" ? data.total : norm.length);
             setServerTotalPages(typeof data.total_pages === "number" ? data.total_pages : 1);
+            setDidYouMean(data.did_you_mean || null);
           }
         }
       } catch (err) {
@@ -369,20 +458,20 @@ const RenderPage: React.FC<RenderPageProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [siteId, currentPage, pageSize, searchQuery, filters, sortBy]);
+  }, [effectiveSiteId, currentPage, pageSize, searchQuery, filters, sortBy]);
 
   useEffect(() => {
-    if (!siteId) return;
-    fetch(`${API_BASE_URL}/sites/${siteId}/categories/public`)
+    if (!effectiveSiteId) return;
+    fetch(`${API_BASE_URL}/sites/${effectiveSiteId}/categories/public`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setCategories(Array.isArray(data) ? data : []))
       .catch(() => { });
 
-    fetch(`${API_BASE_URL}/sites/${siteId}/collections/public`)
+    fetch(`${API_BASE_URL}/sites/${effectiveSiteId}/collections/public`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setCollections(Array.isArray(data) ? data : []))
       .catch(() => { });
-  }, [siteId]);
+  }, [effectiveSiteId]);
 
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>("delivery");
   const [deliveryData, setDeliveryData] = useState<DeliveryData>(initialDeliveryData);
@@ -727,17 +816,116 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const filteredAndSortedProducts = useMemo(() => {
     let list = [...sourceProductsForFilters];
 
-    // Search filter across name, brand, product type
+    // Search filter across name, brand, product type with multi-token AND match
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      list = list.filter(
-        (p) =>
-          (p.name && p.name.toLowerCase().includes(q)) ||
-          (p.brand && p.brand.toLowerCase().includes(q)) ||
-          (p.category && p.category.toLowerCase().includes(q)) ||
-          (p.category_name && p.category_name.toLowerCase().includes(q)) ||
-          (p.description && p.description.toLowerCase().includes(q))
-      );
+      const rawWords = q.split(/\s+/).filter((w) => w.length > 0);
+      const meaningfulWords = rawWords.length > 1 ? rawWords.filter((w) => !STOP_WORDS.has(w)) : rawWords;
+      const qWords = meaningfulWords.length > 0 ? meaningfulWords : rawWords;
+
+      const isSubsequenceMatch = (sub: string, full: string) => {
+        if (sub.length < 2 || sub.length > full.length) return false;
+        if (sub[0] !== full[0] && sub.length <= 3) return false;
+        let sIdx = 0;
+        for (let i = 0; i < full.length && sIdx < sub.length; i++) {
+          if (full[i] === sub[sIdx]) sIdx++;
+        }
+        return sIdx === sub.length;
+      };
+
+      const scoredList: Array<{ prod: Product; score: number }> = [];
+
+      for (const p of list) {
+        const name = (p.name || "").toLowerCase();
+        const brand = (p.brand || "").toLowerCase();
+        const cat = (p.category || p.category_name || "").toLowerCase();
+        const desc = (p.description || "").toLowerCase();
+        const fullText = `${name} ${brand} ${cat}`;
+        const textWords = fullText.split(/[^a-z0-9]+/);
+
+        let matchCount = 0;
+        let score = 0;
+
+        if (name.includes(q)) score += 500;
+        else if (fullText.includes(q)) score += 300;
+        else if (desc.includes(q)) score += 100;
+
+        for (const qw of qWords) {
+          let tokenMatched = false;
+
+          // 1. Direct exact token match
+          if (name.includes(qw)) {
+            score += 100;
+            tokenMatched = true;
+          } else if (fullText.includes(qw)) {
+            score += 60;
+            tokenMatched = true;
+          } else if (desc.includes(qw)) {
+            score += 20;
+            tokenMatched = true;
+          }
+
+          if (!tokenMatched) {
+            // 2. Stem & Synonym expansion
+            const variants = getWordStems(qw);
+            if (SYNONYMS_MAP[qw]) {
+              variants.push(...SYNONYMS_MAP[qw]);
+            }
+
+            for (const v of variants) {
+              if (name.includes(v)) {
+                score += 80;
+                tokenMatched = true;
+                break;
+              } else if (fullText.includes(v)) {
+                score += 40;
+                tokenMatched = true;
+                break;
+              }
+            }
+          }
+
+          if (!tokenMatched && qw.length >= 2) {
+            // 3. Subsequence / abbreviation match (e.g. pnk in pink, snkrs in sneakers, drss in dress)
+            for (const tw of textWords) {
+              if (isSubsequenceMatch(qw, tw)) {
+                score += 70;
+                tokenMatched = true;
+                break;
+              }
+            }
+          }
+
+          if (!tokenMatched && qw.length >= 3) {
+            // 4. Proportional typo edit distance
+            for (const tw of textWords) {
+              if (tw.length >= 3) {
+                const maxLen = Math.max(qw.length, tw.length);
+                const maxEdits = maxLen <= 3 ? 1 : maxLen <= 6 ? 2 : 3;
+                if (Math.abs(tw.length - qw.length) <= maxEdits) {
+                  const dist = getLevenshteinDistance(qw, tw);
+                  if (dist <= maxEdits) {
+                    score += 50 - dist * 10;
+                    tokenMatched = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          if (tokenMatched) {
+            matchCount++;
+          }
+        }
+
+        if (score > 0 || matchCount >= 1) {
+          scoredList.push({ prod: p, score: score + matchCount * 30 });
+        }
+      }
+
+      scoredList.sort((a, b) => b.score - a.score);
+      list = scoredList.map((item) => item.prod);
     }
 
     // Broad Category filter
@@ -1186,33 +1374,88 @@ const RenderPage: React.FC<RenderPageProps> = ({
     }
 
     if (!isProductDetailPageContext && isProductListingBlock) {
+      const showTypoBanner = Boolean(
+        searchQuery &&
+        didYouMean &&
+        didYouMean.trim().toLowerCase() !== searchQuery.trim().toLowerCase()
+      );
+
       return (
-        <Component
-          key={blockId}
-          {...componentProps}
-          products={resolvedStoreProducts}
-          title={dynamicTitle}
-          subtitle={dynamicSubtitle}
-          itemCount={resolvedTotalCount}
-          activeFilterCount={activeFilterCount}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-          onFilterClick={() => setFilterModalOpen(true)}
-          showFilterButton={!isDedicatedSectionOrSearchView}
-          currentPage={currentPage}
-          totalPages={resolvedTotalPages}
-          onPageChange={(newPage: number) => {
-            setCurrentPage(newPage);
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }}
-          pageSize={pageSize}
-          pageSizeOptions={[24, 48, 96, 100]}
-          onPageSizeChange={(newSize: number) => {
-            setPageSize(newSize);
-            setCurrentPage(1);
-          }}
-          totalProducts={resolvedTotalCount}
-        />
+        <React.Fragment key={blockId}>
+          {showTypoBanner && (
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "1280px",
+                margin: "12px auto 16px auto",
+                padding: "12px 18px",
+                borderRadius: "12px",
+                background: isThemeDark ? "rgba(99,102,241,0.16)" : "rgba(99,102,241,0.08)",
+                border: `1px solid ${isThemeDark ? "rgba(99,102,241,0.35)" : "rgba(99,102,241,0.2)"}`,
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                fontSize: "14px",
+                color: isThemeDark ? "#e0e7ff" : "#3730a3",
+                boxSizing: "border-box",
+              }}
+            >
+              <span style={{ fontSize: "16px" }}>💡</span>
+              <span style={{ flex: 1 }}>
+                Showing results for{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (didYouMean) {
+                      setSearchQuery(didYouMean);
+                      const params = new URLSearchParams(location.search);
+                      params.set("search", didYouMean);
+                      navigate(`${location.pathname}?${params.toString()}`);
+                    }
+                  }}
+                  style={{
+                    fontWeight: 700,
+                    textDecoration: "underline",
+                    background: "none",
+                    border: "none",
+                    color: isThemeDark ? "#93c5fd" : "#4f46e5",
+                    cursor: "pointer",
+                    padding: 0,
+                    fontSize: "14px",
+                  }}
+                >
+                  "{didYouMean}"
+                </button>
+                {" "}(typo corrected from "{searchQuery}")
+              </span>
+            </div>
+          )}
+          <Component
+            {...componentProps}
+            products={resolvedStoreProducts}
+            title={dynamicTitle}
+            subtitle={dynamicSubtitle}
+            itemCount={resolvedTotalCount}
+            activeFilterCount={activeFilterCount}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            onFilterClick={() => setFilterModalOpen(true)}
+            showFilterButton={!isDedicatedSectionOrSearchView}
+            currentPage={currentPage}
+            totalPages={resolvedTotalPages}
+            onPageChange={(newPage: number) => {
+              setCurrentPage(newPage);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            pageSize={pageSize}
+            pageSizeOptions={[24, 48, 96, 100]}
+            onPageSizeChange={(newSize: number) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+            totalProducts={resolvedTotalCount}
+          />
+        </React.Fragment>
       );
     }
 
@@ -1238,7 +1481,6 @@ const RenderPage: React.FC<RenderPageProps> = ({
       (theme as any)?.visual_style === "glassmorphic" ||
       (theme as any)?.name?.toLowerCase()?.includes("glass");
 
-    const isThemeDark = theme?.mode === "dark" || isColorDarkHex(theme?.primary_bg);
     const resolvedAccent = theme?.accent_color || (isThemeDark ? "#60a5fa" : "#2563eb");
     const scrollTrackBg = theme?.primary_bg || (isThemeDark ? "#0f172a" : "#f1f5f9");
     const scrollThumbColor = resolvedAccent;
@@ -1616,6 +1858,20 @@ const RenderPage: React.FC<RenderPageProps> = ({
   }
 
   if (placedOrder) {
+    const confirmationShellBg = isLight ? "#ffffff" : (theme?.secondary_bg || (isDark ? "#1e293b" : "#ffffff"));
+    const isConfirmationShellDark = isColorDarkHex(confirmationShellBg);
+    const confirmationTitleColor = isConfirmationShellDark ? "#f8fafc" : "#0f172a";
+    const confirmationSubtitleColor = isConfirmationShellDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)";
+
+    const confirmationSummaryBg = (cardBg && cardBg !== "transparent") ? cardBg : (isConfirmationShellDark ? "rgba(255, 255, 255, 0.06)" : "#f8fafc");
+    const isConfirmationSummaryDark = isColorDarkHex(confirmationSummaryBg);
+    const confirmationValueColor = isConfirmationSummaryDark ? "#f8fafc" : "#0f172a";
+    const confirmationLabelColor = isConfirmationSummaryDark ? "rgba(248, 250, 252, 0.70)" : "rgba(15, 23, 42, 0.65)";
+    const confirmationSummaryBorder = isConfirmationSummaryDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)";
+
+    const continueBtnBg = accentColor || "#2563eb";
+    const continueBtnTextColor = isColorDarkHex(continueBtnBg) ? "#ffffff" : "#0f172a";
+
     return (
       <ThemeProvider theme={theme as any}>
         <div
@@ -1635,8 +1891,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
             <div
               style={{
                 borderRadius: "20px",
-                border: shellBorder,
-                background: shellBg,
+                border: `1px solid ${isConfirmationShellDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.10)"}`,
+                background: confirmationShellBg,
                 padding: isCompactCheckout ? "20px 16px" : "32px 24px",
                 textAlign: "center",
                 boxShadow: isLight
@@ -1675,7 +1931,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                   margin: "0 0 8px 0",
                   fontSize: "24px",
                   fontWeight: 800,
-                  color: textColor,
+                  color: confirmationTitleColor,
                 }}
               >
                 Thank you for your order!
@@ -1685,7 +1941,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                 style={{
                   margin: 0,
                   fontSize: "14px",
-                  color: subtleText,
+                  color: confirmationSubtitleColor,
                   lineHeight: 1.6,
                 }}
               >
@@ -1699,29 +1955,29 @@ const RenderPage: React.FC<RenderPageProps> = ({
                   marginTop: "20px",
                   textAlign: "left",
                   borderRadius: "14px",
-                  border: cardBorder,
-                  background: cardBg,
+                  border: `1px solid ${confirmationSummaryBorder}`,
+                  background: confirmationSummaryBg,
                   padding: "16px",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                  <span style={{ fontSize: "13px", color: subtleText }}>Order ID</span>
-                  <span style={{ fontSize: "13px", color: textColor, fontWeight: 700 }}>
+                  <span style={{ fontSize: "13px", color: confirmationLabelColor, fontWeight: 500 }}>Order ID</span>
+                  <span style={{ fontSize: "13px", color: confirmationValueColor, fontWeight: 700, fontFamily: "monospace" }}>
                     {placedOrder.orderId}
                   </span>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                  <span style={{ fontSize: "13px", color: subtleText }}>Status</span>
-                  <span style={{ fontSize: "13px", color: textColor, fontWeight: 700, textTransform: "capitalize" }}>
+                  <span style={{ fontSize: "13px", color: confirmationLabelColor, fontWeight: 500 }}>Status</span>
+                  <span style={{ fontSize: "13px", color: confirmationValueColor, fontWeight: 700, textTransform: "capitalize" }}>
                     {placedOrder.status.replace(/_/g, " ")}
                   </span>
                 </div>
 
                 {typeof placedOrder.total === "number" ? (
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                    <span style={{ fontSize: "13px", color: subtleText }}>Total</span>
-                    <span style={{ fontSize: "13px", color: textColor, fontWeight: 700 }}>
+                    <span style={{ fontSize: "13px", color: confirmationLabelColor, fontWeight: 500 }}>Total</span>
+                    <span style={{ fontSize: "13px", color: confirmationValueColor, fontWeight: 700 }}>
                       ₹{placedOrder.total}
                     </span>
                   </div>
@@ -1755,11 +2011,12 @@ const RenderPage: React.FC<RenderPageProps> = ({
                   padding: "10px 24px",
                   borderRadius: "999px",
                   border: "none",
-                  background: accentColor,
-                  color: "#ffffff",
+                  background: continueBtnBg,
+                  color: continueBtnTextColor,
                   fontSize: "14px",
                   fontWeight: 700,
                   cursor: "pointer",
+                  transition: "opacity 150ms ease",
                 }}
               >
                 Continue Shopping
