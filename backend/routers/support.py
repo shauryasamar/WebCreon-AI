@@ -24,7 +24,8 @@ from auth_middleware import (
 )
 from routers.products import save_optimized_upload_image
 
-SUPPORT_UPLOADS_DIR = Path("uploads/support")
+BASE_DIR = Path(__file__).resolve().parent.parent
+SUPPORT_UPLOADS_DIR = BASE_DIR / "uploads" / "support"
 SUPPORT_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_SUPPORT_IMAGE_TYPES = {
     "image/jpeg",

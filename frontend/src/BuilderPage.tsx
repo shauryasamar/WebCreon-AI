@@ -15,6 +15,7 @@ import Footer from "./Component/Footer";
 import type { EditorTab } from "./customizations/EditorSidebar";
 import { applyThemeToPages, type EditorSiteDefinition } from "./customizations/editorUtils";
 import { API_BASE_URL } from "./config/api";
+import { resolveAndUploadPendingAssets } from "./utils/pendingAssetRegistry";
 import BuilderShell from "./Component/BuilderShell";
 import { DeviceModeProvider } from "./context/DeviceModeContext";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
@@ -1275,11 +1276,14 @@ function BuilderPageContent() {
 
     setPublishing(true);
     try {
+      // Resolve & upload any pending local blob assets (hero banners, logos, etc.) before publishing
+      const finalDraftDef = await resolveAndUploadPendingAssets(draftSiteDefinition);
+
       const response = await fetch(`${API_BASE_URL}/sites/${currentSiteId}/publish`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ draft_definition: draftSiteDefinition }),
+        body: JSON.stringify({ draft_definition: finalDraftDef }),
       });
 
       if (!response.ok) {
@@ -1287,7 +1291,7 @@ function BuilderPageContent() {
       }
 
       const updatedSite = await response.json();
-      const finalDef = updatedSite.site_definition || draftSiteDefinition;
+      const finalDef = updatedSite.site_definition || finalDraftDef;
       setSiteDefinition(finalDef);
       setDraftSiteDefinition(finalDef);
       setPublishedSiteDefinition(finalDef);

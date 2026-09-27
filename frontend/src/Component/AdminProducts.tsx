@@ -917,6 +917,20 @@ const AdminProducts = () => {
     preorder_limit: "",
   });
 
+  const pendingImageFilesRef = useRef<Map<string, File>>(new Map());
+
+  // Clean up blob URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      pendingImageFilesRef.current.forEach((_, blobUrl) => {
+        try {
+          URL.revokeObjectURL(blobUrl);
+        } catch (_) {}
+      });
+      pendingImageFilesRef.current.clear();
+    };
+  }, []);
+
   const parseImages = (text: string): string[] => {
     if (!text || !text.trim()) return [];
     const lines = text
@@ -932,7 +946,8 @@ const AdminProducts = () => {
         !line.startsWith("http://") &&
         !line.startsWith("https://") &&
         !line.startsWith("/") &&
-        !line.startsWith("data:")
+        !line.startsWith("data:") &&
+        !line.startsWith("blob:")
       ) {
         healed[healed.length - 1] = `${healed[healed.length - 1]},${line}`;
       } else {
@@ -1073,6 +1088,12 @@ const AdminProducts = () => {
   };
 
   const resetForm = () => {
+    pendingImageFilesRef.current.forEach((_, blobUrl) => {
+      try {
+        URL.revokeObjectURL(blobUrl);
+      } catch (_) {}
+    });
+    pendingImageFilesRef.current.clear();
     setEditingProduct(null);
     setErrors({});
     setVariantRows([]);
@@ -1810,8 +1831,8 @@ const AdminProducts = () => {
     );
   };
 
-  // Batch Image Upload Handler
-  const handleBatchImageUpload = async (fileList: FileList | File[]) => {
+  // Batch Image Handler - Instant Client Preview (Uploads only on Save Product)
+  const handleBatchImageUpload = (fileList: FileList | File[]) => {
     if (!siteId) return;
     const files = Array.from(fileList);
     const validFiles = files.filter((f) =>
@@ -1822,57 +1843,20 @@ const AdminProducts = () => {
       return;
     }
 
-    setIsUploadingImage(true);
-    try {
-      const compressedFiles = await Promise.all(
-        validFiles.map((f) => compressImageFile(f, 1600, 1600, 0.82))
-      );
+    const newBlobUrls: string[] = [];
+    validFiles.forEach((file) => {
+      const blobUrl = URL.createObjectURL(file);
+      pendingImageFilesRef.current.set(blobUrl, file);
+      newBlobUrls.push(blobUrl);
+    });
 
-      const formData = new FormData();
-      compressedFiles.forEach((f) => formData.append("files", f));
-
-      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/upload-images`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const newUrls = (data.urls || []).map((u: string) => optimizeImageUrl(u));
-        setFormValues((prev) => {
-          const existing = prev.imagesText.trim() ? prev.imagesText.trim().split("\n") : [];
-          return {
-            ...prev,
-            imagesText: [...existing, ...newUrls].join("\n"),
-          };
-        });
-      } else {
-        // Fallback to uploading individually if /upload-images fails
-        for (const file of validFiles) {
-          const singleData = new FormData();
-          singleData.append("file", file);
-          const singleRes = await fetch(`${API_BASE_URL}/sites/${siteId}/products/upload-image`, {
-            method: "POST",
-            credentials: "include",
-            body: singleData,
-          });
-          if (singleRes.ok) {
-            const data = await singleRes.json();
-            const fullUrl = optimizeImageUrl(data.url);
-            setFormValues((prev) => ({
-              ...prev,
-              imagesText: prev.imagesText.trim() ? `${prev.imagesText}\n${fullUrl}` : fullUrl,
-            }));
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Image upload failed", err);
-      alert("Image upload failed.");
-    } finally {
-      setIsUploadingImage(false);
-    }
+    setFormValues((prev) => {
+      const existing = prev.imagesText.trim() ? prev.imagesText.trim().split("\n") : [];
+      return {
+        ...prev,
+        imagesText: [...existing, ...newBlobUrls].join("\n"),
+      };
+    });
   };
 
   // Image Reordering Functions
@@ -1890,6 +1874,13 @@ const AdminProducts = () => {
   };
 
   const removeImage = (index: number) => {
+    const targetUrl = imagePreviewList[index];
+    if (targetUrl && targetUrl.startsWith("blob:")) {
+      try {
+        URL.revokeObjectURL(targetUrl);
+      } catch (_) {}
+      pendingImageFilesRef.current.delete(targetUrl);
+    }
     const updated = imagePreviewList.filter((_, i) => i !== index);
     handleFormChange("imagesText", updated.join("\n"));
   };
@@ -2269,6 +2260,72 @@ const AdminProducts = () => {
       .map((h) => h.trim())
       .filter(Boolean);
 
+    let finalImages = parseImages(formValues.imagesText);
+    const hasBlobImages = finalImages.some((img) => img.startsWith("blob:"));
+
+    if (hasBlobImages) {
+      setIsUploadingImage(true);
+      try {
+        const blobUrlsToUpload: string[] = [];
+        const filesToUpload: File[] = [];
+
+        for (const imgUrl of finalImages) {
+          if (imgUrl.startsWith("blob:")) {
+            const file = pendingImageFilesRef.current.get(imgUrl);
+            if (file) {
+              blobUrlsToUpload.push(imgUrl);
+              filesToUpload.push(file);
+            }
+          }
+        }
+
+        if (filesToUpload.length > 0) {
+          const compressedFiles = await Promise.all(
+            filesToUpload.map((f) => compressImageFile(f, 1200, 1200, 0.76))
+          );
+
+          const formData = new FormData();
+          compressedFiles.forEach((f) => formData.append("files", f));
+
+          const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/upload-images`, {
+            method: "POST",
+            credentials: "include",
+            body: formData,
+          });
+
+          if (!res.ok) {
+            throw new Error("Failed to upload product images to server.");
+          }
+
+          const data = await res.json();
+          const serverUrls: string[] = (data.urls || []).map((u: string) => optimizeImageUrl(u));
+
+          const blobToServerMap = new Map<string, string>();
+          blobUrlsToUpload.forEach((blobUrl, i) => {
+            if (serverUrls[i]) {
+              blobToServerMap.set(blobUrl, serverUrls[i]);
+            }
+          });
+
+          finalImages = finalImages.map((img) => blobToServerMap.get(img) || img);
+
+          blobUrlsToUpload.forEach((blobUrl) => {
+            try {
+              URL.revokeObjectURL(blobUrl);
+            } catch (_) {}
+            pendingImageFilesRef.current.delete(blobUrl);
+          });
+        }
+      } catch (err: any) {
+        console.error("Image upload during save failed", err);
+        setToast({ message: err.message || "Failed to upload product images", type: "error" });
+        setIsUploadingImage(false);
+        return;
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+
     const payload = {
       name: formValues.name.trim(),
       brand: formValues.brand.trim() || null,
@@ -2295,7 +2352,7 @@ const AdminProducts = () => {
       width_cm: formValues.width_cm.trim() ? Number(formValues.width_cm) : null,
       height_cm: formValues.height_cm.trim() ? Number(formValues.height_cm) : null,
       slug: formValues.slug.trim() || null,
-      images: parseImages(formValues.imagesText),
+      images: finalImages,
       variant_option: hasVariantOptions ? buildVariantOption(finalVariantRows) : null,
       return_window_days: formValues.return_window_days === "" ? null : Number(formValues.return_window_days),
       is_cod_allowed: formValues.is_cod_allowed,

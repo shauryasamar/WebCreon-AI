@@ -808,6 +808,19 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const [reviewPreviewModalImage, setReviewPreviewModalImage] = useState<string | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number>(0);
   const [isReviewUploading, setIsReviewUploading] = useState<boolean>(false);
+  const pendingReviewFilesRef = React.useRef<Map<string, File>>(new Map());
+
+  // Clean up blob URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      pendingReviewFilesRef.current.forEach((_, blobUrl) => {
+        try {
+          URL.revokeObjectURL(blobUrl);
+        } catch (_) {}
+      });
+      pendingReviewFilesRef.current.clear();
+    };
+  }, []);
   const inlineBuyRef = React.useRef<HTMLDivElement>(null);
   const [showBottomSticky, setShowBottomSticky] = useState(true);
   const [stickyTopOffset, setStickyTopOffset] = useState<number>(() => {
@@ -1914,48 +1927,36 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     }
   };
 
-  const handleReviewImageUpload = async (file: File) => {
+  const handleReviewImageUpload = (file: File) => {
     if (!file) return;
     if (!siteId) {
       setReviewUploadError("Missing site id for this product.");
       return;
     }
+    if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(file.type)) {
+      setReviewUploadError("Only PNG, JPG, JPEG, and WEBP files are allowed.");
+      return;
+    }
+    if (reviewImages.length >= 5) {
+      setReviewUploadError("You can upload a maximum of 5 images per review.");
+      return;
+    }
 
     setReviewUploadError("");
-    setIsReviewUploading(true);
+    const blobUrl = URL.createObjectURL(file);
+    pendingReviewFilesRef.current.set(blobUrl, file);
+    setReviewImages((current) => [...current, blobUrl]);
+  };
 
-    try {
-      // Fast client-side image compression to WebP (max 1200x1200px at 0.80 quality)
-      const compressedFile = await compressImageFile(file, 1200, 1200, 0.80);
-      const formData = new FormData();
-      formData.append("file", compressedFile);
-
-      const res = await fetch(
-        `${API_BASE_URL}/sites/${siteId}/products/upload-review-image`,
-        {
-          method: "POST",
-          credentials: "include",
-          body: formData,
-        }
-      );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.detail || "Failed to upload review image");
-      }
-
-      if (data?.url) {
-        setReviewImages((current) => [...current, data.url]);
-      }
-    } catch (error) {
-      console.error("Review image upload failed", error);
-      setReviewUploadError(
-        error instanceof Error ? error.message : "Failed to upload image"
-      );
-    } finally {
-      setIsReviewUploading(false);
+  const removeReviewImage = (indexToRemove: number) => {
+    const targetUrl = reviewImages[indexToRemove];
+    if (targetUrl && targetUrl.startsWith("blob:")) {
+      try {
+        URL.revokeObjectURL(targetUrl);
+      } catch (_) {}
+      pendingReviewFilesRef.current.delete(targetUrl);
     }
+    setReviewImages((prev) => prev.filter((_, i) => i !== indexToRemove));
   };
 
   const submitReview = async () => {
@@ -1983,6 +1984,65 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     setReviewMessage("");
 
     try {
+      let finalReviewImages = [...reviewImages];
+      const hasBlobImages = finalReviewImages.some((img) => img.startsWith("blob:"));
+
+      if (hasBlobImages) {
+        const blobUrlsToUpload: string[] = [];
+        const filesToUpload: File[] = [];
+
+        for (const imgUrl of finalReviewImages) {
+          if (imgUrl.startsWith("blob:")) {
+            const file = pendingReviewFilesRef.current.get(imgUrl);
+            if (file) {
+              blobUrlsToUpload.push(imgUrl);
+              filesToUpload.push(file);
+            }
+          }
+        }
+
+        if (filesToUpload.length > 0) {
+          const uploadedUrls: string[] = [];
+          for (const file of filesToUpload) {
+            const compressedFile = await compressImageFile(file, 1000, 1000, 0.72);
+            const formData = new FormData();
+            formData.append("file", compressedFile);
+
+            const res = await fetch(
+              `${API_BASE_URL}/sites/${siteId}/products/upload-review-image`,
+              {
+                method: "POST",
+                credentials: "include",
+                body: formData,
+              }
+            );
+            const data = await res.json();
+            if (!res.ok) {
+              throw new Error(data?.detail || "Failed to upload review image");
+            }
+            if (data?.url) {
+              uploadedUrls.push(data.url);
+            }
+          }
+
+          const blobToServerMap = new Map<string, string>();
+          blobUrlsToUpload.forEach((blobUrl, i) => {
+            if (uploadedUrls[i]) {
+              blobToServerMap.set(blobUrl, uploadedUrls[i]);
+            }
+          });
+
+          finalReviewImages = finalReviewImages.map((img) => blobToServerMap.get(img) || img);
+
+          blobUrlsToUpload.forEach((blobUrl) => {
+            try {
+              URL.revokeObjectURL(blobUrl);
+            } catch (_) {}
+            pendingReviewFilesRef.current.delete(blobUrl);
+          });
+        }
+      }
+
       const res = await fetch(
         `${API_BASE_URL}/sites/${siteId}/products/reviews`,
         {
@@ -1996,7 +2056,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             order_item_id: eligibleOrderItem.id,
             rating: reviewRating,
             review_text: reviewText,
-            review_images: reviewImages,
+            review_images: finalReviewImages,
           }),
         }
       );
@@ -3726,7 +3786,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                       />
                       <button
                         type="button"
-                        onClick={() => setReviewImages((prev) => prev.filter((_, i) => i !== uploadIdx))}
+                        onClick={() => removeReviewImage(uploadIdx)}
                         style={{
                           position: "absolute",
                           top: "-4px",

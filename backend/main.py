@@ -51,10 +51,11 @@ from routers import delivery
 
 logger = logging.getLogger(__name__)
 
-UPLOADS_DIR = Path("uploads")
+BASE_DIR = Path(__file__).resolve().parent
+UPLOADS_DIR = BASE_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-ASSETS_DIR = Path("uploads/assets")
+ASSETS_DIR = UPLOADS_DIR / "assets"
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -462,7 +463,7 @@ async def upload_brand_logo(
     if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".svg"}:
         suffix = ".png"
 
-    # For raster images – optimize but PRESERVE ALPHA channel (do NOT flatten to RGB)
+    # For raster images – optimize to high-efficiency WebP while preserving ALPHA channel
     try:
         from PIL import Image, ImageOps
         import io as _io
@@ -470,17 +471,19 @@ async def upload_brand_logo(
             with Image.open(_io.BytesIO(content)) as img:
                 img = ImageOps.exif_transpose(img)
                 # Keep RGBA/LA so transparency is preserved
-                if img.mode in ("RGBA", "LA", "P"):
+                if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
                     img = img.convert("RGBA")
                 else:
                     img = img.convert("RGB")
-                # Preserve crisp high-resolution detail (up to 1600x1600) while keeping aspect ratio
-                img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+                # High-efficiency balanced optimization for banners and brand assets
+                max_dim = 1600
+                if img.width > max_dim or img.height > max_dim:
+                    img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
                 buf = _io.BytesIO()
-                # Always save as PNG to preserve transparency
-                img.save(buf, "PNG", optimize=True)
+                # Save as optimized WebP to keep file sizes tiny (~20-95KB) while preserving alpha
+                img.save(buf, "WEBP", quality=78, method=6)
                 content = buf.getvalue()
-                suffix = ".png"
+                suffix = ".webp"
     except Exception:
         pass  # Fall back to storing the file as-is
 

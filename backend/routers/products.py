@@ -59,12 +59,12 @@ def save_optimized_upload_image(content: bytes, destination_dir: Path, original_
                 else:
                     img = img.convert("RGB")
 
-                max_dim = 1600
+                max_dim = 1200
                 if img.width > max_dim or img.height > max_dim:
                     img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
 
                 filename = f"{uuid4()}.webp"
-                img.save(destination_dir / filename, "WEBP", quality=82, method=6)
+                img.save(destination_dir / filename, "WEBP", quality=76, method=6)
                 return filename
         except Exception:
             pass
@@ -115,13 +115,34 @@ class ProductCatalogCache:
 catalog_cache = ProductCatalogCache(default_ttl=60.0)
 
 
-PRODUCT_UPLOADS_DIR = Path("uploads/products")
+BASE_DIR = Path(__file__).resolve().parent.parent
+PRODUCT_UPLOADS_DIR = BASE_DIR / "uploads" / "products"
 PRODUCT_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-REVIEW_UPLOADS_DIR = Path("uploads/product-reviews")
+REVIEW_UPLOADS_DIR = BASE_DIR / "uploads" / "product-reviews"
 REVIEW_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
+
+
+def delete_product_image_files(image_urls: list[str]) -> None:
+    """Safely deletes uploaded product image files from disk when products are deleted or images removed."""
+    if not image_urls:
+        return
+    for url in image_urls:
+        if not url or not isinstance(url, str):
+            continue
+        try:
+            # Handle "/uploads/products/<filename>" or full URL containing "/uploads/products/"
+            idx = url.find("/uploads/products/")
+            if idx != -1:
+                filename = url[idx + len("/uploads/products/"):].split("?")[0].strip()
+                if filename and not filename.startswith((".", "/")):
+                    file_path = PRODUCT_UPLOADS_DIR / filename
+                    if file_path.exists() and file_path.is_file():
+                        file_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def utc_now() -> datetime:
@@ -2788,10 +2809,16 @@ def update_product(
 
     sync_product_collections(session, product.id, product_in.collection_ids)
 
+    new_images = list(product_in.images or [])
+    removed_images = [img for img in old_images if img not in new_images]
+
     session.add(product)
     session.commit()
     session.refresh(product)
     catalog_cache.invalidate_site(site_id)
+
+    if removed_images:
+        delete_product_image_files(removed_images)
 
     diff_changes: dict[str, Any] = {}
     primary_action = "product.updated"
@@ -2980,6 +3007,15 @@ def bulk_action_products(
                 affected_count += 1
         elif action == "delete":
             for chunk in chunk_list(unique_ids, CHUNK_SIZE):
+                # 0. Collect images of products to be deleted
+                prods_to_del = session.exec(
+                    select(Product).where(Product.site_id == site_id, Product.id.in_(chunk))
+                ).all()
+                images_to_purge: list[str] = []
+                for p in prods_to_del:
+                    if p.images and isinstance(p.images, list):
+                        images_to_purge.extend(p.images)
+
                 # 1. Delete transient cart items containing these products
                 session.exec(
                     delete(CartItem)
@@ -3018,6 +3054,8 @@ def bulk_action_products(
                 )
                 result = session.exec(stmt)
                 affected_count += getattr(result, "rowcount", len(chunk))
+                if images_to_purge:
+                    delete_product_image_files(images_to_purge)
 
         session.commit()
         catalog_cache.invalidate_site(site_id)
@@ -3170,6 +3208,7 @@ def delete_product(
 
     product = get_site_product_or_404(session, site_id, product_id)
     deleted_product_name = product.name
+    product_images = list(product.images or [])
 
     # 1. Clean up transient cart items containing this product
     session.exec(delete(CartItem).where(CartItem.product_id == product_id))
@@ -3195,6 +3234,10 @@ def delete_product(
     session.delete(product)
     session.commit()
     catalog_cache.invalidate_site(site_id)
+
+    # 6. Delete the product images from disk
+    if product_images:
+        delete_product_image_files(product_images)
 
     log_activity(
         session=session,

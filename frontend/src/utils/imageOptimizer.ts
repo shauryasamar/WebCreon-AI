@@ -46,9 +46,9 @@ export function getThumbnailUrl(
  */
 export async function compressImageFile(
   file: File,
-  maxWidth = 1600,
-  maxHeight = 1600,
-  quality = 0.82
+  maxWidth = 1200,
+  maxHeight = 1200,
+  quality = 0.76
 ): Promise<File> {
   if (!file || !file.type.startsWith("image/") || file.size < 40 * 1024) {
     return file;

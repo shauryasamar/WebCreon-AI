@@ -17,8 +17,12 @@ import {
   updateThemeValues,
 } from "./editorUtils";
 import { EditorField } from "./editorTypes";
-import { API_BASE_URL } from "../config/api";
 import { optimizeImageUrl, compressImageFile } from "../utils/imageOptimizer";
+import {
+  registerPendingAsset,
+  removePendingAsset,
+  resolveAndUploadPendingAssets,
+} from "../utils/pendingAssetRegistry";
 
 function PageBlocksTreeView({
   siteDefinition: _siteDefinition,
@@ -869,7 +873,6 @@ type LogoUploadControlProps = {
 };
 
 function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadControlProps) {
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -881,48 +884,39 @@ function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadCo
 
   const previewUrl = currentValue ? optimizeImageUrl(currentValue) : "";
 
-  const uploadFile = useCallback(async (file: File) => {
+  const processFile = useCallback((file: File) => {
     const allowed = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"]);
     if (!allowed.has(file.type)) {
       setError("Only PNG, JPEG, WEBP or SVG files are allowed.");
       return;
     }
-    setUploading(true);
     setError("");
-    try {
-      const fileToUpload = await compressImageFile(file, 1920, 1080, 0.85);
-      const formData = new FormData();
-      formData.append("file", fileToUpload);
-      const res = await fetch(`${API_BASE_URL}/assets/upload-logo`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Upload failed");
-      }
-      const data = await res.json();
-      onChange(data.url);
-    } catch (err: any) {
-      setError(err.message || "Upload failed");
-    } finally {
-      setUploading(false);
+    if (currentValue && currentValue.startsWith("blob:")) {
+      removePendingAsset(currentValue);
     }
-  }, [onChange]);
+    const blobUrl = registerPendingAsset(file);
+    onChange(blobUrl);
+  }, [currentValue, onChange]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file) uploadFile(file);
-  }, [uploadFile]);
+    if (file) processFile(file);
+  }, [processFile]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) uploadFile(file);
+    if (file) processFile(file);
     e.target.value = "";
   };
+
+  const handleRemove = useCallback(() => {
+    if (currentValue && currentValue.startsWith("blob:")) {
+      removePendingAsset(currentValue);
+    }
+    onChange("");
+  }, [currentValue, onChange]);
 
   return (
     <div style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
@@ -993,7 +987,7 @@ function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadCo
           >
             <button
               type="button"
-              onClick={() => !uploading && fileInputRef.current?.click()}
+              onClick={() => fileInputRef.current?.click()}
               style={{
                 padding: "3px 8px",
                 fontSize: "10px",
@@ -1006,12 +1000,12 @@ function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadCo
                 lineHeight: 1.2,
               }}
             >
-              {uploading ? "Uploading..." : "Replace Logo"}
+              Replace Image
             </button>
 
             <button
               type="button"
-              onClick={() => onChange("")}
+              onClick={handleRemove}
               style={{
                 padding: "3px 8px",
                 fontSize: "10px",
@@ -1034,7 +1028,7 @@ function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadCo
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
-          onClick={() => !uploading && fileInputRef.current?.click()}
+          onClick={() => fileInputRef.current?.click()}
           style={{
             display: "flex",
             flexDirection: "column",
@@ -1045,7 +1039,7 @@ function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadCo
             borderRadius: "8px",
             border: isDragging ? activeBorder : border,
             background: isDragging ? (isLightMode ? "rgba(37,99,235,0.04)" : "rgba(37,99,235,0.1)") : cardBg,
-            cursor: uploading ? "wait" : "pointer",
+            cursor: "pointer",
             transition: "all 0.15s ease",
             textAlign: "center",
             userSelect: "none",
@@ -1059,9 +1053,9 @@ function LogoUploadControl({ currentValue, isLightMode, onChange }: LogoUploadCo
             <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
           <span style={{ fontSize: "11px", color: isDragging ? "#2563eb" : (isLightMode ? "#334155" : "#f1f5f9"), fontWeight: 600 }}>
-            {uploading ? "Uploading..." : "Click or drag logo to upload"}
+            Click or drag image to upload
           </span>
-          <span style={{ fontSize: "9.5px", color: textMuted }}>PNG, SVG, JPG, WEBP (Max 2MB)</span>
+          <span style={{ fontSize: "9.5px", color: textMuted }}>PNG, SVG, JPG, WEBP (Max 15MB)</span>
         </div>
       )}
 
@@ -11958,7 +11952,8 @@ export default function EditorSidebar({
   );
 
   const handleSaveSnapshot = async () => {
-    const next = saveThemeSnapshot(siteDefinition, snapshotName);
+    const defWithUploadedAssets = await resolveAndUploadPendingAssets(siteDefinition);
+    const next = saveThemeSnapshot(defWithUploadedAssets, snapshotName);
     onSiteDefinitionChange(next);
     setSnapshotName("");
     setSnapshotFeedback("Saved!");

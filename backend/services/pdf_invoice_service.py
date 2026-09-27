@@ -7,9 +7,19 @@ from __future__ import annotations
 
 import io
 import os
+from pathlib import Path
 from typing import Any, Optional, List, Dict
 from datetime import datetime, timezone
 from decimal import Decimal
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+def _save_pdf_to_disk(output_path: str, pdf_bytes: bytes) -> None:
+    p = Path(output_path)
+    if not p.is_absolute():
+        p = BACKEND_DIR / p
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(pdf_bytes)
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -807,9 +817,7 @@ def generate_rule46_invoice_pdf(
     buffer.close()
 
     if output_path:
-        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        with open(output_path, "wb") as f:
-            f.write(pdf_bytes)
+        _save_pdf_to_disk(output_path, pdf_bytes)
 
     return pdf_bytes
 
@@ -1193,9 +1201,7 @@ def generate_rule54_credit_note_pdf(
     buffer.close()
 
     if output_path:
-        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        with open(output_path, "wb") as f:
-            f.write(pdf_bytes)
+        _save_pdf_to_disk(output_path, pdf_bytes)
 
     return pdf_bytes
 
@@ -1931,9 +1937,7 @@ def generate_platform_fee_invoice_pdf(
     buffer.close()
 
     if output_path:
-        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        with open(output_path, "wb") as f:
-            f.write(pdf_bytes)
+        _save_pdf_to_disk(output_path, pdf_bytes)
 
     return pdf_bytes
 
@@ -2610,9 +2614,7 @@ def generate_subscription_invoice_pdf(
     buffer.close()
 
     if output_path:
-        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        with open(output_path, "wb") as f:
-            f.write(pdf_bytes)
+        _save_pdf_to_disk(output_path, pdf_bytes)
 
     return pdf_bytes
 
