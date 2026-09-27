@@ -2779,7 +2779,7 @@ function HeroSlidesEditor({
                               }}
                               title="Download exact canvas PNG matching your hero banner size to design in Canva"
                             >
-                              📥 Download Canvas (1280×{bannerHeightNum || 400}px)
+                              Download Canvas (1280×{bannerHeightNum || 400}px)
                             </button>
                           </div>
                           <LogoUploadControl
@@ -2801,6 +2801,51 @@ function HeroSlidesEditor({
                                   { label: "Cover", value: "cover" },
                                   { label: "Contain", value: "contain" },
                                   { label: "Fill", value: "fill" },
+                                ]}
+                              />
+                            </div>
+
+                            {/* Mobile Image Focus (Continuous Full-Width Slider: 0% Left -> 100% Right) */}
+                            <div style={{ display: "grid", gap: "2px" }}>
+                              <NumberStepperField
+                                label="Mobile Image Focus (Left ↔ Right)"
+                                value={(() => {
+                                  const raw = slide.mobile_image_position;
+                                  if (typeof raw === "number") return raw;
+                                  if (typeof raw === "string") {
+                                    if (raw === "left") return 0;
+                                    if (raw === "right") return 100;
+                                    if (raw === "center") return 50;
+                                    const parsed = parseFloat(raw);
+                                    if (!isNaN(parsed)) return parsed;
+                                  }
+                                  return 50;
+                                })()}
+                                min={0}
+                                max={100}
+                                step={1}
+                                unit="%"
+                                onChange={(val) => handleSlideChange(idx, "mobile_image_position", val)}
+                              />
+                              <div style={{ display: "flex", justifyContent: "space-between", padding: "0 2px", fontSize: "7.5px", color: "#94a3b8", fontWeight: 600 }}>
+                                <span>0% Left</span>
+                                <span>50% Center</span>
+                                <span>100% Right</span>
+                              </div>
+                            </div>
+
+                            {/* Desktop Image Focus (Left / Center / Right) */}
+                            <div style={{ display: "grid", gap: "2px" }}>
+                              <label style={{ fontSize: "8.5px", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
+                                Desktop Focus
+                              </label>
+                              <SegmentedRow
+                                value={slide.image_position || "center"}
+                                onChange={(val) => handleSlideChange(idx, "image_position", val)}
+                                options={[
+                                  { label: "Left", value: "left" },
+                                  { label: "Center", value: "center" },
+                                  { label: "Right", value: "right" },
                                 ]}
                               />
                             </div>

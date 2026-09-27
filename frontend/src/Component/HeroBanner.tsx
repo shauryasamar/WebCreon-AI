@@ -53,6 +53,10 @@ export type HeroSlide = {
   hero_text_color?: string;
   accent_color?: string;
   hero_accent?: string;
+  image_position?: "left" | "center" | "right" | string;
+  mobile_image_position?: "left" | "center" | "right" | string;
+  image_fit?: "cover" | "contain" | "fill";
+  image_zoom?: number;
   [key: string]: any;
 };
 
@@ -81,6 +85,8 @@ export type HeroBannerProps = {
   banner_width?: number | string; // Custom width limit
   border_radius?: number | string;
   background_position?: string;
+  image_position?: "left" | "center" | "right" | string;
+  mobile_image_position?: "left" | "center" | "right" | string;
   background_size?: string;
   theme?: {
     mode?: "light" | "dark";
@@ -455,8 +461,70 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     currentSlide.background_overlay ||
     (overlayOpacity > 0 ? `rgba(0, 0, 0, ${overlayOpacity})` : "transparent");
 
+  const resolvePositionValue = (pos?: string | number): string => {
+    if (pos === undefined || pos === null || pos === "") return "center center";
+    if (typeof pos === "number" || (!isNaN(Number(pos)) && String(pos).trim() !== "")) {
+      const num = Number(pos);
+      return `${num}% center`;
+    }
+    if (typeof pos === "string") {
+      const trimmed = pos.trim().toLowerCase();
+      if (trimmed.endsWith("%") && !isNaN(Number(trimmed.replace("%", "")))) {
+        return `${trimmed} center`;
+      }
+      if (trimmed === "left") return "left center";
+      if (trimmed === "right") return "right center";
+      if (trimmed === "center") return "center center";
+      if (trimmed === "top") return "center top";
+      if (trimmed === "bottom") return "center bottom";
+      return pos;
+    }
+    return "center center";
+  };
+
   const slideImageFit = currentSlide.image_fit || currentSlide.background_size || background_size || "cover";
-  const slideImagePosition = currentSlide.image_position || currentSlide.background_position || background_position || "center";
+
+  const hasMobilePos =
+    currentSlide.mobile_image_position !== undefined &&
+    currentSlide.mobile_image_position !== null &&
+    currentSlide.mobile_image_position !== "";
+
+  const hasMobileBgPos =
+    currentSlide.mobile_background_position !== undefined &&
+    currentSlide.mobile_background_position !== null &&
+    currentSlide.mobile_background_position !== "";
+
+  const hasRestMobilePos =
+    (restProps as any).mobile_image_position !== undefined &&
+    (restProps as any).mobile_image_position !== null &&
+    (restProps as any).mobile_image_position !== "";
+
+  const rawMobilePos = hasMobilePos
+    ? currentSlide.mobile_image_position
+    : hasMobileBgPos
+    ? currentSlide.mobile_background_position
+    : hasRestMobilePos
+    ? (restProps as any).mobile_image_position
+    : undefined;
+
+  const hasDesktopPos =
+    currentSlide.image_position !== undefined &&
+    currentSlide.image_position !== null &&
+    currentSlide.image_position !== "";
+
+  const hasDesktopBgPos =
+    currentSlide.background_position !== undefined &&
+    currentSlide.background_position !== null &&
+    currentSlide.background_position !== "";
+
+  const rawDesktopPos = hasDesktopPos
+    ? currentSlide.image_position
+    : hasDesktopBgPos
+    ? currentSlide.background_position
+    : (restProps as any).image_position || background_position || "center";
+
+  const rawPosition = isMobile && rawMobilePos !== undefined ? rawMobilePos : rawDesktopPos;
+  const slideImagePosition = resolvePositionValue(rawPosition);
   const slideImageZoom = typeof currentSlide.image_zoom === "number" ? currentSlide.image_zoom : 100;
 
   const resolvedBgSize = slideImageZoom !== 100

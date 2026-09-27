@@ -65,6 +65,18 @@ const heroBackgroundPositionField = {
   ],
 };
 
+const heroMobileImagePositionField = {
+  key: "mobile_image_position",
+  label: "Mobile Image Focus",
+  type: "select" as const,
+  target: "props" as const,
+  options: [
+    { label: "Left", value: "left" },
+    { label: "Center", value: "center" },
+    { label: "Right", value: "right" },
+  ],
+};
+
 const heroBackgroundSizeField = {
   key: "background_size",
   label: "Background size",
@@ -1997,6 +2009,7 @@ export const editorRegistry: EditorRegistry = {
       heroBackgroundImageField,
       heroBackgroundOverlayField,
       heroBackgroundPositionField,
+      heroMobileImagePositionField,
       heroBackgroundSizeField,
       sizeField,
       textColorField,
@@ -2010,6 +2023,7 @@ export const editorRegistry: EditorRegistry = {
       heroBackgroundImageField,
       heroBackgroundOverlayField,
       heroBackgroundPositionField,
+      heroMobileImagePositionField,
       heroBackgroundSizeField,
       sizeField,
       textColorField,
