@@ -6,11 +6,11 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete
 
 from auth_middleware import enforce_site_ownership
 from db.database import get_session
-from models import Collection, Site
+from models import Collection, ProductCollection, Site
 
 
 router = APIRouter(
@@ -38,6 +38,8 @@ class CollectionCreate(BaseModel):
     name: str
     slug: Optional[str] = None
     description: str = ""
+    is_badge: bool = False
+    badge_color: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -52,6 +54,8 @@ class CollectionUpdate(BaseModel):
     name: str
     slug: Optional[str] = None
     description: str = ""
+    is_badge: bool = False
+    badge_color: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -68,6 +72,8 @@ class CollectionResponse(BaseModel):
     name: str
     slug: Optional[str] = None
     description: str = ""
+    is_badge: bool = False
+    badge_color: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -126,6 +132,8 @@ def create_collection(
         name=payload.name,
         slug=slug_value,
         description=payload.description,
+        is_badge=payload.is_badge,
+        badge_color=payload.badge_color,
     )
     session.add(collection)
     session.commit()
@@ -161,6 +169,28 @@ def update_collection(
     collection.name = payload.name
     collection.slug = slug_value
     collection.description = payload.description
+    collection.is_badge = payload.is_badge
+    collection.badge_color = payload.badge_color
+    session.add(collection)
+    session.commit()
+    session.refresh(collection)
+    return collection
+
+
+@router.patch("/{collection_id}/toggle-badge", response_model=CollectionResponse)
+def toggle_collection_badge(
+    site_id: UUID,
+    collection_id: UUID,
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    get_site_or_404(session, site_id)
+    collection = session.get(Collection, collection_id)
+    if not collection or collection.site_id != site_id:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+    collection.is_badge = not collection.is_badge
+    collection.updated_at = utc_now()
     session.add(collection)
     session.commit()
     session.refresh(collection)
@@ -179,6 +209,10 @@ def delete_collection(
     if not collection or collection.site_id != site_id:
         raise HTTPException(status_code=404, detail="Collection not found")
 
+    # 1. Clean up product collection junction mappings
+    session.exec(delete(ProductCollection).where(ProductCollection.collection_id == collection_id))
+
+    # 2. Delete the collection itself
     session.delete(collection)
     session.commit()
     return

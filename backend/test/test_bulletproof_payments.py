@@ -116,7 +116,16 @@ def test_webhook_order_fulfillment_on_dropoff(session_fixture: Session):
         }
     }
 
-    resp = client.post("/payments/webhook", json=webhook_payload)
+    import hmac, hashlib, json, os
+    webhook_secret = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or "test_webhook_secret").strip()
+    raw_payload = json.dumps(webhook_payload).encode("utf-8")
+    sig = hmac.new(webhook_secret.encode("utf-8"), raw_payload, hashlib.sha256).hexdigest()
+
+    resp = client.post(
+        "/payments/webhook",
+        content=raw_payload,
+        headers={"X-Razorpay-Signature": sig, "Content-Type": "application/json"},
+    )
     assert resp.status_code == 200
 
     # 4. Verify Order was automatically fulfilled and stock deducted

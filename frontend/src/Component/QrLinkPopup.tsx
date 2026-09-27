@@ -1,4 +1,7 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useAdminTheme } from "../context/ThemeContext";
+import { generateQrSvgDataUrl, generateQrCanvasDataUrl } from "../utils/qrCodeGenerator";
 
 type QrLinkPopupProps = {
   open: boolean;
@@ -284,45 +287,6 @@ return new Blob([pdfBuffer], {
 });
 }
 
-async function createQrImageDataUrl(qrUrl: string) {
-  const response = await fetch(qrUrl);
-
-  if (!response.ok) {
-    throw new Error("Unable to load QR code.");
-  }
-
-  const imageBlob = await response.blob();
-  const objectUrl = URL.createObjectURL(imageBlob);
-
-  try {
-    const image = new Image();
-    image.src = objectUrl;
-
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error("Unable to process QR code."));
-    });
-
-    const canvas = document.createElement("canvas");
-    canvas.width = 1000;
-    canvas.height = 1000;
-
-    const context = canvas.getContext("2d");
-
-    if (!context) {
-      throw new Error("Unable to create canvas.");
-    }
-
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-    return canvas.toDataURL("image/jpeg", 0.96);
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
 async function copyToClipboard(value: string) {
   if (!value) return false;
 
@@ -364,15 +328,14 @@ export default function QrLinkPopup({
   onClose,
   customerUrl,
 }: QrLinkPopupProps) {
+  const { isDark, tokens } = useAdminTheme();
   const [copied, setCopied] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const qrFallback = useMemo(() => {
+  // Instant 0.00ms local QR generation
+  const qrSvgUrl = useMemo(() => {
     if (!customerUrl) return "";
-
-    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-      customerUrl,
-    )}`;
+    return generateQrSvgDataUrl(customerUrl);
   }, [customerUrl]);
 
   if (!open) return null;
@@ -396,12 +359,14 @@ export default function QrLinkPopup({
   };
 
   const handleDownloadPdf = async () => {
-    if (!qrFallback || !customerUrl || isDownloading) return;
+    if (!customerUrl || isDownloading) return;
 
     try {
       setIsDownloading(true);
 
-      const qrImageDataUrl = await createQrImageDataUrl(qrFallback);
+      const qrImageDataUrl = generateQrCanvasDataUrl(customerUrl, 1000);
+      if (!qrImageDataUrl) return;
+
       const pdfBlob = createQrPdf(qrImageDataUrl, customerUrl);
       const downloadUrl = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
@@ -415,13 +380,15 @@ export default function QrLinkPopup({
 
       URL.revokeObjectURL(downloadUrl);
     } catch {
-      // Intentionally silent for now.
+      // Intentionally silent
     } finally {
       setIsDownloading(false);
     }
   };
 
-  return (
+  if (!open) return null;
+
+  const modalContent = (
     <div
       role="dialog"
       aria-modal="true"
@@ -430,26 +397,47 @@ export default function QrLinkPopup({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 500,
-        background: "rgba(15,23,42,0.52)",
+        zIndex: 99999,
+        background: isDark ? "rgba(0, 0, 0, 0.45)" : "rgba(15, 23, 42, 0.25)",
+        backdropFilter: "blur(2px)",
+        WebkitBackdropFilter: "blur(2px)",
         display: "grid",
         placeItems: "center",
         padding: "16px",
       }}
     >
       <div
+        className="qr-popup-root"
         onClick={(event) => event.stopPropagation()}
         style={{
           width: "min(720px, calc(100vw - 32px))",
           maxHeight: "calc(100dvh - 32px)",
           overflow: "hidden",
           borderRadius: "24px",
-          background: "#ffffff",
-          border: "1px solid rgba(15,23,42,0.08)",
-          boxShadow: "0 28px 80px rgba(15,23,42,0.24)",
+          background: tokens.surfaceBg,
+          border: `1px solid ${tokens.border}`,
+          boxShadow: isDark
+            ? "0 28px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)"
+            : "0 28px 80px rgba(15,23,42,0.24)",
           padding: "22px",
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          transition: "background-color 0.2s ease, border-color 0.2s ease",
         }}
       >
+        <style>{`
+          .qr-popup-root,
+          .qr-popup-root input,
+          .qr-popup-root button,
+          .qr-popup-root span,
+          .qr-popup-root div,
+          .qr-popup-root p,
+          .qr-popup-root h1,
+          .qr-popup-root h2,
+          .qr-popup-root h3,
+          .qr-popup-root label {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+          }
+        `}</style>
         <div
           style={{
             display: "flex",
@@ -464,8 +452,9 @@ export default function QrLinkPopup({
               id="qr-link-popup-title"
               style={{
                 margin: 0,
-                color: "#0f172a",
+                color: tokens.textPrimary,
                 fontSize: "20px",
+                fontWeight: 700,
                 lineHeight: 1.2,
               }}
             >
@@ -475,7 +464,7 @@ export default function QrLinkPopup({
             <p
               style={{
                 margin: "6px 0 0",
-                color: "#64748b",
+                color: tokens.textSecondary,
                 fontSize: "13px",
                 lineHeight: 1.45,
               }}
@@ -493,12 +482,15 @@ export default function QrLinkPopup({
               width: "34px",
               height: "34px",
               borderRadius: "10px",
-              border: "1px solid rgba(15,23,42,0.1)",
-              background: "#ffffff",
-              color: "#475569",
+              border: `1px solid ${tokens.border}`,
+              background: tokens.elevatedSurfaceBg,
+              color: tokens.textSecondary,
               fontSize: "21px",
               lineHeight: 1,
               cursor: "pointer",
+              display: "grid",
+              placeItems: "center",
+              transition: "all 0.15s ease",
             }}
           >
             ×
@@ -521,7 +513,7 @@ export default function QrLinkPopup({
             <p
               style={{
                 margin: "0 0 12px",
-                color: "#334155",
+                color: tokens.textPrimary,
                 fontSize: "13px",
                 fontWeight: 700,
               }}
@@ -536,9 +528,11 @@ export default function QrLinkPopup({
                 margin: "0 auto",
                 padding: "12px",
                 borderRadius: "22px",
-                border: "2px solid #2563eb",
+                border: isDark ? "2px solid #38bdf8" : "2px solid #2563eb",
                 background: "#ffffff",
-                boxShadow: "0 14px 32px rgba(37,99,235,0.14)",
+                boxShadow: isDark
+                  ? "0 14px 32px rgba(56,189,248,0.2)"
+                  : "0 14px 32px rgba(37,99,235,0.14)",
               }}
             >
               <div
@@ -547,18 +541,19 @@ export default function QrLinkPopup({
                   height: "100%",
                   overflow: "hidden",
                   borderRadius: "12px",
-                  background: "#f8fafc",
+                  background: "#ffffff",
                 }}
               >
-                {qrFallback ? (
+                {qrSvgUrl ? (
                   <img
-                    src={qrFallback}
+                    src={qrSvgUrl}
                     alt="QR code for the customer website"
                     style={{
                       width: "100%",
                       height: "100%",
                       display: "block",
-                      objectFit: "cover",
+                      objectFit: "contain",
+                      imageRendering: "pixelated",
                     }}
                   />
                 ) : (
@@ -581,7 +576,7 @@ export default function QrLinkPopup({
               style={{
                 maxWidth: "280px",
                 margin: "14px auto 0",
-                color: "#64748b",
+                color: tokens.textSecondary,
                 fontSize: "13px",
                 lineHeight: 1.55,
               }}
@@ -597,14 +592,16 @@ export default function QrLinkPopup({
                 marginBottom: "14px",
                 padding: "16px",
                 borderRadius: "16px",
-                background: "#eff6ff",
-                border: "1px solid #dbeafe",
+                background: isDark ? "rgba(56,189,248,0.1)" : "#eff6ff",
+                border: isDark
+                  ? "1px solid rgba(56,189,248,0.25)"
+                  : "1px solid #dbeafe",
               }}
             >
               <p
                 style={{
                   margin: "0 0 6px",
-                  color: "#1d4ed8",
+                  color: isDark ? "#38bdf8" : "#1d4ed8",
                   fontSize: "13px",
                   fontWeight: 700,
                 }}
@@ -615,7 +612,7 @@ export default function QrLinkPopup({
               <p
                 style={{
                   margin: 0,
-                  color: "#475569",
+                  color: isDark ? "#cbd5e1" : "#475569",
                   fontSize: "12px",
                   lineHeight: 1.55,
                 }}
@@ -629,7 +626,7 @@ export default function QrLinkPopup({
               style={{
                 display: "block",
                 marginBottom: "7px",
-                color: "#334155",
+                color: tokens.textSecondary,
                 fontSize: "12px",
                 fontWeight: 700,
               }}
@@ -646,15 +643,15 @@ export default function QrLinkPopup({
                 marginBottom: "14px",
                 padding: "10px 10px 10px 12px",
                 borderRadius: "13px",
-                background: "#f8fafc",
-                border: "1px solid rgba(15,23,42,0.1)",
+                background: tokens.elevatedSurfaceBg,
+                border: `1px solid ${tokens.border}`,
               }}
             >
               <span
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  color: customerUrl ? "#0f172a" : "#94a3b8",
+                  color: customerUrl ? tokens.textPrimary : tokens.textMuted,
                   fontSize: "12px",
                   lineHeight: 1.4,
                   wordBreak: "break-all",
@@ -676,11 +673,24 @@ export default function QrLinkPopup({
                   display: "grid",
                   placeItems: "center",
                   borderRadius: "10px",
-                  border: "1px solid rgba(15,23,42,0.1)",
-                  background: copied ? "#dcfce7" : "#ffffff",
-                  color: copied ? "#15803d" : "#475569",
+                  border: copied
+                    ? isDark
+                      ? "1px solid rgba(34,197,94,0.4)"
+                      : "1px solid rgba(21,128,61,0.2)"
+                    : `1px solid ${tokens.border}`,
+                  background: copied
+                    ? isDark
+                      ? "rgba(34,197,94,0.2)"
+                      : "#dcfce7"
+                    : tokens.surfaceBg,
+                  color: copied
+                    ? isDark
+                      ? "#4ade80"
+                      : "#15803d"
+                    : tokens.textSecondary,
                   cursor: customerUrl ? "pointer" : "not-allowed",
                   opacity: customerUrl ? 1 : 0.5,
+                  transition: "all 0.15s ease",
                 }}
               >
                 {copied ? (
@@ -741,9 +751,9 @@ export default function QrLinkPopup({
                 style={{
                   minHeight: "44px",
                   borderRadius: "12px",
-                  border: "1px solid #2563eb",
-                  background: "#ffffff",
-                  color: "#2563eb",
+                  border: isDark ? "1px solid #38bdf8" : "1px solid #2563eb",
+                  background: isDark ? "rgba(56,189,248,0.1)" : "#ffffff",
+                  color: isDark ? "#38bdf8" : "#2563eb",
                   fontSize: "12px",
                   fontWeight: 700,
                   cursor:
@@ -751,6 +761,7 @@ export default function QrLinkPopup({
                       ? "pointer"
                       : "not-allowed",
                   opacity: customerUrl && !isDownloading ? 1 : 0.55,
+                  transition: "all 0.15s ease",
                 }}
               >
                 {isDownloading ? "Preparing..." : "Download PDF"}
@@ -764,12 +775,13 @@ export default function QrLinkPopup({
                   minHeight: "44px",
                   borderRadius: "12px",
                   border: "none",
-                  background: "#2563eb",
+                  background: isDark ? "#0284c7" : "#2563eb",
                   color: "#ffffff",
                   fontSize: "12px",
                   fontWeight: 700,
                   cursor: customerUrl ? "pointer" : "not-allowed",
                   opacity: customerUrl ? 1 : 0.55,
+                  transition: "all 0.15s ease",
                 }}
               >
                 Open website
@@ -780,4 +792,10 @@ export default function QrLinkPopup({
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+
+  return modalContent;
 }

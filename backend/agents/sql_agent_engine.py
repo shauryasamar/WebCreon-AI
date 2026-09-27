@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from db.database import engine
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0, request_timeout=20, max_retries=2)
 
 # Schema definitions for tenant tables
 SCHEMA_DOCS = """

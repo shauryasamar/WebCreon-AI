@@ -58,25 +58,25 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
 
   // Theme-aware tokens
   const containerBg = isDark
-    ? "linear-gradient(145deg, #0b0f19 0%, #111827 100%)"
+    ? "linear-gradient(145deg, #18181b 0%, #242429 100%)"
     : "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)";
 
   const containerBorder = isDark
-    ? "1px solid rgba(99, 102, 241, 0.3)"
+    ? "1px solid rgba(255, 255, 255, 0.12)"
     : "1px solid rgba(15, 23, 42, 0.12)";
 
   const shadowStyle = isDark
-    ? "0 12px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(99, 102, 241, 0.12)"
+    ? "0 12px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(59, 130, 246, 0.12)"
     : "0 10px 30px rgba(15, 23, 42, 0.08), 0 0 15px rgba(37, 99, 235, 0.06)";
 
-  const headerBg = isDark ? "rgba(15, 23, 42, 0.6)" : "rgba(241, 245, 249, 0.8)";
+  const headerBg = isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(241, 245, 249, 0.8)";
   const headerBorder = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.08)";
-  const textColor = isDark ? "#ffffff" : "#0f172a";
-  const subtextColor = isDark ? "#94a3b8" : "#64748b";
-  const wireframeBg = isDark ? "#080c14" : "#f1f5f9";
-  const wireframeBorder = isDark ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid rgba(15, 23, 42, 0.08)";
-  const wireframeBlockBg = isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(15, 23, 42, 0.06)";
-  const wireframePillBg = isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(15, 23, 42, 0.2)";
+  const textColor = isDark ? "#f4f4f5" : "#0f172a";
+  const subtextColor = isDark ? "#a1a1aa" : "#64748b";
+  const wireframeBg = isDark ? "#121214" : "#f1f5f9";
+  const wireframeBorder = isDark ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid rgba(15, 23, 42, 0.08)";
+  const wireframeBlockBg = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(15, 23, 42, 0.06)";
+  const wireframePillBg = isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(15, 23, 42, 0.2)";
 
   return (
     <div
@@ -133,11 +133,8 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
           backdropFilter: "blur(8px)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444" }} />
-          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f59e0b" }} />
-          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981" }} />
-          <span style={{ marginLeft: "6px", fontSize: "11px", color: subtextColor, fontWeight: 600 }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <span style={{ fontSize: "11px", color: subtextColor, fontWeight: 600 }}>
             WebCreon AI Engine
           </span>
         </div>

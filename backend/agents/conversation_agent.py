@@ -139,7 +139,7 @@ class AgentAnalysis(BaseModel):
     )
 
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, request_timeout=15, max_retries=2)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, request_timeout=20, max_retries=2)
 
 analyzer_system = """You are WebCreon AI's Lead Designer assisting {admin_name}.
 

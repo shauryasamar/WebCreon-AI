@@ -1,7 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { API_BASE_URL} from "../config/api";
+import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
+import { optimizeImageUrl, getThumbnailUrl, compressImageFile } from "../utils/imageOptimizer";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme, ADMIN_LIGHT_TOKENS } from "../context/ThemeContext";
+import { AccessDeniedView } from "./AccessDeniedView";
+import { GlassToast } from "./GlassToast";
+
+const tokens = ADMIN_LIGHT_TOKENS;
 
 
 type VariantValue = {
@@ -12,13 +19,11 @@ type VariantValue = {
   comparePrice?: number | null;
 };
 
-
 type ProductVariantOption = {
   optionType: "size" | "weight" | "shoe_size" | "volume" | "pack_size" | "custom";
   optionName: string;
   optionValues: VariantValue[];
 };
-
 
 type Category = {
   id: string;
@@ -31,6 +36,8 @@ type Collection = {
   name: string;
   slug?: string;
   description?: string;
+  is_badge?: boolean;
+  badge_color?: string | null;
 };
 
 type Product = {
@@ -40,17 +47,34 @@ type Product = {
   category?: string;
   category_id?: string | null;
   category_name?: string | null;
-  collections?: { id: string; name: string; slug?: string }[];
+  collections?: { id: string; name: string; slug?: string; is_badge?: boolean; badge_color?: string | null }[];
   price: number;
   compare_price?: number | null;
   images: string[];
   description: string;
+  highlights?: string[];
   in_stock: boolean;
   stock: number;
+  is_active: boolean;
+  sku?: string | null;
+  hsn_code?: string | null;
+  video_url?: string | null;
+  video_position?: number | null;
+  sibling_group?: string | null;
+  sibling_label?: string | null;
+  weight_grams: number;
+  length_cm?: number | null;
+  width_cm?: number | null;
+  height_cm?: number | null;
   slug?: string | null;
   variant_option?: ProductVariantOption | null;
+  return_window_days?: number | null;
+  is_cod_allowed?: boolean | null;
+  is_preorder?: boolean;
+  preorder_release_date?: string | null;
+  preorder_message?: string | null;
+  preorder_limit?: number | null;
 };
-
 
 type VariantRow = {
   value: string;
@@ -60,7 +84,6 @@ type VariantRow = {
   inStock: boolean;
 };
 
-
 type ProductFormValues = {
   name: string;
   brand: string;
@@ -68,19 +91,37 @@ type ProductFormValues = {
   categoryId: string;
   selectedCollectionIds: string[];
   description: string;
+  highlights: string;
   slug: string;
   imagesText: string;
+  is_active: boolean;
+  sku: string;
+  hsn_code: string;
+  video_url: string;
+  video_position: number;
+  sibling_group: string;
+  sibling_label: string;
+  weight_grams: string;
+  length_cm: string;
+  width_cm: string;
+  height_cm: string;
+  price: string;
+  compare_price: string;
+  stock: string;
   optionType: ProductVariantOption["optionType"];
   optionName: string;
   optionValuesText: string;
+  return_window_days: string;
+  is_cod_allowed: boolean | null;
+  is_preorder: boolean;
+  preorder_release_date: string;
+  preorder_message: string;
+  preorder_limit: string;
 };
-
 
 type FormErrors = Partial<
   Record<keyof ProductFormValues | "imagesText" | "optionValuesText" | "variantRows", string>
 >;
-
-
 
 const presetMap: Record<
   ProductVariantOption["optionType"],
@@ -94,7 +135,6 @@ const presetMap: Record<
   custom: { optionName: "", values: [] },
 };
 
-
 const normalizeProduct = (p: any): Product => ({
   id: String(p.id),
   name: p.name ?? "",
@@ -105,14 +145,33 @@ const normalizeProduct = (p: any): Product => ({
   collections: Array.isArray(p.collections) ? p.collections : [],
   price: Number(p.price ?? 0),
   compare_price: p.compare_price != null ? Number(p.compare_price) : null,
-  images: Array.isArray(p.images) ? p.images.filter(Boolean) : [],
+  images: Array.isArray(p.images)
+    ? p.images.filter(Boolean).map((img: string) => optimizeImageUrl(img))
+    : [],
   description: p.description ?? "",
+  highlights: Array.isArray(p.highlights) ? p.highlights : [],
   in_stock: Boolean(p.in_stock ?? Number(p.stock ?? 0) > 0),
   stock: Number(p.stock ?? 0),
+  is_active: p.is_active !== false,
+  sku: p.sku ?? null,
+  hsn_code: p.hsn_code ?? null,
+  video_url: p.video_url ?? null,
+  video_position: p.video_position != null ? Number(p.video_position) : 2,
+  sibling_group: p.sibling_group ?? null,
+  sibling_label: p.sibling_label ?? null,
+  weight_grams: Number(p.weight_grams ?? 500),
+  length_cm: p.length_cm != null ? Number(p.length_cm) : null,
+  width_cm: p.width_cm != null ? Number(p.width_cm) : null,
+  height_cm: p.height_cm != null ? Number(p.height_cm) : null,
   slug: p.slug ?? null,
   variant_option: p.variant_option ?? null,
+  return_window_days: p.return_window_days != null ? Number(p.return_window_days) : null,
+  is_cod_allowed: typeof p.is_cod_allowed === "boolean" ? p.is_cod_allowed : (p.is_cod_allowed != null ? Boolean(p.is_cod_allowed) : null),
+  is_preorder: Boolean(p.is_preorder),
+  preorder_release_date: p.preorder_release_date ?? null,
+  preorder_message: p.preorder_message ?? null,
+  preorder_limit: p.preorder_limit != null ? Number(p.preorder_limit) : null,
 });
-
 
 const buildVariantRowsFromText = (
   text: string,
@@ -122,7 +181,6 @@ const buildVariantRowsFromText = (
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
-
 
   return values.map((value) => {
     const found = existing.find((item) => item.value.toLowerCase() === value.toLowerCase());
@@ -137,7 +195,6 @@ const buildVariantRowsFromText = (
     );
   });
 };
-
 
 const getVariantDiscountPercent = (price: string, comparePrice: string) => {
   const finalPrice = Number(price);
@@ -157,36 +214,673 @@ const getVariantDiscountPercent = (price: string, comparePrice: string) => {
   return Math.round(((original - finalPrice) / original) * 100);
 };
 
+export const AdminCheckbox = ({
+  checked,
+  onChange,
+  ariaLabel,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  ariaLabel?: string;
+  disabled?: boolean;
+}) => {
+  const { isDark } = useAdminTheme();
+  return (
+    <label
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: disabled ? "not-allowed" : "pointer",
+        position: "relative",
+        userSelect: "none",
+        width: "16px",
+        height: "16px",
+        flexShrink: 0,
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        style={{
+          position: "absolute",
+          opacity: 0,
+          width: 0,
+          height: 0,
+          margin: 0,
+        }}
+      />
+      <div
+        style={{
+          width: "16px",
+          height: "16px",
+          borderRadius: "4px",
+          border: checked
+            ? "1.5px solid #2563eb"
+            : `1.5px solid ${isDark ? "rgba(255, 255, 255, 0.25)" : "#cbd5e1"}`,
+          background: checked
+            ? "#2563eb"
+            : isDark
+            ? "rgba(255, 255, 255, 0.06)"
+            : "#ffffff",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "all 0.15s ease",
+          boxShadow: checked
+            ? "0 1px 2px rgba(37, 99, 235, 0.3)"
+            : "none",
+        }}
+      >
+        {checked && (
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )}
+      </div>
+    </label>
+  );
+};
+
+export const ToggleSwitch = ({
+  checked,
+  onChange,
+  disabled = false,
+  id,
+}: {
+  checked: boolean;
+  onChange: (val: boolean) => void;
+  disabled?: boolean;
+  id?: string;
+}) => {
+  return (
+    <div
+      id={id}
+      role="switch"
+      aria-checked={checked}
+      onClick={() => {
+        if (!disabled) onChange(!checked);
+      }}
+      style={{
+        width: "34px",
+        height: "19px",
+        borderRadius: "999px",
+        backgroundColor: checked ? "#16a34a" : "#cbd5e1",
+        position: "relative",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.6 : 1,
+        transition: "background-color 0.2s ease",
+        display: "inline-flex",
+        alignItems: "center",
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          width: "15px",
+          height: "15px",
+          borderRadius: "50%",
+          backgroundColor: "#ffffff",
+          position: "absolute",
+          top: "2px",
+          left: checked ? "17px" : "2px",
+          transition: "left 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.25)",
+        }}
+      />
+    </div>
+  );
+};
+
+const SearchIcon = ({ style }: { style?: React.CSSProperties }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, ...style }}>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+
+const FilterIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+  </svg>
+);
+
+const PencilIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const LightningIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  </svg>
+);
+
+const QuickEditIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    <polygon points="13 2 9 8 13 8 11 14 17 7 13 7 13 2" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const getOptimizedThumbnailUrl = (url?: string, width = 120, height = 140): string => {
+  return getThumbnailUrl(url, width, height);
+};
+
+const RefreshIcon = ({ spin = false }: { spin?: boolean }) => (
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ animation: spin ? "spin 1s linear infinite" : undefined }}
+  >
+    <polyline points="23 4 23 10 17 10" />
+    <polyline points="1 20 1 14 7 14" />
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+);
+
+const CopyIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
+
+const FilmIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+    <line x1="7" y1="2" x2="7" y2="22" />
+    <line x1="17" y1="2" x2="17" y2="22" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+  </svg>
+);
+
+const ChevronDownIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
+const XMarkIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+const UploadIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+);
+
+const DownloadIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+const CheckCircleIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
+
+const EyeOffIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </svg>
+);
+
+const PlusIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const getCachedProducts = (id?: string): Product[] => {
+  if (!id || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`wc_admin_products_${id}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const getCachedCategories = (id?: string): Category[] => {
+  if (!id || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`wc_admin_categories_${id}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const getCachedCollections = (id?: string): Collection[] => {
+  if (!id || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`wc_admin_collections_${id}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+type AdminProductsCacheEntry = {
+  products: Product[];
+  totalProducts: number;
+  filteredTotal: number;
+  totalPages: number;
+  activeCount?: number;
+  draftCount?: number;
+  inStockCount?: number;
+  lowStockCount?: number;
+  outOfStockCount?: number;
+  timestamp: number;
+};
+
+const MAX_ADMIN_QUERY_CACHE = 40;
+const adminProductsQueryCache = new Map<string, AdminProductsCacheEntry>();
+
+function setAdminProductsCache(key: string, entry: AdminProductsCacheEntry) {
+  while (adminProductsQueryCache.size >= MAX_ADMIN_QUERY_CACHE) {
+    const oldestKey = adminProductsQueryCache.keys().next().value;
+    if (!oldestKey) break;
+    adminProductsQueryCache.delete(oldestKey);
+  }
+  adminProductsQueryCache.set(key, entry);
+}
+
+function invalidateAdminProductsCache(targetSiteId?: string) {
+  if (!targetSiteId) {
+    adminProductsQueryCache.clear();
+    return;
+  }
+  const prefix = `${targetSiteId}:`;
+  for (const key of Array.from(adminProductsQueryCache.keys())) {
+    if (key.startsWith(prefix)) {
+      adminProductsQueryCache.delete(key);
+    }
+  }
+}
+
+const plainCardStyle: React.CSSProperties = {
+  background: tokens.surfaceBg,
+  border: `1px solid ${tokens.border}`,
+  borderRadius: "8px",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: "12px",
+  fontWeight: 600,
+  color: tokens.textSecondary,
+};
+
+const inputStyle: React.CSSProperties = {
+  padding: "7px 10px",
+  borderRadius: "6px",
+  border: `1px solid ${tokens.border}`,
+  background: tokens.surfaceBg,
+  color: tokens.textPrimary,
+  fontSize: "13px",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const thStyle: React.CSSProperties = {
+  textAlign: "left",
+  padding: "10px 16px",
+  fontSize: "11px",
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: tokens.textSecondary,
+  borderBottom: `1px solid ${tokens.border}`,
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "12px 16px",
+  borderTop: `1px solid ${tokens.border}`,
+  fontSize: "13px",
+  color: tokens.textPrimary,
+  verticalAlign: "middle",
+};
+
+const ghostButtonStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: "6px",
+  border: `1px solid ${tokens.border}`,
+  background: tokens.surfaceBg,
+  color: tokens.textPrimary,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: "6px",
+  border: `1px solid ${tokens.border}`,
+  background: tokens.elevatedSurfaceBg,
+  color: tokens.textSecondary,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  padding: "9px 14px",
+  borderRadius: "6px",
+  border: "none",
+  background: "#2563eb",
+  color: "white",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const dangerButtonStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: "6px",
+  border: "1px solid #fecaca",
+  background: "#fef2f2",
+  color: "#b91c1c",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const errorStyle: React.CSSProperties = {
+  color: "#b91c1c",
+  fontSize: "12px",
+};
+
+export const extractErrorMessage = (errData: any, fallback: string = "An error occurred"): string => {
+  if (!errData) return fallback;
+  if (typeof errData === "string") return errData;
+  if (typeof errData.detail === "string") return errData.detail;
+  if (errData.detail && typeof errData.detail === "object") {
+    if (typeof errData.detail.message === "string") return errData.detail.message;
+    if (typeof errData.detail.detail === "string") return errData.detail.detail;
+    if (Array.isArray(errData.detail)) {
+      return errData.detail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join(", ");
+    }
+  }
+  if (typeof errData.message === "string") return errData.message;
+  return fallback;
+};
 
 const AdminProducts = () => {
   const { siteId } = useParams();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [collections, setCollections] = useState<Collection[]>([]);
+  const { hasPermission, isOwner } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
 
+  const plainCardStyle: React.CSSProperties = {
+    background: tokens.surfaceBg,
+    border: `1px solid ${tokens.border}`,
+    borderRadius: "8px",
+    boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.35)" : "0 1px 3px rgba(0,0,0,0.04)",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: tokens.textSecondary,
+  };
+
+  const inputStyle: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: "8px",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+    color: tokens.textPrimary,
+    fontSize: "13px",
+    width: "100%",
+    boxSizing: "border-box",
+    colorScheme: isDark ? "dark" : "light",
+    outline: "none",
+  };
+
+  const thStyle: React.CSSProperties = {
+    textAlign: "left",
+    padding: "10px 16px",
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    color: tokens.textSecondary,
+    borderBottom: `1px solid ${tokens.border}`,
+    background: tokens.surfaceBg,
+  };
+
+  const tdStyle: React.CSSProperties = {
+    padding: "12px 16px",
+    borderTop: `1px solid ${tokens.border}`,
+    fontSize: "13px",
+    color: tokens.textPrimary,
+    verticalAlign: "middle",
+  };
+
+  const ghostButtonStyle: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: "6px",
+    border: `1px solid ${tokens.border}`,
+    background: tokens.surfaceBg,
+    color: tokens.textPrimary,
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+
+  const secondaryButtonStyle: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: "6px",
+    border: `1px solid ${tokens.border}`,
+    background: tokens.elevatedSurfaceBg,
+    color: tokens.textSecondary,
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+
+  const dangerButtonStyle: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: "6px",
+    border: isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca",
+    background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+    color: isDark ? "#fca5a5" : "#b91c1c",
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+
+  const errorStyle: React.CSSProperties = {
+    color: isDark ? "#f87171" : "#b91c1c",
+    fontSize: "12px",
+  };
+  const canViewProducts = isOwner || hasPermission("products:view");
+  const canCreateProducts = isOwner || hasPermission("products:create");
+  const canEditProducts = isOwner || hasPermission("products:edit");
+  const canDeleteProducts = isOwner || hasPermission("products:delete");
+
+  const initialProducts = getCachedProducts(siteId);
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (initialProducts.length > 0 && siteId) {
+      const defaultKey = `${siteId}:all:1:10::::::all:all:all:newest`;
+      if (!adminProductsQueryCache.has(defaultKey)) {
+        adminProductsQueryCache.set(defaultKey, {
+          products: initialProducts,
+          totalProducts: initialProducts.length,
+          filteredTotal: initialProducts.length,
+          totalPages: 1,
+          timestamp: Date.now(),
+        });
+      }
+    }
+    return initialProducts;
+  });
+  const [categories, setCategories] = useState<Category[]>(() => getCachedCategories(siteId));
+  const [collections, setCollections] = useState<Collection[]>(() => getCachedCollections(siteId));
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalProducts, setTotalProducts] = useState(0);
-  const [inStockCount, setInStockCount] = useState(0);
-  const [outOfStockCount, setOutOfStockCount] = useState(0);
+  const [totalProducts, setTotalProducts] = useState(initialProducts.length);
+  const [filteredTotal, setFilteredTotal] = useState(initialProducts.length);
+  const [activeCount, setActiveCount] = useState(() => initialProducts.filter((p) => p.is_active).length);
+  const [draftCount, setDraftCount] = useState(() => initialProducts.filter((p) => !p.is_active).length);
+  const [inStockCount, setInStockCount] = useState(() => initialProducts.filter((p) => p.in_stock && p.stock > 0).length);
+  const [lowStockCount, setLowStockCount] = useState(() => initialProducts.filter((p) => p.in_stock && p.stock > 0 && p.stock <= 5).length);
+  const [outOfStockCount, setOutOfStockCount] = useState(() => initialProducts.filter((p) => !p.in_stock || p.stock <= 0).length);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "draft" | "low_stock" | "out_of_stock">("all");
 
+  // Rich Filter Popover states
+  const filterPopoverRef = useRef<HTMLDivElement | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showFilterPopover, setShowFilterPopover] = useState(false);
+  const [showReturnPolicyMenu, setShowReturnPolicyMenu] = useState(false);
+  const returnPolicyMenuRef = useRef<HTMLDivElement | null>(null);
+  const [filterCategory, setFilterCategory] = useState<string>("");
+  const [filterCollection, setFilterCollection] = useState<string>("");
+  const [filterBrand, setFilterBrand] = useState<string>("");
+  const [filterMinPrice, setFilterMinPrice] = useState<string>("");
+  const [filterMaxPrice, setFilterMaxPrice] = useState<string>("");
+  const [filterDiscount, setFilterDiscount] = useState<"all" | "discounted" | "regular">("all");
+  const [filterReturnPolicy, setFilterReturnPolicy] = useState<"all" | "non_returnable" | "returnable">("all");
+  const [filterCod, setFilterCod] = useState<"all" | "cod_allowed" | "prepaid_only">("all");
+  const [filterHasVideo, setFilterHasVideo] = useState<"all" | "with_video" | "images_only">("all");
+  const [filterSortBy, setFilterSortBy] = useState<string>("newest");
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+
+  const [storeBrands, setStoreBrands] = useState<string[]>([]);
+
+  // Dynamic available brands across full store catalog
+  const availableBrands = useMemo(() => {
+    const set = new Set<string>(storeBrands);
+    products.forEach((p) => {
+      if (p.brand && p.brand.trim()) set.add(p.brand.trim());
+    });
+    return Array.from(set).sort();
+  }, [products, storeBrands]);
+
+  const chipStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "5px",
+    fontSize: "11.5px",
+    fontWeight: 600,
+    padding: "3px 9px",
+    borderRadius: "6px",
+    background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+    color: isDark ? "#93c5fd" : "#1d4ed8",
+    border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
+    lineHeight: 1.3,
+  };
+
+  const chipCloseStyle: React.CSSProperties = {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    color: isDark ? "#93c5fd" : "#1d4ed8",
+    padding: 0,
+    display: "grid",
+    placeItems: "center",
+    opacity: 0.85,
+  };
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
+  const [newCollectionIsBadge, setNewCollectionIsBadge] = useState(false);
   const [showAddCollection, setShowAddCollection] = useState(false);
 
-
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(initialProducts.length === 0);
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [variantRows, setVariantRows] = useState<VariantRow[]>([]);
 
+  // Bulk Actions State
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+
+  // Inline quick-edit state for price and stock (flat products)
+  const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
+  const [inlinePrice, setInlinePrice] = useState<string>("");
+  const [inlineStock, setInlineStock] = useState<string>("");
+  const [isQuickSaving, setIsQuickSaving] = useState(false);
+
+  // Variant Quick Edit Modal State (multi-variant products)
+  const [quickEditProduct, setQuickEditProduct] = useState<Product | null>(null);
+  const [quickEditVariantRows, setQuickEditVariantRows] = useState<VariantRow[]>([]);
+
+  const [defaultReturnWindowDays, setDefaultReturnWindowDays] = useState<number>(7);
+  const [isUpdatingReturnPolicy, setIsUpdatingReturnPolicy] = useState(false);
+
+  // COD Settings & Bulk Operations State
+  const [showCodSettingsModal, setShowCodSettingsModal] = useState(false);
+  const [storeEnableCod, setStoreEnableCod] = useState<boolean>(true);
+  const [tempStoreEnableCod, setTempStoreEnableCod] = useState<boolean>(true);
+  const [maxCodLimit, setMaxCodLimit] = useState<number>(5000);
+  const [tempMaxCodLimit, setTempMaxCodLimit] = useState<string>("5000");
+  const [isUpdatingCodLimit, setIsUpdatingCodLimit] = useState(false);
+  const [isUpdatingBulkCod, setIsUpdatingBulkCod] = useState(false);
+
+  const exceptionCount = useMemo(() => {
+    return products.filter((p) => p.is_cod_allowed !== null && p.is_cod_allowed !== undefined && p.is_cod_allowed !== storeEnableCod).length;
+  }, [products, storeEnableCod]);
+
+  // CSV Import / Export States
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [defaultImportStatus, setDefaultImportStatus] = useState<"draft" | "active" | "csv">("draft");
+  const [isImporting, setIsImporting] = useState(false);
+  const [isExportingCSV, setIsExportingCSV] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    success?: boolean;
+    created_count?: number;
+    updated_count?: number;
+    errors?: Array<{ row: number; error: string }>;
+  } | null>(null);
+
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const [formValues, setFormValues] = useState<ProductFormValues>({
     name: "",
@@ -195,26 +889,80 @@ const AdminProducts = () => {
     categoryId: "",
     selectedCollectionIds: [],
     description: "",
+    highlights: "",
     slug: "",
     imagesText: "",
+    is_active: true,
+    sku: "",
+    hsn_code: "",
+    video_url: "",
+    video_position: 2,
+    sibling_group: "",
+    sibling_label: "",
+    weight_grams: "500",
+    length_cm: "",
+    width_cm: "",
+    height_cm: "",
+    price: "",
+    compare_price: "",
+    stock: "10",
     optionType: "custom",
     optionName: "",
     optionValuesText: "",
+    return_window_days: "",
+    is_cod_allowed: null,
+    is_preorder: false,
+    preorder_release_date: "",
+    preorder_message: "",
+    preorder_limit: "",
   });
 
+  const pendingImageFilesRef = useRef<Map<string, File>>(new Map());
 
-  const parseImages = (text: string) =>
-    text
+  // Clean up blob URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      pendingImageFilesRef.current.forEach((_, blobUrl) => {
+        try {
+          URL.revokeObjectURL(blobUrl);
+        } catch (_) {}
+      });
+      pendingImageFilesRef.current.clear();
+    };
+  }, []);
+
+  const parseImages = (text: string): string[] => {
+    if (!text || !text.trim()) return [];
+    const lines = text
       .split("\n")
       .map((item) => item.trim())
       .filter(Boolean);
 
+    const healed: string[] = [];
+    for (const line of lines) {
+      // If line is a broken suffix from a comma split (e.g. "1000_QL80_.jpg")
+      if (
+        healed.length > 0 &&
+        !line.startsWith("http://") &&
+        !line.startsWith("https://") &&
+        !line.startsWith("/") &&
+        !line.startsWith("data:") &&
+        !line.startsWith("blob:")
+      ) {
+        healed[healed.length - 1] = `${healed[healed.length - 1]},${line}`;
+      } else {
+        healed.push(line);
+      }
+    }
+    return healed;
+  };
 
-  const buildVariantOption = (): ProductVariantOption | null => {
-    if (!formValues.optionName.trim() && variantRows.length === 0) return null;
+  const imagePreviewList = useMemo(() => parseImages(formValues.imagesText), [formValues.imagesText]);
 
+  const buildVariantOption = (rowsToUse: VariantRow[] = variantRows): ProductVariantOption | null => {
+    if (!formValues.optionName.trim() && rowsToUse.length === 0) return null;
 
-    const optionValues = variantRows
+    const optionValues = rowsToUse
       .map((row) => ({
         value: row.value.trim(),
         inStock: row.inStock,
@@ -224,9 +972,7 @@ const AdminProducts = () => {
       }))
       .filter((row) => row.value);
 
-
     if (optionValues.length === 0) return null;
-
 
     return {
       optionType: formValues.optionType,
@@ -235,14 +981,12 @@ const AdminProducts = () => {
     };
   };
 
-
   const getFallbackProductPrice = () => {
     const firstWithPrice = variantRows.find(
       (row) => row.price.trim() !== "" && Number(row.price) > 0
     );
     return firstWithPrice ? Number(firstWithPrice.price) : 0;
   };
-
 
   const getFallbackComparePrice = () => {
     const firstWithComparePrice = variantRows.find(
@@ -254,13 +998,11 @@ const AdminProducts = () => {
     return firstWithComparePrice ? Number(firstWithComparePrice.comparePrice) : null;
   };
 
-
   const getFallbackStock = () =>
     variantRows.reduce((sum, row) => {
       const qty = row.stockQty.trim() === "" ? 0 : Number(row.stockQty);
       return sum + (Number.isFinite(qty) && qty > 0 ? qty : 0);
     }, 0);
-
 
   const validateForm = () => {
     const nextErrors: FormErrors = {};
@@ -270,60 +1012,88 @@ const AdminProducts = () => {
       .map((v) => v.trim())
       .filter(Boolean);
 
-
     if (!formValues.name.trim()) nextErrors.name = "Name is required.";
     if (!formValues.category.trim()) nextErrors.category = "Product Type is required.";
     if (!formValues.description.trim()) nextErrors.description = "Description is required.";
     if (images.length === 0) nextErrors.imagesText = "Add at least one image.";
-    if (!formValues.optionName.trim()) nextErrors.optionName = "Option name is required.";
-    if (optionValues.length === 0) nextErrors.optionValuesText = "Add at least one option value.";
-    if (new Set(optionValues.map((v) => v.toLowerCase())).size !== optionValues.length) {
-      nextErrors.optionValuesText = "Duplicate option values are not allowed.";
-    }
 
+    const hasVariantSection =
+      formValues.optionName.trim() !== "" ||
+      optionValues.length > 0 ||
+      variantRows.length > 0;
 
-    const hasAnyVariantPrice = variantRows.some(
-      (row) => row.price.trim() !== "" && Number(row.price) > 0
-    );
+    if (hasVariantSection) {
+      if (!formValues.optionName.trim()) nextErrors.optionName = "Option name is required.";
+      if (optionValues.length === 0) nextErrors.optionValuesText = "Add at least one option value.";
+      if (new Set(optionValues.map((v) => v.toLowerCase())).size !== optionValues.length) {
+        nextErrors.optionValuesText = "Duplicate option values are not allowed.";
+      }
 
-
-    if (!hasAnyVariantPrice) {
-      nextErrors.variantRows = "Add at least one variant price.";
-    }
-
-
-    const invalidVariantRow = variantRows.some((row) => {
-      const price = row.price.trim() === "" ? null : Number(row.price);
-      const comparePrice =
-        row.comparePrice.trim() === "" ? null : Number(row.comparePrice);
-      const stockQty = row.stockQty.trim() === "" ? null : Number(row.stockQty);
-
-
-      return (
-        !row.value.trim() ||
-        price == null ||
-        !Number.isFinite(price) ||
-        price <= 0 ||
-        (comparePrice != null &&
-          (!Number.isFinite(comparePrice) || comparePrice < price)) ||
-        (stockQty != null &&
-          (!Number.isFinite(stockQty) || stockQty < 0))
+      const hasAnyVariantPrice = variantRows.some(
+        (row) => row.price.trim() !== "" && Number(row.price) > 0
       );
-    });
 
+      if (!hasAnyVariantPrice) {
+        nextErrors.variantRows = "Add at least one variant price.";
+      }
 
-    if (invalidVariantRow) {
-      nextErrors.variantRows =
-        "Each variant must have value, valid price, optional MRP, and valid stock.";
+      const invalidVariantRow = variantRows.some((row) => {
+        const price = row.price.trim() === "" ? null : Number(row.price);
+        const comparePrice =
+          row.comparePrice.trim() === "" ? null : Number(row.comparePrice);
+        const stockQty = row.stockQty.trim() === "" ? null : Number(row.stockQty);
+
+        return (
+          !row.value.trim() ||
+          price == null ||
+          !Number.isFinite(price) ||
+          price <= 0 ||
+          (comparePrice != null &&
+            (!Number.isFinite(comparePrice) || comparePrice < price)) ||
+          (stockQty != null &&
+            (!Number.isFinite(stockQty) || stockQty < 0))
+        );
+      });
+
+      if (invalidVariantRow) {
+        nextErrors.variantRows =
+          "Each variant must have value, valid price, optional MRP, and valid stock.";
+      }
+    } else {
+      // Validate Base Price & Stock when no sub-variants (e.g. Color Earphones / Standalone Product)
+      const basePrice = formValues.price.trim() === "" ? null : Number(formValues.price);
+      const baseComparePrice = formValues.compare_price.trim() === "" ? null : Number(formValues.compare_price);
+      const baseStock = formValues.stock.trim() === "" ? null : Number(formValues.stock);
+
+      if (basePrice == null || !Number.isFinite(basePrice) || basePrice <= 0) {
+        nextErrors.price = "Selling price is required and must be greater than 0.";
+      }
+
+      if (baseComparePrice != null && (!Number.isFinite(baseComparePrice) || (basePrice != null && baseComparePrice < basePrice))) {
+        nextErrors.compare_price = "MRP / Strike Price cannot be less than selling price.";
+      }
+
+      if (baseStock != null && (!Number.isFinite(baseStock) || baseStock < 0)) {
+        nextErrors.stock = "Stock quantity cannot be negative.";
+      }
     }
 
+    const highlightWords = formValues.highlights.trim() ? formValues.highlights.trim().split(/\s+/).filter(Boolean).length : 0;
+    if (highlightWords > 50) {
+      nextErrors.highlights = `Highlights cannot exceed 50 words (currently ${highlightWords} words).`;
+    }
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
-
   const resetForm = () => {
+    pendingImageFilesRef.current.forEach((_, blobUrl) => {
+      try {
+        URL.revokeObjectURL(blobUrl);
+      } catch (_) {}
+    });
+    pendingImageFilesRef.current.clear();
     setEditingProduct(null);
     setErrors({});
     setVariantRows([]);
@@ -334,22 +1104,43 @@ const AdminProducts = () => {
       categoryId: "",
       selectedCollectionIds: [],
       description: "",
+      highlights: "",
       slug: "",
       imagesText: "",
+      is_active: true,
+      sku: "",
+      hsn_code: "",
+      video_url: "",
+      video_position: 2,
+      sibling_group: "",
+      sibling_label: "",
+      weight_grams: "500",
+      length_cm: "",
+      width_cm: "",
+      height_cm: "",
+      price: "",
+      compare_price: "",
+      stock: "10",
       optionType: "custom",
       optionName: "",
       optionValuesText: "",
+      return_window_days: "",
+      is_cod_allowed: null,
+      is_preorder: false,
+      preorder_release_date: "",
+      preorder_message: "",
+      preorder_limit: "",
     });
   };
 
-
   const openCreateForm = () => {
+    if (!canCreateProducts) return;
     resetForm();
     setShowForm(true);
   };
 
-
   const openEditForm = (product: Product) => {
+    if (!canEditProducts) return;
     const optionValues = product.variant_option?.optionValues ?? [];
     setEditingProduct(product);
     setErrors({});
@@ -363,6 +1154,12 @@ const AdminProducts = () => {
         inStock: v.inStock !== false,
       }))
     );
+    const productHighlights =
+      Array.isArray(product.highlights)
+        ? product.highlights.join("\n")
+        : typeof (product as any).highlights === "string"
+        ? (product as any).highlights
+        : "";
     setFormValues({
       name: product.name,
       brand: product.brand ?? "",
@@ -370,15 +1167,35 @@ const AdminProducts = () => {
       categoryId: product.category_id ?? "",
       selectedCollectionIds: (product.collections ?? []).map((c) => c.id),
       description: product.description ?? "",
+      highlights: productHighlights,
       slug: product.slug ?? "",
-      imagesText: (product.images ?? []).join("\n"),
+      imagesText: (product.images ?? []).map((img) => optimizeImageUrl(img)).join("\n"),
+      is_active: product.is_active !== false,
+      sku: product.sku ?? "",
+      hsn_code: product.hsn_code ?? "",
+      video_url: product.video_url ?? "",
+      video_position: product.video_position != null ? Number(product.video_position) : 2,
+      sibling_group: product.sibling_group ?? "",
+      sibling_label: product.sibling_label ?? "",
+      weight_grams: String(product.weight_grams ?? 500),
+      length_cm: product.length_cm != null ? String(product.length_cm) : "",
+      width_cm: product.width_cm != null ? String(product.width_cm) : "",
+      height_cm: product.height_cm != null ? String(product.height_cm) : "",
+      price: product.price != null && product.price > 0 ? String(product.price) : "",
+      compare_price: product.compare_price != null ? String(product.compare_price) : "",
+      stock: product.stock != null ? String(product.stock) : "10",
       optionType: product.variant_option?.optionType ?? "custom",
       optionName: product.variant_option?.optionName ?? "",
       optionValuesText: optionValues.map((v) => v.value).join(", "),
+      return_window_days: product.return_window_days != null ? String(product.return_window_days) : "",
+      is_cod_allowed: product.is_cod_allowed !== undefined ? product.is_cod_allowed : null,
+      is_preorder: Boolean(product.is_preorder),
+      preorder_release_date: product.preorder_release_date ? product.preorder_release_date.slice(0, 16) : "",
+      preorder_message: product.preorder_message ?? "",
+      preorder_limit: product.preorder_limit != null ? String(product.preorder_limit) : "",
     });
     setShowForm(true);
   };
-
 
   const handleCreateCategoryInline = async () => {
     if (!siteId || !newCategoryName.trim()) return;
@@ -401,7 +1218,6 @@ const AdminProducts = () => {
     }
   };
 
-
   const handleCreateCollectionInline = async () => {
     if (!siteId || !newCollectionName.trim()) return;
     try {
@@ -409,7 +1225,10 @@ const AdminProducts = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: newCollectionName.trim() }),
+        body: JSON.stringify({
+          name: newCollectionName.trim(),
+          is_badge: newCollectionIsBadge,
+        }),
       });
       if (res.ok) {
         const created = await res.json();
@@ -419,6 +1238,7 @@ const AdminProducts = () => {
           selectedCollectionIds: [...prev.selectedCollectionIds, created.id],
         }));
         setNewCollectionName("");
+        setNewCollectionIsBadge(false);
         setShowAddCollection(false);
       }
     } catch (err) {
@@ -426,33 +1246,254 @@ const AdminProducts = () => {
     }
   };
 
-
-  const loadProducts = async (page = currentPage, limit = pageSize, search = searchQuery) => {
+  const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
     if (!siteId) return;
-    setIsLoading(true);
+    if (
+      !window.confirm(
+        `Are you sure you want to delete category "${categoryName}"? Any products assigned to this category will become unassigned.`
+      )
+    ) {
+      return;
+    }
     try {
-      const searchParam = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : "";
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/categories/${categoryId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+        if (formValues.categoryId === categoryId) {
+          setFormValues((prev) => ({ ...prev, categoryId: "", category: "" }));
+        }
+        await loadProducts();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || "Failed to delete category");
+      }
+    } catch (err: any) {
+      console.error("Error deleting category", err);
+      alert(err.message || "Failed to delete category");
+    }
+  };
+
+  const handleDeleteCollection = async (collectionId: string, collectionName: string) => {
+    if (!siteId) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to delete collection "${collectionName}"?`
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/collections/${collectionId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setCollections((prev) => prev.filter((c) => c.id !== collectionId));
+        setFormValues((prev) => ({
+          ...prev,
+          selectedCollectionIds: prev.selectedCollectionIds.filter((id) => id !== collectionId),
+        }));
+        await loadProducts();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || "Failed to delete collection");
+      }
+    } catch (err: any) {
+      console.error("Error deleting collection", err);
+      alert(err.message || "Failed to delete collection");
+    }
+  };
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filterCategory) count++;
+    if (filterCollection) count++;
+    if (filterBrand) count++;
+    if (filterMinPrice) count++;
+    if (filterMaxPrice) count++;
+    if (filterDiscount !== "all") count++;
+    if (filterReturnPolicy !== "all") count++;
+    if (filterCod !== "all") count++;
+    if (filterHasVideo !== "all") count++;
+    if (filterSortBy !== "newest") count++;
+    return count;
+  }, [
+    filterCategory,
+    filterCollection,
+    filterBrand,
+    filterMinPrice,
+    filterMaxPrice,
+    filterDiscount,
+    filterReturnPolicy,
+    filterCod,
+    filterHasVideo,
+    filterSortBy,
+  ]);
+
+  const loadProducts = async (customParams?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: "all" | "active" | "draft" | "low_stock" | "out_of_stock";
+    catId?: string;
+    colId?: string;
+    brand?: string;
+    minP?: string;
+    maxP?: string;
+    discount?: "all" | "discounted" | "regular";
+    retPol?: "all" | "non_returnable" | "returnable";
+    codPol?: "all" | "cod_allowed" | "prepaid_only";
+    hasVid?: "all" | "with_video" | "images_only";
+    sortB?: string;
+  }) => {
+    if (!siteId) return;
+
+    const page = customParams?.page !== undefined ? customParams.page : currentPage;
+    const limit = customParams?.limit !== undefined ? customParams.limit : pageSize;
+    const search = customParams?.search !== undefined ? customParams.search : searchQuery;
+    const status = customParams?.status !== undefined ? customParams.status : statusFilter;
+    const catId = customParams?.catId !== undefined ? customParams.catId : filterCategory;
+    const colId = customParams?.colId !== undefined ? customParams.colId : filterCollection;
+    const brand = customParams?.brand !== undefined ? customParams.brand : filterBrand;
+    const minP = customParams?.minP !== undefined ? customParams.minP : filterMinPrice;
+    const maxP = customParams?.maxP !== undefined ? customParams.maxP : filterMaxPrice;
+    const discount = customParams?.discount !== undefined ? customParams.discount : filterDiscount;
+    const retPol = customParams?.retPol !== undefined ? customParams.retPol : filterReturnPolicy;
+    const codPol = customParams?.codPol !== undefined ? customParams.codPol : filterCod;
+    const hasVid = customParams?.hasVid !== undefined ? customParams.hasVid : filterHasVideo;
+    const sortB = customParams?.sortB !== undefined ? customParams.sortB : filterSortBy;
+
+    const cacheKey = `${siteId}:${status}:${page}:${limit}:${search}:${catId}:${colId}:${brand}:${minP}:${maxP}:${discount}:${retPol}:${codPol}:${hasVid}:${sortB}`;
+    const cached = adminProductsQueryCache.get(cacheKey);
+
+    if (cached) {
+      setProducts(cached.products);
+      setTotalProducts(cached.totalProducts);
+      setFilteredTotal(cached.filteredTotal);
+      setTotalPages(cached.totalPages);
+      if (cached.activeCount != null) setActiveCount(cached.activeCount);
+      if (cached.draftCount != null) setDraftCount(cached.draftCount);
+      if (cached.inStockCount != null) setInStockCount(cached.inStockCount);
+      if (cached.lowStockCount != null) setLowStockCount(cached.lowStockCount);
+      if (cached.outOfStockCount != null) setOutOfStockCount(cached.outOfStockCount);
+      setIsLoading(false);
+      if (Date.now() - cached.timestamp < 30000) {
+        return;
+      }
+    } else if (page === 1 && status === "all" && !search && !catId && products.length > 0) {
+      setIsLoading(false);
+    } else {
+      setProducts([]);
+      setIsLoading(true);
+    }
+
+    try {
+      const qParams = new URLSearchParams();
+      qParams.set("page", String(page));
+      qParams.set("page_size", String(limit));
+      if (search && search.trim()) qParams.set("search", search.trim());
+      if (status !== "all") qParams.set("status", status);
+      if (catId) qParams.set("category_id", catId);
+      if (colId) qParams.set("collection_id", colId);
+      if (brand) qParams.set("brand", brand);
+      if (minP) qParams.set("min_price", minP);
+      if (maxP) qParams.set("max_price", maxP);
+      if (discount === "discounted") qParams.set("has_discount", "true");
+      else if (discount === "regular") qParams.set("has_discount", "false");
+      if (retPol === "non_returnable") qParams.set("return_policy", "non_returnable");
+      else if (retPol === "returnable") qParams.set("return_policy", "returnable");
+      if (codPol === "cod_allowed") qParams.set("cod_policy", "cod_allowed");
+      else if (codPol === "prepaid_only") qParams.set("cod_policy", "prepaid_only");
+      if (hasVid === "with_video") qParams.set("has_video", "true");
+      else if (hasVid === "images_only") qParams.set("has_video", "false");
+      if (sortB && sortB !== "newest") qParams.set("sort_by", sortB);
+
       const prodRes = await fetch(
-        `${API_BASE_URL}/sites/${siteId}/products?page=${page}&page_size=${limit}${searchParam}`,
+        `${API_BASE_URL}/sites/${siteId}/products?${qParams.toString()}`,
         { credentials: "include" }
       );
 
       if (prodRes.ok) {
         const data = await prodRes.json();
-        if (Array.isArray(data)) {
-          const normalized = data.map(normalizeProduct);
-          setProducts(normalized);
-          setTotalProducts(normalized.length);
-          setTotalPages(Math.ceil(normalized.length / limit) || 1);
-          setInStockCount(normalized.filter((p) => p.in_stock).length);
-          setOutOfStockCount(normalized.filter((p) => !p.in_stock).length);
-        } else if (data && Array.isArray(data.products)) {
-          const normalized = data.products.map(normalizeProduct);
-          setProducts(normalized);
-          setTotalProducts(data.total ?? normalized.length);
-          setTotalPages(data.total_pages ?? Math.ceil((data.total ?? normalized.length) / limit) ?? 1);
-          setInStockCount(data.in_stock_count ?? normalized.filter((p) => p.in_stock).length);
-          setOutOfStockCount(data.out_of_stock_count ?? normalized.filter((p) => !p.in_stock).length);
+        if (data && Array.isArray(data.products)) {
+          const norm = data.products.map(normalizeProduct);
+          setProducts(norm);
+          const allCnt = data.all_count ?? data.total_count ?? (data.total ?? 0);
+          const totPages = data.total_pages ?? 1;
+          const act = data.active_count ?? activeCount;
+          const dft = data.draft_count ?? (data.active_count != null ? Math.max(0, allCnt - data.active_count) : draftCount);
+          const inStk = data.in_stock_count ?? inStockCount;
+          const lowStk = data.low_stock_count ?? lowStockCount;
+          const outStk = data.out_of_stock_count ?? outOfStockCount;
+
+          setTotalProducts(allCnt);
+          setFilteredTotal(data.total ?? 0);
+          setTotalPages(totPages);
+          if (data.active_count != null) setActiveCount(act);
+          if (data.draft_count != null || data.active_count != null) setDraftCount(dft);
+          if (data.in_stock_count != null) setInStockCount(inStk);
+          if (data.low_stock_count != null) setLowStockCount(lowStk);
+          if (data.out_of_stock_count != null) setOutOfStockCount(outStk);
+          if (Array.isArray(data.brands)) setStoreBrands(data.brands);
+
+          try {
+            if (page === 1 && status === "all" && !search && !catId) {
+              localStorage.setItem(`wc_admin_products_${siteId}`, JSON.stringify(norm.slice(0, 25)));
+            }
+          } catch (_) {}
+
+          setAdminProductsCache(cacheKey, {
+            products: norm,
+            totalProducts: allCnt,
+            filteredTotal: data.total ?? 0,
+            totalPages: totPages,
+            activeCount: act,
+            draftCount: dft,
+            inStockCount: inStk,
+            lowStockCount: lowStk,
+            outOfStockCount: outStk,
+            timestamp: Date.now(),
+          });
+        } else if (Array.isArray(data)) {
+          const norm = data.map(normalizeProduct);
+          setProducts(norm);
+          const act = norm.filter((p) => p.is_active).length;
+          const dft = norm.length - act;
+          const inStk = norm.filter((p) => p.in_stock && p.stock > 0).length;
+          const lowStk = norm.filter((p) => p.in_stock && p.stock > 0 && p.stock <= 5).length;
+          const outStk = norm.filter((p) => !p.in_stock || p.stock <= 0).length;
+          const totPages = Math.max(1, Math.ceil(norm.length / limit));
+
+          setTotalProducts(norm.length);
+          setFilteredTotal(norm.length);
+          setTotalPages(totPages);
+          setActiveCount(act);
+          setDraftCount(dft);
+          setInStockCount(inStk);
+          setLowStockCount(lowStk);
+          setOutOfStockCount(outStk);
+
+          try {
+            if (page === 1 && status === "all" && !search && !catId) {
+              localStorage.setItem(`wc_admin_products_${siteId}`, JSON.stringify(norm.slice(0, 25)));
+            }
+          } catch (_) {}
+
+          setAdminProductsCache(cacheKey, {
+            products: norm,
+            totalProducts: norm.length,
+            filteredTotal: norm.length,
+            totalPages: totPages,
+            activeCount: act,
+            draftCount: dft,
+            inStockCount: inStk,
+            lowStockCount: lowStk,
+            outOfStockCount: outStk,
+            timestamp: Date.now(),
+          });
         }
       }
     } catch (err) {
@@ -462,35 +1503,252 @@ const AdminProducts = () => {
     }
   };
 
-  useEffect(() => {
-    const loadInitial = async () => {
-      if (!siteId) return;
-      try {
-        const [catRes, colRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/sites/${siteId}/categories/public`),
-          fetch(`${API_BASE_URL}/sites/${siteId}/collections/public`),
-        ]);
+  const loadDeliverySettings = useCallback(async () => {
+    if (!siteId) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/delivery/settings/${siteId}`, { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.enable_cod !== undefined) {
+          setStoreEnableCod(Boolean(data.enable_cod));
+          setTempStoreEnableCod(Boolean(data.enable_cod));
+        }
+        if (data.max_cod_amount !== undefined) {
+          const limitVal = Number(data.max_cod_amount) || 5000;
+          setMaxCodLimit(limitVal);
+          setTempMaxCodLimit(String(limitVal));
+        }
+      }
+    } catch (err) {
+      console.error("Error loading delivery settings", err);
+    }
+  }, [siteId]);
 
+  useEffect(() => {
+    if (!siteId) return;
+    const timer = setTimeout(async () => {
+      try {
+        const [catRes, colRes, siteRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/sites/${siteId}/categories`, { credentials: "include" }),
+          fetch(`${API_BASE_URL}/sites/${siteId}/collections`, { credentials: "include" }),
+          fetch(`${API_BASE_URL}/sites/${siteId}`, { credentials: "include" }),
+        ]);
         if (catRes.ok) {
           const catData = await catRes.json();
-          setCategories(Array.isArray(catData) ? catData : []);
+          setCategories(catData);
+          try {
+            localStorage.setItem(`wc_admin_categories_${siteId}`, JSON.stringify(catData));
+          } catch (_) {}
         }
         if (colRes.ok) {
           const colData = await colRes.json();
-          setCollections(Array.isArray(colData) ? colData : []);
+          setCollections(colData);
+          try {
+            localStorage.setItem(`wc_admin_collections_${siteId}`, JSON.stringify(colData));
+          } catch (_) {}
+        }
+        if (siteRes.ok) {
+          const siteData = await siteRes.json();
+          if (siteData.default_return_window_days != null) {
+            setDefaultReturnWindowDays(siteData.default_return_window_days);
+          }
         }
       } catch (err) {
-        console.error("Error loading categories/collections", err);
+        console.error("Error loading categories or collections", err);
       }
-      await loadProducts(1, pageSize, searchQuery);
+    }, categories.length > 0 ? 120 : 0);
+
+    loadDeliverySettings();
+    return () => clearTimeout(timer);
+  }, [siteId, loadDeliverySettings]);
+
+  useEffect(() => {
+    if (!siteId) return;
+    loadProducts();
+  }, [
+    siteId,
+    currentPage,
+    pageSize,
+    statusFilter,
+    filterCategory,
+    filterCollection,
+    filterBrand,
+    filterMinPrice,
+    filterMaxPrice,
+    filterDiscount,
+    filterReturnPolicy,
+    filterHasVideo,
+    filterSortBy,
+  ]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        filterPopoverRef.current &&
+        !filterPopoverRef.current.contains(event.target as Node)
+      ) {
+        setShowFilterPopover(false);
+      }
+    }
+    if (showFilterPopover) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
     };
+  }, [showFilterPopover]);
 
-    loadInitial();
-  }, [siteId]);
+  const openCodSettingsModal = () => {
+    setTempMaxCodLimit(String(maxCodLimit));
+    setTempStoreEnableCod(storeEnableCod);
+    setShowCodSettingsModal(true);
+  };
 
+  const handleSaveAllCodSettings = async () => {
+    if (!siteId) return;
+    const newLimit = Number(tempMaxCodLimit);
+    if (isNaN(newLimit) || newLimit < 0) {
+      alert("Please enter a valid positive number for Max COD Limit");
+      return;
+    }
 
-  const imagePreviewList = useMemo(() => parseImages(formValues.imagesText), [formValues.imagesText]);
+    setIsUpdatingCodLimit(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/delivery/settings/${siteId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          enable_cod: tempStoreEnableCod,
+          max_cod_amount: newLimit,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to update COD settings");
+      }
+      setStoreEnableCod(tempStoreEnableCod);
+      setMaxCodLimit(newLimit);
 
+      // Invalidate products cache and refresh so any inherited products immediately show new policy
+      invalidateAdminProductsCache(siteId);
+      await loadProducts({ page: currentPage });
+
+      setToast({ message: "Store COD settings saved successfully", type: "success" });
+      setShowCodSettingsModal(false);
+    } catch (err: any) {
+      setToast({ message: extractErrorMessage(err, "Failed to save COD settings"), type: "error" });
+    } finally {
+      setIsUpdatingCodLimit(false);
+    }
+  };
+
+  const handleResetAllCodExceptions = async () => {
+    if (!siteId || (!canEditProducts && !isOwner)) return;
+    setIsUpdatingBulkCod(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/bulk-cod`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ is_cod_allowed: null, product_ids: null }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to reset product exceptions");
+      }
+      invalidateAdminProductsCache(siteId);
+      await loadProducts({ page: currentPage });
+      setToast({ message: "All product exceptions reset to store default", type: "success" });
+    } catch (err: any) {
+      setToast({ message: extractErrorMessage(err, "Failed to reset exceptions"), type: "error" });
+    } finally {
+      setIsUpdatingBulkCod(false);
+    }
+  };
+
+  const handleSaveMaxCodLimit = async (newLimit: number) => {
+    if (!siteId) return;
+    setIsUpdatingCodLimit(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/delivery/settings/${siteId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ max_cod_amount: newLimit }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to update Max COD Order Limit");
+      }
+      setMaxCodLimit(newLimit);
+      setToast({ message: `Max COD Order Limit set to ₹${newLimit.toLocaleString("en-IN")}`, type: "success" });
+      setShowCodSettingsModal(false);
+    } catch (err: any) {
+      setToast({ message: extractErrorMessage(err, "Failed to update COD limit"), type: "error" });
+    } finally {
+      setIsUpdatingCodLimit(false);
+    }
+  };
+
+  const handleBulkCod = async (isAllowed: boolean, targetProductIds?: string[]) => {
+    if (!siteId || (!canEditProducts && !isOwner)) return;
+    setIsUpdatingBulkCod(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/bulk-cod`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          is_cod_allowed: isAllowed,
+          product_ids: targetProductIds && targetProductIds.length > 0 ? targetProductIds : null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to bulk update COD");
+      }
+      const data = await res.json();
+      invalidateAdminProductsCache(siteId);
+      await loadProducts({ page: currentPage });
+      setSelectedProductIds(new Set());
+      setToast({
+        message: `${isAllowed ? "Enabled" : "Disabled"} COD for ${data.updated_count || 0} product(s)`,
+        type: "success",
+      });
+      if (showCodSettingsModal) {
+        setShowCodSettingsModal(false);
+      }
+    } catch (err: any) {
+      setToast({ message: extractErrorMessage(err, "Failed to update COD status"), type: "error" });
+    } finally {
+      setIsUpdatingBulkCod(false);
+    }
+  };
+
+  const handleUpdateDefaultReturnPolicy = async (days: number) => {
+    if (!siteId || !canEditProducts) return;
+    setIsUpdatingReturnPolicy(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/default-return-policy`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ default_return_window_days: days }),
+      });
+      if (res.ok) {
+        setDefaultReturnWindowDays(days);
+        await loadProducts();
+      } else {
+        alert("Failed to update store default return policy");
+      }
+    } catch (err) {
+      console.error("Error updating default return policy", err);
+      alert("Error updating store default return policy");
+    } finally {
+      setIsUpdatingReturnPolicy(false);
+    }
+  };
 
   const handleFormChange = <K extends keyof ProductFormValues>(
     field: K,
@@ -500,7 +1758,6 @@ const AdminProducts = () => {
       ...prev,
       [field]: value,
     }));
-
 
     if (field === "optionType") {
       const preset = presetMap[value as ProductVariantOption["optionType"]];
@@ -516,12 +1773,51 @@ const AdminProducts = () => {
       return;
     }
 
-
     if (field === "optionValuesText" && typeof value === "string") {
       setVariantRows((prev) => buildVariantRowsFromText(value, prev));
+      return;
+    }
+
+    if (field === "price" && typeof value === "string") {
+      const newPriceStr = value.trim();
+      setVariantRows((prev) => {
+        if (prev.length === 0 || newPriceStr === "") return prev;
+        const oldPriceStr = formValues.price.trim();
+        const allSameOrEmpty = prev.every(
+          (r) => r.price.trim() === "" || r.price.trim() === oldPriceStr || r.price.trim() === prev[0]?.price.trim()
+        );
+        if (allSameOrEmpty) {
+          return prev.map((r) => ({ ...r, price: newPriceStr }));
+        }
+        return prev.map((r) =>
+          r.price.trim() === "" || r.price.trim() === oldPriceStr
+            ? { ...r, price: newPriceStr }
+            : r
+        );
+      });
+      return;
+    }
+
+    if (field === "compare_price" && typeof value === "string") {
+      const newCompareStr = value.trim();
+      setVariantRows((prev) => {
+        if (prev.length === 0) return prev;
+        const oldCompareStr = formValues.compare_price.trim();
+        const allSameOrEmpty = prev.every(
+          (r) => r.comparePrice.trim() === "" || r.comparePrice.trim() === oldCompareStr || r.comparePrice.trim() === prev[0]?.comparePrice.trim()
+        );
+        if (allSameOrEmpty) {
+          return prev.map((r) => ({ ...r, comparePrice: newCompareStr }));
+        }
+        return prev.map((r) =>
+          r.comparePrice.trim() === "" || r.comparePrice.trim() === oldCompareStr
+            ? { ...r, comparePrice: newCompareStr }
+            : r
+        );
+      });
+      return;
     }
   };
-
 
   const handleVariantRowChange = (
     index: number,
@@ -535,67 +1831,500 @@ const AdminProducts = () => {
     );
   };
 
-
-  const handleImageUpload = async (file: File) => {
+  // Batch Image Handler - Instant Client Preview (Uploads only on Save Product)
+  const handleBatchImageUpload = (fileList: FileList | File[]) => {
     if (!siteId) return;
-
-
-    const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
+    const files = Array.from(fileList);
+    const validFiles = files.filter((f) =>
+      ["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(f.type)
+    );
+    if (validFiles.length === 0) {
       alert("Only PNG, JPG, JPEG, and WEBP files are allowed.");
       return;
     }
 
+    const newBlobUrls: string[] = [];
+    validFiles.forEach((file) => {
+      const blobUrl = URL.createObjectURL(file);
+      pendingImageFilesRef.current.set(blobUrl, file);
+      newBlobUrls.push(blobUrl);
+    });
+
+    setFormValues((prev) => {
+      const existing = prev.imagesText.trim() ? prev.imagesText.trim().split("\n") : [];
+      return {
+        ...prev,
+        imagesText: [...existing, ...newBlobUrls].join("\n"),
+      };
+    });
+  };
+
+  // Image Reordering Functions
+  const moveImage = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= imagePreviewList.length) return;
+    const updated = [...imagePreviewList];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    handleFormChange("imagesText", updated.join("\n"));
+  };
+
+  const setAsCoverImage = (index: number) => {
+    if (index === 0) return;
+    moveImage(index, 0);
+  };
+
+  const removeImage = (index: number) => {
+    const targetUrl = imagePreviewList[index];
+    if (targetUrl && targetUrl.startsWith("blob:")) {
+      try {
+        URL.revokeObjectURL(targetUrl);
+      } catch (_) {}
+      pendingImageFilesRef.current.delete(targetUrl);
+    }
+    const updated = imagePreviewList.filter((_, i) => i !== index);
+    handleFormChange("imagesText", updated.join("\n"));
+  };
+
+  // Bulk Actions
+  const handleBulkAction = async (action: "make_active" | "make_draft" | "delete" | "duplicate") => {
+    if (selectedProductIds.size === 0 || !siteId) return;
+    if (action === "delete" && !canDeleteProducts) return;
+    if (action === "duplicate" && !canCreateProducts) return;
+    if ((action === "make_active" || action === "make_draft") && !canEditProducts) return;
+
+    if (action === "delete") {
+      if (
+        !window.confirm(
+          `Are you sure you want to permanently delete ${selectedProductIds.size} selected product(s)?`
+        )
+      ) {
+        return;
+      }
+    }
+
+    setBulkActionLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/bulk-action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          product_ids: Array.from(selectedProductIds),
+          action,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const msg = extractErrorMessage(err, "Failed to execute bulk action");
+        throw new Error(msg);
+      }
+
+      setSelectedProductIds(new Set());
+      invalidateAdminProductsCache(siteId);
+      await loadProducts();
+      setToast({ message: `Bulk action '${action}' completed successfully`, type: "success" });
+    } catch (err: any) {
+      console.error("Bulk action failed", err);
+      setToast({ message: extractErrorMessage(err, "Bulk action failed"), type: "error" });
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  // Open Multi-Variant Quick Edit Modal
+  const openVariantQuickEdit = (product: Product) => {
+    setQuickEditProduct(product);
+    const vals = product.variant_option?.optionValues || [];
+    setQuickEditVariantRows(
+      vals.map((v) => ({
+        value: v.value,
+        price: v.price != null ? String(v.price) : "",
+        comparePrice:
+          (v as any).comparePrice != null ? String((v as any).comparePrice) : "",
+        stockQty: v.stockQty != null ? String(v.stockQty) : "",
+        inStock: v.inStock !== false,
+      }))
+    );
+  };
+
+  // Save Multi-Variant Quick Edit
+  const handleSaveVariantQuickEdit = async () => {
+    if (!siteId || !quickEditProduct) return;
+    setIsQuickSaving(true);
+    try {
+      const updatedValues = quickEditVariantRows.map((row) => ({
+        value: row.value.trim(),
+        price: row.price.trim() === "" ? null : Number(row.price),
+        comparePrice: row.comparePrice.trim() === "" ? null : Number(row.comparePrice),
+        stockQty: row.stockQty.trim() === "" ? null : Number(row.stockQty),
+        inStock: row.inStock,
+      }));
+
+      const payload = {
+        variant_option: {
+          optionType: quickEditProduct.variant_option?.optionType || "custom",
+          optionName: quickEditProduct.variant_option?.optionName || "Options",
+          optionValues: updatedValues,
+        },
+      };
+
+      const res = await fetch(
+        `${API_BASE_URL}/sites/${siteId}/products/${quickEditProduct.id}/quick-edit`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (res.ok) {
+        setQuickEditProduct(null);
+        invalidateAdminProductsCache(siteId);
+        await loadProducts();
+        setToast({ message: "Variants updated successfully", type: "success" });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setToast({ message: extractErrorMessage(err, "Failed to update variants"), type: "error" });
+      }
+    } catch (err: any) {
+      console.error("Variant quick edit failed", err);
+      setToast({ message: extractErrorMessage(err, "Variant quick edit failed"), type: "error" });
+    } finally {
+      setIsQuickSaving(false);
+    }
+  };
+
+  // Quick Inline Table Save for Single Products
+  const handleQuickSave = async (productId: string) => {
+    if (!siteId) return;
+    setIsQuickSaving(true);
+    try {
+      const payload: any = {};
+      if (inlinePrice.trim() !== "") payload.price = Number(inlinePrice);
+      if (inlineStock.trim() !== "") payload.stock = Number(inlineStock);
+
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/${productId}/quick-edit`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        setInlineEditingId(null);
+        invalidateAdminProductsCache(siteId);
+        await loadProducts();
+        setToast({ message: "Product details saved", type: "success" });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setToast({ message: extractErrorMessage(err, "Failed to update product details"), type: "error" });
+      }
+    } catch (err: any) {
+      console.error("Quick edit failed", err);
+      setToast({ message: extractErrorMessage(err, "Quick edit failed"), type: "error" });
+    } finally {
+      setIsQuickSaving(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    if (!siteId || (!canEditProducts && !canCreateProducts)) return;
+    setIsExportingCSV(true);
+    try {
+      const qParams = new URLSearchParams();
+      if (searchQuery && searchQuery.trim()) qParams.set("search", searchQuery.trim());
+      if (statusFilter !== "all") qParams.set("status", statusFilter);
+      if (filterCategory) qParams.set("category_id", filterCategory);
+      if (filterCollection) qParams.set("collection_id", filterCollection);
+      if (filterBrand) qParams.set("brand", filterBrand);
+      if (filterMinPrice) qParams.set("min_price", filterMinPrice);
+      if (filterMaxPrice) qParams.set("max_price", filterMaxPrice);
+      if (filterDiscount === "discounted") qParams.set("has_discount", "true");
+      else if (filterDiscount === "regular") qParams.set("has_discount", "false");
+      if (filterReturnPolicy === "non_returnable") qParams.set("return_policy", "non_returnable");
+      else if (filterReturnPolicy === "returnable") qParams.set("return_policy", "returnable");
+      if (filterHasVideo === "with_video") qParams.set("has_video", "true");
+      else if (filterHasVideo === "images_only") qParams.set("has_video", "false");
+      if (filterSortBy && filterSortBy !== "newest") qParams.set("sort_by", filterSortBy);
+
+      const qs = qParams.toString();
+      const exportUrl = `${API_BASE_URL}/sites/${siteId}/products/export-csv${qs ? `?${qs}` : ""}`;
+      const res = await fetch(exportUrl, { credentials: "include" });
+      if (!res.ok) {
+        throw new Error("Failed to export products CSV");
+      }
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      const isFiltered = qs.length > 0;
+      link.setAttribute("download", isFiltered ? `products_filtered_${siteId}.csv` : `products_${siteId}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err: any) {
+      console.error("Failed to export products CSV", err);
+      alert(err.message || "Failed to export products CSV");
+    } finally {
+      setIsExportingCSV(false);
+    }
+  };
+
+  const handleExportSelectedCSV = async () => {
+    if (!siteId || selectedProductIds.size === 0 || (!canEditProducts && !canCreateProducts)) return;
+    setIsExportingCSV(true);
+    try {
+      const ids = Array.from(selectedProductIds).join(",");
+      const exportUrl = `${API_BASE_URL}/sites/${siteId}/products/export-csv?ids=${encodeURIComponent(ids)}`;
+      const res = await fetch(exportUrl, { credentials: "include" });
+      if (!res.ok) {
+        throw new Error("Failed to export selected products CSV");
+      }
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.setAttribute("download", `products_selected_${siteId}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err: any) {
+      console.error("Failed to export selected products CSV", err);
+      alert(err.message || "Failed to export selected products CSV");
+    } finally {
+      setIsExportingCSV(false);
+    }
+  };
+
+  const handleDownloadSampleCSV = async () => {
+    if (!siteId) return;
+    try {
+      const sampleUrl = `${API_BASE_URL}/sites/${siteId}/products/sample-csv`;
+      const res = await fetch(sampleUrl, { credentials: "include" });
+      if (!res.ok) {
+        throw new Error("Failed to download sample CSV");
+      }
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.setAttribute("download", "sample_products_template.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err: any) {
+      console.error("Failed to download sample CSV", err);
+      alert(err.message || "Failed to download sample CSV");
+    }
+  };
+
+  const handleImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!siteId || !importFile) return;
+
+    setIsImporting(true);
+    setImportResult(null);
 
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", importFile);
+    formData.append("default_status", defaultImportStatus);
 
-
-    setIsUploadingImage(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/upload-image`, {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/import-csv`, {
         method: "POST",
         credentials: "include",
         body: formData,
       });
 
-
+      const data = await res.json();
       if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        alert(errorData?.detail || "Failed to upload image.");
-        return;
+        throw new Error(data.detail || "Import failed");
       }
 
-
-      const data = await res.json();
-      const fullUrl = `${API_BASE_URL}${data.url}`;
-
-
-      setFormValues((prev) => ({
-        ...prev,
-        imagesText: prev.imagesText.trim()
-          ? `${prev.imagesText}\n${fullUrl}`
-          : fullUrl,
-      }));
-    } catch (err) {
-      console.error("Image upload failed", err);
-      alert("Image upload failed.");
+      setImportResult(data);
+      const totalChanges = (data.created_count || 0) + (data.updated_count || 0);
+      if (totalChanges > 0) {
+        try {
+          const [catRes, colRes] = await Promise.all([
+            fetch(`${API_BASE_URL}/sites/${siteId}/categories`, { credentials: "include" }),
+            fetch(`${API_BASE_URL}/sites/${siteId}/collections`, { credentials: "include" }),
+          ]);
+          if (catRes.ok) setCategories(await catRes.json());
+          if (colRes.ok) setCollections(await colRes.json());
+        } catch (fetchErr) {
+          console.error("Error refreshing categories/collections after import", fetchErr);
+        }
+        invalidateAdminProductsCache(siteId);
+        await loadProducts({ page: 1 });
+      }
+    } catch (err: any) {
+      console.error("CSV Import error", err);
+      alert(err.message || "Failed to import CSV");
     } finally {
-      setIsUploadingImage(false);
+      setIsImporting(false);
     }
   };
 
+  const handleToggleCollectionBadge = async (collectionId: string) => {
+    if (!siteId) return;
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/sites/${siteId}/collections/${collectionId}/toggle-badge`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        }
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setCollections((prev) =>
+          prev.map((col) => (col.id === collectionId ? updated : col))
+        );
+      } else {
+        alert("Failed to update collection badge status");
+      }
+    } catch (err) {
+      console.error("Error toggling collection badge", err);
+    }
+  };
+
+  const handleDuplicateProduct = async (productId: string) => {
+    if (!siteId || !canCreateProducts) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/${productId}/duplicate`, {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to duplicate product");
+      }
+
+      invalidateAdminProductsCache(siteId);
+      await loadProducts();
+      setToast({ message: "Product duplicated as draft", type: "success" });
+    } catch (err: any) {
+      console.error("Duplicate failed", err);
+      setToast({ message: extractErrorMessage(err, "Failed to duplicate product"), type: "error" });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!siteId) return;
+    if (editingProduct && !canEditProducts) return;
+    if (!editingProduct && !canCreateProducts) return;
     if (!validateForm()) return;
 
+    const hasVariantOptions =
+      variantRows.length > 0 && formValues.optionName.trim() !== "";
 
-    const fallbackPrice = getFallbackProductPrice();
-    const fallbackComparePrice = getFallbackComparePrice();
-    const fallbackStock = getFallbackStock();
+    const userEnteredPrice = formValues.price.trim() !== "" ? Number(formValues.price) : null;
+    const userEnteredComparePrice = formValues.compare_price.trim() !== "" ? Number(formValues.compare_price) : null;
 
+    let finalVariantRows = variantRows;
+    if (hasVariantOptions && userEnteredPrice != null && userEnteredPrice > 0) {
+      const allRowsHavePrice = variantRows.every((r) => r.price.trim() !== "");
+      const allRowsSamePrice = variantRows.every((r) => r.price.trim() === variantRows[0]?.price.trim());
+      if (!allRowsHavePrice || allRowsSamePrice) {
+        finalVariantRows = variantRows.map((r) => ({
+          ...r,
+          price: String(userEnteredPrice),
+          comparePrice: userEnteredComparePrice != null ? String(userEnteredComparePrice) : r.comparePrice,
+        }));
+      }
+    }
+
+    const effectivePrice = hasVariantOptions
+      ? (userEnteredPrice != null && userEnteredPrice > 0 ? userEnteredPrice : getFallbackProductPrice())
+      : Number(formValues.price) || 0;
+    const effectiveComparePrice = hasVariantOptions
+      ? (userEnteredComparePrice != null && userEnteredComparePrice > 0 ? userEnteredComparePrice : getFallbackComparePrice())
+      : formValues.compare_price.trim()
+      ? Number(formValues.compare_price)
+      : null;
+    const effectiveStock = hasVariantOptions
+      ? getFallbackStock()
+      : formValues.stock.trim()
+      ? Number(formValues.stock)
+      : 0;
+
+    const cleanHighlights = formValues.highlights
+      .split("\n")
+      .map((h) => h.trim())
+      .filter(Boolean);
+
+    let finalImages = parseImages(formValues.imagesText);
+    const hasBlobImages = finalImages.some((img) => img.startsWith("blob:"));
+
+    if (hasBlobImages) {
+      setIsUploadingImage(true);
+      try {
+        const blobUrlsToUpload: string[] = [];
+        const filesToUpload: File[] = [];
+
+        for (const imgUrl of finalImages) {
+          if (imgUrl.startsWith("blob:")) {
+            const file = pendingImageFilesRef.current.get(imgUrl);
+            if (file) {
+              blobUrlsToUpload.push(imgUrl);
+              filesToUpload.push(file);
+            }
+          }
+        }
+
+        if (filesToUpload.length > 0) {
+          const compressedFiles = await Promise.all(
+            filesToUpload.map((f) => compressImageFile(f, 1200, 1200, 0.76))
+          );
+
+          const formData = new FormData();
+          compressedFiles.forEach((f) => formData.append("files", f));
+
+          const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products/upload-images`, {
+            method: "POST",
+            credentials: "include",
+            body: formData,
+          });
+
+          if (!res.ok) {
+            throw new Error("Failed to upload product images to server.");
+          }
+
+          const data = await res.json();
+          const serverUrls: string[] = (data.urls || []).map((u: string) => optimizeImageUrl(u));
+
+          const blobToServerMap = new Map<string, string>();
+          blobUrlsToUpload.forEach((blobUrl, i) => {
+            if (serverUrls[i]) {
+              blobToServerMap.set(blobUrl, serverUrls[i]);
+            }
+          });
+
+          finalImages = finalImages.map((img) => blobToServerMap.get(img) || img);
+
+          blobUrlsToUpload.forEach((blobUrl) => {
+            try {
+              URL.revokeObjectURL(blobUrl);
+            } catch (_) {}
+            pendingImageFilesRef.current.delete(blobUrl);
+          });
+        }
+      } catch (err: any) {
+        console.error("Image upload during save failed", err);
+        setToast({ message: err.message || "Failed to upload product images", type: "error" });
+        setIsUploadingImage(false);
+        return;
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
 
     const payload = {
       name: formValues.name.trim(),
@@ -604,15 +2333,34 @@ const AdminProducts = () => {
       category_id: formValues.categoryId ? formValues.categoryId : null,
       collection_ids: formValues.selectedCollectionIds,
       description: formValues.description.trim(),
-      price: fallbackPrice,
-      compare_price: fallbackComparePrice,
-      stock: fallbackStock,
-      in_stock: variantRows.some((row) => row.inStock && Number(row.stockQty || 0) > 0),
+      highlights: cleanHighlights,
+      price: effectivePrice,
+      compare_price: effectiveComparePrice,
+      stock: effectiveStock,
+      in_stock: hasVariantOptions
+        ? finalVariantRows.some((row) => row.inStock && Number(row.stockQty || 0) > 0)
+        : effectiveStock > 0,
+      is_active: formValues.is_active,
+      sku: formValues.sku.trim() || null,
+      hsn_code: formValues.hsn_code.trim() || null,
+      video_url: formValues.video_url.trim() || null,
+      video_position: Number(formValues.video_position) || 2,
+      sibling_group: formValues.sibling_group.trim() || null,
+      sibling_label: formValues.sibling_label.trim() || null,
+      weight_grams: Number(formValues.weight_grams) || 500,
+      length_cm: formValues.length_cm.trim() ? Number(formValues.length_cm) : null,
+      width_cm: formValues.width_cm.trim() ? Number(formValues.width_cm) : null,
+      height_cm: formValues.height_cm.trim() ? Number(formValues.height_cm) : null,
       slug: formValues.slug.trim() || null,
-      images: parseImages(formValues.imagesText),
-      variant_option: buildVariantOption(),
+      images: finalImages,
+      variant_option: hasVariantOptions ? buildVariantOption(finalVariantRows) : null,
+      return_window_days: formValues.return_window_days === "" ? null : Number(formValues.return_window_days),
+      is_cod_allowed: formValues.is_cod_allowed,
+      is_preorder: formValues.is_preorder,
+      preorder_release_date: formValues.is_preorder && formValues.preorder_release_date ? formValues.preorder_release_date : null,
+      preorder_message: formValues.is_preorder && formValues.preorder_message.trim() ? formValues.preorder_message.trim() : null,
+      preorder_limit: formValues.is_preorder && formValues.preorder_limit.trim() ? Number(formValues.preorder_limit) : null,
     };
-
 
     try {
       if (editingProduct) {
@@ -626,9 +2374,19 @@ const AdminProducts = () => {
           }
         );
         if (res.ok) {
-          await loadProducts(currentPage, pageSize, searchQuery);
+          invalidateAdminProductsCache(siteId);
+          try {
+            localStorage.removeItem(`wc_admin_products_${siteId}`);
+          } catch (_) {}
+          await loadProducts();
+          setShowForm(false);
+          resetForm();
+          setToast({ message: "Product updated successfully", type: "success" });
         } else {
           console.error("Failed to update product", res.status);
+          const errData = await res.json().catch(() => ({}));
+          const errMsg = extractErrorMessage(errData, "Failed to update product");
+          setToast({ message: errMsg, type: "error" });
         }
       } else {
         const res = await fetch(`${API_BASE_URL}/sites/${siteId}/products`, {
@@ -638,605 +2396,3230 @@ const AdminProducts = () => {
           body: JSON.stringify(payload),
         });
         if (res.ok) {
-          await loadProducts(currentPage, pageSize, searchQuery);
+          invalidateAdminProductsCache(siteId);
+          try {
+            localStorage.removeItem(`wc_admin_products_${siteId}`);
+          } catch (_) {}
+          await loadProducts();
+          setShowForm(false);
+          resetForm();
+          setToast({ message: "Product created successfully", type: "success" });
         } else {
           console.error("Failed to create product", res.status);
+          const errData = await res.json().catch(() => ({}));
+          const errMsg = extractErrorMessage(errData, "Failed to create product");
+          setToast({ message: errMsg, type: "error" });
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving product", err);
-    } finally {
-      setShowForm(false);
-      resetForm();
+      setToast({ message: extractErrorMessage(err, "Error saving product"), type: "error" });
     }
   };
 
-
   const handleDelete = async (productId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canDeleteProducts) return;
+    if (!confirm("Are you sure you want to delete this product?")) return;
     try {
       const res = await fetch(
         `${API_BASE_URL}/sites/${siteId}/products/${productId}`,
         { method: "DELETE", credentials: "include" }
       );
       if (res.ok) {
-        await loadProducts(currentPage, pageSize, searchQuery);
+        invalidateAdminProductsCache(siteId);
+        await loadProducts();
+        setToast({ message: "Product deleted successfully", type: "success" });
       } else {
-        console.error("Failed to delete product", res.status);
+        const err = await res.json().catch(() => ({}));
+        setToast({ message: extractErrorMessage(err, "Failed to delete product"), type: "error" });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error deleting product", err);
+      setToast({ message: extractErrorMessage(err, "Error deleting product"), type: "error" });
     }
   };
 
+  if (!canViewProducts) {
+    return (
+      <div style={{ padding: "32px", display: "flex", justifyContent: "center" }}>
+        <AccessDeniedView
+          title="Products Catalog Restricted"
+          message="You do not have permission to view or manage store products."
+          requiredPermission="products:view"
+        />
+      </div>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: "1100px", color: "#0f172a" }}>
+    <div style={{ width: "100%", color: tokens.textPrimary, display: "flex", flexDirection: "column", gap: "10px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+      <style>{`
+        @keyframes storeShimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+      {/* Standard GlassToast Notification */}
+      {toast && (
+        <GlassToast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      {/* Top Header Card (Mode Switcher + Search & Filter Button) */}
+      <div
+        style={{
+          background: tokens.surfaceBg,
+          border: `1px solid ${tokens.border}`,
+          borderRadius: "10px",
+          padding: "10px 14px",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+          position: "relative",
+        }}
+      >
+        {/* Row 1: Mode Switcher + Global Search + Filter Button */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
+          {/* Mode Pill (Products) */}
+          <div
+            style={{
+              display: "inline-flex",
+              background: tokens.elevatedSurfaceBg,
+              padding: "3px",
+              borderRadius: "8px",
+              border: `1px solid ${tokens.border}`,
+            }}
+          >
+            <button
+              type="button"
+              style={{
+                borderRadius: "6px",
+                padding: "6px 16px",
+                border: "none",
+                background: tokens.surfaceBg,
+                color: tokens.textPrimary,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "default",
+                textTransform: "capitalize",
+                transition: "all 0.15s ease",
+              }}
+            >
+              Products
+            </button>
+          </div>
+
+          {/* Search Bar & Filter Button Container */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              flex: "1 1 300px",
+              maxWidth: "520px",
+              position: "relative",
+            }}
+          >
+            <div style={{ position: "relative", flex: 1 }}>
+              <div
+                style={{
+                  position: "absolute",
+                  left: "11px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: tokens.textMuted,
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                <SearchIcon />
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSearchQuery(val);
+                  setCurrentPage(1);
+                  if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                  searchTimerRef.current = setTimeout(() => {
+                    loadProducts({ page: 1, search: val });
+                  }, 350);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, search: searchQuery });
+                  }
+                }}
+                placeholder="Search products by title, SKU, brand, category..."
+                style={{
+                  ...inputStyle,
+                  paddingLeft: "34px",
+                  paddingRight: searchQuery ? "28px" : "12px",
+                  fontSize: "13px",
+                  height: "36px",
+                  borderRadius: "7px",
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.elevatedSurfaceBg,
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                    setSearchQuery("");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, search: "" });
+                  }}
+                  style={{
+                    position: "absolute",
+                    right: "8px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: tokens.textMuted,
+                    padding: "2px",
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                  title="Clear search"
+                >
+                  <XMarkIcon />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Toggle Button */}
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setShowFilterPopover(!showFilterPopover)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  height: "36px",
+                  padding: "0 12px",
+                  borderRadius: "7px",
+                  border: activeFilterCount > 0
+                    ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}`
+                    : `1px solid ${tokens.border}`,
+                  background: activeFilterCount > 0
+                    ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                    : tokens.surfaceBg,
+                  color: activeFilterCount > 0
+                    ? (isDark ? "#93c5fd" : "#1d4ed8")
+                    : tokens.textPrimary,
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  transition: "all 0.15s ease",
+                }}
+                title="Toggle Filters"
+              >
+                <FilterIcon />
+                <span>Filters</span>
+                {activeFilterCount > 0 && (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      background: "#2563eb",
+                      color: "#ffffff",
+                      borderRadius: "10px",
+                      padding: "0 6px",
+                      marginLeft: "2px",
+                    }}
+                  >
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Floating Filter Popover Modal */}
+              {showFilterPopover && (
+                <div
+                  ref={filterPopoverRef}
+                  style={{
+                    position: "absolute",
+                    top: "40px",
+                    right: 0,
+                    width: "320px",
+                    background: isDark ? tokens.surfaceBg : "#ffffff",
+                    borderRadius: "10px",
+                    border: `1px solid ${tokens.border}`,
+                    boxShadow: isDark
+                      ? "0 10px 30px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.1)"
+                      : "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
+                    padding: "16px",
+                    zIndex: 100,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "14px",
+                    maxHeight: "80vh",
+                    overflowY: "auto",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      borderBottom: `1px solid ${tokens.border}`,
+                      paddingBottom: "10px",
+                    }}
+                  >
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
+                      Filter Products
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowFilterPopover(false)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: tokens.textSecondary,
+                        cursor: "pointer",
+                        padding: "2px",
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                      title="Close filters"
+                    >
+                      <XMarkIcon />
+                    </button>
+                  </div>
+
+                  {/* Filter by Category */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Category
+                    </label>
+                    <select
+                      value={filterCategory}
+                      onChange={(e) => {
+                        setFilterCategory(e.target.value);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, catId: e.target.value });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Categories</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Filter by Collection */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Collection / Badge
+                    </label>
+                    <select
+                      value={filterCollection}
+                      onChange={(e) => {
+                        setFilterCollection(e.target.value);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, colId: e.target.value });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Collections</option>
+                      {collections.map((col) => (
+                        <option key={col.id} value={col.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                          {col.name} {col.is_badge ? "(Badge)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Filter by Brand */}
+                  {availableBrands.length > 0 && (
+                    <div>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                        Brand
+                      </label>
+                      <select
+                        value={filterBrand}
+                        onChange={(e) => {
+                          setFilterBrand(e.target.value);
+                          setCurrentPage(1);
+                          loadProducts({ page: 1, brand: e.target.value });
+                        }}
+                        style={{
+                          width: "100%",
+                          height: "34px",
+                          padding: "0 8px",
+                          borderRadius: "6px",
+                          border: `1px solid ${tokens.border}`,
+                          fontSize: "13px",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          color: tokens.textPrimary,
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      >
+                        <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Brands</option>
+                        {availableBrands.map((b) => (
+                          <option key={b} value={b} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                            {b}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Price Range */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Price Range (₹)
+                    </label>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <input
+                        type="number"
+                        placeholder="Min ₹"
+                        value={filterMinPrice}
+                        onChange={(e) => {
+                          setFilterMinPrice(e.target.value);
+                          setCurrentPage(1);
+                          loadProducts({ page: 1, minP: e.target.value });
+                        }}
+                        style={{
+                          width: "100%",
+                          height: "34px",
+                          padding: "0 8px",
+                          borderRadius: "6px",
+                          border: `1px solid ${tokens.border}`,
+                          fontSize: "13px",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          color: tokens.textPrimary,
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <span style={{ color: tokens.textMuted, fontSize: "12px" }}>–</span>
+                      <input
+                        type="number"
+                        placeholder="Max ₹"
+                        value={filterMaxPrice}
+                        onChange={(e) => {
+                          setFilterMaxPrice(e.target.value);
+                          setCurrentPage(1);
+                          loadProducts({ page: 1, maxP: e.target.value });
+                        }}
+                        style={{
+                          width: "100%",
+                          height: "34px",
+                          padding: "0 8px",
+                          borderRadius: "6px",
+                          border: `1px solid ${tokens.border}`,
+                          fontSize: "13px",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          color: tokens.textPrimary,
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Discount Status */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Discount / Offer
+                    </label>
+                    <select
+                      value={filterDiscount}
+                      onChange={(e) => {
+                        setFilterDiscount(e.target.value as any);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, discount: e.target.value as any });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Products</option>
+                      <option value="discounted" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Discounted Only (On Sale)</option>
+                      <option value="regular" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Regular Price Only</option>
+                    </select>
+                  </div>
+
+                  {/* Return Policy Filter */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Return Policy
+                    </label>
+                    <select
+                      value={filterReturnPolicy}
+                      onChange={(e) => {
+                        setFilterReturnPolicy(e.target.value as any);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, retPol: e.target.value as any });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Policies</option>
+                      <option value="returnable" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Returnable</option>
+                      <option value="non_returnable" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Non-Returnable</option>
+                    </select>
+                  </div>
+
+                  {/* COD Payment Policy Filter */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Cash on Delivery (COD)
+                    </label>
+                    <select
+                      value={filterCod}
+                      onChange={(e) => {
+                        setFilterCod(e.target.value as any);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, codPol: e.target.value as any });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All (COD & Prepaid)</option>
+                      <option value="cod_allowed" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>COD Allowed</option>
+                      <option value="prepaid_only" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Prepaid Only (COD Disabled)</option>
+                    </select>
+                  </div>
+
+                  {/* Video Media Filter */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Media / Video
+                    </label>
+                    <select
+                      value={filterHasVideo}
+                      onChange={(e) => {
+                        setFilterHasVideo(e.target.value as any);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, hasVid: e.target.value as any });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Media</option>
+                      <option value="with_video" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Has Product Video</option>
+                      <option value="images_only" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Photos Only</option>
+                    </select>
+                  </div>
+
+                  {/* Sort Order */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                      Sort By
+                    </label>
+                    <select
+                      value={filterSortBy}
+                      onChange={(e) => {
+                        setFilterSortBy(e.target.value);
+                        setCurrentPage(1);
+                        loadProducts({ page: 1, sortB: e.target.value });
+                      }}
+                      style={{
+                        width: "100%",
+                        height: "34px",
+                        padding: "0 8px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                        fontSize: "13px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="newest" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Newest Added</option>
+                      <option value="oldest" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Oldest Added</option>
+                      <option value="price_asc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Price: Low to High</option>
+                      <option value="price_desc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Price: High to Low</option>
+                      <option value="stock_asc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Stock: Low to High</option>
+                      <option value="stock_desc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Stock: High to Low</option>
+                      <option value="name_asc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Name: A to Z</option>
+                      <option value="name_desc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Name: Z to A</option>
+                    </select>
+                  </div>
+
+                  {/* Popover Footer */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: `1px solid ${tokens.border}` }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterCategory("");
+                        setFilterCollection("");
+                        setFilterBrand("");
+                        setFilterMinPrice("");
+                        setFilterMaxPrice("");
+                        setFilterDiscount("all");
+                        setFilterReturnPolicy("all");
+                        setFilterCod("all");
+                        setFilterHasVideo("all");
+                        setFilterSortBy("newest");
+                        setCurrentPage(1);
+                        loadProducts({
+                          page: 1,
+                          catId: "",
+                          colId: "",
+                          brand: "",
+                          minP: "",
+                          maxP: "",
+                          discount: "all",
+                          retPol: "all",
+                          codPol: "all",
+                          hasVid: "all",
+                          sortB: "newest",
+                        });
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: tokens.textSecondary,
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        padding: "4px",
+                      }}
+                    >
+                      Reset All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowFilterPopover(false)}
+                      style={{
+                        background: tokens.accent || "#2563eb",
+                        border: "none",
+                        color: "#ffffff",
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        padding: "5px 14px",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Active Filter Chips Bar */}
+        {activeFilterCount > 0 && (
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              flexWrap: "wrap",
+              paddingTop: "8px",
+              borderTop: `1px solid ${tokens.border}`,
+            }}
+          >
+            <span style={{ fontSize: "11.5px", color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>
+              Active:
+            </span>
+
+            {filterCategory && (
+              <span style={chipStyle}>
+                <span>Category: {categories.find((c) => c.id === filterCategory)?.name || filterCategory}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterCategory("");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, catId: "" });
+                  }}
+                  style={chipCloseStyle}
+                  title="Remove category filter"
+                >
+                  <XMarkIcon />
+                </button>
+              </span>
+            )}
+
+            {filterCollection && (
+              <span style={chipStyle}>
+                <span>Collection: {collections.find((c) => c.id === filterCollection)?.name || filterCollection}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterCollection("");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, colId: "" });
+                  }}
+                  style={chipCloseStyle}
+                  title="Remove collection filter"
+                >
+                  <XMarkIcon />
+                </button>
+              </span>
+            )}
+
+            {filterBrand && (
+              <span style={chipStyle}>
+                <span>Brand: {filterBrand}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterBrand("");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, brand: "" });
+                  }}
+                  style={chipCloseStyle}
+                  title="Remove brand filter"
+                >
+                  <XMarkIcon />
+                </button>
+              </span>
+            )}
+
+            {(filterMinPrice || filterMaxPrice) && (
+              <span style={chipStyle}>
+                <span>Price: ₹{filterMinPrice || "0"} – ₹{filterMaxPrice || "∞"}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterMinPrice("");
+                    setFilterMaxPrice("");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, minP: "", maxP: "" });
+                  }}
+                  style={chipCloseStyle}
+                  title="Remove price range filter"
+                >
+                  <XMarkIcon />
+                </button>
+              </span>
+            )}
+
+            {filterDiscount !== "all" && (
+              <span style={chipStyle}>
+                <span>{filterDiscount === "discounted" ? "Discounted Only" : "Regular Price"}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterDiscount("all");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, discount: "all" });
+                  }}
+                  style={chipCloseStyle}
+                  title="Remove discount filter"
+                >
+                  <XMarkIcon />
+                </button>
+              </span>
+            )}
+
+            {filterReturnPolicy !== "all" && (
+              <span style={chipStyle}>
+                <span>{filterReturnPolicy === "non_returnable" ? "Non-Returnable Only" : "Returnable Only"}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterReturnPolicy("all");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, retPol: "all" });
+                  }}
+                  style={chipCloseStyle}
+                  title="Remove return policy filter"
+                >
+                  <XMarkIcon />
+                </button>
+              </span>
+            )}
+
+            {filterCod !== "all" && (
+              <span style={chipStyle}>
+                <span>COD: {filterCod === "cod_allowed" ? "COD Allowed" : "Prepaid Only"}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterCod("all");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, codPol: "all" });
+                  }}
+                  style={chipCloseStyle}
+                  title="Remove COD filter"
+                >
+                  <XMarkIcon />
+                </button>
+              </span>
+            )}
+
+            {filterHasVideo !== "all" && (
+              <span style={chipStyle}>
+                <span>{filterHasVideo === "with_video" ? "With Video" : "Photos Only"}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterHasVideo("all");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, hasVid: "all" });
+                  }}
+                  style={chipCloseStyle}
+                  title="Remove video filter"
+                >
+                  <XMarkIcon />
+                </button>
+              </span>
+            )}
+
+            {filterSortBy !== "newest" && (
+              <span style={chipStyle}>
+                <span>Sort: {filterSortBy}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterSortBy("newest");
+                    setCurrentPage(1);
+                    loadProducts({ page: 1, sortB: "newest" });
+                  }}
+                  style={chipCloseStyle}
+                  title="Reset sort"
+                >
+                  <XMarkIcon />
+                </button>
+              </span>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setFilterCategory("");
+                setFilterCollection("");
+                setFilterBrand("");
+                setFilterMinPrice("");
+                setFilterMaxPrice("");
+                setFilterDiscount("all");
+                setFilterReturnPolicy("all");
+                setFilterCod("all");
+                setFilterHasVideo("all");
+                setFilterSortBy("newest");
+                setCurrentPage(1);
+                loadProducts({
+                  page: 1,
+                  catId: "",
+                  colId: "",
+                  brand: "",
+                  minP: "",
+                  maxP: "",
+                  discount: "all",
+                  retPol: "all",
+                  codPol: "all",
+                  hasVid: "all",
+                  sortB: "newest",
+                });
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: isDark ? "#fca5a5" : "#dc2626",
+                fontSize: "11.5px",
+                fontWeight: 700,
+                cursor: "pointer",
+                marginLeft: "2px",
+                padding: "2px 6px",
+              }}
+            >
+              Clear All
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 2. 5 Summary KPI Stat Boxes */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+          gap: "12px",
+          width: "100%",
+        }}
+      >
+        {/* Total Products */}
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: tokens.textSecondary, lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+            {totalProducts}
+          </div>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            Total Products
+          </div>
+        </div>
+
+        {/* Active on Store */}
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: tokens.textSecondary, lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+            {activeCount}
+          </div>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            Active on Store
+          </div>
+        </div>
+
+        {/* In Stock */}
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: "#16a34a", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+            {inStockCount}
+          </div>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            In Stock
+          </div>
+        </div>
+
+        {/* Low Stock (≤5) */}
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: "#d97706", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+            {lowStockCount}
+          </div>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            Low Stock (≤5)
+          </div>
+        </div>
+
+        {/* Out of Stock */}
+        <div style={{ ...plainCardStyle, padding: "12px 14px", minWidth: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 600, color: "#ef4444", lineHeight: 1, fontFamily: "'Inter', sans-serif" }}>
+            {outOfStockCount}
+          </div>
+          <div style={{ fontSize: "12px", fontWeight: 500, color: "#555555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'Inter', sans-serif" }}>
+            Out of Stock
+          </div>
+        </div>
+      </div>
+
+      {/* Product Form Modal */}
+      {showForm && (
+        <div
+          style={{
+            position: "fixed",
+            top: "64px",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.65)",
+            zIndex: 1000,
+            overflowY: "auto",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "center",
+            padding: "24px 16px 48px",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowForm(false);
+              resetForm();
+            }
+          }}
+        >
+          <div
+            style={{
+              background: tokens.surfaceBg,
+              borderRadius: "14px",
+              width: "100%",
+              maxWidth: "1100px",
+              boxShadow: isDark ? "0 24px 48px rgba(0,0,0,0.7)" : "0 24px 48px rgba(0,0,0,0.25)",
+              marginBottom: "32px",
+              overflow: "hidden",
+              border: `1px solid ${tokens.border}`,
+              display: "flex",
+              flexDirection: "column",
+              colorScheme: isDark ? "dark" : "light",
+            }}
+          >
+            {/* Sticky Header */}
+            <div
+              style={{
+                position: "sticky",
+                top: 0,
+                zIndex: 20,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "12px 20px",
+                borderBottom: `1px solid ${tokens.border}`,
+                background: tokens.surfaceBg,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: "16px",
+                    color: tokens.textPrimary,
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {editingProduct ? `Edit Product: ${editingProduct.name}` : "Add New Product"}
+                </h2>
+                {editingProduct?.sku && (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: tokens.textSecondary,
+                      background: tokens.elevatedSurfaceBg,
+                      border: `1px solid ${tokens.border}`,
+                      padding: "2px 7px",
+                      borderRadius: "4px",
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}
+                  >
+                    SKU: {editingProduct.sku}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
+                {/* Product Status (Draft vs Active) Switch */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    background: tokens.elevatedSurfaceBg,
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    border: `1px solid ${tokens.border}`,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: formValues.is_active ? (isDark ? "#4ade80" : "#15803d") : tokens.textSecondary,
+                    }}
+                  >
+                    {formValues.is_active ? "● Live on Store" : "○ Draft (Hidden)"}
+                  </span>
+                  <ToggleSwitch
+                    checked={formValues.is_active}
+                    onChange={(val) => handleFormChange("is_active", val)}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForm(false);
+                    resetForm();
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    fontSize: "18px",
+                    cursor: "pointer",
+                    color: tokens.textSecondary,
+                    padding: "4px",
+                    lineHeight: 1,
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                  title="Close form"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <form
+              onSubmit={handleSubmit}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                overflow: "visible",
+              }}
+            >
+              {/* Form Body - 2 Column Industrial Grid */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+                  gap: "14px",
+                  padding: "16px 20px",
+                  background: tokens.elevatedSurfaceBg,
+                }}
+              >
+                {/* Left Main Column: Basic Info, Media, Highlights & Sub-Variants */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px", minWidth: 0 }}>
+                  {/* Card 1: Basic Information */}
+                  <div
+                    style={{
+                      background: tokens.surfaceBg,
+                      borderRadius: "8px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: tokens.textPrimary,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        paddingBottom: "8px",
+                      }}
+                    >
+                      General Information
+                    </div>
+
+                    <FormField
+                      label="Product Title / Name *"
+                      value={formValues.name}
+                      onChange={(v) => handleFormChange("name", v)}
+                      error={errors.name}
+                      placeholder="e.g. Wireless Noise-Cancelling Headphones"
+                    />
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <FormField
+                        label="Brand (Optional)"
+                        value={formValues.brand}
+                        onChange={(v) => handleFormChange("brand", v)}
+                        placeholder="e.g. Sony, Apple, Nike"
+                      />
+                      <FormField
+                        label="Product Type *"
+                        value={formValues.category}
+                        onChange={(v) => handleFormChange("category", v)}
+                        error={errors.category}
+                        placeholder="e.g. Over-Ear Headphones"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Card 2: Photos & Media Gallery */}
+                  <div
+                    style={{
+                      background: tokens.surfaceBg,
+                      borderRadius: "8px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        paddingBottom: "8px",
+                        flexWrap: "wrap",
+                        gap: "6px",
+                      }}
+                    >
+                      <div>
+                        <span
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            color: tokens.textPrimary,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          Product Photos & Gallery
+                        </span>
+                        <span style={{ fontSize: "11px", color: tokens.textSecondary, display: "block" }}>
+                          First photo is the default cover on catalog cards.
+                        </span>
+                      </div>
+
+                      <label
+                        style={{
+                          ...primaryButtonStyle,
+                          padding: "6px 12px",
+                          fontSize: "12px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <span>+ Upload Photos</span>
+                        <input
+                          type="file"
+                          multiple
+                          accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              handleBatchImageUpload(e.target.files);
+                              e.target.value = "";
+                            }
+                          }}
+                          style={{ display: "none" }}
+                        />
+                      </label>
+                    </div>
+
+                    {isUploadingImage && (
+                      <div style={{ fontSize: "12px", color: isDark ? "#60a5fa" : "#2563eb", fontWeight: 600 }}>
+                        Uploading images, please wait...
+                      </div>
+                    )}
+
+                    {imagePreviewList.length > 0 && (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
+                          gap: "8px",
+                        }}
+                      >
+                        {imagePreviewList.map((image, index) => {
+                          const isCover = index === 0;
+                          return (
+                            <div
+                              key={`${image}-${index}`}
+                              style={{
+                                borderRadius: "6px",
+                                border: isCover ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                                background: tokens.elevatedSurfaceBg,
+                                padding: "4px",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "4px",
+                                position: "relative",
+                              }}
+                            >
+                              {isCover && (
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    top: "6px",
+                                    left: "6px",
+                                    background: "#2563eb",
+                                    color: "#ffffff",
+                                    fontSize: "9px",
+                                    fontWeight: 700,
+                                    padding: "1px 5px",
+                                    borderRadius: "3px",
+                                    letterSpacing: "0.04em",
+                                    zIndex: 2,
+                                  }}
+                                >
+                                  COVER
+                                </div>
+                              )}
+                              <img
+                                src={getOptimizedThumbnailUrl(image, 240, 180)}
+                                alt={`Photo ${index + 1}`}
+                                loading="lazy"
+                                decoding="async"
+                                style={{
+                                  width: "100%",
+                                  height: "90px",
+                                  objectFit: "cover",
+                                  borderRadius: "4px",
+                                  background: tokens.surfaceBg,
+                                }}
+                              />
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  gap: "2px",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  title="Move Left"
+                                  disabled={index === 0}
+                                  onClick={() => moveImage(index, index - 1)}
+                                  style={{
+                                    ...ghostButtonStyle,
+                                    padding: "2px 6px",
+                                    fontSize: "10px",
+                                    opacity: index === 0 ? 0.3 : 1,
+                                    height: "24px",
+                                  }}
+                                >
+                                  ←
+                                </button>
+                                {!isCover && (
+                                  <button
+                                    type="button"
+                                    title="Set as Cover Photo"
+                                    onClick={() => setAsCoverImage(index)}
+                                    style={{
+                                      border: `1px solid ${tokens.border}`,
+                                      background: tokens.surfaceBg,
+                                      fontSize: "10px",
+                                      fontWeight: 600,
+                                      padding: "2px 5px",
+                                      borderRadius: "4px",
+                                      cursor: "pointer",
+                                      height: "24px",
+                                      color: tokens.textSecondary,
+                                    }}
+                                  >
+                                    Set Cover
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  title="Move Right"
+                                  disabled={index === imagePreviewList.length - 1}
+                                  onClick={() => moveImage(index, index + 1)}
+                                  style={{
+                                    ...ghostButtonStyle,
+                                    padding: "2px 6px",
+                                    fontSize: "10px",
+                                    opacity: index === imagePreviewList.length - 1 ? 0.3 : 1,
+                                    height: "24px",
+                                  }}
+                                >
+                                  →
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Remove Photo"
+                                  onClick={() => removeImage(index)}
+                                  style={{
+                                    ...dangerButtonStyle,
+                                    padding: "2px 5px",
+                                    fontSize: "10px",
+                                    height: "24px",
+                                  }}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <FormField
+                      label="Direct Image URLs (one URL per line)"
+                      value={formValues.imagesText}
+                      onChange={(v) => handleFormChange("imagesText", v)}
+                      multiline
+                      error={errors.imagesText}
+                      placeholder="https://images.example.com/product-1.jpg"
+                    />
+
+                    {/* Video Section */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: formValues.video_url.trim() ? "1fr 160px" : "1fr",
+                        gap: "10px",
+                        alignItems: "end",
+                        background: tokens.elevatedSurfaceBg,
+                        padding: "10px 12px",
+                        borderRadius: "6px",
+                        border: `1px solid ${tokens.border}`,
+                      }}
+                    >
+                      <FormField
+                        label="Product Video URL (YouTube, Vimeo, or direct MP4)"
+                        value={formValues.video_url}
+                        onChange={(v) => handleFormChange("video_url", v)}
+                        placeholder="https://www.youtube.com/watch?v=..."
+                      />
+
+                      {formValues.video_url.trim() && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <label style={{ ...labelStyle, fontSize: "12px", fontWeight: 600 }}>
+                            Video Slot
+                          </label>
+                          <select
+                            value={formValues.video_position}
+                            onChange={(e) => handleFormChange("video_position", Number(e.target.value))}
+                            style={{ ...inputStyle, height: "34px", fontSize: "12px", padding: "4px 8px" }}
+                          >
+                            <option value="0">1st (Cover Video)</option>
+                            <option value="1">2nd (After Photo 1)</option>
+                            <option value="2">3rd (Recommended)</option>
+                            <option value="3">4th</option>
+                            <option value="99">Last Slot</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card 3: Highlights & Detailed Description */}
+                  <div
+                    style={{
+                      background: tokens.surfaceBg,
+                      borderRadius: "8px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: tokens.textPrimary,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        paddingBottom: "8px",
+                      }}
+                    >
+                      Description & Key Highlights
+                    </div>
+
+                    {/* Highlights */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={labelStyle}>Top Highlights (Hero Section Bullets)</span>
+                        {(() => {
+                          const words = formValues.highlights.trim()
+                            ? formValues.highlights.trim().split(/\s+/).filter(Boolean).length
+                            : 0;
+                          const isOver = words > 50;
+                          return (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                padding: "2px 7px",
+                                borderRadius: "999px",
+                                background: isOver ? (isDark ? "rgba(239, 68, 68, 0.2)" : "#fee2e2") : tokens.elevatedSurfaceBg,
+                                color: isOver ? (isDark ? "#fca5a5" : "#b91c1c") : tokens.textSecondary,
+                                border: isOver ? (isDark ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid #fca5a5") : `1px solid ${tokens.border}`,
+                              }}
+                            >
+                              {words} / 50 words {isOver ? "(Exceeded)" : ""}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <textarea
+                        value={formValues.highlights}
+                        onChange={(e) => handleFormChange("highlights", e.target.value)}
+                        placeholder={`- Active Noise Cancellation with Transparency Mode\n- 40-Hour Battery Life with Fast USB-C Charging\n- Custom 40mm Dynamic Drivers for Deep Bass\n- Bluetooth 5.3 Multipoint Connection`}
+                        rows={3}
+                        style={{
+                          ...inputStyle,
+                          fontFamily: "inherit",
+                          resize: "vertical",
+                          lineHeight: 1.5,
+                          fontSize: "13px",
+                          borderColor:
+                            errors.highlights ||
+                            (formValues.highlights.trim() &&
+                              formValues.highlights.trim().split(/\s+/).filter(Boolean).length > 50)
+                              ? "#ef4444"
+                              : "#cbd5e1",
+                        }}
+                      />
+                      {errors.highlights && <span style={errorStyle}>{errors.highlights}</span>}
+                    </div>
+
+                    {/* Full Description */}
+                    <div>
+                      <FormField
+                        label="Full Product Description (Detailed Accordion) *"
+                        value={formValues.description}
+                        onChange={(v) => handleFormChange("description", v)}
+                        multiline
+                        error={errors.description}
+                        placeholder="Detailed product features, specifications, box contents, warranty information..."
+                      />
+                      <span style={{ fontSize: "11px", color: tokens.textSecondary, marginTop: "3px", display: "block" }}>
+                        Supports Markdown headings (<code style={{ background: tokens.elevatedSurfaceBg, color: tokens.textPrimary, padding: "1px 5px", borderRadius: "3px", border: `1px solid ${tokens.border}` }}>#</code>, <code style={{ background: tokens.elevatedSurfaceBg, color: tokens.textPrimary, padding: "1px 5px", borderRadius: "3px", border: `1px solid ${tokens.border}` }}>##</code>), paragraphs, and bullet lists.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 4: Sub-Variants (Size / Storage / Specs) */}
+                  <div
+                    style={{
+                      background: tokens.surfaceBg,
+                      borderRadius: "8px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        paddingBottom: "8px",
+                        flexWrap: "wrap",
+                        gap: "6px",
+                      }}
+                    >
+                      <div>
+                        <span
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            color: tokens.textPrimary,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          Sub-Variant Options (Size / Storage / Specs)
+                        </span>
+                        <span style={{ fontSize: "11px", color: tokens.textSecondary, display: "block" }}>
+                          Optional. Use if product has sizes or spec tiers. Leave empty for color-only products.
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "10.5px",
+                          fontWeight: 700,
+                          color: tokens.textSecondary,
+                          background: tokens.elevatedSurfaceBg,
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          border: `1px solid ${tokens.border}`,
+                        }}
+                      >
+                        Optional
+                      </span>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: "10px", alignItems: "start" }}>
+                      <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <span style={labelStyle}>Option Preset</span>
+                        <select
+                          value={formValues.optionType}
+                          onChange={(e) =>
+                            handleFormChange("optionType", e.target.value as ProductVariantOption["optionType"])
+                          }
+                          style={{ ...inputStyle, height: "34px", fontSize: "12px", padding: "4px 8px" }}
+                        >
+                          <option value="custom" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Custom (or None)</option>
+                          <option value="size" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Size</option>
+                          <option value="weight" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Weight</option>
+                          <option value="shoe_size" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Shoe Size</option>
+                          <option value="volume" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Volume</option>
+                          <option value="pack_size" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Pack Size</option>
+                        </select>
+                      </label>
+
+                      <FormField
+                        label="Option Name"
+                        value={formValues.optionName}
+                        onChange={(v) => handleFormChange("optionName", v)}
+                        error={errors.optionName}
+                        placeholder="e.g. Storage, Size, RAM (leave empty if none)"
+                      />
+                    </div>
+
+                    <FormField
+                      label="Option Values (comma-separated)"
+                      value={formValues.optionValuesText}
+                      onChange={(v) => handleFormChange("optionValuesText", v)}
+                      error={errors.optionValuesText}
+                      placeholder="e.g. 128GB, 256GB, 512GB (leave empty if none)"
+                    />
+
+                    {variantRows.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textSecondary }}>
+                          Variant Pricing & Inventory Matrix
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          {variantRows.map((row, index) => {
+                            const discountPercent = getVariantDiscountPercent(row.price, row.comparePrice);
+
+                            return (
+                              <div
+                                key={`${row.value}-${index}`}
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "1.2fr 1fr 1fr 1fr 90px 80px",
+                                  gap: "8px",
+                                  alignItems: "center",
+                                  padding: "8px 10px",
+                                  borderRadius: "6px",
+                                  border: `1px solid ${tokens.border}`,
+                                  background: tokens.elevatedSurfaceBg,
+                                }}
+                              >
+                                <FormField
+                                  label="Value"
+                                  value={row.value}
+                                  onChange={(v) => handleVariantRowChange(index, "value", v)}
+                                />
+                                <FormField
+                                  label="Price (₹) *"
+                                  type="number"
+                                  value={row.price}
+                                  onChange={(v) => handleVariantRowChange(index, "price", v)}
+                                />
+                                <FormField
+                                  label="MRP (₹)"
+                                  type="number"
+                                  value={row.comparePrice}
+                                  onChange={(v) => handleVariantRowChange(index, "comparePrice", v)}
+                                />
+                                <FormField
+                                  label="Stock Qty"
+                                  type="number"
+                                  value={row.stockQty}
+                                  onChange={(v) => handleVariantRowChange(index, "stockQty", v)}
+                                />
+                                <label
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    color: tokens.textSecondary,
+                                    fontSize: "12px",
+                                    cursor: "pointer",
+                                    paddingTop: "14px",
+                                  }}
+                                >
+                                  <AdminCheckbox
+                                    checked={row.inStock}
+                                    onChange={(e) => handleVariantRowChange(index, "inStock", e.target.checked)}
+                                  />
+                                  In stock
+                                </label>
+
+                                <div
+                                  style={{
+                                    paddingTop: "14px",
+                                    fontSize: "11px",
+                                    fontWeight: 700,
+                                    color: discountPercent ? "#15803d" : "#94a3b8",
+                                    textAlign: "right",
+                                  }}
+                                >
+                                  {discountPercent ? `${discountPercent}% off` : "No sale"}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {errors.variantRows && <span style={errorStyle}>{errors.variantRows}</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Sidebar Column: Pricing, Organization, Shipping, Color Family */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px", minWidth: 0 }}>
+                  {/* Card 5: Base Pricing & Inventory */}
+                  <div
+                    style={{
+                      background: tokens.surfaceBg,
+                      borderRadius: "8px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        paddingBottom: "8px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          color: tokens.textPrimary,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.04em",
+                        }}
+                      >
+                        Base Pricing & Inventory
+                      </span>
+                      {(() => {
+                        const basePrice = Number(formValues.price);
+                        const baseCompare = Number(formValues.compare_price);
+                        if (basePrice > 0 && baseCompare > basePrice) {
+                          const pct = Math.round(((baseCompare - basePrice) / baseCompare) * 100);
+                          return (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                color: isDark ? "#4ade80" : "#15803d",
+                                background: isDark ? "rgba(34, 197, 94, 0.2)" : "#dcfce7",
+                                border: isDark ? "1px solid rgba(34, 197, 94, 0.4)" : "1px solid #bbf7d0",
+                                padding: "2px 7px",
+                                borderRadius: "999px",
+                              }}
+                            >
+                              {pct}% OFF
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <FormField
+                        label="Selling Price (₹) *"
+                        type="number"
+                        value={formValues.price}
+                        onChange={(v) => handleFormChange("price", v)}
+                        error={errors.price}
+                        placeholder="1999"
+                      />
+                      <FormField
+                        label="MRP / Strike Price (₹)"
+                        type="number"
+                        value={formValues.compare_price}
+                        onChange={(v) => handleFormChange("compare_price", v)}
+                        error={errors.compare_price}
+                        placeholder="2999"
+                      />
+                    </div>
+
+                    <FormField
+                      label="Available Stock Quantity *"
+                      type="number"
+                      value={formValues.stock}
+                      onChange={(v) => handleFormChange("stock", v)}
+                      error={errors.stock}
+                      placeholder="50"
+                    />
+                    <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
+                      Set stock to 0 to mark product as Out of Stock.
+                    </span>
+                  </div>
+
+                  {/* Card 5a: Cash on Delivery (COD) Setup */}
+                  <div
+                    style={{
+                      background: tokens.surfaceBg,
+                      borderRadius: "8px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "12px 14px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
+                        Cash on Delivery (COD)
+                      </div>
+                      <div style={{ fontSize: "11.5px", color: tokens.textSecondary, marginTop: "2px" }}>
+                        {formValues.is_cod_allowed === null
+                          ? `Store default (${storeEnableCod ? "COD active" : "Prepaid only"})`
+                          : formValues.is_cod_allowed
+                          ? "Custom: Allow COD"
+                          : "Custom: Prepaid only"}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        background: tokens.elevatedSurfaceBg,
+                        padding: "3px",
+                        borderRadius: "8px",
+                        border: `1px solid ${tokens.border}`,
+                        gap: "2px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleFormChange("is_cod_allowed", null)}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "6px",
+                          border: "none",
+                          background: formValues.is_cod_allowed === null ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                          color: formValues.is_cod_allowed === null ? tokens.textPrimary : tokens.textSecondary,
+                          fontSize: "12px",
+                          fontWeight: formValues.is_cod_allowed === null ? 700 : 500,
+                          boxShadow: formValues.is_cod_allowed === null ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Default
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleFormChange("is_cod_allowed", true)}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "6px",
+                          border: "none",
+                          background: formValues.is_cod_allowed === true ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                          color: formValues.is_cod_allowed === true ? tokens.textPrimary : tokens.textSecondary,
+                          fontSize: "12px",
+                          fontWeight: formValues.is_cod_allowed === true ? 700 : 500,
+                          boxShadow: formValues.is_cod_allowed === true ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Allow COD
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleFormChange("is_cod_allowed", false)}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "6px",
+                          border: "none",
+                          background: formValues.is_cod_allowed === false ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                          color: formValues.is_cod_allowed === false ? tokens.textPrimary : tokens.textSecondary,
+                          fontSize: "12px",
+                          fontWeight: formValues.is_cod_allowed === false ? 700 : 500,
+                          boxShadow: formValues.is_cod_allowed === false ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Prepaid Only
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Card 5b: Pre-Order Setup */}
+                  <div
+                    style={{
+                      background: formValues.is_preorder ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
+                      borderRadius: "8px",
+                      border: formValues.is_preorder ? "1.5px solid #3b82f6" : `1px solid ${tokens.border}`,
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        paddingBottom: "8px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            color: formValues.is_preorder ? (isDark ? "#60a5fa" : "#1d4ed8") : tokens.textPrimary,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          Pre-Order Configuration
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 600, color: formValues.is_preorder ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary }}>
+                          {formValues.is_preorder ? "Enabled" : "Disabled"}
+                        </span>
+                        <ToggleSwitch
+                          checked={formValues.is_preorder}
+                          onChange={(val) => handleFormChange("is_preorder", val)}
+                        />
+                      </div>
+                    </div>
+
+                    {formValues.is_preorder && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                          <FormField
+                            label="Expected Release / Shipping Date"
+                            type="datetime-local"
+                            value={formValues.preorder_release_date}
+                            onChange={(v) => handleFormChange("preorder_release_date", v)}
+                          />
+                          <FormField
+                            label="Pre-Order Stock Cap (Optional)"
+                            type="number"
+                            value={formValues.preorder_limit}
+                            onChange={(v) => handleFormChange("preorder_limit", v)}
+                            placeholder="Defaults to base stock"
+                          />
+                        </div>
+
+                        <FormField
+                          label="Custom Pre-Order Notice / Disclaimer"
+                          value={formValues.preorder_message}
+                          onChange={(v) => handleFormChange("preorder_message", v)}
+                          placeholder="e.g. Official Launch Oct 25 — Ships immediately upon launch!"
+                        />
+                        <div style={{ fontSize: "11px", color: tokens.textSecondary, lineHeight: 1.4, background: tokens.surfaceBg, padding: "8px 10px", borderRadius: "6px", border: isDark ? "1px solid rgba(59, 130, 246, 0.35)" : "1px solid #bfdbfe" }}>
+                          <b>How it works:</b> Customers can order now before stock arrives. Orders are collected under the <b>Pre-Orders</b> tab. When launch date arrives, it automatically reverts to a standard product with remaining available stock.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card 6: Organization, Taxonomy & Policies */}
+                  <div
+                    style={{
+                      background: tokens.surfaceBg,
+                      borderRadius: "8px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: tokens.textPrimary,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        paddingBottom: "8px",
+                      }}
+                    >
+                      Organization & Taxonomy
+                    </div>
+
+                    {/* Broad Category */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <label style={labelStyle}>Category</label>
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <select
+                          value={formValues.categoryId}
+                          onChange={(e) => {
+                            const selectedId = e.target.value;
+                            const catObj = categories.find((c) => c.id === selectedId);
+                            handleFormChange("categoryId", selectedId);
+                            if (catObj && !formValues.category) {
+                              handleFormChange("category", catObj.name);
+                            }
+                          }}
+                          style={{ ...inputStyle, flex: 1, height: "34px", fontSize: "13px", padding: "4px 8px" }}
+                        >
+                          <option value="">Select Category (Optional)</option>
+                          {categories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddCategory(!showAddCategory)}
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: "6px",
+                            border: `1px solid ${tokens.border}`,
+                            background: tokens.elevatedSurfaceBg,
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          + New
+                        </button>
+                        {formValues.categoryId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cat = categories.find((c) => c.id === formValues.categoryId);
+                              if (cat) handleDeleteCategory(cat.id, cat.name);
+                            }}
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              border: isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca",
+                              background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                              color: isDark ? "#fca5a5" : "#dc2626",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                            }}
+                            title="Delete currently selected category"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                      {showAddCategory && (
+                        <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
+                          <input
+                            type="text"
+                            placeholder="Category name (e.g. Men)"
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            style={{ ...inputStyle, flex: 1, height: "30px", fontSize: "12px", padding: "4px 8px" }}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleCreateCategoryInline}
+                            style={{ ...primaryButtonStyle, padding: "4px 10px", fontSize: "11px" }}
+                          >
+                            Save
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Return Policy */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <label style={labelStyle}>Return Policy</label>
+                      <select
+                        value={formValues.return_window_days}
+                        onChange={(e) => handleFormChange("return_window_days", e.target.value)}
+                        style={{ ...inputStyle, height: "34px", fontSize: "13px", padding: "4px 8px" }}
+                      >
+                        <option value="">Use Store Default ({defaultReturnWindowDays} Days)</option>
+                        <option value="0">Non-Returnable (Final Sale - Instant Payout)</option>
+                        <option value="2">2 Days Returnable</option>
+                        <option value="7">7 Days Returnable</option>
+                        <option value="10">10 Days Returnable</option>
+                        <option value="14">14 Days Returnable</option>
+                        <option value="30">30 Days Returnable</option>
+                      </select>
+                    </div>
+
+                    {/* Collections & Badges */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={labelStyle}>Collections & Badges</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddCollection(!showAddCollection)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: isDark ? "#60a5fa" : "#2563eb",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          + New Collection
+                        </button>
+                      </div>
+
+                      {showAddCollection && (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "6px",
+                            background: tokens.elevatedSurfaceBg,
+                            padding: "8px",
+                            borderRadius: "6px",
+                            border: `1px solid ${tokens.border}`,
+                          }}
+                        >
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            <input
+                              type="text"
+                              placeholder="Collection name (e.g. Bestsellers)"
+                              value={newCollectionName}
+                              onChange={(e) => setNewCollectionName(e.target.value)}
+                              style={{ ...inputStyle, flex: 1, height: "30px", fontSize: "12px", padding: "4px 8px" }}
+                            />
+                            <button
+                              type="button"
+                              onClick={handleCreateCollectionInline}
+                              style={{ ...primaryButtonStyle, padding: "4px 10px", fontSize: "11px" }}
+                            >
+                              Save
+                            </button>
+                          </div>
+                          <label
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "11px",
+                              color: tokens.textSecondary,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <ToggleSwitch checked={newCollectionIsBadge} onChange={setNewCollectionIsBadge} />
+                            <span>Display as Card Badge (e.g. Bestseller tag)</span>
+                          </label>
+                        </div>
+                      )}
+
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "2px" }}>
+                        {collections.map((col) => {
+                          const selected = formValues.selectedCollectionIds.includes(col.id);
+                          return (
+                            <div
+                              key={col.id}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                borderRadius: "999px",
+                                border: selected ? "1.5px solid #2563eb" : `1px solid ${tokens.border}`,
+                                background: selected ? (isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff") : tokens.surfaceBg,
+                                padding: "2px 4px 2px 10px",
+                                gap: "4px",
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              <span
+                                onClick={() => {
+                                  const next = selected
+                                    ? formValues.selectedCollectionIds.filter((id) => id !== col.id)
+                                    : [...formValues.selectedCollectionIds, col.id];
+                                  handleFormChange("selectedCollectionIds", next);
+                                }}
+                                style={{
+                                  fontSize: "12px",
+                                  fontWeight: selected ? 700 : 500,
+                                  color: selected ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textPrimary,
+                                  cursor: "pointer",
+                                  userSelect: "none",
+                                }}
+                              >
+                                {selected ? "✓ " : ""}
+                                {col.name}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleCollectionBadge(col.id);
+                                }}
+                                style={{
+                                  border: col.is_badge ? (isDark ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid #fcd34d") : `1px solid ${tokens.border}`,
+                                  borderRadius: "999px",
+                                  padding: "1px 6px",
+                                  fontSize: "9.5px",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  background: col.is_badge ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7") : tokens.elevatedSurfaceBg,
+                                  color: col.is_badge ? (isDark ? "#fcd34d" : "#92400e") : tokens.textSecondary,
+                                }}
+                                title={col.is_badge ? "Badge active on card" : "Click to set as card badge"}
+                              >
+                                {col.is_badge ? "Badge" : "+ Badge"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteCollection(col.id, col.name);
+                                }}
+                                style={{
+                                  border: "none",
+                                  background: "transparent",
+                                  color: tokens.textMuted,
+                                  padding: "1px 4px",
+                                  fontSize: "11px",
+                                  cursor: "pointer",
+                                }}
+                                title={`Delete collection "${col.name}"`}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+                        {collections.length === 0 && (
+                          <span style={{ fontSize: "12px", color: tokens.textMuted }}>
+                            No collections yet. Click "+ New Collection" above.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 7: Shipping Dimensions, SKU & Tax */}
+                  <div
+                    style={{
+                      background: tokens.surfaceBg,
+                      borderRadius: "8px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: tokens.textPrimary,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        paddingBottom: "8px",
+                      }}
+                    >
+                      Shipping & Identifiers
+                    </div>
+
+                    <FormField
+                      label="Shipping Weight (Grams)"
+                      type="number"
+                      value={formValues.weight_grams}
+                      onChange={(v) => handleFormChange("weight_grams", v)}
+                      placeholder="500"
+                    />
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                      <FormField
+                        label="Length (cm)"
+                        type="number"
+                        value={formValues.length_cm}
+                        onChange={(v) => handleFormChange("length_cm", v)}
+                        placeholder="10"
+                      />
+                      <FormField
+                        label="Width (cm)"
+                        type="number"
+                        value={formValues.width_cm}
+                        onChange={(v) => handleFormChange("width_cm", v)}
+                        placeholder="10"
+                      />
+                      <FormField
+                        label="Height (cm)"
+                        type="number"
+                        value={formValues.height_cm}
+                        onChange={(v) => handleFormChange("height_cm", v)}
+                        placeholder="5"
+                      />
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <FormField
+                        label="SKU / Barcode"
+                        value={formValues.sku}
+                        onChange={(v) => handleFormChange("sku", v)}
+                        placeholder="WH-1000XM5-BLK"
+                      />
+                      <FormField
+                        label="HSN / Tax Code"
+                        value={formValues.hsn_code}
+                        onChange={(v) => handleFormChange("hsn_code", v)}
+                        placeholder="85183000"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Card 8: Color Family & Sibling Variations */}
+                  <div
+                    style={{
+                      background: tokens.surfaceBg,
+                      borderRadius: "8px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        paddingBottom: "8px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          color: tokens.textPrimary,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.04em",
+                        }}
+                      >
+                        Color Family Variations
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          color: isDark ? "#c084fc" : "#6d28d9",
+                          background: isDark ? "rgba(168, 85, 247, 0.2)" : "#f5f3ff",
+                          border: isDark ? "1px solid rgba(168, 85, 247, 0.4)" : "1px solid #ddd6fe",
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        Multi-Color Linking
+                      </span>
+                    </div>
+
+                    <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
+                      Group different color variants under the same Family Tag (e.g. <code style={{ background: tokens.elevatedSurfaceBg, color: tokens.textPrimary, padding: "1px 5px", borderRadius: "3px", border: `1px solid ${tokens.border}` }}>iphone-17-series</code>) to let customers switch colors on the storefront.
+                    </span>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <FormField
+                        label="Family Tag"
+                        value={formValues.sibling_group}
+                        onChange={(v) => handleFormChange("sibling_group", v)}
+                        placeholder="e.g. sony-xm5"
+                      />
+                      <FormField
+                        label="Color Label"
+                        value={formValues.sibling_label}
+                        onChange={(v) => handleFormChange("sibling_label", v)}
+                        placeholder="e.g. Midnight Black"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sticky Footer Action Bar */}
+              <div
+                style={{
+                  position: "sticky",
+                  bottom: 0,
+                  zIndex: 20,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "12px 20px",
+                  borderTop: `1px solid ${tokens.border}`,
+                  background: tokens.surfaceBg,
+                  boxShadow: "0 -2px 8px rgba(0,0,0,0.04)",
+                }}
+              >
+                <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
+                  {editingProduct
+                    ? "Editing existing catalog product"
+                    : formValues.is_active
+                    ? "Product will be published live to store"
+                    : "Product will be saved as a draft (hidden from store)"}
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForm(false);
+                      resetForm();
+                    }}
+                    style={ghostButtonStyle}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    style={{
+                      ...primaryButtonStyle,
+                      padding: "8px 18px",
+                      fontSize: "13px",
+                    }}
+                    disabled={isUploadingImage}
+                  >
+                    {editingProduct
+                      ? "Save Changes"
+                      : formValues.is_active
+                      ? "Create Product"
+                      : "Save as Draft"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Status Filter Tabs & Action Toolbar */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          gap: "12px",
-          flexWrap: "wrap",
-          marginBottom: "18px",
+          gap: "16px",
+          borderBottom: `1px solid ${tokens.border}`,
+          marginTop: "4px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: "1 1 240px", maxWidth: "380px" }}>
-          <input
-            type="text"
-            placeholder="Search products by name, brand, category..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                setCurrentPage(1);
-                loadProducts(1, pageSize, searchQuery);
-              }
-            }}
-            style={{
-              ...inputStyle,
-              padding: "8px 12px",
-              fontSize: "13px",
-              width: "100%",
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              setCurrentPage(1);
-              loadProducts(1, pageSize, searchQuery);
-            }}
-            style={{
-              ...primaryButtonStyle,
-              padding: "8px 14px",
-              fontSize: "12px",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Search
-          </button>
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setCurrentPage(1);
-                loadProducts(1, pageSize, "");
-              }}
-              style={{
-                ...ghostButtonStyle,
-                padding: "8px 10px",
-                fontSize: "12px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-
-        <button onClick={openCreateForm} style={primaryButtonStyle}>
-          + Add product
-        </button>
-      </div>
-
-
-      {showForm && (
+        {/* Status Navigation Tabs */}
         <div
           style={{
-            marginBottom: "20px",
-            padding: "16px 18px",
-            borderRadius: "8px",
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
+            display: "flex",
+            gap: "4px",
+            overflowX: "auto",
+            whiteSpace: "nowrap",
+            flex: "1 1 auto",
+            minWidth: 0,
+            scrollbarWidth: "none",
           }}
         >
-          <h2
-            style={{
-              margin: "0 0 12px",
-              fontSize: "16px",
-              color: "#0f172a",
-              fontWeight: 700,
-            }}
-          >
-            {editingProduct ? "Edit product" : "Add product"}
-          </h2>
+          {[
+            { key: "all", label: "All Products", count: totalProducts },
+            { key: "active", label: "Active (Live)", count: activeCount },
+            { key: "draft", label: "Drafts", count: draftCount },
+            { key: "low_stock", label: "Low Stock", count: lowStockCount },
+            { key: "out_of_stock", label: "Out of Stock", count: outOfStockCount },
+          ].map((tab) => {
+            const isActive = statusFilter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => {
+                  if (statusFilter === tab.key) return;
+                  setSelectedProductIds(new Set());
+                  const nextStatus = tab.key as any;
+                  setStatusFilter(nextStatus);
+                  setCurrentPage(1);
 
-
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: "12px 18px",
-            }}
-          >
-            <FormField
-              label="Name"
-              value={formValues.name}
-              onChange={(v) => handleFormChange("name", v)}
-              error={errors.name}
-            />
-            <FormField
-              label="Brand"
-              value={formValues.brand}
-              onChange={(v) => handleFormChange("brand", v)}
-            />
-            
-            {/* Broad Category Dropdown */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={labelStyle}>Category (e.g. Men, Women, Kids)</label>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <select
-                  value={formValues.categoryId}
-                  onChange={(e) => handleFormChange("categoryId", e.target.value)}
-                  style={{ ...inputStyle, flex: 1 }}
+                  const cacheKey = `${siteId}:${nextStatus}:1:${pageSize}:${searchQuery}:${filterCategory}:${filterCollection}:${filterBrand}:${filterMinPrice}:${filterMaxPrice}:${filterDiscount}:${filterReturnPolicy}:${filterCod}:${filterHasVideo}:${filterSortBy}`;
+                  const cached = adminProductsQueryCache.get(cacheKey);
+                  if (cached) {
+                    setProducts(cached.products);
+                    setTotalProducts(cached.totalProducts);
+                    setFilteredTotal(cached.filteredTotal);
+                    setTotalPages(cached.totalPages);
+                    setIsLoading(false);
+                  } else {
+                    setProducts([]);
+                    setIsLoading(true);
+                  }
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 12px",
+                  border: "none",
+                  borderBottom: isActive ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : "2px solid transparent",
+                  background: "transparent",
+                  color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
+                  fontSize: "13px",
+                  fontWeight: isActive ? 700 : 500,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  marginBottom: "-1px",
+                  transition: "all 0.15s ease",
+                  flexShrink: 0,
+                }}
+              >
+                <span>{tab.label}</span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    background: isActive ? (isDark ? "rgba(59, 130, 246, 0.25)" : "#dbeafe") : tokens.elevatedSurfaceBg,
+                    color: isActive ? (isDark ? "#93c5fd" : "#1e40af") : tokens.textSecondary,
+                  }}
                 >
-                  <option value="">Select Category (Optional)</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Right Action Toolbar: Bulk Actions or Store Default Return Policy */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0, paddingBottom: "6px" }}>
+          {selectedProductIds.size > 0 ? (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                background: tokens.surfaceBg,
+                border: `1px solid ${tokens.border}`,
+                borderRadius: "8px",
+                padding: "3px 4px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+              }}
+            >
+              {/* Selection Count Pill */}
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: isDark ? "rgba(59, 130, 246, 0.18)" : "#eff6ff",
+                  border: isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe",
+                  borderRadius: "5px",
+                  padding: "4px 8px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <span>{selectedProductIds.size} Selected</span>
+              </div>
+
+              <div style={{ width: "1px", height: "16px", background: tokens.border, margin: "0 2px" }} />
+
+              {/* Bulk Publish */}
+              {canEditProducts && (
                 <button
                   type="button"
-                  onClick={() => setShowAddCategory(!showAddCategory)}
+                  disabled={bulkActionLoading}
+                  onClick={() => handleBulkAction("make_active")}
+                  title="Publish selected products live to store"
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    background: "#f8fafc",
-                    fontSize: "13px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
                     fontWeight: 600,
-                    cursor: "pointer",
+                    borderRadius: "5px",
+                    border: isDark ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid #bbf7d0",
+                    background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4",
+                    color: isDark ? "#4ade80" : "#166534",
+                    cursor: bulkActionLoading ? "not-allowed" : "pointer",
                     whiteSpace: "nowrap",
                   }}
                 >
-                  + New
+                  <CheckCircleIcon />
+                  <span>{bulkActionLoading ? "Publishing..." : "Publish"}</span>
                 </button>
-              </div>
-              {showAddCategory && (
-                <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
-                  <input
-                    type="text"
-                    placeholder="Category name (e.g. Men)"
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCreateCategoryInline}
-                    style={{ ...primaryButtonStyle, padding: "6px 12px", fontSize: "12px" }}
-                  >
-                    Save
-                  </button>
-                </div>
               )}
-            </div>
 
-            {/* Product Type (renamed from Category) */}
-            <FormField
-              label="Product Type (e.g. Shirt, Skirt, Jeans)"
-              value={formValues.category}
-              onChange={(v) => handleFormChange("category", v)}
-              error={errors.category}
-            />
-
-            {/* Collections Multi-Select */}
-            <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "6px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <label style={labelStyle}>Collections (e.g. Bestsellers, Festive, New Arrivals)</label>
+              {/* Bulk Draft */}
+              {canEditProducts && (
                 <button
                   type="button"
-                  onClick={() => setShowAddCollection(!showAddCollection)}
+                  disabled={bulkActionLoading}
+                  onClick={() => handleBulkAction("make_draft")}
+                  title="Hide selected products from store"
                   style={{
-                    padding: "4px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    background: "#f8fafc",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
                     fontSize: "12px",
                     fontWeight: 600,
-                    cursor: "pointer",
+                    borderRadius: "5px",
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.elevatedSurfaceBg,
+                    color: tokens.textSecondary,
+                    cursor: bulkActionLoading ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  + Add New Collection
+                  <EyeOffIcon />
+                  <span>{bulkActionLoading ? "Drafting..." : "Draft"}</span>
                 </button>
-              </div>
-              {showAddCollection && (
-                <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
-                  <input
-                    type="text"
-                    placeholder="Collection name (e.g. Festive)"
-                    value={newCollectionName}
-                    onChange={(e) => setNewCollectionName(e.target.value)}
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCreateCollectionInline}
-                    style={{ ...primaryButtonStyle, padding: "6px 12px", fontSize: "12px" }}
-                  >
-                    Save Collection
-                  </button>
-                </div>
               )}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "2px" }}>
-                {collections.map((col) => {
-                  const selected = formValues.selectedCollectionIds.includes(col.id);
-                  return (
-                    <button
-                      key={col.id}
-                      type="button"
-                      onClick={() => {
-                        const next = selected
-                          ? formValues.selectedCollectionIds.filter((id) => id !== col.id)
-                          : [...formValues.selectedCollectionIds, col.id];
-                        handleFormChange("selectedCollectionIds", next);
-                      }}
-                      style={{
-                        padding: "6px 14px",
-                        borderRadius: "999px",
-                        border: selected ? "1px solid #2563eb" : "1px solid #e2e8f0",
-                        background: selected ? "#eff6ff" : "#f8fafc",
-                        color: selected ? "#2563eb" : "#475569",
-                        fontSize: "13px",
-                        fontWeight: selected ? 700 : 500,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {selected ? "✓ " : ""}{col.name}
-                    </button>
-                  );
-                })}
-                {collections.length === 0 && (
-                  <span style={{ fontSize: "13px", color: "#94a3b8" }}>No collections yet. Click "+ Add New Collection" to create one.</span>
-                )}
-              </div>
-            </div>
 
-
-            <div style={{ gridColumn: "1 / -1" }}>
-              <FormField
-                label="Description"
-                value={formValues.description}
-                onChange={(v) => handleFormChange("description", v)}
-                error={errors.description}
-              />
-            </div>
-
-
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <span style={labelStyle}>Upload product image</span>
-                <input
-                  type="file"
-                  accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      handleImageUpload(file);
-                      e.target.value = "";
-                    }
+              {/* Bulk COD Enable */}
+              {canEditProducts && (
+                <button
+                  type="button"
+                  disabled={isUpdatingBulkCod}
+                  onClick={() => handleBulkCod(true, Array.from(selectedProductIds))}
+                  title="Enable Cash on Delivery for selected products"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: isDark ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid #bbf7d0",
+                    background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4",
+                    color: isDark ? "#4ade80" : "#15803d",
+                    cursor: isUpdatingBulkCod ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
                   }}
-                  style={inputStyle}
-                />
-                {isUploadingImage ? (
-                  <span style={{ fontSize: "12px", color: "#64748b" }}>
-                    Uploading image...
-                  </span>
-                ) : null}
-              </label>
-            </div>
+                >
+                  <span>{isUpdatingBulkCod ? "Updating..." : "COD: Enable"}</span>
+                </button>
+              )}
 
+              {/* Bulk COD Disable */}
+              {canEditProducts && (
+                <button
+                  type="button"
+                  disabled={isUpdatingBulkCod}
+                  onClick={() => handleBulkCod(false, Array.from(selectedProductIds))}
+                  title="Disable COD (Set to Prepaid Only) for selected products"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.elevatedSurfaceBg,
+                    color: tokens.textSecondary,
+                    cursor: isUpdatingBulkCod ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <span>{isUpdatingBulkCod ? "Updating..." : "COD: Disable"}</span>
+                </button>
+              )}
 
-            <div style={{ gridColumn: "1 / -1" }}>
-              <FormField
-                label="Image URLs / uploaded image paths (one per line)"
-                value={formValues.imagesText}
-                onChange={(v) => handleFormChange("imagesText", v)}
-                multiline
-                error={errors.imagesText}
-              />
-            </div>
+              {/* Bulk Duplicate */}
+              {canCreateProducts && (
+                <button
+                  type="button"
+                  disabled={bulkActionLoading}
+                  onClick={() => handleBulkAction("duplicate")}
+                  title="Duplicate selected products"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.elevatedSurfaceBg,
+                    color: tokens.textSecondary,
+                    cursor: bulkActionLoading ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <CopyIcon />
+                  <span>{bulkActionLoading ? "Copying..." : "Duplicate"}</span>
+                </button>
+              )}
 
+              {/* Bulk CSV Export */}
+              {(canEditProducts || canCreateProducts) && (
+                <button
+                  type="button"
+                  disabled={isExportingCSV}
+                  onClick={handleExportSelectedCSV}
+                  title="Export selected products to CSV"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.elevatedSurfaceBg,
+                    color: tokens.textSecondary,
+                    cursor: isExportingCSV ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <DownloadIcon />
+                  <span>{isExportingCSV ? "Exporting..." : "CSV"}</span>
+                </button>
+              )}
 
-            {imagePreviewList.length > 0 && (
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                  display: "flex",
-                  gap: "10px",
-                  flexWrap: "wrap",
-                }}
-              >
-                {imagePreviewList.map((image, index) => (
-                  <div
-                    key={`${image}-${index}`}
-                    style={{
-                      width: "88px",
-                      display: "grid",
-                      gap: "6px",
-                    }}
-                  >
-                    <img
-                      src={image}
-                      alt={`Preview ${index + 1}`}
-                      style={{
-                        width: "88px",
-                        height: "88px",
-                        objectFit: "cover",
-                        borderRadius: "6px",
-                        border: "1px solid #e2e8f0",
-                        background: "#f8fafc",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextImages = imagePreviewList.filter((_, i) => i !== index);
-                        handleFormChange("imagesText", nextImages.join("\n"));
-                      }}
-                      style={dangerButtonStyle}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+              {/* Bulk Delete */}
+              {canDeleteProducts && (
+                <button
+                  type="button"
+                  disabled={bulkActionLoading}
+                  onClick={() => handleBulkAction("delete")}
+                  title="Permanently delete selected products"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "5px",
+                    border: isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca",
+                    background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                    color: isDark ? "#fca5a5" : "#dc2626",
+                    cursor: bulkActionLoading ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <TrashIcon />
+                  <span>{bulkActionLoading ? "Deleting..." : "Delete"}</span>
+                </button>
+              )}
 
+              <div style={{ width: "1px", height: "16px", background: tokens.border, margin: "0 2px" }} />
 
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                padding: "12px",
-                borderRadius: "8px",
-                border: "1px solid #e2e8f0",
-                background: "#f8fafc",
-              }}
-            >
-              <div style={{ display: "grid", gap: "12px" }}>
-                <label style={{ display: "grid", gap: "6px" }}>
-                  <span style={labelStyle}>Option preset</span>
-                  <select
-                    value={formValues.optionType}
-                    onChange={(e) =>
-                      handleFormChange("optionType", e.target.value as ProductVariantOption["optionType"])
-                    }
-                    style={inputStyle}
-                  >
-                    <option value="custom">Custom</option>
-                    <option value="size">Size</option>
-                    <option value="weight">Weight</option>
-                    <option value="shoe_size">Shoe Size</option>
-                    <option value="volume">Volume</option>
-                    <option value="pack_size">Pack Size</option>
-                  </select>
-                </label>
-
-
-                <FormField
-                  label="Option name"
-                  value={formValues.optionName}
-                  onChange={(v) => handleFormChange("optionName", v)}
-                  error={errors.optionName}
-                />
-                <FormField
-                  label="Option values (comma-separated)"
-                  value={formValues.optionValuesText}
-                  onChange={(v) => handleFormChange("optionValuesText", v)}
-                  error={errors.optionValuesText}
-                />
-
-
-                {variantRows.length > 0 && (
-                  <div style={{ display: "grid", gap: "10px" }}>
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        color: "#475569",
-                      }}
-                    >
-                      Per-variant price, MRP, discount, and stock
-                    </div>
-
-
-                    <div style={{ display: "grid", gap: "10px" }}>
-                      {variantRows.map((row, index) => {
-                        const discountPercent = getVariantDiscountPercent(row.price, row.comparePrice);
-
-
-                        return (
-                          <div
-                            key={`${row.value}-${index}`}
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                              gap: "10px",
-                              alignItems: "end",
-                              padding: "12px",
-                              borderRadius: "8px",
-                              border: "1px solid #e2e8f0",
-                              background: "#ffffff",
-                            }}
-                          >
-                            <FormField
-                              label="Value"
-                              value={row.value}
-                              onChange={(v) => handleVariantRowChange(index, "value", v)}
-                            />
-                            <FormField
-                              label="Variant price"
-                              type="number"
-                              value={row.price}
-                              onChange={(v) => handleVariantRowChange(index, "price", v)}
-                            />
-                            <FormField
-                              label="Variant MRP"
-                              type="number"
-                              value={row.comparePrice}
-                              onChange={(v) => handleVariantRowChange(index, "comparePrice", v)}
-                            />
-                            <FormField
-                              label="Variant stock"
-                              type="number"
-                              value={row.stockQty}
-                              onChange={(v) => handleVariantRowChange(index, "stockQty", v)}
-                            />
-                            <label
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                                minHeight: "42px",
-                                color: "#334155",
-                                fontSize: "13px",
-                                paddingBottom: "8px",
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={row.inStock}
-                                onChange={(e) => handleVariantRowChange(index, "inStock", e.target.checked)}
-                              />
-                              In stock
-                            </label>
-
-
-                            <div
-                              style={{
-                                minHeight: "42px",
-                                display: "flex",
-                                alignItems: "center",
-                                fontSize: "12px",
-                                fontWeight: 700,
-                                color: discountPercent ? "#15803d" : "#94a3b8",
-                              }}
-                            >
-                              {discountPercent ? `${discountPercent}% off` : "No discount"}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-
-                    {errors.variantRows ? <span style={errorStyle}>{errors.variantRows}</span> : null}
-                  </div>
-                )}
-              </div>
-            </div>
-
-
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: "10px",
-                marginTop: "8px",
-                flexWrap: "wrap",
-              }}
-            >
+              {/* Clear Selection */}
               <button
                 type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  resetForm();
+                onClick={() => setSelectedProductIds(new Set())}
+                title="Clear selection"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "26px",
+                  height: "26px",
+                  borderRadius: "4px",
+                  border: "none",
+                  background: "transparent",
+                  color: tokens.textSecondary,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  padding: 0,
                 }}
-                style={ghostButtonStyle}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = isDark ? "rgba(239, 68, 68, 0.2)" : "#fee2e2";
+                  e.currentTarget.style.color = isDark ? "#fca5a5" : "#b91c1c";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = tokens.textSecondary;
+                }}
               >
-                Cancel
-              </button>
-              <button type="submit" style={primaryButtonStyle} disabled={isUploadingImage}>
-                {editingProduct ? "Save changes" : "Create product"}
+                <XMarkIcon />
               </button>
             </div>
-          </form>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, flexWrap: "nowrap" }}>
+              {/* Store Default Return Policy Selector (Modern Dropdown) */}
+              <div style={{ position: "relative" }} ref={returnPolicyMenuRef}>
+                <button
+                  type="button"
+                  disabled={isUpdatingReturnPolicy || !canEditProducts}
+                  onClick={() => setShowReturnPolicyMenu(!showReturnPolicyMenu)}
+                  title="Configure store default return window"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    background: tokens.surfaceBg,
+                    border: `1px solid ${tokens.border}`,
+                    borderRadius: "6px",
+                    padding: "4px 9px",
+                    height: "32px",
+                    fontSize: "11.5px",
+                    fontWeight: 600,
+                    color: tokens.textSecondary,
+                    cursor: canEditProducts ? "pointer" : "not-allowed",
+                    boxSizing: "border-box",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <span style={{ fontWeight: 700, color: tokens.textSecondary }}>Return:</span>
+                  <span style={{ color: tokens.textPrimary, fontWeight: 700 }}>
+                    {defaultReturnWindowDays === 0 ? "No Return" : `${defaultReturnWindowDays} Days`}
+                  </span>
+                  <ChevronDownIcon />
+                </button>
+                {showReturnPolicyMenu && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "38px",
+                      right: 0,
+                      background: tokens.surfaceBg,
+                      border: `1px solid ${tokens.border}`,
+                      borderRadius: "8px",
+                      boxShadow: isDark ? "0 10px 25px rgba(0,0,0,0.5)" : "0 10px 25px rgba(0,0,0,0.1)",
+                      padding: "4px",
+                      zIndex: 50,
+                      minWidth: "130px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                    }}
+                  >
+                    {[
+                      { value: 0, label: "No Return" },
+                      { value: 2, label: "2 Days Return" },
+                      { value: 7, label: "7 Days Return" },
+                      { value: 10, label: "10 Days Return" },
+                      { value: 14, label: "14 Days Return" },
+                      { value: 30, label: "30 Days Return" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          handleUpdateDefaultReturnPolicy(opt.value);
+                          setShowReturnPolicyMenu(false);
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          textAlign: "left",
+                          fontSize: "12px",
+                          fontWeight: defaultReturnWindowDays === opt.value ? 700 : 500,
+                          color: defaultReturnWindowDays === opt.value ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textPrimary,
+                          background: defaultReturnWindowDays === opt.value ? (isDark ? "rgba(37,99,235,0.18)" : "#eff6ff") : "transparent",
+                          border: "none",
+                          borderRadius: "5px",
+                          cursor: "pointer",
+                          transition: "background 0.1s ease",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* COD Max Limit Quick Button */}
+              <button
+                type="button"
+                onClick={openCodSettingsModal}
+                title="Configure store-wide Cash on Delivery (COD) settings & Max Order Limit"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  background: tokens.surfaceBg,
+                  border: `1px solid ${tokens.border}`,
+                  borderRadius: "6px",
+                  padding: "4px 8px",
+                  whiteSpace: "nowrap",
+                  height: "32px",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  color: tokens.textSecondary,
+                  cursor: "pointer",
+                  boxSizing: "border-box",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <span style={{ color: tokens.textSecondary, fontWeight: 700 }}>COD:</span>
+                <span>{!storeEnableCod ? "Prepaid Only" : `Max ₹${maxCodLimit.toLocaleString("en-IN")}`}</span>
+              </button>
+
+              {/* Actions Dropdown (Compact) */}
+              {(canCreateProducts || canEditProducts) && (
+                <div style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowActionsMenu(!showActionsMenu)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "4px 9px",
+                      height: "32px",
+                      borderRadius: "6px",
+                      border: `1px solid ${tokens.border}`,
+                      background: tokens.surfaceBg,
+                      color: tokens.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      transition: "all 0.15s ease",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <span>Actions</span>
+                    <ChevronDownIcon />
+                  </button>
+
+                  {showActionsMenu && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        right: 0,
+                        top: "calc(100% + 4px)",
+                        background: tokens.surfaceBg,
+                        border: `1px solid ${tokens.border}`,
+                        borderRadius: "8px",
+                        boxShadow: isDark ? "0 10px 25px rgba(0,0,0,0.5)" : "0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.08)",
+                        minWidth: "170px",
+                        zIndex: 50,
+                        padding: "4px 0",
+                      }}
+                    >
+                      {canCreateProducts && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowActionsMenu(false);
+                            setShowImportModal(true);
+                            setImportFile(null);
+                            setImportResult(null);
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "8px 14px",
+                            background: "none",
+                            border: "none",
+                            textAlign: "left",
+                            fontSize: "13px",
+                            color: tokens.textPrimary,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <UploadIcon /> Import CSV
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowActionsMenu(false);
+                          handleExportCSV();
+                        }}
+                        disabled={isExportingCSV}
+                        style={{
+                          width: "100%",
+                          padding: "8px 14px",
+                          background: "none",
+                          border: "none",
+                          textAlign: "left",
+                          fontSize: "13px",
+                          color: tokens.textPrimary,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <DownloadIcon />{" "}
+                        {isExportingCSV
+                          ? "Exporting..."
+                          : statusFilter !== "all" || searchQuery || activeFilterCount > 0
+                          ? "Export Filtered CSV"
+                          : "Export All CSV"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* + Add Product Primary Button (Blue) */}
+              {canCreateProducts && (
+                <button
+                  onClick={openCreateForm}
+                  style={{
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "5px 13px",
+                    height: "32px",
+                    fontSize: "12.5px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
+                    transition: "all 0.15s ease",
+                    whiteSpace: "nowrap",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <PlusIcon />
+                  <span>Add Product</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
-      )}
-
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-          gap: "12px",
-          marginBottom: "20px",
-        }}
-      >
-        <StatCard label="Total products" value={String(totalProducts)} />
-        <StatCard label="In stock" value={String(inStockCount)} />
-        <StatCard label="Out of stock" value={String(outOfStockCount)} />
       </div>
 
-
-      <div
-        style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: "8px",
-          overflow: "hidden",
-          background: "#ffffff",
-        }}
-      >
+      {/* 5. Main Products Table Card */}
+      <div style={{ ...plainCardStyle, overflow: "hidden", position: "relative" }}>
+        {/* Top Animated Progress Indicator Bar */}
+        {isLoading && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: "2.5px",
+              background: "linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #2563eb 100%)",
+              backgroundSize: "200% 100%",
+              animation: "storeShimmer 1.2s infinite linear",
+              zIndex: 20,
+            }}
+          />
+        )}
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: "#f8fafc" }}>
-              <tr>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
+            <thead style={{ background: tokens.elevatedSurfaceBg, borderBottom: `1px solid ${tokens.border}` }}>
+              <tr style={{ color: tokens.textSecondary }}>
+                <th style={{ ...thStyle, width: "36px", textAlign: "center", padding: "10px 12px" }}>
+                  <AdminCheckbox
+                    ariaLabel="Select All Visible Products"
+                    checked={products.length > 0 && products.every((p) => selectedProductIds.has(p.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        const next = new Set(selectedProductIds);
+                        products.forEach((p) => next.add(p.id));
+                        setSelectedProductIds(next);
+                      } else {
+                        const next = new Set(selectedProductIds);
+                        products.forEach((p) => next.delete(p.id));
+                        setSelectedProductIds(next);
+                      }
+                    }}
+                  />
+                </th>
                 <th style={thStyle}>Product</th>
-                <th style={thStyle}>Price</th>
-                <th style={thStyle}>Category</th>
-                <th style={thStyle}>Stock</th>
-                <th style={thStyle}>Actions</th>
+                <th style={thStyle}>Price (₹)</th>
+                <th style={thStyle}>Category & Tags</th>
+                <th style={thStyle}>Stock & Visibility</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
 
-
-            <tbody>
-              {isLoading && (
-                <tr>
-                  <td colSpan={5} style={tdStyle}>
-                    Loading products...
-                  </td>
-                </tr>
+            <tbody style={{ opacity: isLoading && products.length > 0 ? 0.6 : 1, transition: "opacity 0.12s ease" }}>
+              {isLoading && products.length === 0 && (
+                [...Array(6)].map((_, idx) => (
+                  <tr key={`skel-row-${idx}`} style={{ borderBottom: `1px solid ${tokens.border}` }}>
+                    <td style={{ ...tdStyle, width: "36px", textAlign: "center" }}>
+                      <div style={{ width: "15px", height: "15px", background: tokens.elevatedSurfaceBg, borderRadius: "4px", margin: "0 auto" }} />
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <div style={{ width: "42px", height: "42px", borderRadius: "6px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                        <div style={{ display: "grid", gap: "6px", flex: 1 }}>
+                          <div style={{ height: "14px", width: `${130 + (idx % 3) * 45}px`, borderRadius: "4px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                          <div style={{ height: "10px", width: "80px", borderRadius: "4px", background: tokens.elevatedSurfaceBg }} />
+                        </div>
+                      </div>
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ height: "14px", width: "55px", borderRadius: "4px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ height: "14px", width: "90px", borderRadius: "4px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ height: "20px", width: "70px", borderRadius: "12px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>
+                      <div style={{ height: "28px", width: "80px", borderRadius: "6px", background: tokens.elevatedSurfaceBg, marginLeft: "auto" }} />
+                    </td>
+                  </tr>
+                ))
               )}
-
 
               {!isLoading && products.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={tdStyle}>
-                    {searchQuery ? "No products match your search." : "No products yet. Use “Add product” to create one."}
+                  <td colSpan={6} style={{ ...tdStyle, textAlign: "center", padding: "48px 16px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", maxWidth: "340px", margin: "0 auto" }}>
+                      <div
+                        style={{
+                          width: "42px",
+                          height: "42px",
+                          borderRadius: "50%",
+                          background: tokens.elevatedSurfaceBg,
+                          color: tokens.textSecondary,
+                          display: "grid",
+                          placeItems: "center",
+                        }}
+                      >
+                        <SearchIcon />
+                      </div>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
+                        No products found
+                      </div>
+                      {searchQuery || activeFilterCount > 0 ? (
+                        <>
+                          <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
+                            Try clearing search keywords or active filters.
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSearchQuery("");
+                              setFilterCategory("");
+                              setFilterCollection("");
+                              setFilterBrand("");
+                              setFilterMinPrice("");
+                              setFilterMaxPrice("");
+                              setFilterDiscount("all");
+                              setFilterReturnPolicy("all");
+                              setFilterCod("all");
+                              setFilterHasVideo("all");
+                              setFilterSortBy("newest");
+                              setCurrentPage(1);
+                              loadProducts({
+                                page: 1,
+                                search: "",
+                                catId: "",
+                                colId: "",
+                                brand: "",
+                                minP: "",
+                                maxP: "",
+                                discount: "all",
+                                retPol: "all",
+                                codPol: "all",
+                                hasVid: "all",
+                                sortB: "newest",
+                              });
+                            }}
+                            style={{
+                              ...ghostButtonStyle,
+                              padding: "5px 12px",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              borderRadius: "6px",
+                              border: `1px solid ${tokens.border}`,
+                              marginTop: "4px",
+                            }}
+                          >
+                            Clear Filters
+                          </button>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
+                          No products available in this category or view.
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}
 
-
-              {products.map((product) => {
+              {products.map((product, index) => {
                 const firstVariant = product.variant_option?.optionValues?.[0];
+                const hasVariants =
+                  Array.isArray(product.variant_option?.optionValues) &&
+                  product.variant_option.optionValues.length > 0;
+
                 const displayPrice =
                   typeof firstVariant?.price === "number" && firstVariant.price > 0
                     ? firstVariant.price
@@ -1247,117 +5630,553 @@ const AdminProducts = () => {
                     ? (firstVariant as any).comparePrice
                     : product.compare_price;
 
+                const isInlineEditing = inlineEditingId === product.id;
+
+                const isOverallLowStock = product.stock > 0 && product.stock <= 5;
+                const variantValues = product.variant_option?.optionValues || [];
+                const lowStockVariants = variantValues.filter(
+                  (v) => v.stockQty != null && v.stockQty > 0 && v.stockQty <= 5
+                );
+                const hasVariantLowStock = lowStockVariants.length > 0;
 
                 return (
-                  <tr key={product.id}>
+                  <tr
+                    key={product.id}
+                    style={{
+                      borderBottom: `1px solid ${tokens.border}`,
+                      transition: "background 0.1s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = isDark ? tokens.elevatedSurfaceBg : "#f8fafc";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "transparent";
+                    }}
+                  >
+                    {/* Multi-Select Checkbox */}
+                    <td style={{ ...tdStyle, width: "36px", textAlign: "center" }}>
+                      <AdminCheckbox
+                        ariaLabel={`Select ${product.name}`}
+                        checked={selectedProductIds.has(product.id)}
+                        onChange={(e) => {
+                          const next = new Set(selectedProductIds);
+                          if (e.target.checked) {
+                            next.add(product.id);
+                          } else {
+                            next.delete(product.id);
+                          }
+                          setSelectedProductIds(next);
+                        }}
+                      />
+                    </td>
+
+                    {/* Product Media & Info */}
                     <td style={tdStyle}>
                       <div
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: "14px",
+                          gap: "12px",
                           minWidth: "260px",
                         }}
                       >
-                        <img
-                          src={product.images[0] || ""}
-                          alt={product.name}
-                          style={{
-                            width: "56px",
-                            height: "68px",
-                            borderRadius: "6px",
-                            objectFit: "cover",
-                            background: "#f8fafc",
-                            border: "1px solid #e2e8f0",
-                          }}
-                        />
-                        <div>
-                          <div
+                        <div style={{ position: "relative", flexShrink: 0 }}>
+                          <img
+                            src={getOptimizedThumbnailUrl(product.images[0], 120, 140) || ""}
+                            alt={product.name}
+                            loading={index < 12 ? "eager" : "lazy"}
+                            decoding="async"
                             style={{
-                              fontSize: "14px",
-                              fontWeight: 700,
-                              color: "#0f172a",
-                              marginBottom: "4px",
+                              width: "40px",
+                              height: "48px",
+                              borderRadius: "6px",
+                              objectFit: "cover",
+                              background: tokens.elevatedSurfaceBg,
+                              border: `1px solid ${tokens.border}`,
+                              display: "block",
                             }}
-                          >
-                            {product.name}
-                          </div>
+                          />
+                          {product.video_url && (
+                            <span
+                              title="Has product video"
+                              style={{
+                                position: "absolute",
+                                bottom: "2px",
+                                right: "2px",
+                                background: "rgba(0,0,0,0.75)",
+                                color: "#fff",
+                                fontSize: "8.5px",
+                                padding: "1px 3px",
+                                borderRadius: "3px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                              }}
+                            >
+                              <FilmIcon />
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
                           <div
                             style={{
                               fontSize: "13px",
-                              color: "#64748b",
+                              fontWeight: 600,
+                              color: tokens.textPrimary,
+                              marginBottom: "2px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              flexWrap: "wrap",
                             }}
                           >
-                            {product.brand}
+                            <span>{product.name}</span>
+                            {product.is_preorder && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                                  color: isDark ? "#60a5fa" : "#1d4ed8",
+                                  border: isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                PRE-ORDER
+                              </span>
+                            )}
+                            {!product.is_active && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  padding: "1px 5px",
+                                  borderRadius: "4px",
+                                  background: tokens.elevatedSurfaceBg,
+                                  color: tokens.textSecondary,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                Draft
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "11px",
+                              color: tokens.textSecondary,
+                              display: "flex",
+                              gap: "6px",
+                              alignItems: "center",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            {product.brand && <span>{product.brand}</span>}
+                            {product.sku && (
+                              <span style={{ fontSize: "11px", color: tokens.textMuted }}>
+                                SKU: {product.sku}
+                              </span>
+                            )}
+                            {product.sibling_group && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  color: isDark ? "#c084fc" : "#6d28d9",
+                                  background: isDark ? "rgba(124, 58, 237, 0.2)" : "#f5f3ff",
+                                  border: isDark ? "1px solid rgba(124, 58, 237, 0.4)" : "1px solid #ddd6fe",
+                                  padding: "0 5px",
+                                  borderRadius: "4px",
+                                  fontWeight: 600,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                }}
+                                title={`Color Family: ${product.sibling_group}`}
+                              >
+                                <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: isDark ? "#c084fc" : "#7c3aed" }} />
+                                {product.sibling_label || product.sibling_group}
+                              </span>
+                            )}
+                            {hasVariants && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  color: isDark ? "#60a5fa" : "#2563eb",
+                                  background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                                  border: isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe",
+                                  padding: "0 5px",
+                                  borderRadius: "4px",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {product.variant_option?.optionValues?.length} Variants
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
                     </td>
 
-
+                    {/* Price with Inline Edit */}
                     <td style={tdStyle}>
-                      <div style={{ display: "grid", gap: "4px" }}>
-                        <span>₹{displayPrice}</span>
-                        {displayComparePrice != null && displayComparePrice > displayPrice && (
+                      {isInlineEditing ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <input
+                            type="number"
+                            value={inlinePrice}
+                            onChange={(e) => setInlinePrice(e.target.value)}
+                            style={{
+                              ...inputStyle,
+                              width: "80px",
+                              padding: "4px 8px",
+                              fontSize: "12.5px",
+                              height: "28px",
+                            }}
+                            placeholder="Price"
+                          />
+                        </div>
+                      ) : (
+                        <div style={{ display: "grid", gap: "2px" }}>
+                          <span style={{ fontWeight: 700, color: tokens.textPrimary, fontSize: "13px" }}>
+                            ₹{displayPrice}
+                            {hasVariants && (
+                              <span style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 500, marginLeft: "3px" }}>
+                                (from)
+                              </span>
+                            )}
+                          </span>
+                          {displayComparePrice != null && displayComparePrice > displayPrice && (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                color: tokens.textMuted,
+                                textDecoration: "line-through",
+                              }}
+                            >
+                              ₹{displayComparePrice}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Category & Badge Collections */}
+                    <td style={tdStyle}>
+                      <div style={{ fontWeight: 600, color: tokens.textPrimary, fontSize: "12.5px" }}>
+                        {product.category || "General"}
+                      </div>
+                      {product.collections && product.collections.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "3px" }}>
+                          {product.collections.map((col) => (
+                            <span
+                              key={col.id}
+                              style={{
+                                display: "inline-block",
+                                padding: "1px 5px",
+                                borderRadius: "4px",
+                                fontSize: "10px",
+                                fontWeight: 600,
+                                background: col.is_badge ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7") : tokens.elevatedSurfaceBg,
+                                color: col.is_badge ? (isDark ? "#fcd34d" : "#b45309") : tokens.textSecondary,
+                                border: col.is_badge ? (isDark ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid #fde68a") : `1px solid ${tokens.border}`,
+                              }}
+                            >
+                              {col.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ marginTop: "3px", display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                        {/* Return window exception badges */}
+                        {product.return_window_days === 0 ? (
                           <span
                             style={{
-                              fontSize: "12px",
-                              color: "#94a3b8",
-                              textDecoration: "line-through",
+                              display: "inline-block",
+                              padding: "1px 5px",
+                              borderRadius: "4px",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              background: isDark ? "rgba(239, 68, 68, 0.2)" : "#fef2f2",
+                              color: isDark ? "#fca5a5" : "#991b1b",
+                              border: isDark ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid #fecaca",
                             }}
                           >
-                            ₹{displayComparePrice}
+                            Non-Returnable
                           </span>
-                        )}
+                        ) : product.return_window_days != null ? (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "1px 5px",
+                              borderRadius: "4px",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                              color: isDark ? "#60a5fa" : "#2563eb",
+                              border: isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe",
+                            }}
+                          >
+                            {product.return_window_days}d Return
+                          </span>
+                        ) : null}
+
+                        {/* COD manual exception badges */}
+                        {product.is_cod_allowed === false && storeEnableCod ? (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "1px 5px",
+                              borderRadius: "4px",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              background: isDark ? "rgba(239, 68, 68, 0.2)" : "#fef2f2",
+                              color: isDark ? "#fca5a5" : "#991b1b",
+                              border: isDark ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid #fecaca",
+                            }}
+                            title="Product has manual exception: Prepaid Only (Store overall accepts COD)"
+                          >
+                            Prepaid Only
+                          </span>
+                        ) : product.is_cod_allowed === true && !storeEnableCod ? (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "1px 5px",
+                              borderRadius: "4px",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              background: isDark ? "rgba(22, 163, 74, 0.2)" : "#f0fdf4",
+                              color: isDark ? "#4ade80" : "#166534",
+                              border: isDark ? "1px solid rgba(22, 163, 74, 0.4)" : "1px solid #bbf7d0",
+                            }}
+                            title="Product has manual exception: COD Allowed (Store overall is Prepaid Only)"
+                          >
+                            COD Allowed
+                          </span>
+                        ) : null}
                       </div>
                     </td>
-                    <td style={tdStyle}>{product.category}</td>
 
-
+                    {/* Stock & Status */}
                     <td style={tdStyle}>
-                      <div style={{ display: "grid", gap: "6px" }}>
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            padding: "5px 8px",
-                            borderRadius: "4px",
-                            background: product.in_stock ? "#f0fdf4" : "#fef2f2",
-                            color: product.in_stock ? "#15803d" : "#b91c1c",
-                            fontWeight: 700,
-                            fontSize: "12px",
-                            width: "fit-content",
-                          }}
-                        >
-                          {product.in_stock ? "In stock" : "Out of stock"}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "12px",
-                            color: "#64748b",
-                          }}
-                        >
-                          Qty: {product.stock}
-                        </span>
-                      </div>
+                      {isInlineEditing ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <input
+                            type="number"
+                            value={inlineStock}
+                            onChange={(e) => setInlineStock(e.target.value)}
+                            style={{
+                              ...inputStyle,
+                              width: "70px",
+                              padding: "4px 8px",
+                              fontSize: "12.5px",
+                              height: "28px",
+                            }}
+                            placeholder="Stock"
+                          />
+                        </div>
+                      ) : (
+                        <div style={{ display: "grid", gap: "3px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "2px 7px",
+                                borderRadius: "4px",
+                                background: product.in_stock ? (isDark ? "rgba(22, 163, 74, 0.2)" : "#f0fdf4") : (isDark ? "rgba(239, 68, 68, 0.2)" : "#fef2f2"),
+                                color: product.in_stock ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#fca5a5" : "#b91c1c"),
+                                border: product.in_stock ? (isDark ? "1px solid rgba(22, 163, 74, 0.35)" : "1px solid #bbf7d0") : (isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca"),
+                                fontWeight: 600,
+                                fontSize: "11px",
+                              }}
+                            >
+                              {product.in_stock ? "In Stock" : "Out of Stock"}
+                            </span>
+                            {isOverallLowStock ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  background: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7",
+                                  color: isDark ? "#fcd34d" : "#b45309",
+                                  fontWeight: 600,
+                                  fontSize: "10.5px",
+                                  border: isDark ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid #fde68a",
+                                }}
+                              >
+                                Low ({product.stock} left)
+                              </span>
+                            ) : hasVariantLowStock ? (
+                              <span
+                                title={`Low variants: ${lowStockVariants.map((v) => `${v.value} (${v.stockQty})`).join(", ")}`}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  background: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7",
+                                  color: isDark ? "#fcd34d" : "#b45309",
+                                  fontWeight: 600,
+                                  fontSize: "10.5px",
+                                  border: isDark ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid #fde68a",
+                                  cursor: "help",
+                                }}
+                              >
+                                Low: {lowStockVariants[0]?.value} (≤5)
+                              </span>
+                            ) : null}
+                          </div>
+                          <span style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
+                            Total Stock: {product.stock}
+                          </span>
+                        </div>
+                      )}
                     </td>
 
+                    {/* Actions & Quick Edit */}
+                    <td style={{ ...tdStyle, textAlign: "right" }}>
+                      {isInlineEditing ? (
+                        <div style={{ display: "inline-flex", gap: "5px", alignItems: "center" }}>
+                          <button
+                            onClick={() => handleQuickSave(product.id)}
+                            disabled={isQuickSaving}
+                            style={{
+                              ...primaryButtonStyle,
+                              padding: "4px 8px",
+                              fontSize: "11.5px",
+                              background: "#16a34a",
+                              height: "28px",
+                              borderRadius: "5px",
+                            }}
+                          >
+                            {isQuickSaving ? "..." : "Save"}
+                          </button>
+                          <button
+                            onClick={() => setInlineEditingId(null)}
+                            style={{
+                              ...ghostButtonStyle,
+                              padding: "4px 8px",
+                              fontSize: "11.5px",
+                              height: "28px",
+                              borderRadius: "5px",
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: "inline-flex", gap: "4px", alignItems: "center", justifyContent: "flex-end", flexWrap: "nowrap", whiteSpace: "nowrap" }}>
+                          {/* Quick Edit */}
+                          {canEditProducts && (
+                            <button
+                              type="button"
+                              title={hasVariants ? "Quick Edit Variant Prices & Stocks" : "Quick Edit Price & Stock"}
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                padding: 0,
+                                display: "inline-grid",
+                                placeItems: "center",
+                                color: isDark ? "#60a5fa" : "#2563eb",
+                                background: isDark ? "rgba(37, 99, 235, 0.18)" : "#eff6ff",
+                                border: isDark ? "1px solid rgba(59, 130, 246, 0.35)" : "1px solid #bfdbfe",
+                                borderRadius: "5px",
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                transition: "all 0.15s ease",
+                              }}
+                              onClick={() => {
+                                if (hasVariants) {
+                                  openVariantQuickEdit(product);
+                                } else {
+                                  setInlineEditingId(product.id);
+                                  setInlinePrice(String(displayPrice));
+                                  setInlineStock(String(product.stock));
+                                }
+                              }}
+                            >
+                              <QuickEditIcon />
+                            </button>
+                          )}
 
-                    <td style={tdStyle}>
-                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                        <button
-                          style={ghostButtonStyle}
-                          onClick={() => openEditForm(product)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          style={dangerButtonStyle}
-                          onClick={() => handleDelete(product.id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
+                          {/* Full Edit Form */}
+                          {canEditProducts && (
+                            <button
+                              type="button"
+                              title="Edit Product Details"
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                padding: 0,
+                                display: "inline-grid",
+                                placeItems: "center",
+                                color: tokens.textSecondary,
+                                background: tokens.elevatedSurfaceBg,
+                                border: `1px solid ${tokens.border}`,
+                                borderRadius: "5px",
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                transition: "all 0.15s ease",
+                              }}
+                              onClick={() => openEditForm(product)}
+                            >
+                              <PencilIcon />
+                            </button>
+                          )}
+
+                          {/* Duplicate Product */}
+                          {canCreateProducts && (
+                            <button
+                              type="button"
+                              title="Duplicate as new Draft product"
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                padding: 0,
+                                display: "inline-grid",
+                                placeItems: "center",
+                                color: isDark ? "#a5b4fc" : "#4f46e5",
+                                background: isDark ? "rgba(79, 70, 229, 0.18)" : "#eef2ff",
+                                border: isDark ? "1px solid rgba(99, 102, 241, 0.35)" : "1px solid #c7d2fe",
+                                borderRadius: "5px",
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                transition: "all 0.15s ease",
+                              }}
+                              onClick={() => handleDuplicateProduct(product.id)}
+                            >
+                              <CopyIcon />
+                            </button>
+                          )}
+
+                          {/* Delete Product */}
+                          {canDeleteProducts && (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(product.id)}
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                padding: 0,
+                                display: "inline-grid",
+                                placeItems: "center",
+                                color: isDark ? "#fca5a5" : "#dc2626",
+                                background: isDark ? "rgba(239, 68, 68, 0.18)" : "#fef2f2",
+                                border: isDark ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #fecaca",
+                                borderRadius: "5px",
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                transition: "all 0.15s ease",
+                              }}
+                              title={`Delete ${product.name}`}
+                            >
+                              <TrashIcon />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -1367,62 +6186,746 @@ const AdminProducts = () => {
         </div>
       </div>
 
-      {/* Pagination and page size controls */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "12px",
-          marginTop: "16px",
-          padding: "8px 4px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#64748b" }}>
-          <span>Rows per page:</span>
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              const newSize = Number(e.target.value);
+      {/* Server-Side Pagination Bar */}
+      {filteredTotal > 0 && (
+        <div style={{ marginTop: "16px" }}>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredTotal}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 20, 50, 100]}
+            onPageChange={(p) => {
+              setCurrentPage(p);
+              const cacheKey = `${siteId}:${statusFilter}:${p}:${pageSize}:${searchQuery}:${filterCategory}:${filterCollection}:${filterBrand}:${filterMinPrice}:${filterMaxPrice}:${filterDiscount}:${filterReturnPolicy}:${filterHasVideo}:${filterSortBy}`;
+              const cached = adminProductsQueryCache.get(cacheKey);
+              if (cached) {
+                setProducts(cached.products);
+                setIsLoading(false);
+              } else {
+                setProducts([]);
+                setIsLoading(true);
+              }
+              loadProducts({ page: p });
+            }}
+            onPageSizeChange={(newSize) => {
               setPageSize(newSize);
               setCurrentPage(1);
-              loadProducts(1, newSize, searchQuery);
+              setProducts([]);
+              setIsLoading(true);
+              loadProducts({ page: 1, limit: newSize });
             }}
+            showRangeText={true}
+          />
+        </div>
+      )}
+
+      {/* Multi-Variant Quick Edit Modal */}
+      {quickEditProduct && (
+        <div
+          style={{
+            position: "fixed",
+            top: "64px",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "16px",
+          }}
+        >
+          <div
             style={{
-              padding: "6px 10px",
-              borderRadius: "6px",
-              border: "1px solid #cbd5e1",
-              background: "#ffffff",
-              color: "#0f172a",
-              fontSize: "13px",
-              cursor: "pointer",
+              background: tokens.surfaceBg,
+              borderRadius: "12px",
+              maxWidth: "680px",
+              width: "100%",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              maxHeight: "90vh",
             }}
           >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-          </select>
-        </div>
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: `1px solid ${tokens.border}`,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                background: tokens.elevatedSurfaceBg,
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
+                  Quick Edit Variants: {quickEditProduct.name}
+                </h3>
+                <span style={{ fontSize: "12px", color: tokens.textSecondary }}>
+                  Option: {quickEditProduct.variant_option?.optionName || "Variant Values"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickEditProduct(null)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "18px",
+                  cursor: "pointer",
+                  color: tokens.textSecondary,
+                }}
+              >
+                ✕
+              </button>
+            </div>
 
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={(page) => {
-            setCurrentPage(page);
-            loadProducts(page, pageSize, searchQuery);
+            <div style={{ padding: "16px 20px", overflowY: "auto", display: "grid", gap: "12px" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: tokens.elevatedSurfaceBg, textAlign: "left", fontSize: "12px" }}>
+                    <th style={{ padding: "8px 10px" }}>Variant Value</th>
+                    <th style={{ padding: "8px 10px" }}>Selling Price (₹)</th>
+                    <th style={{ padding: "8px 10px" }}>Original MRP (₹)</th>
+                    <th style={{ padding: "8px 10px" }}>Stock Qty</th>
+                    <th style={{ padding: "8px 10px", textAlign: "center" }}>In Stock</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quickEditVariantRows.map((row, idx) => (
+                    <tr key={idx} style={{ borderBottom: `1px solid ${tokens.border}` }}>
+                      <td style={{ padding: "10px", fontWeight: 700, color: tokens.textPrimary, fontSize: "13px" }}>
+                        {row.value}
+                      </td>
+                      <td style={{ padding: "10px" }}>
+                        <input
+                          type="number"
+                          value={row.price}
+                          onChange={(e) => {
+                            const next = [...quickEditVariantRows];
+                            next[idx].price = e.target.value;
+                            setQuickEditVariantRows(next);
+                          }}
+                          style={{ ...inputStyle, width: "90px", padding: "6px 8px", fontSize: "13px" }}
+                          placeholder="Price"
+                        />
+                      </td>
+                      <td style={{ padding: "10px" }}>
+                        <input
+                          type="number"
+                          value={row.comparePrice}
+                          onChange={(e) => {
+                            const next = [...quickEditVariantRows];
+                            next[idx].comparePrice = e.target.value;
+                            setQuickEditVariantRows(next);
+                          }}
+                          style={{ ...inputStyle, width: "90px", padding: "6px 8px", fontSize: "13px" }}
+                          placeholder="MRP"
+                        />
+                      </td>
+                      <td style={{ padding: "10px" }}>
+                        <input
+                          type="number"
+                          value={row.stockQty}
+                          onChange={(e) => {
+                            const next = [...quickEditVariantRows];
+                            next[idx].stockQty = e.target.value;
+                            setQuickEditVariantRows(next);
+                          }}
+                          style={{ ...inputStyle, width: "80px", padding: "6px 8px", fontSize: "13px" }}
+                          placeholder="Stock"
+                        />
+                      </td>
+                      <td style={{ padding: "10px", textAlign: "center" }}>
+                        <ToggleSwitch
+                          checked={row.inStock}
+                          onChange={(val) => {
+                            const next = [...quickEditVariantRows];
+                            next[idx].inStock = val;
+                            setQuickEditVariantRows(next);
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div
+              style={{
+                padding: "12px 20px",
+                borderTop: `1px solid ${tokens.border}`,
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+                background: tokens.elevatedSurfaceBg,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setQuickEditProduct(null)}
+                style={{ ...ghostButtonStyle, padding: "8px 16px" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isQuickSaving}
+                onClick={handleSaveVariantQuickEdit}
+                style={{ ...primaryButtonStyle, padding: "8px 20px", background: "#16a34a" }}
+              >
+                {isQuickSaving ? "Saving..." : "Save All Variants"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* CSV Bulk Import Modal */}
+      {showImportModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: "64px",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.65)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "16px",
           }}
-          totalItems={totalProducts}
-          pageSize={pageSize}
-          showRangeText={true}
-          accentColor="#2563eb"
-          style={{ padding: 0 }}
-        />
-      </div>
+        >
+          <div
+            style={{
+              background: tokens.surfaceBg,
+              borderRadius: "16px",
+              maxWidth: "560px",
+              width: "100%",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: `1px solid ${tokens.border}`,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                background: tokens.elevatedSurfaceBg,
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 800, color: tokens.textPrimary }}>
+                  Import Products via CSV
+                </h3>
+                <span style={{ fontSize: "12px", color: tokens.textSecondary }}>
+                  Upload spreadsheets to bulk create or update catalog products.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportFile(null);
+                  setImportResult(null);
+                }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "18px",
+                  cursor: "pointer",
+                  color: tokens.textSecondary,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleImportSubmit} style={{ padding: "20px", display: "grid", gap: "16px" }}>
+              {/* Template Download Banner */}
+              <div
+                style={{
+                  background: "#eff6ff",
+                  border: isDark ? "1px solid rgba(59, 130, 246, 0.35)" : "1px solid #bfdbfe",
+                  borderRadius: "8px",
+                  padding: "12px 14px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ fontSize: "12.5px", color: "#1e40af" }}>
+                  <strong>Need a template?</strong> Download our pre-filled CSV sample with pre-orders, variants, & demo data.
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadSampleCSV}
+                  style={{
+                    ...secondaryButtonStyle,
+                    padding: "5px 12px",
+                    fontSize: "12px",
+                    whiteSpace: "nowrap",
+                    background: tokens.surfaceBg,
+                    borderColor: "#93c5fd",
+                    color: "#1d4ed8",
+                    fontWeight: 700,
+                  }}
+                >
+                  Sample CSV
+                </button>
+              </div>
+
+              {/* File Upload Drop Zone */}
+              <div
+                style={{
+                  border: "2px dashed #cbd5e1",
+                  borderRadius: "10px",
+                  padding: "24px 16px",
+                  textAlign: "center",
+                  background: tokens.elevatedSurfaceBg,
+                  cursor: "pointer",
+                  display: "grid",
+                  gap: "8px",
+                  justifyItems: "center",
+                }}
+                onClick={() => document.getElementById("csv-file-input")?.click()}
+              >
+                <span style={{ fontSize: "28px", color: tokens.textMuted }}>↑</span>
+                <span style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
+                  {importFile ? importFile.name : "Click to select or drag & drop CSV file"}
+                </span>
+                <span style={{ fontSize: "12px", color: tokens.textSecondary }}>
+                  {importFile
+                    ? importFile.size > 1024 * 1024
+                      ? `${(importFile.size / (1024 * 1024)).toFixed(2)} MB`
+                      : `${(importFile.size / 1024).toFixed(1)} KB`
+                    : "Supports UTF-8 encoded .csv files up to 100MB (~100,000+ products)"}
+                </span>
+                <input
+                  id="csv-file-input"
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setImportFile(e.target.files[0]);
+                      setImportResult(null);
+                    }
+                  }}
+                  style={{ display: "none" }}
+                />
+              </div>
+
+              {/* Default Import Status Choice */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: 700, color: tokens.textSecondary }}>
+                  Default Status for Uploaded Products:
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setDefaultImportStatus("draft")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "8px",
+                      border: defaultImportStatus === "draft" ? "2px solid #f59e0b" : `1px solid ${tokens.border}`,
+                      background: defaultImportStatus === "draft" ? (isDark ? "rgba(245, 158, 11, 0.2)" : "#fffbeb") : tokens.surfaceBg,
+                      color: defaultImportStatus === "draft" ? "#b45309" : "#475569",
+                      fontWeight: defaultImportStatus === "draft" ? 700 : 500,
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                    }}
+                  >
+                    <span><strong>Save as Draft</strong></span>
+                    <span style={{ fontSize: "10.5px", color: tokens.textSecondary }}>Safe review before publishing</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDefaultImportStatus("active")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "8px",
+                      border: defaultImportStatus === "active" ? "2px solid #16a34a" : `1px solid ${tokens.border}`,
+                      background: defaultImportStatus === "active" ? (isDark ? "rgba(22, 163, 74, 0.2)" : "#f0fdf4") : tokens.surfaceBg,
+                      color: defaultImportStatus === "active" ? "#15803d" : "#475569",
+                      fontWeight: defaultImportStatus === "active" ? 700 : 500,
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                    }}
+                  >
+                    <span><strong>Publish Live</strong></span>
+                    <span style={{ fontSize: "10.5px", color: tokens.textSecondary }}>Directly visible on store</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDefaultImportStatus("csv")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "8px",
+                      border: defaultImportStatus === "csv" ? "2px solid #2563eb" : `1px solid ${tokens.border}`,
+                      background: defaultImportStatus === "csv" ? (isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff") : tokens.surfaceBg,
+                      color: defaultImportStatus === "csv" ? "#1d4ed8" : "#475569",
+                      fontWeight: defaultImportStatus === "csv" ? 700 : 500,
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                    }}
+                  >
+                    <span><strong>From CSV Column</strong></span>
+                    <span style={{ fontSize: "10.5px", color: tokens.textSecondary }}>Follow 'is_active' column</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Results / Error reporting */}
+              {importResult && (
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: "8px",
+                    background:
+                      (importResult.created_count && importResult.created_count > 0) ||
+                      (importResult.updated_count && importResult.updated_count > 0)
+                        ? "#f0fdf4"
+                        : "#fef2f2",
+                    border:
+                      (importResult.created_count && importResult.created_count > 0) ||
+                      (importResult.updated_count && importResult.updated_count > 0)
+                        ? "1px solid #bbf7d0"
+                        : "1px solid #fecaca",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color:
+                        (importResult.created_count && importResult.created_count > 0) ||
+                        (importResult.updated_count && importResult.updated_count > 0)
+                          ? "#166534"
+                          : "#991b1b",
+                    }}
+                  >
+                    Processed: {importResult.created_count || 0} created,{" "}
+                    {importResult.updated_count || 0} updated (existing SKUs/Names synced).
+                  </div>
+                  {importResult.errors && importResult.errors.length > 0 && (
+                    <div style={{ marginTop: "6px", maxHeight: "100px", overflowY: "auto", fontSize: "11.5px", color: "#dc2626" }}>
+                      {importResult.errors.map((err, i) => (
+                        <div key={i}>
+                          Row {err.row}: {err.error}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "4px" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportFile(null);
+                    setImportResult(null);
+                  }}
+                  style={{ ...ghostButtonStyle, padding: "8px 16px" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!importFile || isImporting}
+                  style={{
+                    ...primaryButtonStyle,
+                    padding: "8px 20px",
+                    background: !importFile || isImporting ? "#94a3b8" : "#2563eb",
+                  }}
+                >
+                  {isImporting ? "Importing Products..." : "Upload & Ingest CSV"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* COD Settings & Max Limit Modal */}
+      {showCodSettingsModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            zIndex: 1100,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCodSettingsModal(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              background: tokens.surfaceBg,
+              borderRadius: "12px",
+              width: "100%",
+              maxWidth: "440px",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+              border: `1px solid ${tokens.border}`,
+              overflow: "hidden",
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "14px 18px",
+                borderBottom: `1px solid ${tokens.border}`,
+                background: tokens.elevatedSurfaceBg,
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
+                Cash on Delivery (COD) Settings
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCodSettingsModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: tokens.textMuted,
+                  padding: "4px",
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                <XMarkIcon />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Max COD Amount Input */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textPrimary }}>
+                  Max COD Order Limit
+                </label>
+                <div style={{ position: "relative" }}>
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      color: tokens.textSecondary,
+                    }}
+                  >
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={tempMaxCodLimit}
+                    onChange={(e) => setTempMaxCodLimit(e.target.value)}
+                    placeholder="5000"
+                    style={{
+                      ...inputStyle,
+                      paddingLeft: "28px",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      height: "38px",
+                      borderRadius: "7px",
+                    }}
+                  />
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
+                  {[2000, 5000, 10000, 25000].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setTempMaxCodLimit(String(preset))}
+                      style={{
+                        padding: "3px 9px",
+                        borderRadius: "5px",
+                        border: Number(tempMaxCodLimit) === preset ? "1.5px solid #2563eb" : `1px solid ${tokens.border}`,
+                        background: Number(tempMaxCodLimit) === preset ? (isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff") : tokens.elevatedSurfaceBg,
+                        color: Number(tempMaxCodLimit) === preset ? (isDark ? "#60a5fa" : "#1d4ed8") : tokens.textSecondary,
+                        fontSize: "11.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ₹{preset.toLocaleString("en-IN")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Store Default Policy */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textPrimary }}>
+                  Store Default COD Policy
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setTempStoreEnableCod(true)}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: tempStoreEnableCod ? "2px solid #16a34a" : `1px solid ${tokens.border}`,
+                      background: tempStoreEnableCod ? (isDark ? "rgba(22, 163, 74, 0.2)" : "#f0fdf4") : tokens.surfaceBg,
+                      color: tempStoreEnableCod ? (isDark ? "#4ade80" : "#15803d") : tokens.textPrimary,
+                      textAlign: "left",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ fontSize: "13px", fontWeight: 700 }}>
+                      {tempStoreEnableCod ? "✓ " : ""}Accept COD by Default
+                    </div>
+                    <div style={{ fontSize: "11px", color: tempStoreEnableCod ? "#166534" : "#64748b", marginTop: "2px" }}>
+                      Orders accept COD (unless product is an exception)
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTempStoreEnableCod(false)}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: !tempStoreEnableCod ? "2px solid #2563eb" : `1px solid ${tokens.border}`,
+                      background: !tempStoreEnableCod ? (isDark ? "rgba(37, 99, 235, 0.2)" : "#eff6ff") : tokens.surfaceBg,
+                      color: !tempStoreEnableCod ? (isDark ? "#60a5fa" : "#1d4ed8") : tokens.textPrimary,
+                      textAlign: "left",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ fontSize: "13px", fontWeight: 700 }}>
+                      {!tempStoreEnableCod ? "✓ " : ""}Prepaid Only by Default
+                    </div>
+                    <div style={{ fontSize: "11px", color: !tempStoreEnableCod ? "#1e40af" : "#64748b", marginTop: "2px" }}>
+                      All default orders require online payment
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Product Exceptions Status & Reset */}
+              {exceptionCount > 0 && (
+                <div
+                  style={{
+                    background: tokens.elevatedSurfaceBg,
+                    border: `1px solid ${tokens.border}`,
+                    borderRadius: "8px",
+                    padding: "10px 12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
+                    <strong style={{ color: tokens.textPrimary }}>{exceptionCount} product(s)</strong> have manual exceptions preserved.
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isUpdatingBulkCod}
+                    onClick={handleResetAllCodExceptions}
+                    style={{
+                      background: "none",
+                      border: `1px solid ${tokens.border}`,
+                      borderRadius: "5px",
+                      padding: "4px 8px",
+                      fontSize: "11.5px",
+                      fontWeight: 600,
+                      color: "#dc2626",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {isUpdatingBulkCod ? "Resetting..." : "Reset Exceptions"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                alignItems: "center",
+                gap: "10px",
+                padding: "12px 18px",
+                borderTop: `1px solid ${tokens.border}`,
+                background: tokens.elevatedSurfaceBg,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowCodSettingsModal(false)}
+                style={ghostButtonStyle}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isUpdatingCodLimit}
+                onClick={handleSaveAllCodSettings}
+                style={{
+                  ...primaryButtonStyle,
+                  padding: "8px 18px",
+                  fontSize: "13px",
+                }}
+              >
+                {isUpdatingCodLimit ? "Saving..." : "Save Settings"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-
 
 const FormField = ({
   label,
@@ -1430,51 +6933,88 @@ const FormField = ({
   onChange,
   type = "text",
   multiline = false,
+  placeholder,
   error,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  type?: "text" | "number";
+  type?: string;
   multiline?: boolean;
+  placeholder?: string;
   error?: string;
-}) => (
-  <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-    <span style={labelStyle}>{label}</span>
-    {multiline ? (
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={4}
-        style={inputStyle}
-      />
-    ) : (
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={inputStyle}
-      />
-    )}
-    {error ? <span style={errorStyle}>{error}</span> : null}
-  </label>
-);
+}) => {
+  const { tokens, isDark } = useAdminTheme();
+  const inputStyleLocal: React.CSSProperties = {
+    padding: "8px 12px",
+    borderRadius: "8px",
+    border: `1px solid ${error ? "#ef4444" : tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+    color: tokens.textPrimary,
+    fontSize: "13px",
+    width: "100%",
+    boxSizing: "border-box",
+    colorScheme: isDark ? "dark" : "light",
+    outline: "none",
+  };
+  const labelStyleLocal: React.CSSProperties = {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: tokens.textSecondary,
+    marginBottom: "2px",
+  };
+  const errorStyleLocal: React.CSSProperties = {
+    color: isDark ? "#f87171" : "#b91c1c",
+    fontSize: "12px",
+  };
 
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+      <span style={labelStyleLocal}>{label}</span>
+      {multiline ? (
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          rows={4}
+          style={inputStyleLocal}
+        />
+      ) : (
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={inputStyleLocal}
+        />
+      )}
+      {error ? <span style={errorStyleLocal}>{error}</span> : null}
+    </label>
+  );
+};
 
-const StatCard = ({ label, value }: { label: string; value: string }) => (
+const StatCard = ({ label, value }: { label: string; value: string | number }) => {
+  const { tokens } = useAdminTheme();
+  return (
   <div
     style={{
-      padding: "14px 16px",
+      padding: "10px 12px",
       borderRadius: "8px",
-      background: "#ffffff",
-      border: "1px solid #e2e8f0",
+      background: tokens.surfaceBg,
+      border: `1px solid ${tokens.border}`,
+      minWidth: 0,
+      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
     }}
   >
     <p
       style={{
-        margin: "0 0 6px",
-        fontSize: "13px",
-        color: "#64748b",
+        margin: "0 0 3px",
+        fontSize: "11px",
+        fontWeight: 600,
+        color: tokens.textSecondary,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
       }}
     >
       {label}
@@ -1482,90 +7022,16 @@ const StatCard = ({ label, value }: { label: string; value: string }) => (
     <h3
       style={{
         margin: 0,
-        fontSize: "22px",
-        color: "#0f172a",
+        fontSize: "17px",
+        fontWeight: 700,
+        color: tokens.textPrimary,
+        lineHeight: 1.1,
       }}
     >
       {value}
     </h3>
   </div>
 );
-
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "13px",
-  color: "#475569",
 };
-
-
-const inputStyle: React.CSSProperties = {
-  padding: "8px 10px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
-  fontSize: "14px",
-  width: "100%",
-};
-
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "13px 16px",
-  fontSize: "12px",
-  letterSpacing: "0.05em",
-  textTransform: "uppercase",
-  color: "#64748b",
-  borderBottom: "1px solid #e2e8f0",
-};
-
-
-const tdStyle: React.CSSProperties = {
-  padding: "14px 16px",
-  borderTop: "1px solid #e2e8f0",
-  fontSize: "14px",
-  color: "#0f172a",
-  verticalAlign: "middle",
-};
-
-
-const ghostButtonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: "9px 14px",
-  borderRadius: "6px",
-  border: "none",
-  background: "#2563eb",
-  color: "white",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-
-const dangerButtonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: "6px",
-  border: "1px solid #fecaca",
-  background: "#fef2f2",
-  color: "#b91c1c",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-
-const errorStyle: React.CSSProperties = {
-  color: "#b91c1c",
-  fontSize: "12px",
-};
-
 
 export default AdminProducts;

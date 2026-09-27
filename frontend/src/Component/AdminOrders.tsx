@@ -1,7 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import { API_BASE_URL as API_BASE } from "../config/api";
 import { Pagination } from "./Pagination";
+import GlassToast from "./GlassToast";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminTheme } from "../context/ThemeContext";
+import { AdminCheckbox } from "./AdminProducts";
+import AccessDeniedView from "./AccessDeniedView";
 
 type AdminMode = "orders" | "returns";
 
@@ -16,10 +21,13 @@ type OrderStatus =
   | "failed"
   | "partially_cancelled"
   | "cancelled"
+  | "refunded"
+  | "replacement_dispatched"
   | "returned";
 
 type TabKey =
   | "new"
+  | "preorders"
   | "yet_to_ship"
   | "yet_to_deliver"
   | "delivered"
@@ -66,6 +74,10 @@ type OrderItem = {
   status: string;
   returnable_quantity?: number;
   pricing_snapshot?: any;
+  weight_grams?: number;
+  is_preorder?: boolean;
+  preorder_release_date?: string | null;
+  preorder_message?: string | null;
 };
 
 type Shipment = {
@@ -93,12 +105,33 @@ type Shipment = {
   [key: string]: any;
 };
 
+export type ShippingAddress = {
+  fullName?: string;
+  full_name?: string;
+  addressLine1?: string;
+  address_line1?: string;
+  city?: string;
+  postalCode?: string;
+  postal_code?: string;
+  mobileNumber?: string;
+  mobile_number?: string;
+  email?: string;
+  addressType?: string;
+  address_type?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  geoAccuracy?: string | null;
+  geo_accuracy?: string | null;
+  [key: string]: any;
+};
+
 type AdminOrderListItem = {
   id: string;
   customer_id: string;
   status: OrderStatus;
   payment_status?: string | null;
   total: number;
+  total_weight_grams?: number;
   payment_method: string;
   razorpay_payment_id?: string | null;
   razorpay_order_id?: string | null;
@@ -111,19 +144,16 @@ type AdminOrderListItem = {
   customer_name?: string | null;
   customer_phone?: string | null;
   customer_email?: string | null;
-  shipping_address?: {
-    fullName?: string;
-    addressLine1?: string;
-    city?: string;
-    postalCode?: string;
-    mobileNumber?: string;
-    email?: string;
-  } | null;
+  shipping_address?: ShippingAddress | null;
   shipment?: Shipment | null;
   items?: OrderItem[];
   item_count?: number;
   pricing_snapshot?: any;
   delivery_otp?: string | null;
+  contains_preorder?: boolean;
+  preorder_release_date?: string | null;
+  preorder_released?: boolean;
+  preorder_released_at?: string | null;
 };
 
 type AdminOrderDetail = {
@@ -135,19 +165,17 @@ type AdminOrderDetail = {
   status: OrderStatus;
   payment_status?: string | null;
   total: number;
+  total_weight_grams?: number;
   payment_method: string;
   razorpay_payment_id?: string | null;
   razorpay_order_id?: string | null;
-  shipping_address?: {
-    fullName?: string;
-    addressLine1?: string;
-    city?: string;
-    postalCode?: string;
-    mobileNumber?: string;
-    email?: string;
-  } | null;
+  shipping_address?: ShippingAddress | null;
   pricing_snapshot?: any;
   delivery_otp?: string | null;
+  contains_preorder?: boolean;
+  preorder_release_date?: string | null;
+  preorder_released?: boolean;
+  preorder_released_at?: string | null;
   created_at: string;
   confirmed_at?: string | null;
   shipped_at?: string | null;
@@ -208,14 +236,7 @@ type AdminReturnListItem = {
   customer_name?: string | null;
   customer_phone?: string | null;
   customer_email?: string | null;
-  shipping_address?: {
-    fullName?: string;
-    addressLine1?: string;
-    city?: string;
-    postalCode?: string;
-    mobileNumber?: string;
-    email?: string;
-  } | null;
+  shipping_address?: ShippingAddress | null;
   status: ReturnStatus;
   refund_status: ReturnRefundStatus | string;
   request_note?: string | null;
@@ -294,7 +315,25 @@ type AdminReturnDetail = {
   received_at?: string | null;
   inspected_at?: string | null;
   refunded_at?: string | null;
-  closed_at?: string | null;
+  refund_breakdown?: {
+    items_subtotal: number;
+    discounts_prorated: number;
+    tax_refund: number;
+    refundable_charges_added: number;
+    non_refundable_charges_retained: number;
+    suggested_refund_amount: number;
+    max_refundable_amount: number;
+    actual_refund_amount?: number;
+    exception_refund_added?: number;
+    charge_allocations: Array<{
+      id: string;
+      code: string;
+      label: string;
+      refundable: boolean;
+      total_order_amount: number;
+      allocated_amount: number;
+    }>;
+  };
   created_at: string;
   updated_at?: string | null;
   order: {
@@ -307,14 +346,7 @@ type AdminReturnDetail = {
     total: number;
     created_at?: string | null;
     delivered_at?: string | null;
-    shipping_address?: {
-      fullName?: string;
-      addressLine1?: string;
-      city?: string;
-      postalCode?: string;
-      mobileNumber?: string;
-      email?: string;
-    } | null;
+    shipping_address?: ShippingAddress | null;
     pricing_snapshot?: any;
     [key: string]: any;
   };
@@ -350,34 +382,33 @@ type RefundDraft = {
 
 const plainCardStyle: React.CSSProperties = {
   borderRadius: "8px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
+  border: "1px solid var(--admin-border, #e2e8f0)",
+  background: "var(--admin-surface, #ffffff)",
   boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
 };
-
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
   borderRadius: "6px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
+  border: "1px solid var(--admin-border, #cbd5e1)",
+  background: "var(--admin-elevated-surface, #f8fafc)",
+  color: "var(--admin-text-primary, #0f172a)",
   padding: "9px 10px",
   outline: "none",
   fontSize: "14px",
 };
 
-
 const labelStyle: React.CSSProperties = {
   fontSize: "12px",
   fontWeight: 700,
-  color: "#475569",
+  color: "var(--admin-text-secondary, #475569)",
   marginBottom: "6px",
 };
 
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "new", label: "New" },
+  { key: "preorders", label: "Pre-Orders" },
   { key: "yet_to_ship", label: "Yet to Ship" },
   { key: "yet_to_deliver", label: "Yet to Deliver" },
   { key: "delivered", label: "Delivered" },
@@ -575,10 +606,93 @@ const getPaymentMethodIcon = (method?: string | null): React.ReactNode => {
   return <CreditCardIcon />;
 };
 
-const getStatusLabel = (status: string) => status.replaceAll("_", " ");
+const isOrderReplacement = (order?: { status: string; cancel_reason?: string | null; items?: Array<{ status: string }> } | null) => {
+  if (!order) return false;
+  return Boolean(
+    order.cancel_reason?.toLowerCase().includes("replacement") ||
+    order.status === "replacement_dispatched" ||
+    order.status === "replacement_pending" ||
+    (order.status === "confirmed" && order.items?.some(i => i.status === "delivered") && order.items?.some(i => i.status === "confirmed"))
+  );
+};
 
+const getStatusLabel = (status: string, cancelReason?: string | null, isRepl?: boolean) => {
+  if (isRepl || cancelReason?.toLowerCase().includes("replacement")) {
+    if (status === "confirmed" || status === "accepted") return "Re-Dispatch (Pending)";
+    if (status === "shipped") return "Re-Dispatch Shipped";
+    if (status === "out_for_delivery") return "Re-Dispatch Out for Delivery";
+    if (status === "delivered") return "Re-Dispatch Delivered";
+  }
+  if (status === "failed") return "Returned to Hub";
+  if (status === "replacement_dispatched") return "Replacement Dispatched";
+  return status.replaceAll("_", " ");
+};
 
-const getStatusTone = (status: string) => {
+const getStatusTone = (status: string, isRepl?: boolean, isDark?: boolean) => {
+  if (isDark) {
+    if (isRepl) {
+      if (status === "confirmed" || status === "accepted") {
+        return { bg: "rgba(2, 132, 199, 0.16)", text: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.3)" };
+      }
+      if (status === "shipped" || status === "out_for_delivery") {
+        return { bg: "rgba(3, 105, 161, 0.16)", text: "#7dd3fc", border: "1px solid rgba(125, 211, 252, 0.3)" };
+      }
+      if (status === "delivered") {
+        return { bg: "rgba(21, 128, 61, 0.16)", text: "#4ade80", border: "1px solid rgba(74, 222, 128, 0.3)" };
+      }
+    }
+    switch (status) {
+      case "placed":
+        return { bg: "rgba(29, 78, 216, 0.15)", text: "#60a5fa", border: "1px solid rgba(96, 165, 250, 0.3)" };
+      case "confirmed":
+      case "accepted":
+        return { bg: "rgba(14, 116, 144, 0.15)", text: "#22d3ee", border: "1px solid rgba(34, 211, 238, 0.3)" };
+      case "shipped":
+        return { bg: "rgba(180, 83, 9, 0.15)", text: "#fbbf24", border: "1px solid rgba(251, 191, 36, 0.3)" };
+      case "out_for_delivery":
+        return { bg: "rgba(124, 58, 237, 0.15)", text: "#c084fc", border: "1px solid rgba(192, 132, 252, 0.3)" };
+      case "rescheduled":
+        return { bg: "rgba(180, 83, 9, 0.15)", text: "#fbbf24", border: "1px solid rgba(251, 191, 36, 0.3)" };
+      case "failed":
+        return { bg: "rgba(185, 28, 28, 0.15)", text: "#f87171", border: "1px solid rgba(248, 113, 113, 0.3)" };
+      case "delivered":
+        return { bg: "rgba(21, 128, 61, 0.15)", text: "#4ade80", border: "1px solid rgba(74, 222, 128, 0.3)" };
+      case "returned":
+        return { bg: "rgba(124, 58, 237, 0.15)", text: "#c084fc", border: "1px solid rgba(192, 132, 252, 0.3)" };
+      case "cancelled":
+      case "partially_cancelled":
+        return { bg: "rgba(185, 28, 28, 0.15)", text: "#f87171", border: "1px solid rgba(248, 113, 113, 0.3)" };
+      case "requested":
+        return { bg: "rgba(29, 78, 216, 0.15)", text: "#60a5fa", border: "1px solid rgba(96, 165, 250, 0.3)" };
+      case "approved":
+        return { bg: "rgba(14, 116, 144, 0.15)", text: "#22d3ee", border: "1px solid rgba(34, 211, 238, 0.3)" };
+      case "received":
+        return { bg: "rgba(180, 83, 9, 0.15)", text: "#fbbf24", border: "1px solid rgba(251, 191, 36, 0.3)" };
+      case "inspected":
+        return { bg: "rgba(124, 58, 237, 0.15)", text: "#c084fc", border: "1px solid rgba(192, 132, 252, 0.3)" };
+      case "refunded":
+        return { bg: "rgba(21, 128, 61, 0.15)", text: "#4ade80", border: "1px solid rgba(74, 222, 128, 0.3)" };
+      case "replacement_dispatched":
+        return { bg: "rgba(2, 132, 199, 0.15)", text: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.3)" };
+      case "closed":
+        return { bg: "rgba(255, 255, 255, 0.06)", text: "#94a3b8", border: "1px solid rgba(255, 255, 255, 0.1)" };
+      case "rejected":
+        return { bg: "rgba(185, 28, 28, 0.15)", text: "#f87171", border: "1px solid rgba(248, 113, 113, 0.3)" };
+      default:
+        return { bg: "rgba(255, 255, 255, 0.05)", text: "#94a3b8", border: "1px solid rgba(255, 255, 255, 0.08)" };
+    }
+  }
+  if (isRepl) {
+    if (status === "confirmed" || status === "accepted") {
+      return { bg: "#f0f9ff", text: "#0284c7", border: "1px solid #7dd3fc" };
+    }
+    if (status === "shipped" || status === "out_for_delivery") {
+      return { bg: "#e0f2fe", text: "#0369a1", border: "1px solid #38bdf8" };
+    }
+    if (status === "delivered") {
+      return { bg: "#f0fdf4", text: "#15803d", border: "1px solid #bbf7d0" };
+    }
+  }
   switch (status) {
     case "placed":
       return { bg: "#eff6ff", text: "#1d4ed8", border: "1px solid #bfdbfe" };
@@ -610,20 +724,24 @@ const getStatusTone = (status: string) => {
       return { bg: "#faf5ff", text: "#7c3aed", border: "1px solid #e9d5ff" };
     case "refunded":
       return { bg: "#f0fdf4", text: "#15803d", border: "1px solid #bbf7d0" };
+    case "replacement_dispatched":
+      return { bg: "#f0f9ff", text: "#0284c7", border: "1px solid #bae6fd" };
     case "closed":
-      return { bg: "#f1f5f9", text: "#334155", border: "1px solid #e2e8f0" };
+      return { bg: "#f1f5f9", text: "#334155", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" };
     case "rejected":
       return { bg: "#fef2f2", text: "#b91c1c", border: "1px solid #fecaca" };
     default:
-      return { bg: "#f8fafc", text: "#334155", border: "1px solid #e2e8f0" };
+      return { bg: "#f8fafc", text: "#334155", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" };
   }
 };
 
 
 const matchesTab = (order: AdminOrderListItem, tab: TabKey) => {
   switch (tab) {
+    case "preorders":
+      return Boolean(order.contains_preorder && !order.preorder_released && (order.status === "placed" || order.status === "confirmed"));
     case "new":
-      return order.status === "placed";
+      return order.status === "placed" && (!order.contains_preorder || Boolean(order.preorder_released));
     case "yet_to_ship":
       return order.status === "confirmed" || order.status === "accepted";
     case "yet_to_deliver":
@@ -631,17 +749,30 @@ const matchesTab = (order: AdminOrderListItem, tab: TabKey) => {
         order.status === "shipped" ||
         order.status === "out_for_delivery" ||
         order.status === "rescheduled" ||
-        order.status === "failed"
+        order.status === "failed" ||
+        order.status === "replacement_dispatched"
       );
     case "delivered":
       return order.status === "delivered" || order.status === "returned";
     case "cancelled":
-      return order.status === "cancelled" || order.status === "partially_cancelled";
+      return order.status === "cancelled" || order.status === "partially_cancelled" || order.status === "refunded";
     default:
       return false;
   }
 };
-
+const ADMIN_CANCEL_PRESETS = [
+  "Parcel Returned to Hub - Customer unreachable / no response after multiple attempts",
+  "Parcel Returned to Hub - Customer refused delivery at doorstep",
+  "Parcel Returned to Hub - Incorrect / untraceable address",
+  "Parcel Returned to Hub - Customer requested order cancellation",
+  "No response from customer after multiple delivery attempts",
+  "Customer unreachable / phone switched off",
+  "Customer refused delivery at doorstep",
+  "Incorrect or untraceable delivery address",
+  "Customer requested order cancellation",
+  "Item lost or damaged during transit",
+  "Other admin cancellation reason",
+];
 
 type DeliveryAgentItem = {
   id: string;
@@ -653,6 +784,9 @@ type DeliveryAgentItem = {
 
 type DeliverySettingsSummary = {
   delivery_mode: string;
+  enable_fleet?: boolean;
+  enable_shiprocket?: boolean;
+  enable_manual?: boolean;
   shiprocket_connected: boolean;
   shiprocket_enabled?: boolean;
   allow_own_delivery_agents?: boolean;
@@ -664,37 +798,105 @@ type DeliverySettingsSummary = {
 
 const matchesReturnTab = (item: AdminReturnListItem, tab: ReturnTabKey) => item.status === tab;
 
+const getCachedOrders = (id?: string): AdminOrderListItem[] => {
+  if (!id || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`wc_admin_orders_${id}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
 
-const AdminOrders: React.FC = () => {
-  const { siteId } = useParams<{ siteId: string }>();
-  const [mode, setMode] = useState<AdminMode>("orders");
+const getCachedReturns = (id?: string): AdminReturnListItem[] => {
+  if (!id || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`wc_admin_returns_${id}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
 
+type AdminOrdersProps = {
+  siteId?: string;
+  initialOrders?: AdminOrderListItem[];
+  initialReturns?: AdminReturnListItem[];
+};
 
-  const [orders, setOrders] = useState<AdminOrderListItem[]>([]);
-  const [detailsMap, setDetailsMap] = useState<Record<string, AdminOrderDetail>>({});
-  const [shipmentDrafts, setShipmentDrafts] = useState<Record<string, ShipmentDraft>>({});
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+const AdminOrders: React.FC<AdminOrdersProps> = ({
+  siteId: propSiteId,
+  initialOrders = [],
+  initialReturns = [],
+}) => {
+  const { hasPermission, isOwner } = useAdminAuth();
+  const { isDark, tokens } = useAdminTheme();
+  const canViewOrders = isOwner || hasPermission("orders:view");
+  const canUpdateOrders = isOwner || hasPermission("orders:update");
+  const canCancelOrders = isOwner || hasPermission("orders:cancel");
+  const canRefundOrders = isOwner || hasPermission("orders:refund");
+
+  const params = useParams<{ siteId?: string; id?: string }>();
+  const siteId = propSiteId || params.siteId || params.id || "";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [mode, setMode] = useState<"orders" | "returns">("orders");
   const [activeTab, setActiveTab] = useState<TabKey>("new");
-
-  // Delivery integration state
-  const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgentItem[]>([]);
-  const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsSummary | null>(null);
+  const [orders, setOrders] = useState<AdminOrderListItem[]>(initialOrders);
+  const [detailsMap, setDetailsMap] = useState<Record<string, AdminOrderDetail>>({});
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [selectedAgentMap, setSelectedAgentMap] = useState<Record<string, string>>({});
+  const [packageWeightMap, setPackageWeightMap] = useState<Record<string, number>>({});
   const [selectedDispatchModeMap, setSelectedDispatchModeMap] = useState<Record<string, "own_agent" | "shiprocket" | "manual">>({});
-  const [copiedLinkMap, setCopiedLinkMap] = useState<Record<string, boolean>>({});
+  const [editingCourierOrderIdMap, setEditingCourierOrderIdMap] = useState<Record<string, boolean>>({});
   const [reassigningOrderIdMap, setReassigningOrderIdMap] = useState<Record<string, boolean>>({});
   const [reassignAgentIdMap, setReassignAgentIdMap] = useState<Record<string, string>>({});
-  const [packageWeightMap, setPackageWeightMap] = useState<Record<string, number>>({});
+
+  const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgentItem[]>([]);
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsSummary | null>(null);
+
+  const [shipmentDrafts, setShipmentDrafts] = useState<Record<string, ShipmentDraft>>({});
+
+  const [adminCancelOrder, setAdminCancelOrder] = useState<AdminOrderListItem | null>(null);
+  const [adminCancelReason, setAdminCancelReason] = useState<string>(ADMIN_CANCEL_PRESETS[0]);
+  const [adminCancelCustomNote, setAdminCancelCustomNote] = useState<string>("");
+  const [copiedLinkMap, setCopiedLinkMap] = useState<Record<string, boolean>>({});
+  const [isBulkActionLoading, setIsBulkActionLoading] = useState<boolean>(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
+    setToast({ message, type });
+  };
+
+  const getOrderDefaultWeight = (orderItem?: AdminOrderListItem | AdminOrderDetail | null): number => {
+    if (!orderItem) return deliverySettings?.default_weight_grams || 500;
+    if (typeof orderItem.total_weight_grams === "number" && orderItem.total_weight_grams > 0) {
+      return orderItem.total_weight_grams;
+    }
+    if (Array.isArray(orderItem.items) && orderItem.items.length > 0) {
+      const sum = orderItem.items.reduce(
+        (acc, it) =>
+          acc +
+          ((it.weight_grams && it.weight_grams > 0
+            ? it.weight_grams
+            : deliverySettings?.default_weight_grams || 500) *
+            (it.quantity || 1)),
+        0
+      );
+      if (sum > 0) return sum;
+    }
+    return deliverySettings?.default_weight_grams || 500;
+  };
 
   // Return Reverse Logistics state
   const [selectedReturnAgentMap, setSelectedReturnAgentMap] = useState<Record<string, string>>({});
   const [selectedReturnDispatchModeMap, setSelectedReturnDispatchModeMap] = useState<Record<string, "own_agent" | "shiprocket" | "manual">>({});
   const [returnPackageWeightMap, setReturnPackageWeightMap] = useState<Record<string, number>>({});
   const [returnManualCourierMap, setReturnManualCourierMap] = useState<Record<string, { courierName: string; trackingNumber: string; notes: string }>>({});
+  const [editingReturnCourierMap, setEditingReturnCourierMap] = useState<Record<string, boolean>>({});
   const [reassigningReturnIdMap, setReassigningReturnIdMap] = useState<Record<string, boolean>>({});
   const [reassignReturnAgentIdMap, setReassignReturnAgentIdMap] = useState<Record<string, string>>({});
 
-  const [adminReturns, setAdminReturns] = useState<AdminReturnListItem[]>([]);
+  const [adminReturns, setAdminReturns] = useState<AdminReturnListItem[]>(initialReturns);
   const [returnDetailsMap, setReturnDetailsMap] = useState<Record<string, AdminReturnDetail>>({});
   const [expandedReturnId, setExpandedReturnId] = useState<string | null>(null);
   const [activeReturnTab, setActiveReturnTab] = useState<ReturnTabKey>("requested");
@@ -715,12 +917,17 @@ const AdminOrders: React.FC = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [serverTotalOrders, setServerTotalOrders] = useState<number>(initialOrders.length);
+  const [serverTotalPages, setServerTotalPages] = useState<number>(1);
+  const [serverTabCounts, setServerTabCounts] = useState<Record<string, number>>({});
 
+  const [serverTotalReturns, setServerTotalReturns] = useState<number>(initialReturns.length);
+  const [serverTotalReturnPages, setServerTotalReturnPages] = useState<number>(1);
+  const [serverReturnTabCounts, setServerReturnTabCounts] = useState<Record<string, number>>({});
 
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(initialOrders.length === 0);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
-
 
   const hydrateShipmentDraft = (orderId: string, detail: AdminOrderDetail) => {
     setShipmentDrafts((prev) => ({
@@ -732,7 +939,6 @@ const AdminOrders: React.FC = () => {
       },
     }));
   };
-
 
   const hydrateReturnDrafts = (returnId: string, detail: AdminReturnDetail) => {
     setReviewDrafts((prev) => ({
@@ -748,7 +954,6 @@ const AdminOrders: React.FC = () => {
         },
     }));
 
-
     setReceiveDrafts((prev) => ({
       ...prev,
       [returnId]:
@@ -759,7 +964,6 @@ const AdminOrders: React.FC = () => {
           ),
         },
     }));
-
 
     setInspectDrafts((prev) => ({
       ...prev,
@@ -778,7 +982,6 @@ const AdminOrders: React.FC = () => {
         },
     }));
 
-
     setRefundDrafts((prev) => ({
       ...prev,
       [returnId]:
@@ -789,22 +992,130 @@ const AdminOrders: React.FC = () => {
           adminNote: detail.admin_note || "",
         },
     }));
+
+    if (detail.pickup_details) {
+      setReturnManualCourierMap((prev) => ({
+        ...prev,
+        [returnId]: {
+          courierName: detail.pickup_details?.courier_name || "",
+          trackingNumber: detail.pickup_details?.tracking_number || "",
+          notes: detail.pickup_details?.pickup_notes || "",
+        },
+      }));
+    }
   };
 
+  const [selectedExtraChargesByReturn, setSelectedExtraChargesByReturn] = useState<Record<string, Record<string, boolean>>>({});
 
-  const loadOrdersForSite = async () => {
+  const toggleExtraCharge = (
+    returnId: string,
+    chargeId: string,
+    baseSuggested: number,
+    allAllocations: Array<{ id: string; label: string; allocated_amount: number; refundable: boolean }>
+  ) => {
+    const currentChecked = selectedExtraChargesByReturn[returnId] || {};
+    const willBeChecked = !currentChecked[chargeId];
+    const nextChecked = { ...currentChecked, [chargeId]: willBeChecked };
+    setSelectedExtraChargesByReturn((prev) => ({ ...prev, [returnId]: nextChecked }));
+
+    let addedAmount = 0;
+    const includedLabels: string[] = [];
+    allAllocations.forEach((ch) => {
+      if (nextChecked[ch.id]) {
+        addedAmount += Number(ch.allocated_amount || 0);
+        includedLabels.push(ch.label);
+      }
+    });
+
+    const newTotal = Number((baseSuggested + addedAmount).toFixed(2));
+    setRefundDraftValue(returnId, (draft) => ({
+      ...draft,
+      finalRefundAmount: String(newTotal),
+      refundOverrideReason:
+        includedLabels.length > 0
+          ? `Exception: Refunded non-refundable charge(s) (${includedLabels.join(", ")}) upon admin review.`
+          : "",
+    }));
+  };
+
+  const loadOrdersForSite = async (
+    page = currentPage,
+    size = pageSize,
+    tab = activeTab,
+    search = searchQuery,
+    payment = paymentFilter,
+    date = dateFilter,
+    fromD = customFromDate,
+    toD = customToDate
+  ) => {
     if (!siteId) return;
-    const orderList = await fetchJson(`${API_BASE}/orders/admin/${siteId}`);
-    setOrders(Array.isArray(orderList) ? orderList : []);
+    try {
+      const qParams = new URLSearchParams();
+      qParams.set("page", String(page));
+      qParams.set("page_size", String(size));
+      if (tab) qParams.set("tab", tab);
+      if (search.trim()) qParams.set("search", search.trim());
+      if (payment !== "all") qParams.set("payment_method", payment);
+      if (date !== "all") qParams.set("date_filter", date);
+      if (fromD) qParams.set("from_date", fromD);
+      if (toD) qParams.set("to_date", toD);
+
+      const res = await fetchJson(`${API_BASE}/orders/admin/${siteId}?${qParams.toString()}`);
+      if (res && Array.isArray(res.orders)) {
+        setOrders(res.orders);
+        setServerTotalOrders(res.total ?? res.orders.length);
+        setServerTotalPages(res.total_pages ?? 1);
+        if (res.tab_counts) setServerTabCounts(res.tab_counts);
+        if (page === 1) {
+          try {
+            localStorage.setItem(`wc_admin_orders_${siteId}`, JSON.stringify(res.orders));
+          } catch (_) {}
+        }
+      } else if (Array.isArray(res)) {
+        setOrders(res);
+        setServerTotalOrders(res.length);
+        setServerTotalPages(Math.max(1, Math.ceil(res.length / size)));
+      }
+    } catch (err) {
+      console.error("Failed to load orders", err);
+    }
     setDetailsMap({});
     setExpandedOrderId(null);
   };
 
-
-  const loadReturnsForSite = async () => {
+  const loadReturnsForSite = async (
+    page = currentPage,
+    size = pageSize,
+    tab = activeReturnTab,
+    search = searchQuery
+  ) => {
     if (!siteId) return;
-    const returnList = await fetchJson(`${API_BASE}/returns/admin/${siteId}`);
-    setAdminReturns(Array.isArray(returnList) ? returnList : []);
+    try {
+      const qParams = new URLSearchParams();
+      qParams.set("page", String(page));
+      qParams.set("page_size", String(size));
+      if (tab) qParams.set("status", tab);
+      if (search.trim()) qParams.set("search", search.trim());
+
+      const res = await fetchJson(`${API_BASE}/returns/admin/${siteId}?${qParams.toString()}`);
+      if (res && Array.isArray(res.returns)) {
+        setAdminReturns(res.returns);
+        setServerTotalReturns(res.total ?? res.returns.length);
+        setServerTotalReturnPages(res.total_pages ?? 1);
+        if (res.tab_counts) setServerReturnTabCounts(res.tab_counts);
+        if (page === 1) {
+          try {
+            localStorage.setItem(`wc_admin_returns_${siteId}`, JSON.stringify(res.returns));
+          } catch (_) {}
+        }
+      } else if (Array.isArray(res)) {
+        setAdminReturns(res);
+        setServerTotalReturns(res.length);
+        setServerTotalReturnPages(Math.max(1, Math.ceil(res.length / size)));
+      }
+    } catch (err) {
+      console.error("Failed to load returns", err);
+    }
     setReturnDetailsMap({});
     setExpandedReturnId(null);
   };
@@ -829,14 +1140,28 @@ const AdminOrders: React.FC = () => {
     }
   };
 
-  const handleDispatchOrder = async (orderId: string, customMode?: "own_agent" | "shiprocket" | "manual") => {
-    if (!siteId) return;
+  const handleDispatchOrder = async (
+    orderId: string,
+    customMode?: "own_agent" | "shiprocket" | "manual",
+    overrideWeight?: number
+  ) => {
+    if (!siteId || !canUpdateOrders) return;
     setActionLoadingId(orderId);
     try {
-      const storeDefaultMode = (deliverySettings?.delivery_mode as any) || "own_agent";
-      const chosenMode = customMode || selectedDispatchModeMap[orderId] || (storeDefaultMode === "hybrid" ? "own_agent" : storeDefaultMode);
+      const isFleet = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+      const isSr = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+      const fallbackMode = isFleet ? "own_agent" : (isSr ? "shiprocket" : "manual");
+      const chosenMode = customMode || selectedDispatchModeMap[orderId] || fallbackMode;
       const agentId = selectedAgentMap[orderId] || "";
-      const customWeight = packageWeightMap[orderId] || deliverySettings?.default_weight_grams || 500;
+
+      const orderObj = orders.find((o) => o.id === orderId) || detailsMap[orderId];
+      const defaultWeight = orderObj ? getOrderDefaultWeight(orderObj) : (deliverySettings?.default_weight_grams || 500);
+      const customWeight = overrideWeight !== undefined
+        ? overrideWeight
+        : packageWeightMap[orderId] !== undefined
+        ? packageWeightMap[orderId]
+        : defaultWeight;
+
       const body: Record<string, any> = {
         mode: chosenMode,
         weight_grams: customWeight,
@@ -854,23 +1179,25 @@ const AdminOrders: React.FC = () => {
         const errJson = await res.json().catch(() => ({ detail: "Dispatch failed" }));
         throw new Error(errJson.detail || "Dispatch failed");
       }
+      const resData = await res.json().catch(() => ({}));
+      showToast(resData.message || "Order dispatched successfully!", "success");
       await loadOrdersForSite();
       if (expandedOrderId === orderId) {
         await refreshOrderDetail(orderId);
       }
       await loadDeliveryMeta();
     } catch (e: any) {
-      alert(e.message || "Failed to dispatch order");
+      showToast(e.message || "Failed to dispatch order", "error");
     } finally {
       setActionLoadingId(null);
     }
   };
 
   const handleReassignRider = async (orderId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const newAgentId = reassignAgentIdMap[orderId] || "";
     if (!newAgentId) {
-      alert("Please select a new delivery agent to reassign this order.");
+      showToast("Please select a new delivery agent to reassign this order.", "error");
       return;
     }
     setActionLoadingId(orderId);
@@ -889,6 +1216,7 @@ const AdminOrders: React.FC = () => {
         const errJson = await res.json().catch(() => ({ detail: "Reassign failed" }));
         throw new Error(errJson.detail || "Reassign failed");
       }
+      showToast("Delivery rider reassigned successfully!", "success");
       setReassigningOrderIdMap((p) => ({ ...p, [orderId]: false }));
       await loadOrdersForSite();
       if (expandedOrderId === orderId) {
@@ -896,7 +1224,7 @@ const AdminOrders: React.FC = () => {
       }
       await loadDeliveryMeta();
     } catch (e: any) {
-      alert(e.message || "Failed to reassign delivery agent");
+      showToast(e.message || "Failed to reassign delivery agent", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -906,17 +1234,20 @@ const AdminOrders: React.FC = () => {
     if (!link) return;
     navigator.clipboard.writeText(link);
     setCopiedLinkMap((prev) => ({ ...prev, [orderId]: true }));
+    showToast("Rider tracking link copied to clipboard!", "success");
     setTimeout(() => {
       setCopiedLinkMap((prev) => ({ ...prev, [orderId]: false }));
     }, 2500);
   };
 
   const handleDispatchReturnPickup = async (returnId: string, customMode?: "own_agent" | "shiprocket" | "manual") => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     setActionLoadingId(returnId);
     try {
-      const storeDefaultMode = (deliverySettings?.delivery_mode as any) || "own_agent";
-      const chosenMode = customMode || selectedReturnDispatchModeMap[returnId] || (storeDefaultMode === "hybrid" ? "own_agent" : storeDefaultMode);
+      const isFleet = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+      const isSr = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+      const fallbackMode = isFleet ? "own_agent" : (isSr ? "shiprocket" : "manual");
+      const chosenMode = customMode || selectedReturnDispatchModeMap[returnId] || fallbackMode;
       const agentId = selectedReturnAgentMap[returnId] || "";
       const customWeight = returnPackageWeightMap[returnId] || deliverySettings?.default_weight_grams || 500;
       const manualData = returnManualCourierMap[returnId] || { courierName: "", trackingNumber: "", notes: "" };
@@ -932,7 +1263,7 @@ const AdminOrders: React.FC = () => {
           if (availableAgent) {
             body.agent_id = availableAgent.id;
           } else {
-            alert("Please select an active delivery rider to assign this return pickup.");
+            showToast("Please select an active delivery rider to assign this return pickup.", "error");
             setActionLoadingId(null);
             return;
           }
@@ -963,20 +1294,22 @@ const AdminOrders: React.FC = () => {
       if (data.return_request) {
         setReturnDetailsMap((prev) => ({ ...prev, [returnId]: data.return_request }));
       }
+      showToast(data.message || "Return pickup dispatched successfully!", "success");
+      setEditingReturnCourierMap((p) => ({ ...p, [returnId]: false }));
       await loadReturnsForSite();
       await loadDeliveryMeta();
     } catch (err: any) {
-      alert(err?.message || "Failed to dispatch return pickup");
+      showToast(err?.message || "Failed to dispatch return pickup", "error");
     } finally {
       setActionLoadingId(null);
     }
   };
 
   const handleReassignReturnRider = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const newAgentId = reassignReturnAgentIdMap[returnId] || "";
     if (!newAgentId) {
-      alert("Please select a new rider to reassign this return pickup.");
+      showToast("Please select a new rider to reassign this return pickup.", "error");
       return;
     }
     setActionLoadingId(returnId);
@@ -998,34 +1331,85 @@ const AdminOrders: React.FC = () => {
       if (data.return_request) {
         setReturnDetailsMap((prev) => ({ ...prev, [returnId]: data.return_request }));
       }
+      showToast("Return rider reassigned successfully!", "success");
       setReassigningReturnIdMap((p) => ({ ...p, [returnId]: false }));
       await loadReturnsForSite();
       await loadDeliveryMeta();
     } catch (err: any) {
-      alert(err?.message || "Failed to reassign rider");
+      showToast(err?.message || "Failed to reassign rider", "error");
     } finally {
       setActionLoadingId(null);
     }
   };
 
+  const handleSwitchReturnToManual = async (returnId: string) => {
+    if (!siteId || !canUpdateOrders) return;
+    const draft = returnManualCourierMap[returnId] || { courierName: "", trackingNumber: "", notes: "" };
+    setActionLoadingId(returnId);
+    try {
+      const res = await fetch(`${API_BASE}/returns/admin/${siteId}/${returnId}/dispatch-pickup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "manual",
+          courier_name: draft.courierName || "Manual Courier / Self Ship",
+          tracking_number: draft.trackingNumber || "",
+          pickup_notes: draft.notes || "",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to switch return to manual courier");
+      }
+      const data = await res.json();
+      if (data.return_request) {
+        setReturnDetailsMap((prev) => ({ ...prev, [returnId]: data.return_request }));
+      }
+      showToast("Switched return to manual courier successfully!", "success");
+      setReassigningReturnIdMap((p) => ({ ...p, [returnId]: false }));
+      await loadReturnsForSite();
+      await loadDeliveryMeta();
+    } catch (err: any) {
+      showToast(err?.message || "Failed to switch to manual return", "error");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   useEffect(() => {
-    if (!siteId) return;
-
+    if (!siteId) {
+      setLoading(false);
+      return;
+    }
 
     const loadByMode = async () => {
-      setLoading(true);
       setError("");
+      setLoading(true);
       try {
         if (mode === "orders") {
-          await loadOrdersForSite();
+          await loadOrdersForSite(
+            currentPage,
+            pageSize,
+            activeTab,
+            searchQuery,
+            paymentFilter,
+            dateFilter,
+            customFromDate,
+            customToDate
+          );
           try {
             await loadDeliveryMeta();
           } catch (metaErr) {
             console.warn("Delivery metadata load failed non-critically:", metaErr);
           }
         } else {
-          await loadReturnsForSite();
+          await loadReturnsForSite(
+            currentPage,
+            pageSize,
+            activeReturnTab,
+            searchQuery
+          );
         }
       } catch (err: any) {
         setError(err.message || `Failed to load ${mode}`);
@@ -1039,9 +1423,84 @@ const AdminOrders: React.FC = () => {
       }
     };
 
-
     loadByMode();
-  }, [siteId, mode]);
+  }, [
+    siteId,
+    mode,
+    activeTab,
+    activeReturnTab,
+    currentPage,
+    pageSize,
+    searchQuery,
+    paymentFilter,
+    dateFilter,
+    customFromDate,
+    customToDate,
+  ]);
+
+  // Deep-linking support for direct order/return links (e.g. from Earnings/Ledger page)
+  const targetOrderId = searchParams.get("orderId");
+  const targetReturnId = searchParams.get("returnId");
+  const handledDeepLinkRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const deepLinkKey = targetOrderId ? `order:${targetOrderId}` : targetReturnId ? `return:${targetReturnId}` : null;
+    if (!deepLinkKey) {
+      handledDeepLinkRef.current = null;
+      return;
+    }
+
+    // Only process once per deep-link key unless searchParams change
+    if (handledDeepLinkRef.current === deepLinkKey) return;
+
+    if (targetOrderId && orders.length > 0) {
+      const found = orders.find(
+        (o) => o.id === targetOrderId || o.id.toLowerCase() === targetOrderId.toLowerCase() || o.id.startsWith(targetOrderId)
+      );
+      handledDeepLinkRef.current = deepLinkKey;
+      if (found) {
+        setMode("orders");
+        if (found.status === "placed") setActiveTab("new");
+        else if (found.status === "confirmed" || found.status === "accepted") setActiveTab("yet_to_ship");
+        else if (
+          found.status === "shipped" ||
+          found.status === "out_for_delivery" ||
+          found.status === "rescheduled" ||
+          found.status === "failed" ||
+          found.status === "replacement_dispatched"
+        )
+          setActiveTab("yet_to_deliver");
+        else if (found.status === "delivered" || found.status === "returned") setActiveTab("delivered");
+        else if (found.status === "cancelled" || found.status === "partially_cancelled" || found.status === "refunded") setActiveTab("cancelled");
+
+        setDateFilter("all");
+        setPaymentFilter("all");
+        setFulfillmentFilter("all");
+        setSearchQuery(found.id.slice(0, 8).toUpperCase());
+        setExpandedOrderId(found.id);
+        ensureOrderDetail(found.id);
+      } else {
+        setMode("orders");
+        setDateFilter("all");
+        setSearchQuery(targetOrderId.slice(0, 8).toUpperCase());
+        setExpandedOrderId(targetOrderId);
+        ensureOrderDetail(targetOrderId);
+      }
+    } else if (targetReturnId && adminReturns.length > 0) {
+      const found = adminReturns.find(
+        (r) => r.id === targetReturnId || r.id.toLowerCase() === targetReturnId.toLowerCase() || r.id.startsWith(targetReturnId)
+      );
+      handledDeepLinkRef.current = deepLinkKey;
+      if (found) {
+        setMode("returns");
+        setActiveReturnTab(found.status);
+        setDateFilter("all");
+        setSearchQuery(found.id.slice(0, 8).toUpperCase());
+        setExpandedReturnId(found.id);
+        ensureReturnDetail(found.id);
+      }
+    }
+  }, [targetOrderId, targetReturnId, orders, adminReturns]);
 
 
   const hasActiveFilters =
@@ -1094,6 +1553,12 @@ const AdminOrders: React.FC = () => {
     setPaymentFilter("all");
     setFulfillmentFilter("all");
     setCurrentPage(1);
+    if (searchParams.has("orderId") || searchParams.has("returnId")) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("orderId");
+      nextParams.delete("returnId");
+      setSearchParams(nextParams, { replace: true });
+    }
   };
 
   const matchesOrderDateFilter = (createdAt?: string | null) => {
@@ -1122,6 +1587,9 @@ const AdminOrders: React.FC = () => {
   };
 
   const filteredOrders = useMemo(() => {
+    if (Object.keys(serverTabCounts).length > 0) {
+      return orders.filter((order) => matchesTab(order, activeTab));
+    }
     return orders.filter((order) => {
       // 1. Tab match
       if (!matchesTab(order, activeTab)) return false;
@@ -1187,6 +1655,7 @@ const AdminOrders: React.FC = () => {
       return true;
     });
   }, [
+    serverTabCounts,
     orders,
     activeTab,
     searchQuery,
@@ -1197,13 +1666,17 @@ const AdminOrders: React.FC = () => {
     customToDate,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const totalPages = Math.max(1, serverTotalPages || Math.ceil(filteredOrders.length / pageSize));
   const paginatedOrders = useMemo(() => {
+    if (Object.keys(serverTabCounts).length > 0) return filteredOrders;
     const start = (currentPage - 1) * pageSize;
     return filteredOrders.slice(start, start + pageSize);
-  }, [filteredOrders, currentPage, pageSize]);
+  }, [serverTabCounts, filteredOrders, currentPage, pageSize]);
 
   const filteredReturns = useMemo(() => {
+    if (Object.keys(serverReturnTabCounts).length > 0) {
+      return adminReturns.filter((item) => matchesReturnTab(item, activeReturnTab));
+    }
     return adminReturns.filter((item) => {
       if (!matchesReturnTab(item, activeReturnTab)) return false;
       if (searchQuery.trim()) {
@@ -1216,16 +1689,27 @@ const AdminOrders: React.FC = () => {
       if (!matchesOrderDateFilter(item.created_at)) return false;
       return true;
     });
-  }, [adminReturns, activeReturnTab, searchQuery, dateFilter, customFromDate, customToDate]);
+  }, [serverReturnTabCounts, adminReturns, activeReturnTab, searchQuery, dateFilter, customFromDate, customToDate]);
 
-  const totalReturnPages = Math.max(1, Math.ceil(filteredReturns.length / pageSize));
+  const totalReturnPages = Math.max(1, serverTotalReturnPages || Math.ceil(filteredReturns.length / pageSize));
   const paginatedReturns = useMemo(() => {
+    if (Object.keys(serverReturnTabCounts).length > 0) return filteredReturns;
     const start = (currentPage - 1) * pageSize;
     return filteredReturns.slice(start, start + pageSize);
-  }, [filteredReturns, currentPage, pageSize]);
+  }, [serverReturnTabCounts, filteredReturns, currentPage, pageSize]);
 
 
   const counts = useMemo(() => {
+    if (Object.keys(serverTabCounts).length > 0) {
+      return {
+        new: serverTabCounts.new ?? 0,
+        preorders: serverTabCounts.preorders ?? 0,
+        yet_to_ship: serverTabCounts.yet_to_ship ?? 0,
+        yet_to_deliver: serverTabCounts.yet_to_deliver ?? 0,
+        delivered: serverTabCounts.delivered ?? 0,
+        cancelled: serverTabCounts.cancelled ?? 0,
+      };
+    }
     const matchesNonTab = (o: AdminOrderListItem) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -1269,15 +1753,27 @@ const AdminOrders: React.FC = () => {
 
     return {
       new: orders.filter((o) => matchesTab(o, "new") && matchesNonTab(o)).length,
+      preorders: orders.filter((o) => matchesTab(o, "preorders") && matchesNonTab(o)).length,
       yet_to_ship: orders.filter((o) => matchesTab(o, "yet_to_ship") && matchesNonTab(o)).length,
       yet_to_deliver: orders.filter((o) => matchesTab(o, "yet_to_deliver") && matchesNonTab(o)).length,
       delivered: orders.filter((o) => matchesTab(o, "delivered") && matchesNonTab(o)).length,
       cancelled: orders.filter((o) => matchesTab(o, "cancelled") && matchesNonTab(o)).length,
     };
-  }, [orders, searchQuery, paymentFilter, fulfillmentFilter, dateFilter, customFromDate, customToDate]);
+  }, [serverTabCounts, orders, searchQuery, paymentFilter, fulfillmentFilter, dateFilter, customFromDate, customToDate]);
 
 
   const returnCounts = useMemo(() => {
+    if (Object.keys(serverReturnTabCounts).length > 0) {
+      return {
+        requested: serverReturnTabCounts.requested ?? 0,
+        approved: serverReturnTabCounts.approved ?? 0,
+        received: serverReturnTabCounts.received ?? 0,
+        inspected: serverReturnTabCounts.inspected ?? 0,
+        refunded: serverReturnTabCounts.refunded ?? 0,
+        closed: serverReturnTabCounts.closed ?? 0,
+        rejected: serverReturnTabCounts.rejected ?? 0,
+      };
+    }
     const matchesNonTabReturn = (item: AdminReturnListItem) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -1299,7 +1795,7 @@ const AdminOrders: React.FC = () => {
       closed: adminReturns.filter((o) => matchesReturnTab(o, "closed") && matchesNonTabReturn(o)).length,
       rejected: adminReturns.filter((o) => matchesReturnTab(o, "rejected") && matchesNonTabReturn(o)).length,
     };
-  }, [adminReturns, searchQuery, dateFilter, customFromDate, customToDate]);
+  }, [serverReturnTabCounts, adminReturns, searchQuery, dateFilter, customFromDate, customToDate]);
 
 
   const refreshOrderDetail = async (orderId: string) => {
@@ -1334,32 +1830,42 @@ const AdminOrders: React.FC = () => {
   const syncOrderAfterAction = async (orderId: string) => {
     if (!siteId) return;
 
-
-    const [orderList, detail] = await Promise.all([
-      fetchJson(`${API_BASE}/orders/admin/${siteId}`),
-      fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}`),
-    ]);
-
-
-    setOrders(Array.isArray(orderList) ? orderList : []);
-    setDetailsMap((prev) => ({ ...prev, [orderId]: detail }));
-    hydrateShipmentDraft(orderId, detail);
+    await loadOrdersForSite(
+      currentPage,
+      pageSize,
+      activeTab,
+      searchQuery,
+      paymentFilter,
+      dateFilter,
+      customFromDate,
+      customToDate
+    );
+    try {
+      const detail = await fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}`);
+      setDetailsMap((prev) => ({ ...prev, [orderId]: detail }));
+      hydrateShipmentDraft(orderId, detail);
+    } catch {
+      // ignore
+    }
   };
 
 
   const syncReturnAfterAction = async (returnId: string) => {
     if (!siteId) return;
 
-
-    const [returnList, detail] = await Promise.all([
-      fetchJson(`${API_BASE}/returns/admin/${siteId}`),
-      fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}`),
-    ]);
-
-
-    setAdminReturns(Array.isArray(returnList) ? returnList : []);
-    setReturnDetailsMap((prev) => ({ ...prev, [returnId]: detail }));
-    hydrateReturnDrafts(returnId, detail);
+    await loadReturnsForSite(
+      currentPage,
+      pageSize,
+      activeReturnTab,
+      searchQuery
+    );
+    try {
+      const detail = await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}`);
+      setReturnDetailsMap((prev) => ({ ...prev, [returnId]: detail }));
+      hydrateReturnDrafts(returnId, detail);
+    } catch {
+      // ignore
+    }
   };
 
 
@@ -1374,6 +1880,17 @@ const AdminOrders: React.FC = () => {
     } = {}
   ) => {
     if (!siteId) return;
+    if (status === "cancelled") {
+      if (!canCancelOrders && !canUpdateOrders) {
+        showToast("You do not have permission to cancel orders.", "error");
+        return;
+      }
+    } else {
+      if (!canUpdateOrders) {
+        showToast("You do not have permission to update order status.", "error");
+        return;
+      }
+    }
     setActionLoadingId(orderId);
     try {
       await fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}/status`, {
@@ -1388,7 +1905,7 @@ const AdminOrders: React.FC = () => {
       });
       await syncOrderAfterAction(orderId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to update order");
+      showToast(err.message || "Failed to update order", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1402,7 +1919,7 @@ const AdminOrders: React.FC = () => {
       try {
         await ensureOrderDetail(orderId);
       } catch (err: any) {
-        window.alert(err.message || "Failed to load order detail");
+        showToast(err.message || "Failed to load order detail", "error");
       }
     }
   };
@@ -1415,7 +1932,7 @@ const AdminOrders: React.FC = () => {
       try {
         await ensureReturnDetail(returnId);
       } catch (err: any) {
-        window.alert(err.message || "Failed to load return detail");
+        showToast(err.message || "Failed to load return detail", "error");
       }
     }
   };
@@ -1534,6 +2051,49 @@ const AdminOrders: React.FC = () => {
     await updateStatus(orderId, "confirmed");
   };
 
+  const handleReleasePreorder = async (orderId: string) => {
+    if (!siteId) return;
+    setActionLoadingId(orderId);
+    try {
+      const res = await fetchJson(`${API_BASE}/orders/admin/${siteId}/${orderId}/release-preorder`, {
+        method: "POST",
+      });
+      showToast(res?.message || "Pre-order released for shipping", "success");
+      await syncOrderAfterAction(orderId);
+    } catch (err: any) {
+      showToast(err.message || "Failed to release pre-order", "error");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleBulkReleasePreorders = async () => {
+    if (!siteId) return;
+    if (!window.confirm("Release all pending pre-orders for shipping? This will move them to your standard fulfillment queue.")) return;
+    setIsBulkActionLoading(true);
+    try {
+      const res = await fetchJson(`${API_BASE}/orders/admin/${siteId}/bulk-release-preorders`, {
+        method: "POST",
+        body: JSON.stringify({ order_ids: [] }),
+      });
+      showToast(res?.message || "All pre-orders released for shipping", "success");
+      await loadOrdersForSite(
+        currentPage,
+        pageSize,
+        activeTab,
+        searchQuery,
+        paymentFilter,
+        dateFilter,
+        customFromDate,
+        customToDate
+      );
+    } catch (err: any) {
+      showToast(err.message || "Failed to bulk release pre-orders", "error");
+    } finally {
+      setIsBulkActionLoading(false);
+    }
+  };
+
 
   const handleMarkShipped = async (orderId: string) => {
     const order = orders.find((item) => item.id === orderId);
@@ -1568,10 +2128,24 @@ const AdminOrders: React.FC = () => {
   };
 
 
-  const handleCancel = async (orderId: string) => {
-    const cancelReason = window.prompt("Enter cancel reason") || "";
+  const handleCancel = async (orderId: string, reason?: string) => {
+    if (!canCancelOrders) {
+      showToast("You do not have permission to cancel orders.", "error");
+      return;
+    }
+    let cancelReason = reason;
+    if (cancelReason === undefined) {
+      const order = orders.find((o) => o.id === orderId);
+      if (order) {
+        setAdminCancelOrder(order);
+        setAdminCancelReason(ADMIN_CANCEL_PRESETS[0]);
+        setAdminCancelCustomNote("");
+        return;
+      }
+      cancelReason = window.prompt("Enter cancel reason") || "";
+    }
     await updateStatus(orderId, "cancelled", {
-      cancel_reason: cancelReason || null,
+      cancel_reason: cancelReason || "Cancelled by admin",
     });
   };
 
@@ -1579,29 +2153,33 @@ const AdminOrders: React.FC = () => {
   const handleSaveShipment = async (orderId: string) => {
     const order = orders.find((item) => item.id === orderId);
     if (!order) return;
-
-
-    if (order.status === "confirmed") {
-      await handleMarkShipped(orderId);
-      return;
-    }
-
+    const draft = getShipmentDraft(order);
 
     if (order.status === "shipped") {
       await handleOutForDelivery(orderId);
       return;
     }
 
-
-    window.alert("Shipment details are saved when moving the order to shipped/out for delivery.");
+    await updateStatus(orderId, "shipped", {
+      delivery_partner_name: draft.deliveryPartnerName || null,
+      delivery_partner_phone: draft.deliveryPartnerPhone || null,
+      estimated_delivery_at: toIsoOrNull(draft.estimatedDeliveryAt),
+    });
   };
 
 
   const handleReviewReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const draft = reviewDrafts[returnId];
     if (!draft) return;
 
+    if (draft.action === "approve") {
+      const totalAppr = Object.values(draft.approvedQuantities).reduce((acc, q) => acc + Number(q || 0), 0);
+      if (totalAppr <= 0) {
+        showToast("Cannot approve return with 0 items. Please specify an approved quantity of at least 1, or select 'Reject Return' to decline the request.", "error");
+        return;
+      }
+    }
 
     setActionLoadingId(returnId);
     try {
@@ -1620,9 +2198,10 @@ const AdminOrders: React.FC = () => {
               : [],
         }),
       });
+      showToast("Return request reviewed successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to review return request");
+      showToast(err.message || "Failed to review return request", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1630,7 +2209,7 @@ const AdminOrders: React.FC = () => {
 
 
   const handleReceiveReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const draft = receiveDrafts[returnId];
     if (!draft) return;
 
@@ -1649,9 +2228,10 @@ const AdminOrders: React.FC = () => {
           ),
         }),
       });
+      showToast("Return marked as received!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to mark return as received");
+      showToast(err.message || "Failed to mark return as received", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1659,7 +2239,7 @@ const AdminOrders: React.FC = () => {
 
 
   const handleInspectReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
     const detail = returnDetailsMap[returnId];
     const draft = inspectDrafts[returnId];
     const itemsList = detail?.items || [];
@@ -1685,9 +2265,10 @@ const AdminOrders: React.FC = () => {
           items: itemsPayload,
         }),
       });
+      showToast("Return inspection recorded successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to inspect return");
+      showToast(err.message || "Failed to inspect return", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1695,7 +2276,7 @@ const AdminOrders: React.FC = () => {
 
 
   const handleRefundReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canRefundOrders) return;
     const draft = refundDrafts[returnId];
     if (!draft) return;
 
@@ -1712,9 +2293,10 @@ const AdminOrders: React.FC = () => {
           admin_note: draft.adminNote || null,
         }),
       });
+      showToast("Refund processed successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to process refund");
+      showToast(err.message || "Failed to process refund", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1722,7 +2304,7 @@ const AdminOrders: React.FC = () => {
 
 
   const handleCloseReturn = async (returnId: string) => {
-    if (!siteId) return;
+    if (!siteId || !canUpdateOrders) return;
 
 
     setActionLoadingId(returnId);
@@ -1730,9 +2312,10 @@ const AdminOrders: React.FC = () => {
       await fetchJson(`${API_BASE}/returns/admin/${siteId}/${returnId}/close`, {
         method: "PATCH",
       });
+      showToast("Return closed successfully!", "success");
       await syncReturnAfterAction(returnId);
     } catch (err: any) {
-      window.alert(err.message || "Failed to close return");
+      showToast(err.message || "Failed to close return", "error");
     } finally {
       setActionLoadingId(null);
     }
@@ -1740,13 +2323,13 @@ const AdminOrders: React.FC = () => {
 
 
   const generateBillPdf = (order: AdminOrderDetail | AdminOrderListItem) => {
-    window.alert(`Generate invoice for ${order.id}`);
+    window.open(`${API_BASE}/orders/${order.id}/invoice/pdf`, "_blank");
   };
 
 
   const renderRowActions = (order: AdminOrderListItem) => {
     const actionButtonStyle: React.CSSProperties = {
-      border: "1px solid #cbd5e1",
+      border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
       borderRadius: "6px",
       padding: "8px 10px",
       fontSize: "12px",
@@ -1754,45 +2337,148 @@ const AdminOrders: React.FC = () => {
       cursor: actionLoadingId === order.id ? "wait" : "pointer",
       whiteSpace: "nowrap",
       opacity: actionLoadingId === order.id ? 0.7 : 1,
-      background: "#ffffff",
-      color: "#0f172a",
+      background: tokens.surfaceBg,
+      color: tokens.textPrimary,
     };
 
+
+    if (activeTab === "preorders" || (order.contains_preorder && !order.preorder_released)) {
+      return (
+        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+          {canUpdateOrders && (
+            <button
+              disabled={actionLoadingId === order.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReleasePreorder(order.id);
+              }}
+              style={{
+                ...actionButtonStyle,
+                padding: "5px 12px",
+                background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fef3c7",
+                color: isDark ? "#fde047" : "#92400e",
+                border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
+                fontWeight: 700,
+              }}
+              title="Release pre-order for standard shipping and fulfillment"
+            >
+              {actionLoadingId === order.id ? "Releasing..." : "Release for Shipping"}
+            </button>
+          )}
+          {canCancelOrders && (
+            <button
+              disabled={actionLoadingId === order.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCancel(order.id);
+              }}
+              style={{
+                ...actionButtonStyle,
+                padding: "5px 10px",
+                background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                color: isDark ? "#fca5a5" : "#b91c1c",
+                border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
+              }}
+            >
+              Reject
+            </button>
+          )}
+        </div>
+      );
+    }
 
     if (activeTab === "new") {
       return (
         <div style={{ display: "flex", gap: "6px" }}>
+          {canUpdateOrders && (
+            <button
+              disabled={actionLoadingId === order.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleConfirmOrder(order.id);
+              }}
+              style={{
+                ...actionButtonStyle,
+                padding: "5px 10px",
+                background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
+              }}
+            >
+              Accept
+            </button>
+          )}
+          {canCancelOrders && (
+            <button
+              disabled={actionLoadingId === order.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCancel(order.id);
+              }}
+              style={{
+                ...actionButtonStyle,
+                padding: "5px 10px",
+                background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                color: isDark ? "#fca5a5" : "#b91c1c",
+                border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
+              }}
+            >
+              Reject
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    const isReturnedToHub = order.status === "failed" || order.shipment?.status === "returned_to_warehouse" || order.shipment?.status === "failed";
+    const canCancel = order.status !== "delivered" && order.status !== "cancelled" && order.status !== "returned";
+
+    if (isReturnedToHub && canCancel) {
+      if (!canCancelOrders) return null;
+      return (
+        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
           <button
             disabled={actionLoadingId === order.id}
             onClick={(e) => {
               e.stopPropagation();
-              handleConfirmOrder(order.id);
+              setAdminCancelOrder(order);
+              setAdminCancelReason("Parcel Returned to Hub - Customer unreachable / no response after multiple attempts");
+              setAdminCancelCustomNote(order.shipment?.notes ? cleanShipmentNotes(order.shipment.notes) : "");
             }}
             style={{
               ...actionButtonStyle,
               padding: "5px 10px",
-              background: "#eff6ff",
-              color: "#1d4ed8",
-              border: "1px solid #bfdbfe",
+              background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+              color: isDark ? "#fca5a5" : "#dc2626",
+              border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
             }}
+            title="Cancel this returned order and restock inventory"
           >
-            Accept
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+            Cancel Order
           </button>
           <button
-            disabled={actionLoadingId === order.id}
             onClick={(e) => {
               e.stopPropagation();
-              handleCancel(order.id);
+              const detail = detailsMap[order.id] || order;
+              generateBillPdf(detail);
             }}
             style={{
               ...actionButtonStyle,
               padding: "5px 10px",
-              background: "#fef2f2",
-              color: "#b91c1c",
-              border: "1px solid #fecaca",
+              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
             }}
           >
-            Reject
+            Invoice
           </button>
         </div>
       );
@@ -1808,9 +2494,9 @@ const AdminOrders: React.FC = () => {
         style={{
           ...actionButtonStyle,
           padding: "5px 10px",
-          background: "#ffffff",
-          color: "#475569",
-          border: "1px solid #e2e8f0",
+          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
         }}
       >
         Invoice
@@ -1821,7 +2507,7 @@ const AdminOrders: React.FC = () => {
 
   const renderReturnRowActions = (returnItem: AdminReturnListItem) => {
     const actionButtonStyle: React.CSSProperties = {
-      border: "1px solid #cbd5e1",
+      border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
       borderRadius: "6px",
       padding: "8px 10px",
       fontSize: "12px",
@@ -1829,24 +2515,24 @@ const AdminOrders: React.FC = () => {
       cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
       whiteSpace: "nowrap",
       opacity: actionLoadingId === returnItem.id ? 0.7 : 1,
-      background: "#ffffff",
-      color: "#0f172a",
+      background: tokens.surfaceBg,
+      color: tokens.textPrimary,
     };
 
 
     if (returnItem.status === "requested") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canUpdateOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
           }}
           style={{
             ...actionButtonStyle,
-            background: "#eff6ff",
-            color: "#1d4ed8",
-            border: "1px solid #bfdbfe",
+            background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
           }}
         >
           Review
@@ -1858,16 +2544,16 @@ const AdminOrders: React.FC = () => {
     if (returnItem.status === "approved") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canUpdateOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
           }}
           style={{
             ...actionButtonStyle,
-            background: "#fffbeb",
-            color: "#b45309",
-            border: "1px solid #fde68a",
+            background: isDark ? "rgba(245, 158, 11, 0.2)" : "#fffbeb",
+            color: isDark ? "#fcd34d" : "#b45309",
+            border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.35)" : "#fde68a"}`,
           }}
         >
           Receive
@@ -1879,16 +2565,16 @@ const AdminOrders: React.FC = () => {
     if (returnItem.status === "received") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canUpdateOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
           }}
           style={{
             ...actionButtonStyle,
-            background: "#faf5ff",
-            color: "#7c3aed",
-            border: "1px solid #e9d5ff",
+            background: isDark ? "rgba(168, 85, 247, 0.2)" : "#faf5ff",
+            color: isDark ? "#d8b4fe" : "#7c3aed",
+            border: `1px solid ${isDark ? "rgba(168, 85, 247, 0.35)" : "#e9d5ff"}`,
           }}
         >
           Inspect
@@ -1900,16 +2586,16 @@ const AdminOrders: React.FC = () => {
     if (returnItem.status === "inspected") {
       return (
         <button
-          disabled={actionLoadingId === returnItem.id}
+          disabled={actionLoadingId === returnItem.id || !canRefundOrders}
           onClick={(e) => {
             e.stopPropagation();
             handleReturnExpandToggle(returnItem.id);
           }}
           style={{
             ...actionButtonStyle,
-            background: "#f0fdf4",
-            color: "#15803d",
-            border: "1px solid #bbf7d0",
+            background: isDark ? "rgba(34, 197, 94, 0.2)" : "#f0fdf4",
+            color: isDark ? "#86efac" : "#15803d",
+            border: `1px solid ${isDark ? "rgba(34, 197, 94, 0.35)" : "#bbf7d0"}`,
           }}
         >
           Refund
@@ -1918,7 +2604,7 @@ const AdminOrders: React.FC = () => {
     }
 
 
-    if (returnItem.status === "refunded" || returnItem.status === "rejected") {
+    if (canUpdateOrders && (returnItem.status === "refunded" || returnItem.status === "rejected")) {
       return (
         <button
           disabled={actionLoadingId === returnItem.id}
@@ -1928,9 +2614,9 @@ const AdminOrders: React.FC = () => {
           }}
           style={{
             ...actionButtonStyle,
-            background: "#f1f5f9",
-            color: "#334155",
-            border: "1px solid #e2e8f0",
+            background: tokens.elevatedSurfaceBg,
+            color: tokens.textSecondary,
+            border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
           }}
         >
           Close
@@ -1943,13 +2629,23 @@ const AdminOrders: React.FC = () => {
   };
 
 
+  if (!canViewOrders) {
+    return (
+      <AccessDeniedView
+        title="Orders Access Restricted"
+        message="You do not have permission to view or manage store orders. Please contact your workspace administrator to request access."
+      />
+    );
+  }
+
   return (
-    <div style={{ color: "#0f172a" }}>
+    <div style={{ color: tokens.textPrimary }}>
+      {toast && <GlassToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       {/* Top Header Card (Segmented Mode + Search & Filter Button) */}
       <div
         style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
+          background: tokens.surfaceBg,
+          border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
           borderRadius: "10px",
           padding: "10px 14px",
           marginBottom: "16px",
@@ -1974,10 +2670,10 @@ const AdminOrders: React.FC = () => {
           <div
             style={{
               display: "inline-flex",
-              background: "#f1f5f9",
+              background: tokens.elevatedSurfaceBg,
               padding: "3px",
               borderRadius: "8px",
-              border: "1px solid #e2e8f0",
+              border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
             }}
           >
             {(["orders", "returns"] as const).map((value) => {
@@ -1995,8 +2691,8 @@ const AdminOrders: React.FC = () => {
                     borderRadius: "6px",
                     padding: "6px 16px",
                     border: "none",
-                    background: isActive ? "#ffffff" : "transparent",
-                    color: isActive ? "#0f172a" : "#64748b",
+                    background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                    color: isActive ? tokens.textPrimary : tokens.textSecondary,
                     boxShadow: isActive
                       ? "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
                       : "none",
@@ -2031,7 +2727,7 @@ const AdminOrders: React.FC = () => {
                   left: "11px",
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   display: "grid",
                   placeItems: "center",
                 }}
@@ -2044,6 +2740,12 @@ const AdminOrders: React.FC = () => {
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
+                  if (searchParams.has("orderId") || searchParams.has("returnId")) {
+                    const nextParams = new URLSearchParams(searchParams);
+                    nextParams.delete("orderId");
+                    nextParams.delete("returnId");
+                    setSearchParams(nextParams, { replace: true });
+                  }
                 }}
                 placeholder={
                   mode === "orders"
@@ -2057,8 +2759,8 @@ const AdminOrders: React.FC = () => {
                   fontSize: "13px",
                   height: "36px",
                   borderRadius: "7px",
-                  border: "1px solid #cbd5e1",
-                  background: "#f8fafc",
+                  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                  background: tokens.elevatedSurfaceBg,
                 }}
               />
               {searchQuery && (
@@ -2066,6 +2768,12 @@ const AdminOrders: React.FC = () => {
                   onClick={() => {
                     setSearchQuery("");
                     setCurrentPage(1);
+                    if (searchParams.has("orderId") || searchParams.has("returnId")) {
+                      const nextParams = new URLSearchParams(searchParams);
+                      nextParams.delete("orderId");
+                      nextParams.delete("returnId");
+                      setSearchParams(nextParams, { replace: true });
+                    }
                   }}
                   style={{
                     position: "absolute",
@@ -2075,7 +2783,7 @@ const AdminOrders: React.FC = () => {
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "#94a3b8",
+                    color: tokens.textMuted,
                     padding: "2px",
                     display: "grid",
                     placeItems: "center",
@@ -2097,9 +2805,9 @@ const AdminOrders: React.FC = () => {
                 height: "36px",
                 padding: "0 12px",
                 borderRadius: "7px",
-                border: activeFilterCount > 0 ? "1px solid #93c5fd" : "1px solid #cbd5e1",
-                background: activeFilterCount > 0 ? "#eff6ff" : "#ffffff",
-                color: activeFilterCount > 0 ? "#1d4ed8" : "#334155",
+                border: activeFilterCount > 0 ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}` : `1px solid ${tokens.border}`,
+                background: activeFilterCount > 0 ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.surfaceBg,
+                color: activeFilterCount > 0 ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: "pointer",
@@ -2135,8 +2843,8 @@ const AdminOrders: React.FC = () => {
                   top: "44px",
                   right: "0",
                   width: "320px",
-                  background: "#ffffff",
-                  border: "1px solid #cbd5e1",
+                  background: tokens.surfaceBg,
+                  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                   borderRadius: "10px",
                   boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
                   padding: "16px",
@@ -2147,10 +2855,10 @@ const AdminOrders: React.FC = () => {
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Filter Orders</div>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>Filter Orders</div>
                   <button
                     onClick={() => setIsFilterOpen(false)}
-                    style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", padding: "2px" }}
+                    style={{ background: "none", border: "none", color: tokens.textSecondary, cursor: "pointer", padding: "2px" }}
                   >
                     <XMarkIcon />
                   </button>
@@ -2167,11 +2875,11 @@ const AdminOrders: React.FC = () => {
                     }}
                     style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
                   >
-                    <option value="last_30_days">Last 30 Days (Default)</option>
-                    <option value="today">Today</option>
-                    <option value="last_7_days">Last 7 Days</option>
-                    <option value="all">All Time</option>
-                    <option value="custom">Custom Date Range...</option>
+                    <option value="last_30_days" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Last 30 Days (Default)</option>
+                    <option value="today" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Today</option>
+                    <option value="last_7_days" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Last 7 Days</option>
+                    <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Time</option>
+                    <option value="custom" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Custom Date Range...</option>
                   </select>
 
                   {dateFilter === "custom" && (
@@ -2185,7 +2893,7 @@ const AdminOrders: React.FC = () => {
                         }}
                         style={{ ...inputStyle, fontSize: "12px", height: "32px", padding: "0 6px" }}
                       />
-                      <span style={{ fontSize: "12px", color: "#64748b" }}>to</span>
+                      <span style={{ fontSize: "12px", color: tokens.textSecondary }}>to</span>
                       <input
                         type="date"
                         value={customToDate}
@@ -2211,7 +2919,7 @@ const AdminOrders: React.FC = () => {
                       }}
                       style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
                     >
-                      <option value="all">All Payment Methods</option>
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Payment Methods</option>
                       <option value="cod">Cash on Delivery (COD)</option>
                       <option value="online">Prepaid / Online</option>
                       <option value="upi">UPI</option>
@@ -2233,7 +2941,7 @@ const AdminOrders: React.FC = () => {
                       }}
                       style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
                     >
-                      <option value="all">All Orders (Dispatched & Pending)</option>
+                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Orders (Dispatched & Pending)</option>
                       <option value="unassigned">Unassigned (Pending Dispatch)</option>
                       <option value="dispatched">All Dispatched Orders</option>
 
@@ -2269,7 +2977,7 @@ const AdminOrders: React.FC = () => {
                     justifyContent: "space-between",
                     alignItems: "center",
                     paddingTop: "8px",
-                    borderTop: "1px solid #f1f5f9",
+                    borderTop: `1px solid ${tokens.border}`,
                   }}
                 >
                   <button
@@ -2319,10 +3027,10 @@ const AdminOrders: React.FC = () => {
               flexWrap: "wrap",
               gap: "6px",
               paddingTop: "6px",
-              borderTop: "1px solid #f1f5f9",
+              borderTop: `1px solid ${tokens.border}`,
             }}
           >
-            <span style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 600, marginRight: "2px" }}>
+            <span style={{ fontSize: "11.5px", color: tokens.textSecondary, fontWeight: 600, marginRight: "2px" }}>
               Active:
             </span>
 
@@ -2336,15 +3044,15 @@ const AdminOrders: React.FC = () => {
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>Date: {dateFilter === "all" ? "All Time" : dateFilter.replaceAll("_", " ")}</span>
                 <button
                   onClick={() => setDateFilter("last_30_days")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: isDark ? "#93c5fd" : "#1d4ed8", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -2361,15 +3069,15 @@ const AdminOrders: React.FC = () => {
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>Payment: {paymentFilter.toUpperCase()}</span>
                 <button
                   onClick={() => setPaymentFilter("all")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: isDark ? "#93c5fd" : "#1d4ed8", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -2386,9 +3094,9 @@ const AdminOrders: React.FC = () => {
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                 }}
               >
                 <span>
@@ -2408,7 +3116,7 @@ const AdminOrders: React.FC = () => {
                 </span>
                 <button
                   onClick={() => setFulfillmentFilter("all")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: isDark ? "#93c5fd" : "#1d4ed8", padding: 0 }}
                 >
                   <XMarkIcon />
                 </button>
@@ -2439,9 +3147,9 @@ const AdminOrders: React.FC = () => {
             ...plainCardStyle,
             padding: "12px 14px",
             marginBottom: "16px",
-            color: "#b91c1c",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
+            color: isDark ? "#fca5a5" : "#b91c1c",
+            background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+            border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
           }}
         >
           {error}
@@ -2454,11 +3162,10 @@ const AdminOrders: React.FC = () => {
           <div
             style={{
               display: "flex",
+              flexWrap: "wrap",
               gap: "4px",
-              overflowX: "auto",
-              borderBottom: "1px solid #e2e8f0",
+              borderBottom: `1px solid ${tokens.border}`,
               marginBottom: "16px",
-              WebkitOverflowScrolling: "touch",
             }}
           >
             {tabs.map((tab) => {
@@ -2478,9 +3185,9 @@ const AdminOrders: React.FC = () => {
                     gap: "8px",
                     padding: "10px 14px",
                     border: "none",
-                    borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                    borderBottom: isActive ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : "2px solid transparent",
                     background: "transparent",
-                    color: isActive ? "#2563eb" : "#64748b",
+                    color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
                     fontSize: "13px",
                     fontWeight: isActive ? 700 : 500,
                     cursor: "pointer",
@@ -2496,9 +3203,9 @@ const AdminOrders: React.FC = () => {
                       fontWeight: 700,
                       padding: "1px 6px",
                       borderRadius: "10px",
-                      background: isActive ? "#eff6ff" : "#f1f5f9",
-                      color: isActive ? "#2563eb" : "#64748b",
-                      border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
+                      background: isActive ? (isDark ? "rgba(59, 130, 246, 0.25)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                      color: isActive ? (isDark ? "#93c5fd" : "#2563eb") : tokens.textSecondary,
+                      border: `1px solid ${isActive ? (isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe") : tokens.border}`,
                     }}
                   >
                     {count}
@@ -2508,19 +3215,71 @@ const AdminOrders: React.FC = () => {
             })}
           </div>
 
-          <div style={{ ...plainCardStyle, overflow: "hidden" }}>
+          {activeTab === "preorders" && (
+            <div
+              style={{
+                margin: "0 0 12px 0",
+                padding: "8px 12px",
+                borderRadius: "6px",
+                background: isDark ? "rgba(245, 158, 11, 0.12)" : "#fefce8",
+                border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.25)" : "#fef08a"}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "8px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "50%",
+                    background: "#d97706",
+                    display: "inline-block",
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontSize: "12.5px", color: "#854d0e", fontWeight: 500 }}>
+                  Pre-orders are held here until launch or release.
+                </span>
+              </div>
+              {filteredOrders.length > 0 && canUpdateOrders && (
+                <button
+                  type="button"
+                  disabled={isBulkActionLoading}
+                  onClick={handleBulkReleasePreorders}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "5px",
+                    border: "1px solid #d97706",
+                    background: "#d97706",
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    fontSize: "11.5px",
+                    cursor: isBulkActionLoading ? "wait" : "pointer",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  {isBulkActionLoading ? "Releasing..." : "Release All"}
+                </button>
+              )}
+            </div>
+          )}
+
+          <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", overflow: "hidden" }}>
             {loading ? (
-              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: tokens.textSecondary }}>
                 Loading orders...
               </div>
             ) : !filteredOrders.length ? (
-              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: tokens.textSecondary }}>
                 {hasActiveFilters ? "No orders match your filter criteria." : "No records in this tab."}
               </div>
             ) : (
-              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-                <div style={{ minWidth: "760px", display: "flex", flexDirection: "column" }}>
-                  {/* Clean Table Header */}
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {/* Clean Table Header */}
                   <div
                     style={{
                       display: "grid",
@@ -2529,11 +3288,11 @@ const AdminOrders: React.FC = () => {
                       gap: "12px",
                       alignItems: "center",
                       padding: "9px 16px",
-                      background: "#f8fafc",
-                      borderBottom: "1px solid #e2e8f0",
+                      background: tokens.elevatedSurfaceBg,
+                      borderBottom: `1px solid ${tokens.border}`,
                       fontSize: "11px",
                       fontWeight: 700,
-                      color: "#64748b",
+                      color: tokens.textSecondary,
                       textTransform: "uppercase",
                       letterSpacing: "0.05em",
                     }}
@@ -2548,8 +3307,11 @@ const AdminOrders: React.FC = () => {
 
                   {paginatedOrders.map((order) => {
                     const isExpanded = expandedOrderId === order.id;
-                    const tone = getStatusTone(order.status);
                     const detail = getExpandedOrder(order);
+                    const isRepl = isOrderReplacement(order) || isOrderReplacement(detail);
+                    const isReplDelivered = isRepl && (order.status === "delivered" || detail?.status === "delivered");
+                    const isReplActive = isRepl && !isReplDelivered && order.status !== "cancelled" && detail?.status !== "cancelled";
+                    const tone = getStatusTone(order.status, isRepl, isDark);
                     const shipmentDraft = getShipmentDraft(order);
                     const items = detail?.items || order.items || [];
                     const shippingAddress = detail?.shipping_address || order.shipping_address;
@@ -2558,8 +3320,8 @@ const AdminOrders: React.FC = () => {
                       <div
                         key={order.id}
                         style={{
-                          borderBottom: "1px solid #e2e8f0",
-                          background: isExpanded ? "#f8fafc" : "#ffffff",
+                          borderBottom: `1px solid ${tokens.border}`,
+                          background: isExpanded ? (isDark ? tokens.elevatedSurfaceBg : "#f8fafc") : (isDark ? tokens.surfaceBg : "#ffffff"),
                           transition: "background 0.15s ease",
                         }}
                       >
@@ -2573,8 +3335,8 @@ const AdminOrders: React.FC = () => {
                             alignItems: "center",
                             padding: "12px 16px",
                             cursor: "pointer",
-                            background: isExpanded ? "#f1f5f9" : "transparent",
-                            borderBottom: isExpanded ? "1px solid #e2e8f0" : "none",
+                            background: isExpanded ? (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9") : "transparent",
+                            borderBottom: isExpanded ? `1px solid ${tokens.border}` : "none",
                             transition: "background 0.15s ease",
                           }}
                         >
@@ -2584,11 +3346,12 @@ const AdminOrders: React.FC = () => {
                               style={{
                                 fontSize: "13.5px",
                                 fontWeight: 700,
-                                color: "#0f172a",
+                                color: tokens.textPrimary,
                                 marginBottom: "2px",
                                 display: "flex",
                                 alignItems: "center",
                                 gap: "7px",
+                                flexWrap: "wrap",
                               }}
                             >
                               <span>{order.customer_name || shippingAddress?.fullName || "Guest Customer"}</span>
@@ -2596,9 +3359,9 @@ const AdminOrders: React.FC = () => {
                                 style={{
                                   fontSize: "11px",
                                   fontWeight: 600,
-                                  color: "#64748b",
-                                  background: "#f1f5f9",
-                                  border: "1px solid #e2e8f0",
+                                  color: tokens.textSecondary,
+                                  background: tokens.elevatedSurfaceBg,
+                                  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                   padding: "1px 5px",
                                   borderRadius: "4px",
                                 }}
@@ -2606,27 +3369,82 @@ const AdminOrders: React.FC = () => {
                               >
                                 #{order.id.slice(0, 8).toUpperCase()}
                               </span>
+                              {order.contains_preorder && (
+                                <span
+                                  style={{
+                                    fontSize: "10.5px",
+                                    fontWeight: 700,
+                                    color: order.preorder_released ? "#047857" : "#b45309",
+                                    background: order.preorder_released ? "#ecfdf5" : "#fef3c7",
+                                    border: `1px solid ${order.preorder_released ? "#a7f3d0" : "#fde68a"}`,
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                  }}
+                                  title={order.preorder_release_date ? `Release date: ${new Date(order.preorder_release_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}` : "Pre-order reservation"}
+                                >
+                                  <span>{order.preorder_released ? "Pre-Order Released" : "Pre-Order"}</span>
+                                </span>
+                              )}
+                              {isReplActive && (
+                                <span
+                                    style={{
+                                      fontSize: "10.5px",
+                                      fontWeight: 700,
+                                      color: "#0284c7",
+                                      background: "#f0f9ff",
+                                      border: "1px solid #bae6fd",
+                                      padding: "1px 6px",
+                                      borderRadius: "4px",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "3px",
+                                    }}
+                                  >
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                    <span>Re-Dispatch</span>
+                                  </span>
+                              )}
                             </div>
                             <div
                               style={{
                                 fontSize: "12px",
-                                color: "#64748b",
+                                color: tokens.textSecondary,
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
                               }}
                             >
                               {shippingAddress?.city ? `${shippingAddress.city} • ` : ""}
-                              {items.length > 0
-                                ? items.map((i) => `${i.product_name} ×${i.quantity}`).slice(0, 2).join(", ")
-                                : `${order.item_count || 1} item`}
+                              {(() => {
+                                if (isReplActive) {
+                                  const replItems = items.filter((i) => i.status === "confirmed" || i.status === "shipped" || i.status === "out_for_delivery");
+                                  const deliveredItems = items.filter((i) => i.status === "delivered");
+                                  if (replItems.length > 0 && deliveredItems.length > 0) {
+                                    return (
+                                      <span>
+                                        <strong style={{ color: "#0369a1" }}>Replacing: </strong>
+                                        {replItems.map((i) => `${i.product_name} ×${i.quantity}`).join(", ")}
+                                        <span style={{ color: tokens.textMuted, marginLeft: "5px" }}>
+                                          ({deliveredItems.length} item{deliveredItems.length > 1 ? "s" : ""} delivered earlier)
+                                        </span>
+                                      </span>
+                                    );
+                                  }
+                                }
+                                return items.length > 0
+                                  ? items.map((i) => `${i.product_name} ×${i.quantity}`).slice(0, 2).join(", ")
+                                  : `${order.item_count || 1} item`;
+                              })()}
                             </div>
                           </div>
 
                           {/* Col 2: Amount & Date */}
                           <div style={{ minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <span style={{ fontSize: "13.5px", color: "#0f172a", fontWeight: 700 }}>
+                              <span style={{ fontSize: "13.5px", color: tokens.textPrimary, fontWeight: 700 }}>
                                 {formatPrice(order.total)}
                               </span>
                               <span
@@ -2635,9 +3453,9 @@ const AdminOrders: React.FC = () => {
                                   fontWeight: 600,
                                   padding: "1px 6px",
                                   borderRadius: "4px",
-                                  background: "#f8fafc",
-                                  color: "#475569",
-                                  border: "1px solid #e2e8f0",
+                                  background: tokens.elevatedSurfaceBg,
+                                  color: tokens.textSecondary,
+                                  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "4px",
@@ -2647,7 +3465,7 @@ const AdminOrders: React.FC = () => {
                                 <span>{formatPaymentMethodName(order.payment_method)}</span>
                               </span>
                             </div>
-                            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                            <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "2px" }}>
                               {formatDate(order.created_at)}
                             </div>
                           </div>
@@ -2657,14 +3475,14 @@ const AdminOrders: React.FC = () => {
                             {order.shipment?.delivery_partner_name ? (
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#16a34a", flexShrink: 0 }} />
-                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {order.shipment.delivery_partner_name}
                                 </span>
                               </div>
                             ) : order.shipment?.courier_name ? (
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#7c3aed", flexShrink: 0 }} />
-                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {order.shipment.courier_name}
                                 </span>
                               </div>
@@ -2676,7 +3494,7 @@ const AdminOrders: React.FC = () => {
                                 </span>
                               </div>
                             ) : (
-                              <span style={{ fontSize: "12px", color: "#94a3b8" }}>—</span>
+                              <span style={{ fontSize: "12px", color: tokens.textMuted }}>—</span>
                             )}
                           </div>
 
@@ -2715,294 +3533,409 @@ const AdminOrders: React.FC = () => {
                           </div>
 
                           {/* Col 6: Chevron */}
-                          <div style={{ color: "#94a3b8", display: "grid", placeItems: "center" }}>
+                          <div style={{ color: tokens.textMuted, display: "grid", placeItems: "center" }}>
                             {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
                           </div>
                         </div>
 
-
-                        {isExpanded ? (
-                          <div style={{ padding: "16px 18px 20px", background: "#f8fafc" }}>
+                        {isExpanded && (
+                          <div style={{ padding: "16px", borderTop: `1px solid ${tokens.border}`, background: isDark ? "rgba(0,0,0,0.25)" : tokens.elevatedSurfaceBg }}>
                             <div
                               style={{
                                 display: "grid",
-                                gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+                                gridTemplateColumns: "1fr 1fr",
                                 gap: "16px",
-                                alignItems: "start",
                               }}
                             >
-                              {/* Left Column: Customer Details, Delivery Destination & Items */}
-                              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                {/* Card 1: Customer & Shipping Information */}
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      marginBottom: "12px",
-                                      paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
-                                    }}
-                                  >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Customer & Destination
-                                    </span>
-                                    <span
+                                {/* Left Column: Destination, Items Breakdown & Pricing Snapshot */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                                  {/* Card 1: Customer Destination & Notes */}
+                                  <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
+                                    <div
                                       style={{
-                                        fontSize: "11px",
-                                        fontWeight: 700,
-                                        padding: "2px 8px",
-                                        borderRadius: "4px",
-                                        background: (detail?.payment_status || order.payment_status) === "paid"
-                                          ? "#f0fdf4"
-                                          : (detail?.payment_status || order.payment_status) === "refunded"
-                                          ? "#faf5ff"
-                                          : "#fffbeb",
-                                        color: (detail?.payment_status || order.payment_status) === "paid"
-                                          ? "#15803d"
-                                          : (detail?.payment_status || order.payment_status) === "refunded"
-                                          ? "#7c3aed"
-                                          : "#b45309",
-                                        border: `1px solid ${(detail?.payment_status || order.payment_status) === "paid" ? "#bbf7d0" : (detail?.payment_status || order.payment_status) === "refunded" ? "#e9d5ff" : "#fde68a"}`,
-                                        textTransform: "capitalize",
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        marginBottom: "12px",
+                                        paddingBottom: "8px",
+                                        borderBottom: `1px solid ${tokens.border}`,
                                       }}
                                     >
-                                      Payment: {(detail?.payment_status || order.payment_status) || "Pending"}
-                                    </span>
-                                  </div>
-
-                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
-                                      {shippingAddress?.fullName || detail?.customer_name || order.customer_name || "Guest Customer"}
-                                    </div>
-
-                                    <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, background: "#f8fafc", padding: "10px 12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                                      <div style={{ fontWeight: 600, color: "#1e293b", marginBottom: "2px" }}>
-                                        Delivery Address:
-                                      </div>
-                                      <div>{shippingAddress?.addressLine1 || "—"}</div>
-                                      <div>
-                                        {[shippingAddress?.city, shippingAddress?.postalCode].filter(Boolean).join(" - ") || "—"}
-                                      </div>
-                                    </div>
-
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "13px", color: "#475569", marginTop: "2px" }}>
-                                      {(shippingAddress?.mobileNumber || detail?.customer_phone || order.customer_phone) && (
-                                        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                                          <PhoneIcon />
-                                          <a
-                                            href={`tel:${shippingAddress?.mobileNumber || detail?.customer_phone || order.customer_phone}`}
-                                            style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}
-                                          >
-                                            {formatPhoneDisplay(shippingAddress?.mobileNumber || detail?.customer_phone || order.customer_phone || "")}
-                                          </a>
-                                        </div>
-                                      )}
-                                      {(shippingAddress?.email || detail?.customer_email || order.customer_email) && (
-                                        <div style={{ color: "#64748b" }}>
-                                          {shippingAddress?.email || detail?.customer_email || order.customer_email}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div style={{ marginTop: "6px", paddingTop: "8px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12.5px" }}>
-                                      <span style={{ color: "#64748b" }}>Payment Method:</span>
-                                      <span style={{ fontWeight: 700, color: "#0f172a", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                                        <span>{getPaymentMethodIcon(detail?.payment_method || order.payment_method)}</span>
-                                        <span>{formatPaymentMethodName(detail?.payment_method || order.payment_method)}</span>
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                        Customer & Destination
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: "11px",
+                                          fontWeight: 700,
+                                          padding: "3px 8px",
+                                          borderRadius: "4px",
+                                          background: (detail?.payment_status || order.payment_status) === "paid"
+                                            ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4")
+                                            : (detail?.payment_status || order.payment_status) === "refunded"
+                                            ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4")
+                                            : (detail?.payment_status || order.payment_status) === "partially_refunded"
+                                            ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                                            : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"),
+                                          color: (detail?.payment_status || order.payment_status) === "paid"
+                                            ? (isDark ? "#4ade80" : "#15803d")
+                                            : (detail?.payment_status || order.payment_status) === "refunded"
+                                            ? (isDark ? "#4ade80" : "#15803d")
+                                            : (detail?.payment_status || order.payment_status) === "partially_refunded"
+                                            ? (isDark ? "#93c5fd" : "#1d4ed8")
+                                            : (isDark ? "#fca5a5" : "#b91c1c"),
+                                          border: `1px solid ${
+                                            (detail?.payment_status || order.payment_status) === "paid"
+                                              ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0")
+                                              : (detail?.payment_status || order.payment_status) === "refunded"
+                                              ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0")
+                                              : (detail?.payment_status || order.payment_status) === "partially_refunded"
+                                              ? (isDark ? "rgba(147, 197, 253, 0.3)" : "#bfdbfe")
+                                              : (isDark ? "rgba(252, 165, 165, 0.3)" : "#fecaca")
+                                          }`,
+                                          textTransform: "capitalize",
+                                        }}
+                                      >
+                                        Payment: {detail?.payment_status || order.payment_status || "Pending"}
                                       </span>
                                     </div>
 
+                                    <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "4px" }}>
+                                      {order.customer_name || shippingAddress?.fullName || "Guest Customer"}
+                                    </div>
+                                    <div style={{ fontSize: "12.5px", color: tokens.textSecondary, lineHeight: "1.5" }}>
+                                      <span style={{ fontWeight: 600, color: tokens.textSecondary }}>Delivery Address:</span><br />
+                                      {shippingAddress?.addressLine1 || shippingAddress?.street || "No address line"}<br />
+                                      {shippingAddress?.city ? `${shippingAddress.city} - ${shippingAddress.postalCode || ""}` : ""}
+                                    </div>
+
+                                    {(order.customer_phone || shippingAddress?.mobileNumber) && (
+                                      <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                        <PhoneIcon />
+                                        <a href={`tel:${order.customer_phone || shippingAddress?.mobileNumber}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
+                                          {formatPhoneDisplay(order.customer_phone || shippingAddress?.mobileNumber || "")}
+                                        </a>
+                                      </div>
+                                    )}
+                                    {(order.customer_email || shippingAddress?.email) && (
+                                      <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "2px" }}>
+                                        {order.customer_email || shippingAddress?.email}
+                                      </div>
+                                    )}
+
+                                    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                      <span style={{ fontSize: "12px", color: tokens.textSecondary }}>Payment Method:</span>
+                                      <span style={{ fontSize: "12.5px", fontWeight: 700, color: tokens.textPrimary }}>{formatPaymentMethodName(order.payment_method)}</span>
+                                    </div>
+
                                     {(detail?.razorpay_payment_id || order.razorpay_payment_id) && (
-                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
-                                        <span style={{ color: "#64748b" }}>Payment Reference:</span>
-                                        <code style={{ fontSize: "11px", fontWeight: 700, background: "#f8fafc", padding: "2px 6px", borderRadius: "4px", border: "1px solid #e2e8f0", color: "#0f172a" }}>
+                                      <div style={{ marginTop: "4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={{ fontSize: "11px", color: tokens.textSecondary }}>Payment Reference:</span>
+                                        <code style={{ fontSize: "11px", color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, padding: "1px 5px", borderRadius: "3px" }}>
                                           {detail?.razorpay_payment_id || order.razorpay_payment_id}
                                         </code>
                                       </div>
                                     )}
 
-                                    {(detail?.delivery_otp || order.delivery_otp) && (
-                                      <div
+                                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}`, display: "flex", justifyContent: "flex-end" }}>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const ordDetail = detailsMap[order.id] || order;
+                                          generateBillPdf(ordDetail);
+                                        }}
                                         style={{
-                                          marginTop: "6px",
-                                          padding: "8px 12px",
-                                          background: "#ecfdf5",
-                                          borderRadius: "6px",
-                                          border: "1px solid #a7f3d0",
-                                          display: "flex",
+                                          display: "inline-flex",
                                           alignItems: "center",
-                                          justifyContent: "space-between",
+                                          gap: "6px",
+                                          padding: "7px 12px",
+                                          borderRadius: "6px",
+                                          border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                          background: tokens.surfaceBg,
+                                          color: tokens.textPrimary,
+                                          fontSize: "12px",
+                                          fontWeight: 600,
+                                          cursor: "pointer",
+                                          boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                                          transition: "all 0.15s ease",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.background = isDark ? tokens.elevatedSurfaceBg : "#f8fafc";
+                                          e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.2)" : "#94a3b8";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#ffffff";
+                                          e.currentTarget.style.borderColor = tokens.border;
                                         }}
                                       >
-                                        <span style={{ fontSize: "12px", fontWeight: 700, color: "#065f46" }}>
-                                          🔒 Delivery OTP:
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                          <polyline points="14 2 14 8 20 8"></polyline>
+                                          <line x1="16" y1="13" x2="8" y2="13"></line>
+                                          <line x1="16" y1="17" x2="8" y2="17"></line>
+                                          <polyline points="10 9 9 9 8 9"></polyline>
+                                        </svg>
+                                        <span>Download Bill / Tax Invoice</span>
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Card 2: Order Items & Pricing Breakdown */}
+                                  <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        marginBottom: "12px",
+                                        paddingBottom: "8px",
+                                        borderBottom: `1px solid ${tokens.border}`,
+                                      }}
+                                    >
+                                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                        <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                          Order Items ({items.length})
                                         </span>
-                                        <code
+                                        {isReplActive && (
+                                          <span style={{ fontSize: "11px", fontWeight: 700, color: "#0284c7", background: "#f0f9ff", border: "1px solid #bae6fd", padding: "1px 6px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                            <span>Re-Dispatch</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
+                                        Total: {formatPrice(order.total)}
+                                      </span>
+                                    </div>
+
+                                    {/* Re-Dispatch Alert Notice for Warehouse Packing */}
+                                    {(() => {
+                                      if (isReplActive) {
+                                        const replItems = items.filter((i) => i.status === "confirmed" || i.status === "shipped" || i.status === "out_for_delivery");
+                                        const deliveredItems = items.filter((i) => i.status === "delivered");
+                                        if (replItems.length > 0 && deliveredItems.length > 0) {
+                                          return (
+                                            <div style={{ padding: "10px 12px", borderRadius: "6px", background: isDark ? "rgba(2, 132, 199, 0.12)" : "#f0f9ff", border: `1.5px solid ${isDark ? "rgba(56, 189, 248, 0.3)" : "#bae6fd"}`, marginBottom: "12px", fontSize: "12px", color: isDark ? "#7dd3fc" : "#0369a1", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "2px" }}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                              <div>
+                                                <strong>Packing Instruction (Partial Re-Dispatch):</strong> Pack only <strong>{replItems.map((i) => `${i.quantity}x ${i.product_name}`).join(", ")}</strong> for this replacement shipment. The other {deliveredItems.length} item(s) were already delivered.
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                      }
+                                      return null;
+                                    })()}
+
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                      {items.map((item) => {
+                                        const isItemBeingReplaced = isReplActive && (item.status === "confirmed" || item.status === "shipped" || item.status === "out_for_delivery");
+                                        const isItemDeliveredEarlier = isReplActive && item.status === "delivered";
+
+                                        return (
+                                          <div
+                                            key={item.id}
+                                            style={{
+                                              display: "flex",
+                                              justifyContent: "space-between",
+                                              alignItems: "flex-start",
+                                              gap: "12px",
+                                              padding: "10px 12px",
+                                              borderRadius: "6px",
+                                              background: isItemBeingReplaced
+                                                ? (isDark ? "rgba(2, 132, 199, 0.12)" : "#f0f9ff")
+                                                : isItemDeliveredEarlier
+                                                ? (isDark ? "rgba(34, 197, 94, 0.08)" : "#f8fafc")
+                                                : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
+                                              border: isItemBeingReplaced
+                                                ? (isDark ? "1.5px solid rgba(125, 211, 252, 0.4)" : "1.5px solid #7dd3fc")
+                                                : isItemDeliveredEarlier
+                                                ? (isDark ? "1px solid rgba(34, 197, 94, 0.2)" : "1px solid #e2e8f0")
+                                                : `1px solid ${tokens.border}`,
+                                              transition: "all 0.15s ease",
+                                            }}
+                                          >
+                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                                <span style={{ fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary }}>
+                                                  {item.product_name}
+                                                </span>
+                                                {item.is_preorder && (
+                                                  <span
+                                                    style={{
+                                                      fontSize: "11px",
+                                                      fontWeight: 700,
+                                                      color: isDark ? "#fbbf24" : "#b45309",
+                                                      background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
+                                                      border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
+                                                      padding: "2px 7px",
+                                                      borderRadius: "4px",
+                                                      display: "inline-flex",
+                                                      alignItems: "center",
+                                                      gap: "4px",
+                                                    }}
+                                                  >
+                                                    <span>Pre-Order</span>
+                                                    {item.preorder_release_date && (
+                                                      <span style={{ fontSize: "10px", fontWeight: 500, color: "#92400e" }}>
+                                                        (Release: {new Date(item.preorder_release_date).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })})
+                                                      </span>
+                                                    )}
+                                                  </span>
+                                                )}
+                                                {isItemBeingReplaced && (
+                                                  <span style={{ fontSize: "11px", fontWeight: 700, color: isDark ? "#38bdf8" : "#0284c7", background: isDark ? "rgba(2, 132, 199, 0.15)" : "#e0f2fe", border: `1px solid ${isDark ? "rgba(56, 189, 248, 0.3)" : "#7dd3fc"}`, padding: "2px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                                    <span>Re-Dispatch Item</span>
+                                                  </span>
+                                                )}
+                                                {isItemDeliveredEarlier && (
+                                                  <span style={{ fontSize: "11px", fontWeight: 600, color: isDark ? "#4ade80" : "#15803d", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, padding: "2px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                    <span>Delivered Earlier</span>
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap" }}>
+                                                <span style={{ fontSize: "12.5px", fontWeight: 600, color: tokens.textSecondary }}>
+                                                  Qty: {item.quantity}
+                                                </span>
+                                                {item.selected_variant_value && (
+                                                  <span
+                                                    style={{
+                                                      fontSize: "11px",
+                                                      fontWeight: 600,
+                                                      color: isDark ? "#60a5fa" : "#2563eb",
+                                                      background: isDark ? "rgba(37, 99, 235, 0.15)" : "#eff6ff",
+                                                      border: `1px solid ${isDark ? "rgba(37, 99, 235, 0.3)" : "#bfdbfe"}`,
+                                                      padding: "1px 6px",
+                                                      borderRadius: "4px",
+                                                    }}
+                                                  >
+                                                    {item.selected_variant_value}
+                                                  </span>
+                                                )}
+                                                {!isReplDelivered && !isItemBeingReplaced && !isItemDeliveredEarlier && item.status && item.status !== "delivered" && (
+                                                  <span style={{ fontSize: "11.5px", color: tokens.textMuted }}>
+                                                    • {item.status.replaceAll("_", " ")}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <div style={{ fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap" }}>
+                                              {formatPrice(item.line_total)}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Right Column: Fulfillment Dispatch Control & Admin Timeline */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                                  {/* Card 1: Delivery & Dispatch Control */}
+                                  <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        marginBottom: "12px",
+                                        paddingBottom: "8px",
+                                        borderBottom: `1px solid ${tokens.border}`,
+                                      }}
+                                    >
+                                      <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                        Fulfillment & Dispatch
+                                      </span>
+                                      {(detail?.shipment || order.shipment) ? (
+                                        <span
                                           style={{
-                                            fontSize: "13px",
-                                            fontWeight: 900,
-                                            letterSpacing: "3px",
-                                            fontFamily: "monospace",
-                                            color: "#047857",
-                                            background: "#ffffff",
-                                            padding: "2px 8px",
+                                            fontSize: "11px",
+                                            fontWeight: 700,
+                                            padding: "3px 8px",
                                             borderRadius: "4px",
-                                            border: "1px dashed #059669",
+                                            background: (detail?.shipment?.status || order.shipment?.status) === "delivered"
+                                              ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4")
+                                              : (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff"),
+                                            color: (detail?.shipment?.status || order.shipment?.status) === "delivered"
+                                              ? (isDark ? "#4ade80" : "#15803d")
+                                              : (isDark ? "#93c5fd" : "#1d4ed8"),
+                                            border: `1px solid ${
+                                              (detail?.shipment?.status || order.shipment?.status) === "delivered"
+                                                ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0")
+                                                : (isDark ? "rgba(147, 197, 253, 0.3)" : "#bfdbfe")
+                                            }`,
+                                            textTransform: "capitalize",
                                           }}
                                         >
-                                          {detail?.delivery_otp || order.delivery_otp}
-                                        </code>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
+                                          {(detail?.shipment?.status || order.shipment?.status || "Pending").replaceAll("_", " ")}
+                                        </span>
+                                      ) : (
+                                        <span
+                                          style={{
+                                            fontSize: "11px",
+                                            fontWeight: 700,
+                                            padding: "3px 8px",
+                                            borderRadius: "4px",
+                                            background: isDark ? "rgba(249, 115, 22, 0.15)" : "#fff7ed",
+                                            color: isDark ? "#fb923c" : "#c2410c",
+                                            border: `1px solid ${isDark ? "rgba(249, 115, 22, 0.3)" : "#ffedd5"}`,
+                                          }}
+                                        >
+                                          Pending Dispatch
+                                        </span>
+                                      )}
+                                    </div>
 
-                                {/* Card 2: Order Items & Pricing Breakdown */}
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      marginBottom: "12px",
-                                      paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
-                                    }}
-                                  >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Order Items ({items.length})
-                                    </span>
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
-                                      Total: {formatPrice(order.total)}
-                                    </span>
-                                  </div>
+                                    {(() => {
+                                      const currentShipment = detail?.shipment || order.shipment;
+                                      const isFleetOn = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+                                      const isShiprocketOn = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+                                      const isManualOn = deliverySettings?.enable_manual !== undefined ? Boolean(deliverySettings.enable_manual) : (deliverySettings?.delivery_mode === "manual");
 
-                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                    {items.map((item) => (
-                                      <div
-                                        key={item.id}
-                                        style={{
-                                          display: "flex",
-                                          justifyContent: "space-between",
-                                          alignItems: "flex-start",
-                                          gap: "12px",
-                                          padding: "10px 12px",
-                                          borderRadius: "6px",
-                                          background: "#f8fafc",
-                                          border: "1px solid #e2e8f0",
-                                        }}
-                                      >
-                                        <div style={{ minWidth: 0, flex: 1 }}>
-                                          <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>
-                                            {item.product_name}
-                                          </div>
-                                          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "3px", flexWrap: "wrap" }}>
-                                            <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#475569" }}>
-                                              Qty: {item.quantity}
-                                            </span>
-                                            {item.selected_variant_value && (
-                                              <span
-                                                style={{
-                                                  fontSize: "11px",
-                                                  fontWeight: 600,
-                                                  color: "#2563eb",
-                                                  background: "#eff6ff",
-                                                  border: "1px solid #bfdbfe",
-                                                  padding: "1px 6px",
-                                                  borderRadius: "4px",
-                                                }}
-                                              >
-                                                {item.selected_variant_value}
-                                              </span>
-                                            )}
-                                            <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>
-                                              • {item.status.replaceAll("_", " ")}
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
-                                          {formatPrice(item.line_total)}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
+                                      const availableModes: Array<{ id: "own_agent" | "shiprocket" | "manual"; label: string }> = [];
+                                      if (isFleetOn) availableModes.push({ id: "own_agent", label: "Own Fleet" });
+                                      if (isShiprocketOn) availableModes.push({ id: "shiprocket", label: "Shiprocket" });
+                                      if (isManualOn) availableModes.push({ id: "manual", label: "Manual" });
 
-                              {/* Right Column: Fulfillment Dispatch Control & Admin Timeline */}
-                              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                {/* Card 1: Delivery & Dispatch Control */}
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      marginBottom: "12px",
-                                      paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
-                                    }}
-                                  >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                      Fulfillment & Dispatch
-                                    </span>
-                                    {(detail?.shipment || order.shipment) ? (
-                                      <span
-                                        style={{
-                                          fontSize: "11px",
-                                          fontWeight: 700,
-                                          padding: "3px 8px",
-                                          borderRadius: "4px",
-                                          background: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#f0fdf4" : "#eff6ff",
-                                          color: (detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#15803d" : "#1d4ed8",
-                                          border: `1px solid ${(detail?.shipment?.status || order.shipment?.status) === "delivered" ? "#bbf7d0" : "#bfdbfe"}`,
-                                          textTransform: "capitalize",
-                                        }}
-                                      >
-                                        {(detail?.shipment?.status || order.shipment?.status || "Pending").replaceAll("_", " ")}
-                                      </span>
-                                    ) : (
-                                      <span
-                                        style={{
-                                          fontSize: "11px",
-                                          fontWeight: 700,
-                                          padding: "3px 8px",
-                                          borderRadius: "4px",
-                                          background: "#fff7ed",
-                                          color: "#c2410c",
-                                          border: "1px solid #ffedd5",
-                                        }}
-                                      >
-                                        Pending Dispatch
-                                      </span>
-                                    )}
-                                  </div>
+                                      if (availableModes.length === 0) {
+                                        availableModes.push({ id: "manual", label: "Manual" });
+                                      }
 
-                                  {(() => {
-                                    const currentShipment = detail?.shipment || order.shipment;
-                                    const storeDeliveryMode = deliverySettings?.delivery_mode || "own_agent";
-                                    const activeMode = selectedDispatchModeMap[order.id] || (storeDeliveryMode === "hybrid" ? "own_agent" : storeDeliveryMode);
-                                    const assignedRider = deliveryAgents.find((a) => a.id === currentShipment?.delivery_partner_phone || a.name === currentShipment?.delivery_partner_name);
-                                    const riderName = currentShipment?.delivery_partner_name || assignedRider?.name || "Assigned Rider";
-                                    const riderPhone = currentShipment?.delivery_partner_phone || assignedRider?.phone || "";
-                                    const isReassigning = Boolean(reassigningOrderIdMap[order.id]);
+                                      const activeMode: "own_agent" | "shiprocket" | "manual" = (
+                                        selectedDispatchModeMap[order.id] && availableModes.some((m) => m.id === selectedDispatchModeMap[order.id])
+                                          ? selectedDispatchModeMap[order.id]
+                                          : availableModes[0].id
+                                      ) as "own_agent" | "shiprocket" | "manual";
 
-                                    return (
+                                      const assignedRider = deliveryAgents.find((a) => a.id === currentShipment?.delivery_partner_phone || a.name === currentShipment?.delivery_partner_name);
+                                      const riderName = currentShipment?.delivery_partner_name || assignedRider?.name || "Assigned Rider";
+                                      const riderPhone = currentShipment?.delivery_partner_phone || assignedRider?.phone || "";
+                                      const isReassigning = Boolean(reassigningOrderIdMap[order.id]);
+
+                                      return (
                                       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                        {/* If Order is already dispatched via Courier / Shiprocket */}
-                                        {Boolean(currentShipment?.courier_name || currentShipment?.awb_number || currentShipment?.delivery_mode === "shiprocket" || currentShipment?.mode === "shiprocket") ? (
+                                        {/* If Order is already dispatched via Shiprocket */}
+                                        {Boolean(
+                                          currentShipment && (
+                                            currentShipment.delivery_mode === "shiprocket" ||
+                                            currentShipment.mode === "shiprocket" ||
+                                            (Boolean(currentShipment.awb_number) && !currentShipment.agent_id && currentShipment.delivery_mode !== "manual")
+                                          )
+                                        ) ? (
                                           <div
                                             style={{
                                               padding: "14px",
-                                              background: "#f8fafc",
+                                              background: tokens.elevatedSurfaceBg,
                                               borderRadius: "8px",
-                                              border: "1px solid #e2e8f0",
+                                              border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                             }}
                                           >
                                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                                              <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                              <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                                                 Courier Partner (Shiprocket)
                                               </div>
                                               <span
@@ -3011,9 +3944,9 @@ const AdminOrders: React.FC = () => {
                                                   fontWeight: 700,
                                                   padding: "2px 7px",
                                                   borderRadius: "4px",
-                                                  background: "#eff6ff",
-                                                  color: "#1d4ed8",
-                                                  border: "1px solid #bfdbfe",
+                                                  background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                                                   textTransform: "capitalize",
                                                 }}
                                               >
@@ -3021,14 +3954,14 @@ const AdminOrders: React.FC = () => {
                                               </span>
                                             </div>
 
-                                            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", marginBottom: "6px" }}>
+                                            <div style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "6px" }}>
                                               {currentShipment?.courier_name || "Delhivery Surface"}
                                             </div>
 
                                             {currentShipment?.awb_number && (
                                               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", fontSize: "13px" }}>
-                                                <span style={{ color: "#64748b" }}>AWB Number:</span>
-                                                <code style={{ background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, color: "#0f172a" }}>
+                                                <span style={{ color: tokens.textSecondary }}>AWB Number:</span>
+                                                <code style={{ background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, color: tokens.textPrimary }}>
                                                   {currentShipment.awb_number}
                                                 </code>
                                               </div>
@@ -3068,9 +4001,9 @@ const AdminOrders: React.FC = () => {
                                                     gap: "5px",
                                                     padding: "6px 12px",
                                                     borderRadius: "6px",
-                                                    background: "#ffffff",
-                                                    color: "#0f172a",
-                                                    border: "1px solid #cbd5e1",
+                                                    background: tokens.surfaceBg,
+                                                    color: tokens.textPrimary,
+                                                    border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                                     fontSize: "12px",
                                                     fontWeight: 700,
                                                     textDecoration: "none",
@@ -3081,18 +4014,278 @@ const AdminOrders: React.FC = () => {
                                               )}
                                             </div>
                                           </div>
-                                        ) : currentShipment?.delivery_partner_name ? (
+                                        ) : Boolean(
+                                          currentShipment && (
+                                            currentShipment.delivery_mode === "manual" ||
+                                            currentShipment.mode === "manual" ||
+                                            (Boolean(currentShipment.delivery_partner_name) && currentShipment.delivery_mode !== "own_agent" && currentShipment.mode !== "own_agent" && !currentShipment.agent_id) ||
+                                            ((order.status === "shipped" || order.status === "out_for_delivery") && !currentShipment.agent_id && currentShipment.delivery_mode !== "own_agent")
+                                          )
+                                        ) ? (
+                                          /* If Order is dispatched via Manual Courier */
                                           <div
                                             style={{
                                               padding: "14px",
-                                              background: "#f8fafc",
+                                              background: tokens.elevatedSurfaceBg,
                                               borderRadius: "8px",
-                                              border: "1px solid #e2e8f0",
+                                              border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                            }}
+                                          >
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                              <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                Manual Courier Partner
+                                              </div>
+                                              <span
+                                                style={{
+                                                  fontSize: "11px",
+                                                  fontWeight: 700,
+                                                  padding: "2px 7px",
+                                                  borderRadius: "4px",
+                                                  background: (order.status === "delivered" || currentShipment?.status === "delivered")
+                                                    ? "#f0fdf4"
+                                                    : (order.status === "out_for_delivery" || currentShipment?.status === "out_for_delivery")
+                                                    ? "#fff7ed"
+                                                    : "#eff6ff",
+                                                  color: (order.status === "delivered" || currentShipment?.status === "delivered")
+                                                    ? "#16a34a"
+                                                    : (order.status === "out_for_delivery" || currentShipment?.status === "out_for_delivery")
+                                                    ? "#c2410c"
+                                                    : "#1d4ed8",
+                                                  border: `1px solid ${
+                                                    (order.status === "delivered" || currentShipment?.status === "delivered")
+                                                      ? "#bbf7d0"
+                                                      : (order.status === "out_for_delivery" || currentShipment?.status === "out_for_delivery")
+                                                      ? "#ffedd5"
+                                                      : "#bfdbfe"
+                                                  }`,
+                                                  textTransform: "capitalize",
+                                                }}
+                                              >
+                                                {(order.status || currentShipment?.status || "Shipped").replaceAll("_", " ")}
+                                              </span>
+                                            </div>
+
+                                            <div style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "4px" }}>
+                                              {currentShipment?.delivery_partner_name || "Courier Partner"}
+                                            </div>
+
+                                            {currentShipment?.delivery_partner_phone && (
+                                              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", fontSize: "13px" }}>
+                                                <span style={{ color: tokens.textSecondary }}>Tracking No. / Contact:</span>
+                                                <code style={{ background: "#e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, color: tokens.textPrimary }}>
+                                                  {currentShipment.delivery_partner_phone}
+                                                </code>
+                                              </div>
+                                            )}
+
+                                            {currentShipment?.notes && (
+                                              <div
+                                                style={{
+                                                  marginTop: "8px",
+                                                  marginBottom: "8px",
+                                                  padding: "8px 10px",
+                                                  background: "#fffbeb",
+                                                  borderRadius: "6px",
+                                                  border: "1px solid #fde68a",
+                                                  fontSize: "12px",
+                                                  color: "#92400e",
+                                                  lineHeight: 1.4,
+                                                }}
+                                              >
+                                                <div style={{ fontWeight: 700, color: "#b45309", marginBottom: "2px" }}>
+                                                  Delivery Note:
+                                                </div>
+                                                <div>{cleanShipmentNotes(currentShipment.notes)}</div>
+                                              </div>
+                                            )}
+
+                                            {/* Admin Control Actions for Manual Courier */}
+                                            {order.status !== "delivered" && order.status !== "cancelled" ? (
+                                              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}` }}>
+                                                <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textSecondary }}>
+                                                  Admin Delivery Controls:
+                                                </div>
+                                                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                                   {canUpdateOrders && order.status === "shipped" && (
+                                                     <button
+                                                       type="button"
+                                                       onClick={() => handleOutForDelivery(order.id)}
+                                                       disabled={actionLoadingId === order.id}
+                                                       style={{
+                                                         padding: "7px 12px",
+                                                         borderRadius: "6px",
+                                                         background: "#d97706",
+                                                         color: "#ffffff",
+                                                         border: "none",
+                                                         fontSize: "12px",
+                                                         fontWeight: 700,
+                                                         cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                       }}
+                                                     >
+                                                       {actionLoadingId === order.id ? "Updating..." : "Mark Out for Delivery"}
+                                                     </button>
+                                                   )}
+
+                                                   {canUpdateOrders && (order.status === "shipped" || order.status === "out_for_delivery" || order.status === "rescheduled") && (
+                                                     <button
+                                                       type="button"
+                                                       onClick={() => handleDelivered(order.id)}
+                                                       disabled={actionLoadingId === order.id}
+                                                       style={{
+                                                         padding: "7px 12px",
+                                                         borderRadius: "6px",
+                                                         background: "#16a34a",
+                                                         color: "#ffffff",
+                                                         border: "none",
+                                                         fontSize: "12px",
+                                                         fontWeight: 700,
+                                                         cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                       }}
+                                                     >
+                                                       {actionLoadingId === order.id ? "Updating..." : "Mark Delivered"}
+                                                     </button>
+                                                   )}
+
+                                                   {canUpdateOrders && (
+                                                     <button
+                                                       type="button"
+                                                       onClick={() => setEditingCourierOrderIdMap((p) => ({ ...p, [order.id]: !p[order.id] }))}
+                                                       style={{
+                                                         padding: "7px 12px",
+                                                         borderRadius: "6px",
+                                                         background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                                         fontSize: "12px",
+                                                         fontWeight: 600,
+                                                         cursor: "pointer",
+                                                       }}
+                                                     >
+                                                       {editingCourierOrderIdMap[order.id] ? "Close Form" : "Edit Courier / Tracking"}
+                                                     </button>
+                                                   )}
+                                                 </div>
+
+                                                {/* Edit Form */}
+                                                {editingCourierOrderIdMap[order.id] && (
+                                                  <div
+                                                    style={{
+                                                      marginTop: "8px",
+                                                      padding: "10px",
+                                                      background: tokens.surfaceBg,
+                                                      borderRadius: "6px",
+                                                      border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                                      display: "flex",
+                                                      flexDirection: "column",
+                                                      gap: "8px",
+                                                    }}
+                                                  >
+                                                    <div>
+                                                      <div style={labelStyle}>Courier Partner Name</div>
+                                                      <input
+                                                        value={shipmentDraft.deliveryPartnerName}
+                                                        onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerName", e.target.value)}
+                                                        placeholder="e.g. BlueDart / DTDC / SpeedPost"
+                                                        style={inputStyle}
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <div style={labelStyle}>Tracking Number / Contact</div>
+                                                      <input
+                                                        value={shipmentDraft.deliveryPartnerPhone}
+                                                        onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerPhone", e.target.value)}
+                                                        placeholder="e.g. AWB12345678"
+                                                        style={inputStyle}
+                                                      />
+                                                    </div>
+                                                    <div style={{ display: "flex", gap: "6px" }}>
+                                                      <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                          const draft = getShipmentDraft(order);
+                                                          await updateStatus(order.id, order.status as OrderStatus, {
+                                                            delivery_partner_name: draft.deliveryPartnerName || null,
+                                                            delivery_partner_phone: draft.deliveryPartnerPhone || null,
+                                                          });
+                                                          setEditingCourierOrderIdMap((p) => ({ ...p, [order.id]: false }));
+                                                        }}
+                                                        disabled={actionLoadingId === order.id}
+                                                        style={{
+                                                          padding: "6px 12px",
+                                                          borderRadius: "5px",
+                                                          background: "#2563eb",
+                                                          color: "#ffffff",
+                                                          border: "none",
+                                                          fontSize: "12px",
+                                                          fontWeight: 700,
+                                                          cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                        }}
+                                                      >
+                                                        {actionLoadingId === order.id ? "Saving..." : "Save Changes"}
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setEditingCourierOrderIdMap((p) => ({ ...p, [order.id]: false }))}
+                                                        style={{
+                                                          padding: "6px 10px",
+                                                          borderRadius: "5px",
+                                                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                                          fontSize: "12px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Cancel
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ) : order.status === "delivered" ? (
+                                              <div
+                                                style={{
+                                                  marginTop: "10px",
+                                                  padding: "8px 12px",
+                                                  background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4",
+                                                  border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`,
+                                                  borderRadius: "6px",
+                                                  fontSize: "12px",
+                                                  color: isDark ? "#86efac" : "#166534",
+                                                  fontWeight: 600,
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  gap: "6px",
+                                                }}
+                                              >
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                  <polyline points="20 6 9 17 4 12" />
+                                                </svg>
+                                                Package delivered to customer.
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ) : Boolean(
+                                          currentShipment && (
+                                            currentShipment.delivery_mode === "own_agent" ||
+                                            currentShipment.mode === "own_agent" ||
+                                            Boolean(currentShipment.agent_id) ||
+                                            Boolean(assignedRider)
+                                          )
+                                        ) ? (
+                                          /* If Order is dispatched via Own Fleet Rider */
+                                          <div
+                                            style={{
+                                              padding: "14px",
+                                              background: tokens.elevatedSurfaceBg,
+                                              borderRadius: "8px",
+                                              border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                             }}
                                           >
                                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                                              <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                                                Assigned Delivery Partner
+                                              <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                Store Delivery Partner (Own Fleet)
                                               </div>
                                               {order.status === "cancelled" ? (
                                                 <span
@@ -3101,15 +4294,15 @@ const AdminOrders: React.FC = () => {
                                                     fontWeight: 700,
                                                     padding: "2px 7px",
                                                     borderRadius: "4px",
-                                                    background: currentShipment?.status === "returned_to_warehouse" ? "#f0fdf4" : "#fef2f2",
-                                                    color: currentShipment?.status === "returned_to_warehouse" ? "#16a34a" : "#dc2626",
-                                                    border: `1px solid ${currentShipment?.status === "returned_to_warehouse" ? "#bbf7d0" : "#fecaca"}`,
+                                                    background: currentShipment?.status === "returned_to_warehouse" ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"),
+                                                    color: currentShipment?.status === "returned_to_warehouse" ? (isDark ? "#4ade80" : "#16a34a") : (isDark ? "#fca5a5" : "#dc2626"),
+                                                    border: `1px solid ${currentShipment?.status === "returned_to_warehouse" ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0") : (isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca")}`,
                                                     textTransform: "capitalize",
                                                   }}
                                                 >
                                                   {currentShipment?.status === "returned_to_warehouse" ? "Returned to Warehouse" : "Cancelled"}
                                                 </span>
-                                              ) : (
+                                              ) : canUpdateOrders ? (
                                                 <button
                                                   type="button"
                                                   onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: !p[order.id] }))}
@@ -3124,15 +4317,15 @@ const AdminOrders: React.FC = () => {
                                                     textDecoration: "underline",
                                                   }}
                                                 >
-                                                  {isReassigning ? "Close" : "Reassign Rider"}
+                                                  {isReassigning ? "Close" : "Reassign Rider / Courier"}
                                                 </button>
-                                              )}
+                                              ) : null}
                                             </div>
 
-                                            <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                                            <div style={{ fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
                                               {riderName}
                                               {riderPhone && (
-                                                <div style={{ fontSize: "13px", color: "#475569", marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
+                                                <div style={{ fontSize: "13px", color: tokens.textSecondary, marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
                                                   <PhoneIcon />
                                                   <a href={`tel:${riderPhone}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
                                                     {formatPhoneDisplay(riderPhone)}
@@ -3146,18 +4339,18 @@ const AdminOrders: React.FC = () => {
                                                     marginTop: "10px",
                                                     padding: "9px 12px",
                                                     background: order.status === "cancelled"
-                                                      ? (currentShipment?.status === "returned_to_warehouse" ? "#f0fdf4" : "#fef2f2")
-                                                      : "#fffbeb",
+                                                      ? (currentShipment?.status === "returned_to_warehouse" ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2"))
+                                                      : (isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb"),
                                                     borderRadius: "6px",
                                                     border: `1px solid ${
                                                       order.status === "cancelled"
-                                                        ? (currentShipment?.status === "returned_to_warehouse" ? "#bbf7d0" : "#fecaca")
-                                                        : "#fde68a"
+                                                        ? (currentShipment?.status === "returned_to_warehouse" ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0") : (isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"))
+                                                        : (isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a")
                                                     }`,
                                                     fontSize: "12px",
                                                     color: order.status === "cancelled"
-                                                      ? (currentShipment?.status === "returned_to_warehouse" ? "#166534" : "#991b1b")
-                                                      : "#92400e",
+                                                      ? (currentShipment?.status === "returned_to_warehouse" ? (isDark ? "#86efac" : "#166534") : (isDark ? "#fca5a5" : "#991b1b"))
+                                                      : (isDark ? "#fde047" : "#92400e"),
                                                     lineHeight: 1.4,
                                                   }}
                                                 >
@@ -3182,6 +4375,91 @@ const AdminOrders: React.FC = () => {
                                                   )}
                                                 </div>
                                               )}
+
+                                              {/* Returned to Hub Banner & Direct Actions */}
+                                              {(currentShipment?.status === "returned_to_warehouse" || currentShipment?.status === "failed" || order.status === "failed") && order.status !== "cancelled" && (
+                                                <div
+                                                  style={{
+                                                    marginTop: "12px",
+                                                    padding: "12px 14px",
+                                                    background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                                                    borderRadius: "8px",
+                                                    border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                    gap: "10px",
+                                                  }}
+                                                >
+                                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                      <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#dc2626" }} />
+                                                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#991b1b" }}>
+                                                        Parcel Returned to Warehouse / Hub
+                                                      </span>
+                                                    </div>
+                                                    <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", background: "#fee2e2", color: "#b91c1c", border: "1px solid #fca5a5" }}>
+                                                      Action Required
+                                                    </span>
+                                                  </div>
+
+                                                  <div style={{ fontSize: "12px", color: "#7f1d1d", lineHeight: 1.45 }}>
+                                                    The delivery partner brought this parcel back to the store warehouse. You can cancel this order to restore inventory stock and process customer refund, or reassign it to another partner.
+                                                  </div>
+
+                                                  {(canCancelOrders || canUpdateOrders) && (
+                                                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", paddingTop: "4px" }}>
+                                                      {canCancelOrders && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                            setAdminCancelOrder(order);
+                                                            setAdminCancelReason("Parcel Returned to Hub - Customer unreachable / no response after multiple attempts");
+                                                            setAdminCancelCustomNote(currentShipment?.notes ? cleanShipmentNotes(currentShipment.notes) : "");
+                                                          }}
+                                                          disabled={actionLoadingId === order.id}
+                                                          style={{
+                                                            padding: "7px 14px",
+                                                            borderRadius: "6px",
+                                                            background: "#dc2626",
+                                                            border: "none",
+                                                            color: "#ffffff",
+                                                            fontSize: "12.5px",
+                                                            fontWeight: 700,
+                                                            cursor: "pointer",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: "6px",
+                                                            boxShadow: "0 1px 2px rgba(220, 38, 38, 0.2)",
+                                                          }}
+                                                        >
+                                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                            <circle cx="12" cy="12" r="10" />
+                                                            <line x1="15" y1="9" x2="9" y2="15" />
+                                                            <line x1="9" y1="9" x2="15" y2="15" />
+                                                          </svg>
+                                                          Cancel Order & Restock
+                                                        </button>
+                                                      )}
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: true }))}
+                                                        style={{
+                                                          padding: "7px 12px",
+                                                          borderRadius: "6px",
+                                                          background: tokens.surfaceBg,
+                                                          border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                                          color: tokens.textSecondary,
+                                                          fontSize: "12.5px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Reassign Rider / Courier
+                                                      </button>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )}
                                             </div>
 
                                             {/* Reassignment Dropdown Panel */}
@@ -3190,131 +4468,168 @@ const AdminOrders: React.FC = () => {
                                                 style={{
                                                   marginTop: "12px",
                                                   padding: "12px",
-                                                  background: "#ffffff",
+                                                  background: tokens.surfaceBg,
                                                   borderRadius: "6px",
-                                                  border: "1px solid #cbd5e1",
+                                                  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                                   display: "flex",
                                                   flexDirection: "column",
-                                                  gap: "8px",
+                                                  gap: "10px",
                                                 }}
                                               >
-                                                <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
-                                                  Select Replacement Rider
-                                                </label>
-                                                <select
-                                                  value={reassignAgentIdMap[order.id] || ""}
-                                                  onChange={(e) => setReassignAgentIdMap((p) => ({ ...p, [order.id]: e.target.value }))}
-                                                  style={{ ...inputStyle, fontSize: "13px" }}
-                                                >
-                                                  <option value="">-- Choose Rider --</option>
-                                                  {deliveryAgents
-                                                    .filter((a) => a.is_active)
-                                                    .map((a) => (
-                                                      <option key={a.id} value={a.id}>
-                                                        {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
-                                                      </option>
-                                                    ))}
-                                                </select>
+                                                <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>
+                                                  Option 1: Choose Replacement In-House Rider
+                                                </div>
+                                                <div style={{ position: "relative" }}>
+                                                  <select
+                                                    value={reassignAgentIdMap[order.id] || ""}
+                                                    onChange={(e) => setReassignAgentIdMap((p) => ({ ...p, [order.id]: e.target.value }))}
+                                                    style={{
+                                                      ...inputStyle,
+                                                      height: "38px",
+                                                      padding: "0 34px 0 12px",
+                                                      borderRadius: "8px",
+                                                      border: `1px solid ${tokens.border}`,
+                                                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                      color: tokens.textPrimary,
+                                                      colorScheme: isDark ? "dark" : "light",
+                                                      cursor: "pointer",
+                                                      appearance: "none",
+                                                      fontSize: "13px",
+                                                      fontWeight: 500,
+                                                    }}
+                                                  >
+                                                    <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>-- Choose Rider --</option>
+                                                    {deliveryAgents
+                                                      .filter((a) => a.is_active)
+                                                      .map((a) => (
+                                                        <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>
+                                                          {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
+                                                        </option>
+                                                      ))}
+                                                  </select>
+                                                  <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: tokens.textSecondary, display: "grid", placeItems: "center" }}>
+                                                    <ChevronDownIcon />
+                                                  </div>
+                                                </div>
                                                 <div style={{ display: "flex", gap: "8px" }}>
                                                   <button
                                                     type="button"
                                                     onClick={() => handleReassignRider(order.id)}
-                                                    disabled={actionLoadingId === order.id}
+                                                    disabled={actionLoadingId === order.id || !reassignAgentIdMap[order.id]}
                                                     style={{
-                                                      padding: "6px 14px",
-                                                      borderRadius: "5px",
+                                                      height: "36px",
+                                                      padding: "0 14px",
+                                                      borderRadius: "7px",
                                                       background: "#2563eb",
                                                       color: "#ffffff",
-                                                      border: "none",
-                                                      fontSize: "12px",
+                                                      border: "1px solid rgba(255,255,255,0.1)",
+                                                      fontSize: "12.5px",
                                                       fontWeight: 700,
-                                                      cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                      cursor: (actionLoadingId === order.id || !reassignAgentIdMap[order.id]) ? "not-allowed" : "pointer",
+                                                      opacity: !reassignAgentIdMap[order.id] ? 0.6 : 1,
+                                                      display: "inline-flex",
+                                                      alignItems: "center",
+                                                      justifyContent: "center",
+                                                      gap: "6px",
                                                     }}
                                                   >
-                                                    {actionLoadingId === order.id ? "Reassigning..." : "Confirm Reassignment"}
+                                                    <span>{actionLoadingId === order.id ? "Reassigning..." : "Confirm Replacement Rider"}</span>
                                                   </button>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: false }))}
-                                                    style={{
-                                                      padding: "6px 12px",
-                                                      borderRadius: "5px",
-                                                      background: "#ffffff",
-                                                      color: "#475569",
-                                                      border: "1px solid #cbd5e1",
-                                                      fontSize: "12px",
-                                                      fontWeight: 600,
-                                                      cursor: "pointer",
-                                                    }}
-                                                  >
-                                                    Cancel
-                                                  </button>
+                                                </div>
+
+                                                <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "10px", marginTop: "4px" }}>
+                                                  <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "8px" }}>
+                                                    Option 2: Switch to Manual Courier Partner
+                                                  </div>
+                                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                                    <input
+                                                      value={shipmentDraft.deliveryPartnerName}
+                                                      onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerName", e.target.value)}
+                                                      placeholder="Courier Name (e.g. BlueDart / DTDC / SpeedPost)" style={{ ...inputStyle, background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", color: tokens.textPrimary, colorScheme: isDark ? "dark" : "light", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}
+                                                    />
+                                                    <input
+                                                      value={shipmentDraft.deliveryPartnerPhone}
+                                                      onChange={(e) => setShipmentDraftValue(order.id, "deliveryPartnerPhone", e.target.value)}
+                                                      placeholder="Tracking Number / AWB" style={{ ...inputStyle, background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", color: tokens.textPrimary, colorScheme: isDark ? "dark" : "light", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}
+                                                    />
+                                                    <div style={{ display: "flex", gap: "8px" }}>
+                                                      <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                          const draft = getShipmentDraft(order);
+                                                          if (!draft.deliveryPartnerName.trim()) {
+                                                            showToast("Please enter the courier partner name.", "error");
+                                                            return;
+                                                          }
+                                                          await updateStatus(order.id, "shipped", {
+                                                            delivery_partner_name: draft.deliveryPartnerName,
+                                                            delivery_partner_phone: draft.deliveryPartnerPhone || null,
+                                                          });
+                                                          setReassigningOrderIdMap((p) => ({ ...p, [order.id]: false }));
+                                                        }}
+                                                        disabled={actionLoadingId === order.id}
+                                                        style={{
+                                                          padding: "6px 12px",
+                                                          borderRadius: "5px",
+                                                          background: "#0f766e",
+                                                          color: "#ffffff",
+                                                          border: "none",
+                                                          fontSize: "12px",
+                                                          fontWeight: 700,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        {actionLoadingId === order.id ? "Switching..." : "Switch to Manual Courier"}
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setReassigningOrderIdMap((p) => ({ ...p, [order.id]: false }))}
+                                                        style={{
+                                                          padding: "6px 10px",
+                                                          borderRadius: "5px",
+                                                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                                          fontSize: "12px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Cancel
+                                                      </button>
+                                                    </div>
+                                                  </div>
                                                 </div>
                                               </div>
                                             )}
                                           </div>
-                                        ) : (
+                                        ) : !canUpdateOrders ? null : (
                                           /* If Not yet dispatched — Dispatch Controller */
                                           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                            {/* Mode Tabs */}
-                                            {storeDeliveryMode === "hybrid" && (
-                                              <div style={{ display: "flex", gap: "4px", padding: "3px", background: "#f1f5f9", borderRadius: "6px" }}>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: "own_agent" }))}
-                                                  style={{
-                                                    flex: 1,
-                                                    padding: "6px 8px",
-                                                    borderRadius: "4px",
-                                                    border: "none",
-                                                    background: activeMode === "own_agent" ? "#ffffff" : "transparent",
-                                                    color: activeMode === "own_agent" ? "#2563eb" : "#64748b",
-                                                    fontWeight: 700,
-                                                    fontSize: "12px",
-                                                    cursor: "pointer",
-                                                    boxShadow: activeMode === "own_agent" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                  }}
-                                                >
-                                                  Own Fleet
-                                                </button>
-
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: "shiprocket" }))}
-                                                  style={{
-                                                    flex: 1,
-                                                    padding: "6px 8px",
-                                                    borderRadius: "4px",
-                                                    border: "none",
-                                                    background: activeMode === "shiprocket" ? "#ffffff" : "transparent",
-                                                    color: activeMode === "shiprocket" ? "#2563eb" : "#64748b",
-                                                    fontWeight: 700,
-                                                    fontSize: "12px",
-                                                    cursor: "pointer",
-                                                    boxShadow: activeMode === "shiprocket" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                  }}
-                                                >
-                                                  Shiprocket
-                                                </button>
-
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: "manual" }))}
-                                                  style={{
-                                                    flex: 1,
-                                                    padding: "6px 8px",
-                                                    borderRadius: "4px",
-                                                    border: "none",
-                                                    background: activeMode === "manual" ? "#ffffff" : "transparent",
-                                                    color: activeMode === "manual" ? "#2563eb" : "#64748b",
-                                                    fontWeight: 700,
-                                                    fontSize: "12px",
-                                                    cursor: "pointer",
-                                                    boxShadow: activeMode === "manual" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                  }}
-                                                >
-                                                  Manual
-                                                </button>
+                                            {/* Mode Tabs: only rendered if more than 1 delivery mode is enabled */}
+                                            {availableModes.length > 1 && (
+                                              <div style={{ display: "flex", gap: "4px", padding: "3px", background: tokens.elevatedSurfaceBg, borderRadius: "6px" }}>
+                                                {availableModes.map((mode) => (
+                                                  <button
+                                                    key={mode.id}
+                                                    type="button"
+                                                    onClick={() => setSelectedDispatchModeMap((p) => ({ ...p, [order.id]: mode.id }))}
+                                                    style={{
+                                                      flex: 1,
+                                                      padding: "6px 8px",
+                                                      borderRadius: "4px",
+                                                      border: "none",
+                                                      background: activeMode === mode.id ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                                                       color: activeMode === mode.id ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
+                                                      fontWeight: 700,
+                                                      fontSize: "12px",
+                                                      cursor: "pointer",
+                                                      boxShadow: activeMode === mode.id ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                                                    }}
+                                                  >
+                                                    {mode.label}
+                                                  </button>
+                                                ))}
                                               </div>
                                             )}
 
@@ -3323,20 +4638,38 @@ const AdminOrders: React.FC = () => {
                                               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                                 <div>
                                                   <label style={labelStyle}>Assign Delivery Rider</label>
-                                                  <select
-                                                    value={selectedAgentMap[order.id] || ""}
-                                                    onChange={(e) => setSelectedAgentMap((p) => ({ ...p, [order.id]: e.target.value }))}
-                                                    style={{ ...inputStyle, cursor: "pointer" }}
-                                                  >
-                                                    <option value="">Auto-Assign (Least Busy Rider)</option>
-                                                    {deliveryAgents
-                                                      .filter((a) => a.is_active)
-                                                      .map((a) => (
-                                                        <option key={a.id} value={a.id}>
-                                                          {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
-                                                        </option>
-                                                      ))}
-                                                  </select>
+                                                  <div style={{ position: "relative" }}>
+                                                    <select
+                                                      value={selectedAgentMap[order.id] || ""}
+                                                      onChange={(e) => setSelectedAgentMap((p) => ({ ...p, [order.id]: e.target.value }))}
+                                                      style={{
+                                                        ...inputStyle,
+                                                        height: "38px",
+                                                        padding: "0 34px 0 12px",
+                                                        borderRadius: "8px",
+                                                        border: `1px solid ${tokens.border}`,
+                                                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                        color: tokens.textPrimary,
+                                                        colorScheme: isDark ? "dark" : "light",
+                                                        cursor: "pointer",
+                                                        appearance: "none",
+                                                        fontSize: "13px",
+                                                        fontWeight: 500,
+                                                      }}
+                                                    >
+                                                      <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Auto-Assign (Least Busy Rider)</option>
+                                                      {deliveryAgents
+                                                        .filter((a) => a.is_active)
+                                                        .map((a) => (
+                                                          <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>
+                                                            {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
+                                                          </option>
+                                                        ))}
+                                                    </select>
+                                                    <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: tokens.textSecondary, display: "grid", placeItems: "center" }}>
+                                                      <ChevronDownIcon />
+                                                    </div>
+                                                  </div>
                                                 </div>
 
                                                 <button
@@ -3344,82 +4677,106 @@ const AdminOrders: React.FC = () => {
                                                   onClick={() => handleDispatchOrder(order.id, "own_agent")}
                                                   disabled={actionLoadingId === order.id}
                                                   style={{
-                                                    padding: "9px 14px",
-                                                    borderRadius: "6px",
+                                                    height: "38px",
+                                                    padding: "0 16px",
+                                                    borderRadius: "8px",
                                                     background: "#2563eb",
-                                                    border: "1px solid #2563eb",
+                                                    border: "1px solid rgba(255,255,255,0.1)",
                                                     color: "#ffffff",
                                                     fontWeight: 700,
                                                     fontSize: "13px",
                                                     cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    gap: "8px",
+                                                    boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
+                                                    transition: "all 0.15s ease",
                                                   }}
                                                 >
-                                                  {actionLoadingId === order.id ? "Assigning Rider..." : "Assign Rider & Confirm Order"}
+                                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                                    <circle cx="9" cy="7" r="4" />
+                                                    <polyline points="16 11 18 13 22 9" />
+                                                  </svg>
+                                                  <span>{actionLoadingId === order.id ? "Assigning Rider..." : "Assign Rider & Confirm Order"}</span>
                                                 </button>
                                               </div>
                                             )}
 
                                             {/* Mode 2: Shiprocket Auto Courier */}
-                                            {activeMode === "shiprocket" && (
-                                              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                                <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
-                                                  Auto-books courier pickup with Delhivery, BlueDart, DTDC, or Xpressbees and generates AWB tracking label.
-                                                </p>
+                                            {activeMode === "shiprocket" && (() => {
+                                               const defaultWeight = getOrderDefaultWeight(order);
+                                               const currentWeight = packageWeightMap[order.id] !== undefined ? packageWeightMap[order.id] : defaultWeight;
+                                               return (
+                                                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                                   <p style={{ fontSize: "12px", color: tokens.textSecondary, margin: 0 }}>
+                                                     Auto-books courier pickup with Delhivery, BlueDart, DTDC, or Xpressbees and generates AWB tracking label.
+                                                   </p>
 
-                                                <div>
-                                                  <label style={{ ...labelStyle, display: "flex", justifyContent: "space-between" }}>
-                                                    <span>Parcel Weight (Grams)</span>
-                                                    {packageWeightMap[order.id] ? (
-                                                      <span style={{ color: "#2563eb", fontWeight: 700 }}>
-                                                        {(packageWeightMap[order.id] / 1000).toFixed(2)} kg
-                                                      </span>
-                                                    ) : null}
-                                                  </label>
-                                                  <input
-                                                    type="number"
-                                                    min={10}
-                                                    step={50}
-                                                    placeholder="e.g. 450 (weight in grams)"
-                                                    value={packageWeightMap[order.id] || ""}
-                                                    onChange={(e) =>
-                                                      setPackageWeightMap((p) => ({
-                                                        ...p,
-                                                        [order.id]: Number(e.target.value),
-                                                      }))
-                                                    }
-                                                    style={inputStyle}
-                                                  />
-                                                  <p style={{ fontSize: "11px", color: "#64748b", margin: "4px 0 0" }}>
-                                                    Enter the weighed parcel weight in grams for courier rate and label generation.
-                                                  </p>
-                                                </div>
+                                                   <div>
+                                                     <label style={{ ...labelStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                       <span>Parcel Weight (Grams)</span>
+                                                       <span style={{ color: "#2563eb", fontWeight: 700, fontSize: "12px" }}>
+                                                         {currentWeight > 0 ? `${(currentWeight / 1000).toFixed(2)} kg (${currentWeight} g)` : "0 g"}
+                                                       </span>
+                                                     </label>
+                                                     <input
+                                                       type="number"
+                                                       min={10}
+                                                       step={50}
+                                                       placeholder="e.g. 500 (weight in grams)"
+                                                       value={currentWeight || ""}
+                                                       onChange={(e) =>
+                                                         setPackageWeightMap((p) => ({
+                                                           ...p,
+                                                           [order.id]: Math.max(0, Number(e.target.value) || 0),
+                                                         }))
+                                                       }
+                                                       style={inputStyle}
+                                                     />
+                                                     <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "5px", flexWrap: "wrap" }}>
+                                                       <span style={{ fontSize: "11px", color: "#059669", background: "rgba(16,185,129,0.1)", padding: "2px 7px", borderRadius: "4px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                                          </svg>
+                                                          Auto-calculated from product details
+                                                        </span>
+                                                       <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
+                                                         (Editable before booking)
+                                                       </span>
+                                                     </div>
+                                                   </div>
 
-                                                <button
-                                                  type="button"
-                                                  onClick={() => {
-                                                    if (!packageWeightMap[order.id] || packageWeightMap[order.id] <= 0) {
-                                                      const entered = window.prompt("Please enter the parcel weight in grams (e.g. 500):", "500");
-                                                      if (!entered || isNaN(Number(entered)) || Number(entered) <= 0) return;
-                                                      setPackageWeightMap((p) => ({ ...p, [order.id]: Number(entered) }));
-                                                    }
-                                                    handleDispatchOrder(order.id, "shiprocket");
-                                                  }}
-                                                  disabled={actionLoadingId === order.id}
-                                                  style={{
-                                                    padding: "9px 14px",
-                                                    borderRadius: "6px",
-                                                    background: "#2563eb",
-                                                    border: "1px solid #2563eb",
-                                                    color: "#ffffff",
-                                                    fontWeight: 700,
-                                                    fontSize: "13px",
-                                                    cursor: actionLoadingId === order.id ? "wait" : "pointer",
-                                                  }}
-                                                >
-                                                  {actionLoadingId === order.id ? "Booking Courier..." : "Book Courier via Shiprocket"}
-                                                </button>
-                                              </div>
-                                            )}
+                                                   <button
+                                                     type="button"
+                                                     onClick={() => {
+                                                       const weightToSend = packageWeightMap[order.id] !== undefined && packageWeightMap[order.id] > 0
+                                                         ? packageWeightMap[order.id]
+                                                         : defaultWeight;
+                                                       if (!weightToSend || weightToSend <= 0) {
+                                                         showToast("Please enter a valid parcel weight in grams", "error");
+                                                         return;
+                                                       }
+                                                       handleDispatchOrder(order.id, "shiprocket", weightToSend);
+                                                     }}
+                                                     disabled={actionLoadingId === order.id}
+                                                     style={{
+                                                       padding: "9px 14px",
+                                                       borderRadius: "6px",
+                                                       background: "#2563eb",
+                                                       border: "1px solid #2563eb",
+                                                       color: "#ffffff",
+                                                       fontWeight: 700,
+                                                       fontSize: "13px",
+                                                       cursor: actionLoadingId === order.id ? "wait" : "pointer",
+                                                     }}
+                                                   >
+                                                     {actionLoadingId === order.id ? "Booking Courier..." : "Book Courier via Shiprocket"}
+                                                   </button>
+                                                 </div>
+                                               );
+                                             })()}
 
                                             {/* Mode 3: Manual partner entry */}
                                             {activeMode === "manual" && (
@@ -3451,53 +4808,31 @@ const AdminOrders: React.FC = () => {
                                                 <button
                                                   type="button"
                                                   onClick={() => handleSaveShipment(order.id)}
+                                                  disabled={actionLoadingId === order.id}
                                                   style={{
-                                                    padding: "8px 12px",
+                                                    padding: "9px 14px",
                                                     borderRadius: "6px",
-                                                    background: "#ffffff",
-                                                    border: "1px solid #cbd5e1",
-                                                    color: "#0f172a",
+                                                    background: "#2563eb",
+                                                    border: "1px solid #2563eb",
+                                                    color: "#ffffff",
                                                     fontWeight: 700,
                                                     fontSize: "13px",
-                                                    cursor: "pointer",
+                                                    cursor: actionLoadingId === order.id ? "wait" : "pointer",
                                                   }}
                                                 >
-                                                  Save Manual Partner Details
+                                                  {actionLoadingId === order.id ? "Dispatching Order..." : "Save Details & Dispatch Order"}
                                                 </button>
                                               </div>
                                             )}
                                           </div>
                                         )}
-
-                                        {/* Customer Live Tracking Link */}
-                                        <div
-                                          style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            fontSize: "12px",
-                                            color: "#64748b",
-                                            paddingTop: "8px",
-                                            borderTop: "1px solid #f1f5f9",
-                                          }}
-                                        >
-                                          <span>Customer Live Tracking:</span>
-                                          <a
-                                            href={`/track/${siteId}/${order.id}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            style={{ color: "#2563eb", fontWeight: 600, textDecoration: "underline" }}
-                                          >
-                                            View Live Tracking ↗
-                                          </a>
-                                        </div>
                                       </div>
                                     );
                                   })()}
                                 </div>
 
                                 {/* Card 2: Timeline & Notes */}
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                   <div
                                     style={{
                                       display: "flex",
@@ -3505,111 +4840,122 @@ const AdminOrders: React.FC = () => {
                                       alignItems: "center",
                                       marginBottom: "12px",
                                       paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
+                                      borderBottom: `1px solid ${tokens.border}`,
                                     }}
                                   >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                    <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                       Order Timeline & Notes
                                     </span>
                                   </div>
 
-                                  <div style={{ display: "grid", gap: "6px", fontSize: "13px", color: "#475569" }}>
+                                  <div style={{ display: "grid", gap: "6px", fontSize: "13px", color: tokens.textSecondary }}>
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ color: "#64748b" }}>Created:</span>
-                                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(order.created_at)}</span>
+                                      <span style={{ color: tokens.textSecondary }}>Created:</span>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(order.created_at)}</span>
                                     </div>
                                     {order.confirmed_at && (
                                       <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                        <span style={{ color: "#64748b" }}>Confirmed:</span>
-                                        <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(order.confirmed_at)}</span>
+                                        <span style={{ color: tokens.textSecondary }}>Confirmed:</span>
+                                        <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(order.confirmed_at)}</span>
                                       </div>
                                     )}
                                     {order.shipped_at && (
                                       <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                        <span style={{ color: "#64748b" }}>Shipped:</span>
-                                        <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(order.shipped_at)}</span>
+                                        <span style={{ color: tokens.textSecondary }}>Shipped:</span>
+                                        <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(order.shipped_at)}</span>
                                       </div>
                                     )}
                                     {order.delivered_at && (
                                       <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                        <span style={{ color: "#64748b" }}>Delivered:</span>
+                                        <span style={{ color: tokens.textSecondary }}>Delivered:</span>
                                         <span style={{ fontWeight: 600, color: "#15803d" }}>{formatDate(order.delivered_at)}</span>
                                       </div>
                                     )}
                                     {order.cancelled_at && (
                                       <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                        <span style={{ color: "#64748b" }}>Cancelled:</span>
+                                        <span style={{ color: tokens.textSecondary }}>Cancelled:</span>
                                         <span style={{ fontWeight: 600, color: "#b91c1c" }}>{formatDate(order.cancelled_at)}</span>
                                       </div>
                                     )}
                                   </div>
 
                                   {detail?.cancel_reason ? (
-                                    <div style={{ marginTop: "10px", padding: "8px 10px", background: "#fef2f2", borderRadius: "6px", border: "1px solid #fecaca", fontSize: "12.5px", color: "#991b1b" }}>
+                                    <div style={{ marginTop: "10px", padding: "8px 10px", background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2", borderRadius: "6px", border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`, fontSize: "12.5px", color: isDark ? "#fca5a5" : "#991b1b" }}>
                                       <strong>Cancel Reason:</strong> {detail.cancel_reason}
                                     </div>
                                   ) : null}
+
+                                  {order.status !== "delivered" && order.status !== "cancelled" && order.status !== "returned" && canCancelOrders && (
+                                    <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: `1px solid ${tokens.border}` }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setAdminCancelOrder(order);
+                                          setAdminCancelReason(ADMIN_CANCEL_PRESETS[0]);
+                                          setAdminCancelCustomNote("");
+                                        }}
+                                        disabled={actionLoadingId === order.id}
+                                        style={{
+                                          width: "100%",
+                                          padding: "8px 12px",
+                                          borderRadius: "6px",
+                                          background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                                          border: `1px solid ${isDark ? "rgba(239, 68, 68, 0.35)" : "#fecaca"}`,
+                                          color: isDark ? "#fca5a5" : "#b91c1c",
+                                          fontSize: "12.5px",
+                                          fontWeight: 700,
+                                          cursor: "pointer",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          gap: "6px",
+                                        }}
+                                      >
+                                        <XMarkIcon />
+                                        <span>Cancel Order with Reason</span>
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
                           </div>
-                        ) : null}
-                    </div>
-                  );
+                        )}
+                      </div>
+                    );
                 })}
-                </div>
               </div>
             )}
           </div>
 
-          {/* Pagination and page size controls */}
-          {filteredOrders.length > 0 && (
+          {/* Centered Pagination Controls */}
+          {orders.length > 0 && (
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                flexDirection: "column",
                 alignItems: "center",
-                flexWrap: "wrap",
-                gap: "12px",
+                justifyContent: "center",
+                gap: "10px",
                 marginTop: "16px",
                 padding: "8px 4px",
+                width: "100%",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#64748b" }}>
-                <span>Rows per page:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    const newSize = Number(e.target.value);
-                    setPageSize(newSize);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#0f172a",
-                    fontSize: "13px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
                 onPageChange={(page) => {
                   setCurrentPage(page);
                 }}
-                totalItems={filteredOrders.length}
                 pageSize={pageSize}
-                showRangeText={true}
-                accentColor="#2563eb"
+                pageSizeOptions={[10, 15, 25, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setCurrentPage(1);
+                }}
+                accentColor={isDark ? tokens.accent : "#2563eb"}
+                theme={{ mode: isDark ? "dark" : "light" }}
                 style={{ padding: 0 }}
               />
             </div>
@@ -3621,11 +4967,10 @@ const AdminOrders: React.FC = () => {
           <div
             style={{
               display: "flex",
+              flexWrap: "wrap",
               gap: "4px",
-              overflowX: "auto",
-              borderBottom: "1px solid #e2e8f0",
+              borderBottom: `1px solid ${tokens.border}`,
               marginBottom: "16px",
-              WebkitOverflowScrolling: "touch",
             }}
           >
             {returnTabs.map((tab) => {
@@ -3644,9 +4989,9 @@ const AdminOrders: React.FC = () => {
                     gap: "8px",
                     padding: "10px 14px",
                     border: "none",
-                    borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
+                    borderBottom: isActive ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : "2px solid transparent",
                     background: "transparent",
-                    color: isActive ? "#2563eb" : "#64748b",
+                    color: isActive ? (isDark ? "#60a5fa" : "#2563eb") : tokens.textSecondary,
                     fontSize: "13px",
                     fontWeight: isActive ? 700 : 500,
                     cursor: "pointer",
@@ -3662,9 +5007,9 @@ const AdminOrders: React.FC = () => {
                       fontWeight: 700,
                       padding: "1px 6px",
                       borderRadius: "10px",
-                      background: isActive ? "#eff6ff" : "#f1f5f9",
-                      color: isActive ? "#2563eb" : "#64748b",
-                      border: `1px solid ${isActive ? "#bfdbfe" : "#e2e8f0"}`,
+                      background: isActive ? (isDark ? "rgba(59, 130, 246, 0.25)" : "#eff6ff") : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                      color: isActive ? (isDark ? "#93c5fd" : "#2563eb") : tokens.textSecondary,
+                      border: `1px solid ${isActive ? (isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe") : tokens.border}`,
                     }}
                   >
                     {count}
@@ -3674,13 +5019,13 @@ const AdminOrders: React.FC = () => {
             })}
           </div>
 
-          <div style={{ ...plainCardStyle, overflow: "hidden" }}>
+          <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", overflow: "hidden" }}>
             {loading ? (
-              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: tokens.textSecondary }}>
                 Loading returns...
               </div>
             ) : !filteredReturns.length ? (
-              <div style={{ padding: "20px 16px", fontSize: "14px", color: "#64748b" }}>
+              <div style={{ padding: "20px 16px", fontSize: "14px", color: tokens.textSecondary }}>
                 {searchQuery ? "No returns match your search." : "No records in this tab."}
               </div>
             ) : (
@@ -3693,11 +5038,11 @@ const AdminOrders: React.FC = () => {
                       "minmax(180px, 1.4fr) minmax(180px, 1.1fr) minmax(130px, 1fr) minmax(110px, 0.8fr) minmax(80px, auto) 28px",
                     gap: "12px",
                     padding: "10px 16px",
-                    background: "#f8fafc",
-                    borderBottom: "1px solid #e2e8f0",
+                    background: tokens.elevatedSurfaceBg,
+                    borderBottom: `1px solid ${tokens.border}`,
                     fontSize: "11px",
                     fontWeight: 700,
-                    color: "#64748b",
+                    color: tokens.textSecondary,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
                   }}
@@ -3712,7 +5057,7 @@ const AdminOrders: React.FC = () => {
 
                 {paginatedReturns.map((returnItem) => {
                   const isExpanded = expandedReturnId === returnItem.id;
-                  const tone = getStatusTone(returnItem.status);
+                  const tone = getStatusTone(returnItem.status, false, isDark);
                   const detail = getExpandedReturn(returnItem);
 
                   const reviewDraft: ReviewDraft =
@@ -3769,8 +5114,8 @@ const AdminOrders: React.FC = () => {
                     <div
                       key={returnItem.id}
                       style={{
-                        borderBottom: "1px solid #e2e8f0",
-                        background: isExpanded ? "#f8fafc" : "#ffffff",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        background: isExpanded ? (isDark ? tokens.elevatedSurfaceBg : "#f8fafc") : (isDark ? tokens.surfaceBg : "#ffffff"),
                         transition: "background 0.15s ease",
                       }}
                     >
@@ -3784,8 +5129,8 @@ const AdminOrders: React.FC = () => {
                           alignItems: "center",
                           padding: "12px 16px",
                           cursor: "pointer",
-                          background: isExpanded ? "#f1f5f9" : "transparent",
-                          borderBottom: isExpanded ? "1px solid #e2e8f0" : "none",
+                          background: isExpanded ? (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9") : "transparent",
+                            borderBottom: isExpanded ? `1px solid ${tokens.border}` : "none",
                           transition: "background 0.15s ease",
                         }}
                       >
@@ -3795,7 +5140,7 @@ const AdminOrders: React.FC = () => {
                             style={{
                               fontSize: "13.5px",
                               fontWeight: 700,
-                              color: "#0f172a",
+                              color: tokens.textPrimary,
                               marginBottom: "2px",
                               display: "flex",
                               alignItems: "center",
@@ -3807,9 +5152,9 @@ const AdminOrders: React.FC = () => {
                               style={{
                                 fontSize: "11px",
                                 fontWeight: 600,
-                                color: "#475569",
-                                background: "#f1f5f9",
-                                border: "1px solid #e2e8f0",
+                                color: tokens.textSecondary,
+                                background: tokens.elevatedSurfaceBg,
+                                border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                 padding: "1px 5px",
                                 borderRadius: "4px",
                               }}
@@ -3821,7 +5166,7 @@ const AdminOrders: React.FC = () => {
                           <div
                             style={{
                               fontSize: "12px",
-                              color: "#64748b",
+                              color: tokens.textSecondary,
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
@@ -3849,8 +5194,8 @@ const AdminOrders: React.FC = () => {
                         {/* Col 2: Amount & Date */}
                         <div style={{ minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span style={{ fontSize: "13.5px", color: "#0f172a", fontWeight: 700 }}>
-                              {formatPrice(returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
+                            <span style={{ fontSize: "13.5px", color: tokens.textPrimary, fontWeight: 700 }}>
+                              {formatPrice(detail?.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
                             </span>
                             {returnItem.refund_status && (
                               <span
@@ -3861,22 +5206,22 @@ const AdminOrders: React.FC = () => {
                                   borderRadius: "4px",
                                   background:
                                     returnItem.refund_status === "completed"
-                                      ? "#dcfce7"
+                                      ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#dcfce7")
                                       : returnItem.refund_status === "pending"
-                                      ? "#fffbeb"
-                                      : "#f1f5f9",
+                                      ? (isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb")
+                                      : (isDark ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9"),
                                   color:
                                     returnItem.refund_status === "completed"
-                                      ? "#15803d"
+                                      ? (isDark ? "#4ade80" : "#15803d")
                                       : returnItem.refund_status === "pending"
-                                      ? "#b45309"
-                                      : "#475569",
+                                      ? (isDark ? "#fbbf24" : "#b45309")
+                                      : (isDark ? "#94a3b8" : "#475569"),
                                   border: `1px solid ${
                                     returnItem.refund_status === "completed"
-                                      ? "#bbf7d0"
+                                      ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0")
                                       : returnItem.refund_status === "pending"
-                                      ? "#fde68a"
-                                      : "#e2e8f0"
+                                      ? (isDark ? "rgba(251, 191, 36, 0.3)" : "#fde68a")
+                                      : (isDark ? "rgba(255, 255, 255, 0.1)" : "#e2e8f0")
                                   }`,
                                   textTransform: "uppercase",
                                 }}
@@ -3885,7 +5230,7 @@ const AdminOrders: React.FC = () => {
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                          <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "2px" }}>
                             {formatDate(returnItem.created_at)}
                           </div>
                         </div>
@@ -3911,14 +5256,14 @@ const AdminOrders: React.FC = () => {
                                 style={{
                                   fontSize: "12.5px",
                                   fontWeight: 600,
-                                  color: "#1e293b",
+                                  color: tokens.textPrimary,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
                                 }}
                               >
                                 {returnItem.pickup_details.agent_name}
-                                <span style={{ fontSize: "11px", color: "#64748b", marginLeft: "4px", fontWeight: 500 }}>
+                                <span style={{ fontSize: "11px", color: tokens.textSecondary, marginLeft: "4px", fontWeight: 500 }}>
                                   ({(returnItem.pickup_details.pickup_status || "assigned").replaceAll("_", " ")})
                                 </span>
                               </span>
@@ -3930,7 +5275,7 @@ const AdminOrders: React.FC = () => {
                                 style={{
                                   fontSize: "12.5px",
                                   fontWeight: 600,
-                                  color: "#1e293b",
+                                  color: tokens.textPrimary,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
@@ -3954,7 +5299,7 @@ const AdminOrders: React.FC = () => {
                               </span>
                             </div>
                           ) : (
-                            <span style={{ fontSize: "12px", color: "#94a3b8" }}>—</span>
+                            <span style={{ fontSize: "12px", color: tokens.textMuted }}>—</span>
                           )}
                         </div>
 
@@ -3993,14 +5338,14 @@ const AdminOrders: React.FC = () => {
                         </div>
 
                         {/* Col 6: Chevron */}
-                        <div style={{ color: "#94a3b8", display: "grid", placeItems: "center" }}>
+                        <div style={{ color: tokens.textMuted, display: "grid", placeItems: "center" }}>
                           {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
                         </div>
                       </div>
 
 
                       {isExpanded ? (
-                        <div style={{ padding: "16px 18px 20px", background: "#f8fafc" }}>
+                        <div style={{ padding: "16px 18px 20px", background: tokens.elevatedSurfaceBg }}>
                           <div
                             style={{
                               display: "grid",
@@ -4012,7 +5357,7 @@ const AdminOrders: React.FC = () => {
                             {/* Left Column: Customer Details, Pickup Address & Return Items */}
                             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                               {/* Card 1: Customer & Original Order Information */}
-                              <div style={{ ...plainCardStyle, padding: "16px" }}>
+                              <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                 <div
                                   style={{
                                     display: "flex",
@@ -4020,33 +5365,61 @@ const AdminOrders: React.FC = () => {
                                     alignItems: "center",
                                     marginBottom: "12px",
                                     paddingBottom: "8px",
-                                    borderBottom: "1px solid #f1f5f9",
+                                    borderBottom: `1px solid ${tokens.border}`,
                                   }}
                                 >
-                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                     Customer & Pickup Address
                                   </span>
-                                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px" }}>
+                                  <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, padding: "2px 6px", borderRadius: "4px" }}>
                                     Order #{returnItem.order_id.slice(0, 8).toUpperCase()}
                                   </span>
                                 </div>
 
                                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                  <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                                     {detail?.order?.shipping_address?.fullName || "Customer"}
                                   </div>
 
-                                  <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, background: "#f8fafc", padding: "10px 12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                                    <div style={{ fontWeight: 600, color: "#1e293b", marginBottom: "2px" }}>
+                                  <div style={{ fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.6, background: tokens.elevatedSurfaceBg, padding: "10px 12px", borderRadius: "6px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
+                                    <div style={{ fontWeight: 600, color: tokens.textPrimary, marginBottom: "2px" }}>
                                       Pickup Address:
                                     </div>
                                     <div>{detail?.order?.shipping_address?.addressLine1 || "—"}</div>
                                     <div>
                                       {[detail?.order?.shipping_address?.city, detail?.order?.shipping_address?.postalCode].filter(Boolean).join(" - ") || "—"}
                                     </div>
+                                    {(detail?.order?.shipping_address?.latitude && detail?.order?.shipping_address?.longitude) ? (
+                                      <div style={{ marginTop: "6px", paddingTop: "4px" }}>
+                                        <a
+                                          href={`https://www.google.com/maps?q=${detail.order.shipping_address.latitude},${detail.order.shipping_address.longitude}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "4px",
+                                            fontSize: "12px",
+                                            fontWeight: 600,
+                                            color: "#2563eb",
+                                            textDecoration: "none",
+                                            background: "#eff6ff",
+                                            border: "1px solid #bfdbfe",
+                                            borderRadius: "4px",
+                                            padding: "2px 8px",
+                                          }}
+                                        >
+                                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                            <circle cx="12" cy="10" r="3"></circle>
+                                          </svg>
+                                          Open Exact Pinned Location on Maps
+                                        </a>
+                                      </div>
+                                    ) : null}
                                   </div>
 
-                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "13px", color: "#475569", marginTop: "2px" }}>
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "13px", color: tokens.textSecondary, marginTop: "2px" }}>
                                     {detail?.order?.shipping_address?.mobileNumber && (
                                       <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                                         <PhoneIcon />
@@ -4059,22 +5432,22 @@ const AdminOrders: React.FC = () => {
                                       </div>
                                     )}
                                     {detail?.order?.shipping_address?.email && (
-                                      <div style={{ color: "#64748b" }}>
+                                      <div style={{ color: tokens.textSecondary }}>
                                         {detail.order.shipping_address.email}
                                       </div>
                                     )}
                                   </div>
 
                                   {returnItem.request_note && (
-                                    <div style={{ marginTop: "6px", padding: "8px 10px", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "12.5px", color: "#334155" }}>
-                                      <span style={{ fontWeight: 600, color: "#0f172a" }}>Customer Reason Note:</span> "{returnItem.request_note}"
+                                    <div style={{ marginTop: "6px", padding: "8px 10px", background: tokens.elevatedSurfaceBg, borderRadius: "6px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", fontSize: "12.5px", color: tokens.textSecondary }}>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary }}>Customer Reason Note:</span> "{returnItem.request_note}"
                                     </div>
                                   )}
                                 </div>
                               </div>
 
                               {/* Card 2: Return Items & Refund Account */}
-                              <div style={{ ...plainCardStyle, padding: "16px" }}>
+                              <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                 <div
                                   style={{
                                     display: "flex",
@@ -4082,14 +5455,14 @@ const AdminOrders: React.FC = () => {
                                     alignItems: "center",
                                     marginBottom: "12px",
                                     paddingBottom: "8px",
-                                    borderBottom: "1px solid #f1f5f9",
+                                    borderBottom: `1px solid ${tokens.border}`,
                                   }}
                                 >
-                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                     Return Items ({detail?.items?.length || returnItem.item_count || 1})
                                   </span>
-                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
-                                    Refund: {formatPrice(returnItem.final_refund_amount)}
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
+                                    Refund: {formatPrice(detail?.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
                                   </span>
                                 </div>
 
@@ -4104,23 +5477,23 @@ const AdminOrders: React.FC = () => {
                                         gap: "12px",
                                         padding: "10px 12px",
                                         borderRadius: "6px",
-                                        background: "#f8fafc",
-                                        border: "1px solid #e2e8f0",
+                                        background: tokens.elevatedSurfaceBg,
+                                        border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                       }}
                                     >
                                       <div style={{ minWidth: 0, flex: 1 }}>
-                                        <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a" }}>
+                                        <div style={{ fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary }}>
                                           {item.product_name}
                                         </div>
                                         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap" }}>
-                                          <span style={{ fontSize: "11px", fontWeight: 600, color: "#475569", background: "#f1f5f9", padding: "1px 6px", borderRadius: "4px" }}>
+                                          <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, padding: "1px 6px", borderRadius: "4px" }}>
                                             Req: {item.quantity_requested}
                                           </span>
-                                          <span style={{ fontSize: "11px", fontWeight: 700, color: "#166534", background: "#dcfce7", padding: "1px 6px", borderRadius: "4px" }}>
+                                          <span style={{ fontSize: "11px", fontWeight: 700, color: isDark ? "#4ade80" : "#166534", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#dcfce7", padding: "1px 6px", borderRadius: "4px" }}>
                                             Appr: {item.quantity_approved}
                                           </span>
                                           {item.quantity_received !== undefined && item.quantity_received !== null && (
-                                            <span style={{ fontSize: "11px", fontWeight: 700, color: item.quantity_received >= item.quantity_approved ? "#15803d" : "#b45309", background: item.quantity_received >= item.quantity_approved ? "#ecfdf5" : "#fffbeb", padding: "1px 6px", borderRadius: "4px", border: `1px solid ${item.quantity_received >= item.quantity_approved ? "#a7f3d0" : "#fde68a"}` }}>
+                                            <span style={{ fontSize: "11px", fontWeight: 700, color: item.quantity_received >= item.quantity_approved ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#fde047" : "#b45309"), background: item.quantity_received >= item.quantity_approved ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#ecfdf5") : (isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb"), padding: "1px 6px", borderRadius: "4px", border: `1px solid ${item.quantity_received >= item.quantity_approved ? (isDark ? "rgba(74, 222, 128, 0.3)" : "#a7f3d0") : (isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a")}` }}>
                                               Rider Picked: {item.quantity_received}
                                             </span>
                                           )}
@@ -4129,9 +5502,9 @@ const AdminOrders: React.FC = () => {
                                               style={{
                                                 fontSize: "11px",
                                                 fontWeight: 600,
-                                                color: "#7c3aed",
-                                                background: "#f5f3ff",
-                                                border: "1px solid #e9d5ff",
+                                                color: isDark ? "#c084fc" : "#7c3aed",
+                                                background: isDark ? "rgba(168, 85, 247, 0.15)" : "#f5f3ff",
+                                                border: `1px solid ${isDark ? "rgba(192, 132, 252, 0.3)" : "#e9d5ff"}`,
                                                 padding: "1px 6px",
                                                 borderRadius: "4px",
                                               }}
@@ -4139,28 +5512,28 @@ const AdminOrders: React.FC = () => {
                                               {item.selected_variant_value}
                                             </span>
                                           )}
-                                          <span style={{ fontSize: "11px", color: "#64748b" }}>
+                                          <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
                                             • Reason: {item.reason_code.replaceAll("_", " ")}
                                           </span>
                                         </div>
                                       </div>
-                                      <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
+                                      <div style={{ fontSize: "13.5px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap" }}>
                                         {formatPrice(item.line_refund_final)}
                                       </div>
                                     </div>
                                   ))}
                                   {/* Customer Refund Account: For COD orders, show Bank/UPI info */}
                                   {(detail?.order?.payment_method === "cod" || detail?.order?.payment_method === "cash_on_delivery") && (detail?.customer_refund_account || returnItem.customer_refund_account) && (
-                                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #f1f5f9" }}>
-                                      <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", marginBottom: "6px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}` }}>
+                                      <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "6px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                         <span>Customer Refund Destination (COD Payout):</span>
                                         <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", background: "#ecfdf5", color: "#059669", fontWeight: 800, textTransform: "uppercase" }}>
                                           {(detail?.customer_refund_account || returnItem.customer_refund_account).type || "UPI"}
                                         </span>
                                       </div>
                                       {(detail?.customer_refund_account || returnItem.customer_refund_account).type === "upi" ? (
-                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: "#f8fafc", padding: "6px 10px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                                          <code style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", background: tokens.elevatedSurfaceBg, padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
+                                          <code style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>
                                             {(detail?.customer_refund_account || returnItem.customer_refund_account).upi_id}
                                           </code>
                                           <button
@@ -4169,13 +5542,13 @@ const AdminOrders: React.FC = () => {
                                               navigator.clipboard.writeText((detail?.customer_refund_account || returnItem.customer_refund_account).upi_id);
                                               alert("Copied UPI ID to clipboard!");
                                             }}
-                                            style={{ border: "1px solid #cbd5e1", background: "#ffffff", padding: "3px 8px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", color: "#2563eb", fontWeight: 700 }}
+                                            style={{ border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", background: tokens.surfaceBg, padding: "3px 8px", borderRadius: "4px", cursor: "pointer", fontSize: "11px", color: "#2563eb", fontWeight: 700 }}
                                           >
                                             Copy UPI
                                           </button>
                                         </div>
                                       ) : (
-                                        <div style={{ fontSize: "12px", color: "#334155", background: "#f8fafc", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e2e8f0", lineHeight: 1.6 }}>
+                                        <div style={{ fontSize: "12px", color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, padding: "8px 10px", borderRadius: "6px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", lineHeight: 1.6 }}>
                                           <div><strong>Name:</strong> {(detail?.customer_refund_account || returnItem.customer_refund_account).account_holder || "—"}</div>
                                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                             <div><strong>A/C:</strong> {(detail?.customer_refund_account || returnItem.customer_refund_account).account_number}</div>
@@ -4185,7 +5558,7 @@ const AdminOrders: React.FC = () => {
                                                 navigator.clipboard.writeText((detail?.customer_refund_account || returnItem.customer_refund_account).account_number);
                                                 alert("Copied Account Number to clipboard!");
                                               }}
-                                              style={{ border: "1px solid #cbd5e1", background: "#ffffff", padding: "2px 6px", borderRadius: "4px", cursor: "pointer", fontSize: "10px", color: "#2563eb", fontWeight: 700 }}
+                                              style={{ border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", background: tokens.surfaceBg, padding: "2px 6px", borderRadius: "4px", cursor: "pointer", fontSize: "10px", color: "#2563eb", fontWeight: 700 }}
                                             >
                                               Copy A/C
                                             </button>
@@ -4197,10 +5570,83 @@ const AdminOrders: React.FC = () => {
                                   )}
 
                                   {detail?.order?.payment_method && detail.order.payment_method !== "cod" && detail.order.payment_method !== "cash_on_delivery" && (
-                                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid #f1f5f9" }}>
-                                      <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "8px 10px", borderRadius: "6px", fontSize: "12px", color: "#166534" }}>
-                                        <span>💳</span>
+                                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}` }}>
+                                      <div style={{ display: "flex", alignItems: "center", gap: "8px", background: isDark ? "rgba(34, 197, 94, 0.12)" : "#f0fdf4", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, padding: "8px 10px", borderRadius: "6px", fontSize: "12px", color: isDark ? "#86efac" : "#166534" }}>
                                         <span><strong>Online Payment ({detail.order.payment_method}):</strong> Refund is automatically credited back to customer's original payment source via Razorpay.</span>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {detail?.refund_breakdown && (
+                                    <div
+                                      style={{
+                                        marginTop: "12px",
+                                        padding: "10px 12px",
+                                        borderRadius: "6px",
+                                        background: tokens.elevatedSurfaceBg,
+                                        border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                        fontSize: "12px",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          justifyContent: "space-between",
+                                          alignItems: "center",
+                                          marginBottom: "8px",
+                                          fontSize: "11px",
+                                          fontWeight: 700,
+                                          color: tokens.textSecondary,
+                                          textTransform: "uppercase",
+                                          letterSpacing: "0.04em",
+                                        }}
+                                      >
+                                        <span>Refund Breakdown</span>
+                                        <span style={{ fontSize: "10px", color: tokens.textSecondary, background: tokens.elevatedSurfaceBg, padding: "1px 6px", borderRadius: "4px" }}>
+                                          Prorated
+                                        </span>
+                                      </div>
+                                      <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
+                                          <span>Items Subtotal</span>
+                                          <span style={{ fontWeight: 600, color: tokens.textPrimary }}>+{formatPrice(detail.refund_breakdown.items_subtotal)}</span>
+                                        </div>
+                                        {detail.refund_breakdown.discounts_prorated > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
+                                            <span>Discount</span>
+                                            <span style={{ fontWeight: 600, color: "#dc2626" }}>-{formatPrice(detail.refund_breakdown.discounts_prorated)}</span>
+                                          </div>
+                                        )}
+                                        {detail.refund_breakdown.tax_refund > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
+                                            <span>Tax (GST)</span>
+                                            <span style={{ fontWeight: 600, color: tokens.textPrimary }}>+{formatPrice(detail.refund_breakdown.tax_refund)}</span>
+                                          </div>
+                                        )}
+                                        {detail.refund_breakdown.refundable_charges_added > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
+                                            <span>Refundable Charges</span>
+                                            <span style={{ fontWeight: 600, color: tokens.textPrimary }}>+{formatPrice(detail.refund_breakdown.refundable_charges_added)}</span>
+                                          </div>
+                                        )}
+                                        {detail.refund_breakdown.non_refundable_charges_retained > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: tokens.textSecondary }}>
+                                            <span>Non-Refundable Retained</span>
+                                            <span style={{ fontWeight: 600, color: "#dc2626" }}>-{formatPrice(detail.refund_breakdown.non_refundable_charges_retained)}</span>
+                                          </div>
+                                        )}
+                                        {(detail.refund_breakdown.exception_refund_added || 0) > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: isDark ? "#4ade80" : "#15803d", fontWeight: 600, background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4", padding: "4px 6px", borderRadius: "4px" }}>
+                                            <span>Retained Charges Refunded (Exception)</span>
+                                            <span style={{ fontWeight: 700 }}>+{formatPrice(detail.refund_breakdown.exception_refund_added || 0)}</span>
+                                          </div>
+                                        )}
+                                        <div style={{ display: "flex", justifyContent: "space-between", borderTop: `1px solid ${tokens.border}`, paddingTop: "6px", marginTop: "2px", fontWeight: 700, fontSize: "12.5px" }}>
+                                          <span>Total Refund</span>
+                                          <span style={{ color: isDark ? "#4ade80" : "#15803d" }}>
+                                            {formatPrice(detail.final_refund_amount || returnItem.final_refund_amount || returnItem.suggested_refund_amount)}
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
                                   )}
@@ -4212,7 +5658,7 @@ const AdminOrders: React.FC = () => {
                             {/* Right Column: Reverse Logistics Control & Admin Action Center */}
                             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                               {/* Card 1: Reverse Pickup & Fleet Dispatch Center (NEW) */}
-                              <div style={{ ...plainCardStyle, padding: "16px" }}>
+                              <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                 <div
                                   style={{
                                     display: "flex",
@@ -4220,10 +5666,10 @@ const AdminOrders: React.FC = () => {
                                     alignItems: "center",
                                     marginBottom: "12px",
                                     paddingBottom: "8px",
-                                    borderBottom: "1px solid #f1f5f9",
+                                    borderBottom: `1px solid ${tokens.border}`,
                                   }}
                                 >
-                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                     Reverse Logistics & Pickup
                                   </span>
                                   {(detail?.pickup_details || returnItem.pickup_details) ? (
@@ -4233,9 +5679,9 @@ const AdminOrders: React.FC = () => {
                                         fontWeight: 700,
                                         padding: "3px 8px",
                                         borderRadius: "4px",
-                                        background: "#eff6ff",
-                                        color: "#1d4ed8",
-                                        border: "1px solid #bfdbfe",
+                                        background: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                  color: isDark ? "#93c5fd" : "#1d4ed8",
+                  border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe"}`,
                                         textTransform: "capitalize",
                                       }}
                                     >
@@ -4263,220 +5709,470 @@ const AdminOrders: React.FC = () => {
                                 </div>
 
                                 {(() => {
-                                  const currentPickup = detail?.pickup_details || returnItem.pickup_details;
-                                  const storeDeliveryMode = deliverySettings?.delivery_mode || "own_agent";
-                                  const activeReturnMode = selectedReturnDispatchModeMap[returnItem.id] || (storeDeliveryMode === "hybrid" ? "own_agent" : storeDeliveryMode);
-                                  const isReassigningReturn = Boolean(reassigningReturnIdMap[returnItem.id]);
+                                   const currentPickup = detail?.pickup_details || returnItem.pickup_details;
+                                   const isFleetOn = deliverySettings?.enable_fleet !== undefined ? Boolean(deliverySettings.enable_fleet) : (deliverySettings?.delivery_mode === "own_agent" || deliverySettings?.delivery_mode === "hybrid");
+                                   const isShiprocketOn = deliverySettings?.enable_shiprocket !== undefined ? Boolean(deliverySettings.enable_shiprocket) : (deliverySettings?.delivery_mode === "shiprocket" || deliverySettings?.delivery_mode === "hybrid");
+                                   const isManualOn = deliverySettings?.enable_manual !== undefined ? Boolean(deliverySettings.enable_manual) : (deliverySettings?.delivery_mode === "manual");
+
+                                   const availableReturnModes: Array<{ id: "own_agent" | "shiprocket" | "manual"; label: string }> = [];
+                                   if (isFleetOn) availableReturnModes.push({ id: "own_agent", label: "In-House Rider" });
+                                   if (isShiprocketOn) availableReturnModes.push({ id: "shiprocket", label: "Shiprocket" });
+                                   if (isManualOn) availableReturnModes.push({ id: "manual", label: "Manual" });
+
+                                   if (availableReturnModes.length === 0) {
+                                     availableReturnModes.push({ id: "manual", label: "Manual" });
+                                   }
+
+                                   const activeReturnMode: "own_agent" | "shiprocket" | "manual" = (
+                                     selectedReturnDispatchModeMap[returnItem.id] && availableReturnModes.some((m) => m.id === selectedReturnDispatchModeMap[returnItem.id])
+                                       ? selectedReturnDispatchModeMap[returnItem.id]
+                                       : availableReturnModes[0].id
+                                   ) as "own_agent" | "shiprocket" | "manual";
+                                   const isReassigningReturn = Boolean(reassigningReturnIdMap[returnItem.id]);
 
                                   return (
                                     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                                       {/* If already assigned pickup */}
                                       {currentPickup?.agent_name || currentPickup?.courier_name ? (
-                                        <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                                            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                                              Assigned Reverse Partner
-                                            </div>
-                                            {currentPickup.mode === "own_agent" && (
-                                              <button
-                                                type="button"
-                                                onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: !p[returnItem.id] }))}
-                                                style={{
-                                                  background: "none",
-                                                  border: "none",
-                                                  color: "#2563eb",
-                                                  fontSize: "12px",
-                                                  fontWeight: 600,
-                                                  cursor: "pointer",
-                                                  padding: "0",
-                                                  textDecoration: "underline",
-                                                }}
-                                              >
-                                                {isReassigningReturn ? "Close" : "Reassign Rider"}
-                                              </button>
-                                            )}
-                                          </div>
+                                        (() => {
+                                          const isManualReturn = currentPickup.mode === "manual" || (!currentPickup.agent_name && Boolean(currentPickup.courier_name));
+                                          const isFleetReturn = currentPickup.mode === "own_agent" || Boolean(currentPickup.agent_name);
+                                          const isShiprocketReturn = currentPickup.mode === "shiprocket";
+                                          const isEditingReturnCourier = Boolean(editingReturnCourierMap[returnItem.id]);
 
-                                          <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
-                                            {currentPickup.agent_name || currentPickup.courier_name}
-                                            {currentPickup.agent_phone && (
-                                              <div style={{ fontSize: "13px", color: "#475569", marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
-                                                <PhoneIcon />
-                                                <a href={`tel:${currentPickup.agent_phone}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
-                                                  {formatPhoneDisplay(currentPickup.agent_phone)}
-                                                </a>
-                                              </div>
-                                            )}
-                                            {currentPickup.tracking_number && (
-                                              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "3px" }}>
-                                                AWB / Tracking: <strong>{currentPickup.tracking_number}</strong>
-                                              </div>
-                                            )}
-                                            {/* Level 1 Doorstep Physical Inspection Result */}
-                                            {(currentPickup.inspection_result === "failed" || currentPickup.pickup_status === "doorstep_rejected") ? (
-                                              <div style={{ marginTop: "8px", fontSize: "12px", color: "#991b1b", background: "#fef2f2", padding: "8px 10px", borderRadius: "6px", border: "1px solid #fecaca", lineHeight: 1.4 }}>
-                                                <div style={{ fontWeight: 700 }}>Doorstep Inspection Failed by Rider</div>
-                                                {currentPickup.inspection_failed_reason && <div>Reason: <strong>{currentPickup.inspection_failed_reason}</strong></div>}
-                                                {currentPickup.inspection_notes && <div>Rider Note: {currentPickup.inspection_notes}</div>}
-                                              </div>
-                                            ) : (currentPickup.pickup_status === "picked_up" || currentPickup.pickup_status === "delivered_to_hub") ? (
-                                              <div style={{ marginTop: "8px", fontSize: "12px", color: "#15803d", background: "#f0fdf4", padding: "6px 8px", borderRadius: "6px", border: "1px solid #bbf7d0", fontWeight: 600 }}>
-                                                Level 1 Doorstep Physical Inspection Passed
-                                              </div>
-                                            ) : null}
-                                            {currentPickup.pickup_notes && (
-                                              <div style={{ marginTop: "6px", fontSize: "12px", color: "#92400e", background: "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: "1px solid #fde68a" }}>
-                                                {currentPickup.pickup_notes}
-                                              </div>
-                                            )}
-                                          </div>
+                                          if (isManualReturn) {
+                                            return (
+                                              <div style={{ padding: "12px", background: tokens.elevatedSurfaceBg, borderRadius: "8px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                                    <span style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                      Manual Return Courier Partner
+                                                    </span>
+                                                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "999px", background: "#e0f2fe", color: "#0369a1" }}>
+                                                      Self-Ship / Courier
+                                                    </span>
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setEditingReturnCourierMap((p) => ({ ...p, [returnItem.id]: !p[returnItem.id] }));
+                                                      if (!returnManualCourierMap[returnItem.id]) {
+                                                        setReturnManualCourierMap((p) => ({
+                                                          ...p,
+                                                          [returnItem.id]: {
+                                                            courierName: currentPickup.courier_name || "",
+                                                            trackingNumber: currentPickup.tracking_number || "",
+                                                            notes: currentPickup.pickup_notes || "",
+                                                          },
+                                                        }));
+                                                      }
+                                                    }}
+                                                    style={{
+                                                      background: "none",
+                                                      border: "none",
+                                                      color: "#2563eb",
+                                                      fontSize: "12px",
+                                                      fontWeight: 600,
+                                                      cursor: "pointer",
+                                                      padding: "0",
+                                                      textDecoration: "underline",
+                                                    }}
+                                                  >
+                                                    {isEditingReturnCourier ? "Cancel Edit" : "Edit Courier / Tracking"}
+                                                  </button>
+                                                </div>
 
-                                          {/* Reassign Return Rider Panel */}
-                                          {isReassigningReturn && (
-                                            <div style={{ marginTop: "10px", padding: "10px", background: "#ffffff", borderRadius: "6px", border: "1px solid #cbd5e1", display: "flex", flexDirection: "column", gap: "8px" }}>
-                                              <label style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>
-                                                Select Replacement Rider
-                                              </label>
-                                              <select
-                                                value={reassignReturnAgentIdMap[returnItem.id] || ""}
-                                                onChange={(e) => setReassignReturnAgentIdMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
-                                                style={{ ...inputStyle, fontSize: "13px" }}
-                                              >
-                                                <option value="">-- Choose Rider --</option>
-                                                {deliveryAgents.filter((a) => a.is_active).map((a) => (
-                                                  <option key={a.id} value={a.id}>
-                                                    {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
-                                                  </option>
-                                                ))}
-                                              </select>
-                                              <div style={{ display: "flex", gap: "8px" }}>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleReassignReturnRider(returnItem.id)}
-                                                  disabled={actionLoadingId === returnItem.id}
-                                                  style={{ padding: "6px 12px", borderRadius: "5px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
-                                                >
-                                                  {actionLoadingId === returnItem.id ? "Reassigning..." : "Confirm Reassign"}
-                                                </button>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: false }))}
-                                                  style={{ padding: "6px 10px", borderRadius: "5px", background: "#ffffff", color: "#475569", border: "1px solid #cbd5e1", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                                                >
-                                                  Cancel
-                                                </button>
+                                                {isEditingReturnCourier ? (
+                                                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+                                                    <div>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>Return Courier Name</label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.courierName ?? (currentPickup.courier_name || "")}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              courierName: e.target.value,
+                                                              trackingNumber: p[returnItem.id]?.trackingNumber ?? (currentPickup.tracking_number || ""),
+                                                              notes: p[returnItem.id]?.notes ?? (currentPickup.pickup_notes || ""),
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="e.g. DTDC Return, BlueDart, India Post"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>Tracking / AWB Number</label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.trackingNumber ?? (currentPickup.tracking_number || "")}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              trackingNumber: e.target.value,
+                                                              courierName: p[returnItem.id]?.courierName ?? (currentPickup.courier_name || ""),
+                                                              notes: p[returnItem.id]?.notes ?? (currentPickup.pickup_notes || ""),
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="e.g. DTDC98234823"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>Pickup / Handover Notes (Optional)</label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.notes ?? (currentPickup.pickup_notes || "")}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              notes: e.target.value,
+                                                              courierName: p[returnItem.id]?.courierName ?? (currentPickup.courier_name || ""),
+                                                              trackingNumber: p[returnItem.id]?.trackingNumber ?? (currentPickup.tracking_number || ""),
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="e.g. Customer shipped via Speed Post"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                    </div>
+                                                    <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleDispatchReturnPickup(returnItem.id, "manual")}
+                                                        disabled={actionLoadingId === returnItem.id}
+                                                        style={{
+                                                          padding: "7px 14px",
+                                                          borderRadius: "6px",
+                                                          background: "#2563eb",
+                                                          color: "#ffffff",
+                                                          border: "none",
+                                                          fontSize: "12px",
+                                                          fontWeight: 700,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        {actionLoadingId === returnItem.id ? "Saving..." : "Save Courier Details"}
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setEditingReturnCourierMap((p) => ({ ...p, [returnItem.id]: false }))}
+                                                        style={{
+                                                          padding: "7px 12px",
+                                                          borderRadius: "6px",
+                                                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                           color: tokens.textSecondary,
+                                                           border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                                          fontSize: "12px",
+                                                          fontWeight: 600,
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        Cancel
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                ) : (
+                                                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                                    <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
+                                                      {currentPickup.courier_name || "Manual Courier / Self Ship"}
+                                                    </div>
+                                                    {currentPickup.tracking_number ? (
+                                                      <div style={{ fontSize: "12.5px", color: tokens.textSecondary }}>
+                                                        AWB / Tracking: <strong style={{ color: tokens.textPrimary }}>{currentPickup.tracking_number}</strong>
+                                                      </div>
+                                                    ) : (
+                                                      <div style={{ fontSize: "12px", color: tokens.textMuted, fontStyle: "italic" }}>
+                                                        No tracking number provided
+                                                      </div>
+                                                    )}
+                                                    {currentPickup.pickup_notes && (
+                                                      <div style={{ marginTop: "4px", fontSize: "12px", color: isDark ? "#fde047" : "#92400e", background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}` }}>
+                                                        {currentPickup.pickup_notes}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                )}
                                               </div>
-                                            </div>
-                                          )}
+                                            );
+                                          }
+
+                                          if (isFleetReturn) {
+                                            return (
+                                              <div style={{ padding: "12px", background: tokens.elevatedSurfaceBg, borderRadius: "8px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                                                  <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                    Store Delivery Partner (Own Fleet)
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: !p[returnItem.id] }))}
+                                                    style={{
+                                                      background: "none",
+                                                      border: "none",
+                                                      color: "#2563eb",
+                                                      fontSize: "12px",
+                                                      fontWeight: 600,
+                                                      cursor: "pointer",
+                                                      padding: "0",
+                                                      textDecoration: "underline",
+                                                    }}
+                                                  >
+                                                    {isReassigningReturn ? "Close" : "Reassign / Switch Partner"}
+                                                  </button>
+                                                </div>
+
+                                                <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
+                                                  {currentPickup.agent_name}
+                                                  {currentPickup.agent_phone && (
+                                                    <div style={{ fontSize: "13px", color: tokens.textSecondary, marginTop: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
+                                                      <PhoneIcon />
+                                                      <a href={`tel:${currentPickup.agent_phone}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
+                                                        {formatPhoneDisplay(currentPickup.agent_phone)}
+                                                      </a>
+                                                    </div>
+                                                  )}
+                                                  {/* Level 1 Doorstep Physical Inspection Result */}
+                                                  {(currentPickup.inspection_result === "failed" || currentPickup.pickup_status === "doorstep_rejected") ? (
+                                                    <div style={{ marginTop: "8px", fontSize: "12px", color: isDark ? "#fca5a5" : "#991b1b", background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2", padding: "8px 10px", borderRadius: "6px", border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`, lineHeight: 1.4 }}>
+                                                      <div style={{ fontWeight: 700 }}>Doorstep Inspection Failed by Rider</div>
+                                                      {currentPickup.inspection_failed_reason && <div>Reason: <strong>{currentPickup.inspection_failed_reason}</strong></div>}
+                                                      {currentPickup.inspection_notes && <div>Rider Note: {currentPickup.inspection_notes}</div>}
+                                                    </div>
+                                                  ) : (currentPickup.pickup_status === "picked_up" || currentPickup.pickup_status === "delivered_to_hub") ? (
+                                                    <div style={{ marginTop: "8px", fontSize: "12px", color: isDark ? "#4ade80" : "#15803d", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4", padding: "6px 8px", borderRadius: "6px", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, fontWeight: 600 }}>
+                                                      Level 1 Doorstep Physical Inspection Passed
+                                                    </div>
+                                                  ) : null}
+                                                  {currentPickup.pickup_notes && (
+                                                    <div style={{ marginTop: "6px", fontSize: "12px", color: isDark ? "#fde047" : "#92400e", background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb", padding: "6px 8px", borderRadius: "4px", border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}` }}>
+                                                      {currentPickup.pickup_notes}
+                                                    </div>
+                                                  )}
+                                                </div>
+
+                                                {/* Reassign Return Rider / Switch to Manual Panel */}
+                                                {isReassigningReturn && (
+                                                  <div style={{ marginTop: "12px", padding: "12px", background: tokens.surfaceBg, borderRadius: "8px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", display: "flex", flexDirection: "column", gap: "12px" }}>
+                                                    {/* Option 1: In-House Rider Reassignment */}
+                                                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                                      <label style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>
+                                                        Option 1: Choose Replacement Rider
+                                                      </label>
+                                                      <select
+                                                        value={reassignReturnAgentIdMap[returnItem.id] || ""}
+                                                        onChange={(e) => setReassignReturnAgentIdMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      >
+                                                        <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>-- Choose Rider --</option>
+                                                        {deliveryAgents.filter((a) => a.is_active).map((a) => (
+                                                          <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                                                            {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
+                                                          </option>
+                                                        ))}
+                                                      </select>
+                                                      <div style={{ display: "flex", gap: "8px", marginTop: "2px" }}>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleReassignReturnRider(returnItem.id)}
+                                                          disabled={actionLoadingId === returnItem.id || !reassignReturnAgentIdMap[returnItem.id]}
+                                                          style={{ padding: "6px 12px", borderRadius: "5px", background: "#2563eb", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 700, cursor: "pointer", opacity: !reassignReturnAgentIdMap[returnItem.id] ? 0.6 : 1 }}
+                                                        >
+                                                          {actionLoadingId === returnItem.id ? "Reassigning..." : "Confirm Reassign"}
+                                                        </button>
+                                                      </div>
+                                                    </div>
+
+                                                    {/* Option 2: Switch to Manual Courier */}
+                                                    <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                                                      <label style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>
+                                                        Option 2: Switch to Manual Return Courier
+                                                      </label>
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.courierName || ""}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              courierName: e.target.value,
+                                                              trackingNumber: p[returnItem.id]?.trackingNumber || "",
+                                                              notes: p[returnItem.id]?.notes || "",
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="Courier Name (e.g. DTDC Return, Customer Self-Ship)"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                      <input
+                                                        value={returnManualCourierMap[returnItem.id]?.trackingNumber || ""}
+                                                        onChange={(e) =>
+                                                          setReturnManualCourierMap((p) => ({
+                                                            ...p,
+                                                            [returnItem.id]: {
+                                                              trackingNumber: e.target.value,
+                                                              courierName: p[returnItem.id]?.courierName || "",
+                                                              notes: p[returnItem.id]?.notes || "",
+                                                            },
+                                                          }))
+                                                        }
+                                                        placeholder="Tracking / AWB Number (Optional)"
+                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                      />
+                                                      <div style={{ display: "flex", gap: "8px", marginTop: "2px" }}>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleSwitchReturnToManual(returnItem.id)}
+                                                          disabled={actionLoadingId === returnItem.id}
+                                                          style={{ padding: "6px 12px", borderRadius: "5px", background: "#059669", color: "#ffffff", border: "none", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+                                                        >
+                                                          {actionLoadingId === returnItem.id ? "Switching..." : "Switch to Manual Courier"}
+                                                        </button>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => setReassigningReturnIdMap((p) => ({ ...p, [returnItem.id]: false }))}
+                                                          style={{ padding: "6px 10px", borderRadius: "5px", background: tokens.surfaceBg, color: tokens.textSecondary, border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                                        >
+                                                          Cancel
+                                                        </button>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          }
+
+                                          if (isShiprocketReturn) {
+                                            return (
+                                              <div style={{ padding: "12px", background: tokens.elevatedSurfaceBg, borderRadius: "8px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
+                                                <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "4px" }}>
+                                                  Shiprocket Reverse Logistics
+                                                </div>
+                                                <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
+                                                  {currentPickup.courier_name}
+                                                </div>
+                                                {currentPickup.tracking_number && (
+                                                  <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginTop: "2px" }}>
+                                                    AWB: <strong>{currentPickup.tracking_number}</strong>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          }
+
+                                          return null;
+                                        })()
+                                      ) : (returnItem.status === "rejected" || detail?.status === "rejected") ? (
+                                        <div style={{ padding: "10px 12px", background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2", color: isDark ? "#fca5a5" : "#991b1b", borderRadius: "6px", fontSize: "12px", border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`, fontWeight: 600 }}>
+                                          Return request is rejected. Reverse logistics is disabled.
                                         </div>
                                       ) : (
                                         /* If Not assigned and return is approved or requested */
                                         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                          {/* Mode Tabs */}
-                                          {storeDeliveryMode === "hybrid" && (
-                                            <div style={{ display: "flex", gap: "4px", padding: "3px", background: "#f1f5f9", borderRadius: "6px" }}>
-                                              <button
-                                                type="button"
-                                                onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: "own_agent" }))}
-                                                style={{
-                                                  flex: 1,
-                                                  padding: "6px 8px",
-                                                  borderRadius: "4px",
-                                                  border: "none",
-                                                  background: activeReturnMode === "own_agent" ? "#ffffff" : "transparent",
-                                                  color: activeReturnMode === "own_agent" ? "#2563eb" : "#64748b",
-                                                  fontWeight: 700,
-                                                  fontSize: "12px",
-                                                  cursor: "pointer",
-                                                  boxShadow: activeReturnMode === "own_agent" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                }}
-                                              >
-                                                In-House Rider
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: "shiprocket" }))}
-                                                style={{
-                                                  flex: 1,
-                                                  padding: "6px 8px",
-                                                  borderRadius: "4px",
-                                                  border: "none",
-                                                  background: activeReturnMode === "shiprocket" ? "#ffffff" : "transparent",
-                                                  color: activeReturnMode === "shiprocket" ? "#2563eb" : "#64748b",
-                                                  fontWeight: 700,
-                                                  fontSize: "12px",
-                                                  cursor: "pointer",
-                                                  boxShadow: activeReturnMode === "shiprocket" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                }}
-                                              >
-                                                Shiprocket
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: "manual" }))}
-                                                style={{
-                                                  flex: 1,
-                                                  padding: "6px 8px",
-                                                  borderRadius: "4px",
-                                                  border: "none",
-                                                  background: activeReturnMode === "manual" ? "#ffffff" : "transparent",
-                                                  color: activeReturnMode === "manual" ? "#2563eb" : "#64748b",
-                                                  fontWeight: 700,
-                                                  fontSize: "12px",
-                                                  cursor: "pointer",
-                                                  boxShadow: activeReturnMode === "manual" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                                                }}
-                                              >
-                                                Manual
-                                              </button>
+                                          {/* Mode Tabs: only rendered if more than 1 delivery mode is enabled */}
+                                          {availableReturnModes.length > 1 && (
+                                            <div style={{ display: "flex", gap: "4px", padding: "3px", background: tokens.elevatedSurfaceBg, borderRadius: "6px" }}>
+                                              {availableReturnModes.map((mode) => (
+                                                <button
+                                                  key={mode.id}
+                                                  type="button"
+                                                  onClick={() => setSelectedReturnDispatchModeMap((p) => ({ ...p, [returnItem.id]: mode.id }))}
+                                                  style={{
+                                                    flex: 1,
+                                                    padding: "6px 8px",
+                                                    borderRadius: "4px",
+                                                    border: "none",
+                                                    background: activeReturnMode === mode.id ? "#ffffff" : "transparent",
+                                                    color: activeReturnMode === mode.id ? "#2563eb" : "#64748b",
+                                                    fontWeight: 700,
+                                                    fontSize: "12px",
+                                                    cursor: "pointer",
+                                                    boxShadow: activeReturnMode === mode.id ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                                                  }}
+                                                >
+                                                  {mode.label}
+                                                </button>
+                                              ))}
                                             </div>
                                           )}
 
                                           {/* Mode 1: In-House Rider Selection */}
-                                          {activeReturnMode === "own_agent" && (
-                                            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                              <div>
-                                                <label style={labelStyle}>Assign Delivery Fleet Rider for Pickup</label>
-                                                <select
-                                                  value={selectedReturnAgentMap[returnItem.id] || ""}
-                                                  onChange={(e) => setSelectedReturnAgentMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
-                                                  style={{ ...inputStyle, cursor: "pointer" }}
-                                                >
-                                                  <option value="">Auto-Assign (Least Busy Rider)</option>
-                                                  {deliveryAgents
-                                                    .filter((a) => a.is_active)
-                                                    .map((a) => (
-                                                      <option key={a.id} value={a.id}>
-                                                        {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
-                                                      </option>
-                                                    ))}
-                                                </select>
-                                              </div>
+                                           {activeReturnMode === "own_agent" && (
+                                             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                               <div>
+                                                 <label style={labelStyle}>Assign Delivery Fleet Rider for Pickup</label>
+                                                 <div style={{ position: "relative" }}>
+                                                   <select
+                                                     value={selectedReturnAgentMap[returnItem.id] || ""}
+                                                     onChange={(e) => setSelectedReturnAgentMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
+                                                     style={{
+                                                       ...inputStyle,
+                                                       height: "38px",
+                                                       padding: "0 34px 0 12px",
+                                                       borderRadius: "8px",
+                                                       border: `1px solid ${tokens.border}`,
+                                                       background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                                       color: tokens.textPrimary,
+                                                       colorScheme: isDark ? "dark" : "light",
+                                                       cursor: "pointer",
+                                                       appearance: "none",
+                                                       fontSize: "13px",
+                                                       fontWeight: 500,
+                                                     }}
+                                                   >
+                                                     <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Auto-Assign (Least Busy Rider)</option>
+                                                     {deliveryAgents
+                                                       .filter((a) => a.is_active)
+                                                       .map((a) => (
+                                                         <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>
+                                                           {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
+                                                         </option>
+                                                       ))}
+                                                   </select>
+                                                   <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: tokens.textSecondary, display: "grid", placeItems: "center" }}>
+                                                     <ChevronDownIcon />
+                                                   </div>
+                                                 </div>
+                                               </div>
 
-                                              <button
-                                                type="button"
-                                                onClick={() => handleDispatchReturnPickup(returnItem.id, "own_agent")}
-                                                disabled={actionLoadingId === returnItem.id}
-                                                style={{
-                                                  padding: "9px 14px",
-                                                  borderRadius: "6px",
-                                                  background: "#2563eb",
-                                                  border: "1px solid #2563eb",
-                                                  color: "#ffffff",
-                                                  fontWeight: 700,
-                                                  fontSize: "13px",
-                                                  cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
-                                                }}
-                                              >
-                                                {actionLoadingId === returnItem.id ? "Assigning..." : "Assign Rider for Return Pickup & Inspection"}
-                                              </button>
-                                            </div>
-                                          )}
+                                               <button
+                                                 type="button"
+                                                 onClick={() => handleDispatchReturnPickup(returnItem.id, "own_agent")}
+                                                 disabled={actionLoadingId === returnItem.id}
+                                                 style={{
+                                                   height: "38px",
+                                                   padding: "0 16px",
+                                                   borderRadius: "8px",
+                                                   background: "#2563eb",
+                                                   border: "1px solid rgba(255,255,255,0.1)",
+                                                   color: "#ffffff",
+                                                   fontWeight: 700,
+                                                   fontSize: "13px",
+                                                   cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
+                                                   display: "inline-flex",
+                                                   alignItems: "center",
+                                                   justifyContent: "center",
+                                                   gap: "8px",
+                                                   boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
+                                                   transition: "all 0.15s ease",
+                                                 }}
+                                               >
+                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                   <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                                   <circle cx="9" cy="7" r="4" />
+                                                   <polyline points="16 11 18 13 22 9" />
+                                                 </svg>
+                                                 <span>{actionLoadingId === returnItem.id ? "Assigning..." : "Assign Rider for Return Pickup & Inspection"}</span>
+                                               </button>
+                                             </div>
+                                           )}
 
                                           {/* Mode 2: Shiprocket Reverse Pickup */}
                                           {activeReturnMode === "shiprocket" && (
                                             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                              <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                                              <p style={{ fontSize: "12px", color: tokens.textSecondary, margin: 0 }}>
                                                 Generates reverse courier pickup via Shiprocket (Delhivery, BlueDart, DTDC).
                                               </p>
                                               <button
@@ -4517,7 +6213,7 @@ const AdminOrders: React.FC = () => {
                                                       },
                                                     }))
                                                   }
-                                                  placeholder="e.g. DTDC Return / Self Ship"
+                                                  placeholder="e.g. DTDC Return, Customer Self-Ship"
                                                   style={inputStyle}
                                                 />
                                               </div>
@@ -4536,7 +6232,26 @@ const AdminOrders: React.FC = () => {
                                                       },
                                                     }))
                                                   }
-                                                  placeholder="Tracking Number"
+                                                  placeholder="e.g. DTDC98234823"
+                                                  style={inputStyle}
+                                                />
+                                              </div>
+                                              <div>
+                                                <div style={labelStyle}>Pickup / Handover Notes (Optional)</div>
+                                                <input
+                                                  value={returnManualCourierMap[returnItem.id]?.notes || ""}
+                                                  onChange={(e) =>
+                                                    setReturnManualCourierMap((p) => ({
+                                                      ...p,
+                                                      [returnItem.id]: {
+                                                        ...p[returnItem.id],
+                                                        notes: e.target.value,
+                                                        courierName: p[returnItem.id]?.courierName || "",
+                                                        trackingNumber: p[returnItem.id]?.trackingNumber || "",
+                                                      },
+                                                    }))
+                                                  }
+                                                  placeholder="e.g. Customer returned via speed post"
                                                   style={inputStyle}
                                                 />
                                               </div>
@@ -4547,9 +6262,9 @@ const AdminOrders: React.FC = () => {
                                                 style={{
                                                   padding: "8px 12px",
                                                   borderRadius: "6px",
-                                                  background: "#ffffff",
-                                                  border: "1px solid #cbd5e1",
-                                                  color: "#0f172a",
+                                                  background: "#2563eb",
+                                                  border: "1px solid #2563eb",
+                                                  color: "#ffffff",
                                                   fontWeight: 700,
                                                   fontSize: "13px",
                                                   cursor: "pointer",
@@ -4567,9 +6282,9 @@ const AdminOrders: React.FC = () => {
                               </div>
 
                               {/* Card 2: Return Lifecycle Admin Action */}
-                              {returnItem.status === "requested" ? (
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "12px", color: "#0f172a" }}>
+                              {returnItem.status === "requested" && canUpdateOrders ? (
+                                <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
+                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "12px", color: tokens.textPrimary }}>
                                     Review Return Request
                                   </div>
 
@@ -4586,15 +6301,15 @@ const AdminOrders: React.FC = () => {
                                         flex: 1,
                                         padding: "8px 12px",
                                         borderRadius: "6px",
-                                        border: reviewDraft.action === "approve" ? "2px solid #16a34a" : "1px solid #cbd5e1",
-                                        background: reviewDraft.action === "approve" ? "#f0fdf4" : "#ffffff",
-                                        color: reviewDraft.action === "approve" ? "#15803d" : "#475569",
+                                        border: reviewDraft.action === "approve" ? "2px solid #16a34a" : `1px solid ${tokens.border}`,
+                                        background: reviewDraft.action === "approve" ? (isDark ? "rgba(34, 197, 94, 0.18)" : "#f0fdf4") : tokens.surfaceBg,
+                                        color: reviewDraft.action === "approve" ? (isDark ? "#4ade80" : "#15803d") : tokens.textSecondary,
                                         fontWeight: 700,
                                         fontSize: "13px",
                                         cursor: "pointer",
                                       }}
                                     >
-                                      ✓ Approve Return
+                                      Approve Return
                                     </button>
 
                                     <button
@@ -4609,15 +6324,15 @@ const AdminOrders: React.FC = () => {
                                         flex: 1,
                                         padding: "8px 12px",
                                         borderRadius: "6px",
-                                        border: reviewDraft.action === "reject" ? "2px solid #dc2626" : "1px solid #cbd5e1",
-                                        background: reviewDraft.action === "reject" ? "#fef2f2" : "#ffffff",
-                                        color: reviewDraft.action === "reject" ? "#b91c1c" : "#475569",
+                                        border: reviewDraft.action === "reject" ? "2px solid #dc2626" : `1px solid ${tokens.border}`,
+                                        background: reviewDraft.action === "reject" ? (isDark ? "rgba(239, 68, 68, 0.18)" : "#fef2f2") : tokens.surfaceBg,
+                                        color: reviewDraft.action === "reject" ? (isDark ? "#fca5a5" : "#b91c1c") : tokens.textSecondary,
                                         fontWeight: 700,
                                         fontSize: "13px",
                                         cursor: "pointer",
                                       }}
                                     >
-                                      ✕ Reject Return
+                                      Reject Return
                                     </button>
                                   </div>
 
@@ -4637,18 +6352,18 @@ const AdminOrders: React.FC = () => {
                                                 alignItems: "center",
                                                 padding: "8px 10px",
                                                 borderRadius: "6px",
-                                                background: "#f8fafc",
-                                                border: "1px solid #e2e8f0",
+                                                background: tokens.elevatedSurfaceBg,
+                                                border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                               }}
                                             >
                                               <div style={{ fontSize: "13px", fontWeight: 600, minWidth: 0, paddingRight: "8px" }}>
                                                 {item.product_name}
-                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                <div style={{ fontSize: "11px", color: tokens.textSecondary }}>
                                                   Requested: {item.quantity_requested}
                                                 </div>
                                               </div>
                                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                                <span style={{ fontSize: "12px", color: "#475569" }}>Approve:</span>
+                                                <span style={{ fontSize: "12px", color: tokens.textSecondary }}>Approve:</span>
                                                 <input
                                                   type="number"
                                                   min={0}
@@ -4727,38 +6442,47 @@ const AdminOrders: React.FC = () => {
                               {returnItem.status === "approved" ? (
                                 (() => {
                                   const pickupInfo = detail?.pickup_details || returnItem.pickup_details;
-                                  const isAssigned = Boolean(pickupInfo?.agent_name || pickupInfo?.courier_name);
+                                  const isFleetRiderPickup = pickupInfo?.mode === "own_agent" && Boolean(pickupInfo.agent_name);
 
-                                  if (isAssigned) {
+                                  if (isFleetRiderPickup) {
                                     return (
-                                      <div style={{ ...plainCardStyle, padding: "16px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                                      <div style={{ ...plainCardStyle, padding: "16px", background: tokens.elevatedSurfaceBg, border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
                                         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                                          <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", display: "grid", placeItems: "center", fontSize: "16px" }}>
-                                            🚚
+                                          <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: isDark ? "rgba(37, 99, 235, 0.15)" : "#eff6ff", color: isDark ? "#60a5fa" : "#2563eb", display: "grid", placeItems: "center" }}>
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                              <rect x="1" y="3" width="15" height="13" />
+                                              <polygon points="16 8 20 8 23 11 23 16 16 16 8" />
+                                              <circle cx="5.5" cy="18.5" r="2.5" />
+                                              <circle cx="18.5" cy="18.5" r="2.5" />
+                                            </svg>
                                           </div>
                                           <div>
-                                            <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                                            <div style={{ fontSize: "14px", fontWeight: 700, color: tokens.textPrimary }}>
                                               Reverse Pickup In Progress
                                             </div>
-                                            <div style={{ fontSize: "12px", color: "#64748b" }}>
-                                              Assigned to <strong>{pickupInfo.agent_name || pickupInfo.courier_name}</strong>.
+                                            <div style={{ fontSize: "12px", color: tokens.textSecondary }}>
+                                              Assigned to rider <strong>{pickupInfo.agent_name}</strong>.
                                             </div>
                                           </div>
                                         </div>
-                                        <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.5, background: "#ffffff", padding: "10px 12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                                        <div style={{ fontSize: "12px", color: tokens.textSecondary, lineHeight: 1.5, background: tokens.surfaceBg, padding: "10px 12px", borderRadius: "6px", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))" }}>
                                           The delivery rider will inspect and collect the items at the doorstep. Once handed over at the store/hub, <strong>Quality Inspection & Restock</strong> will activate automatically.
                                         </div>
                                       </div>
                                     );
                                   }
 
+                                  if (!canUpdateOrders) return null;
+
                                   return (
-                                    <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                      <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
-                                        Direct In-Store Package Receipt
+                                    <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
+                                      <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "4px", color: tokens.textPrimary }}>
+                                        In-Store Package Receipt & Verification
                                       </div>
-                                      <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "14px" }}>
-                                        Confirm physical arrival if customer returned item directly to the store/hub without a rider.
+                                      <div style={{ fontSize: "12px", color: tokens.textSecondary, marginBottom: "14px" }}>
+                                        {pickupInfo?.courier_name
+                                          ? `Package returned via ${pickupInfo.courier_name}. Verify received quantities to proceed to Quality Inspection & Restock.`
+                                          : "Confirm physical arrival if customer returned item directly to the store/hub."}
                                       </div>
 
                                       <div style={{ display: "grid", gap: "8px", marginBottom: "14px" }}>
@@ -4774,18 +6498,18 @@ const AdminOrders: React.FC = () => {
                                                 alignItems: "center",
                                                 padding: "8px 10px",
                                                 borderRadius: "6px",
-                                                background: "#f8fafc",
-                                                border: "1px solid #e2e8f0",
+                                                background: tokens.elevatedSurfaceBg,
+                                                border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
                                               }}
                                             >
                                               <div style={{ fontSize: "13px", fontWeight: 600, minWidth: 0, paddingRight: "8px" }}>
                                                 {item.product_name}
-                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                <div style={{ fontSize: "11px", color: tokens.textSecondary }}>
                                                   Approved Qty: {item.quantity_approved}
                                                 </div>
                                               </div>
                                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                                <span style={{ fontSize: "12px", color: "#475569" }}>Received Qty:</span>
+                                                <span style={{ fontSize: "12px", color: tokens.textSecondary }}>Received Qty:</span>
                                                 <input
                                                   type="number"
                                                   min={0}
@@ -4809,6 +6533,21 @@ const AdminOrders: React.FC = () => {
                                         })}
                                       </div>
 
+                                      <div style={{ marginBottom: "14px" }}>
+                                        <div style={labelStyle}>Admin Note (Optional)</div>
+                                        <textarea
+                                          value={receiveDraft.adminNote}
+                                          onChange={(e) =>
+                                            setReceiveDraftValue(returnItem.id, (draft) => ({
+                                              ...draft,
+                                              adminNote: e.target.value,
+                                            }))
+                                          }
+                                          placeholder="e.g. Package received at store warehouse in good condition..."
+                                          style={{ ...inputStyle, minHeight: "56px", resize: "vertical" }}
+                                        />
+                                      </div>
+
                                       <button
                                         onClick={() => handleReceiveReturn(returnItem.id)}
                                         disabled={actionLoadingId === returnItem.id}
@@ -4824,19 +6563,19 @@ const AdminOrders: React.FC = () => {
                                           cursor: actionLoadingId === returnItem.id ? "wait" : "pointer",
                                         }}
                                       >
-                                        Confirm Direct Hub Receipt
+                                        {actionLoadingId === returnItem.id ? "Receiving Package..." : "Confirm Package Received at Hub"}
                                       </button>
                                     </div>
                                   );
                                 })()
                               ) : null}
 
-                              {returnItem.status === "received" ? (
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
-                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: "#0f172a" }}>
+                              {returnItem.status === "received" && canUpdateOrders ? (
+                                <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
+                                  <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px", color: tokens.textPrimary }}>
                                     Product Quality Inspection & Stock Restock
                                   </div>
-                                  <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "14px" }}>
+                                  <div style={{ fontSize: "12px", color: tokens.textSecondary, marginBottom: "14px" }}>
                                     Inspect received items. Choosing <b>Restock</b> will automatically restore product inventory!
                                   </div>
 
@@ -4853,33 +6592,33 @@ const AdminOrders: React.FC = () => {
                                           style={{
                                             padding: "10px 12px",
                                             borderRadius: "6px",
-                                            background: isZeroReceived ? "#fef2f2" : "#f8fafc",
-                                            border: `1px solid ${isZeroReceived ? "#fecaca" : "#e2e8f0"}`,
+                                            background: isZeroReceived ? (isDark ? "rgba(239, 68, 68, 0.12)" : "#fef2f2") : tokens.elevatedSurfaceBg,
+                                            border: `1px solid ${isZeroReceived ? (isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca") : tokens.border}`,
                                             display: "grid",
                                             gap: "8px",
                                           }}
                                         >
                                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px", fontWeight: 700 }}>
-                                            <span style={{ color: "#0f172a" }}>{item.product_name}</span>
+                                            <span style={{ color: tokens.textPrimary }}>{item.product_name}</span>
                                             {isZeroReceived ? (
-                                              <span style={{ fontSize: "11px", fontWeight: 700, color: "#b91c1c", background: "#fee2e2", border: "1px solid #fca5a5", padding: "2px 7px", borderRadius: "4px" }}>
+                                              <span style={{ fontSize: "11px", fontWeight: 700, color: isDark ? "#fca5a5" : "#b91c1c", background: isDark ? "rgba(239, 68, 68, 0.2)" : "#fee2e2", border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fca5a5"}`, padding: "2px 7px", borderRadius: "4px" }}>
                                                 Unreturned at Doorstep (0 Recv)
                                               </span>
                                             ) : (
-                                              <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#166534", background: "#dcfce7", border: "1px solid #bbf7d0", padding: "2px 7px", borderRadius: "4px" }}>
+                                              <span style={{ fontSize: "11.5px", fontWeight: 700, color: isDark ? "#4ade80" : "#166534", background: isDark ? "rgba(34, 197, 94, 0.15)" : "#dcfce7", border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`, padding: "2px 7px", borderRadius: "4px" }}>
                                                 Received at Hub: {item.quantity_received}
                                               </span>
                                             )}
                                           </div>
 
                                           {isZeroReceived ? (
-                                            <div style={{ fontSize: "12px", color: "#7f1d1d", background: "#ffffff", padding: "7px 10px", borderRadius: "4px", border: "1px solid #fecaca", lineHeight: 1.4 }}>
+                                            <div style={{ fontSize: "12px", color: isDark ? "#fca5a5" : "#7f1d1d", background: tokens.surfaceBg, padding: "7px 10px", borderRadius: "4px", border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`, lineHeight: 1.4 }}>
                                               Rider verified <strong>0 units</strong> received at customer doorstep (missing or rejected). Marked as <strong>Discard (0 Restock)</strong>.
                                             </div>
                                           ) : (
                                             <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "8px", alignItems: "center" }}>
                                               <div>
-                                                <div style={{ fontSize: "11px", color: "#475569", fontWeight: 600 }}>Decision</div>
+                                                <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 600 }}>Decision</div>
                                                 <select
                                                   value={currentDecision}
                                                   onChange={(e) => {
@@ -4898,14 +6637,13 @@ const AdminOrders: React.FC = () => {
                                                   }}
                                                   style={{ ...inputStyle, padding: "6px 8px", fontSize: "12px" }}
                                                 >
-                                                  <option value="restock">Restock (Return to Stock)</option>
+                                                  <option value="restock">Restock (Return to Inventory)</option>
                                                   <option value="discard">Discard (Damaged / Unsellable)</option>
-                                                  <option value="quarantine">Quarantine (Hold for Quality Check)</option>
                                                 </select>
                                               </div>
 
                                               <div>
-                                                <div style={{ fontSize: "11px", color: "#475569", fontWeight: 600 }}>
+                                                <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 600 }}>
                                                   {currentDecision === "restock" ? "Restock Qty (+Stock)" : "Qty Processed"}
                                                 </div>
                                                 <input
@@ -4970,7 +6708,7 @@ const AdminOrders: React.FC = () => {
                               ) : null}
 
                               {returnItem.status === "inspected" ? (
-                                <div style={{ ...plainCardStyle, padding: "16px" }}>
+                                <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                   <div
                                     style={{
                                       display: "flex",
@@ -4978,16 +6716,144 @@ const AdminOrders: React.FC = () => {
                                       alignItems: "center",
                                       marginBottom: "12px",
                                       paddingBottom: "8px",
-                                      borderBottom: "1px solid #f1f5f9",
+                                      borderBottom: `1px solid ${tokens.border}`,
                                     }}
                                   >
-                                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                    <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                       Process Customer Refund
                                     </span>
                                     <span style={{ fontSize: "12px", fontWeight: 700, color: "#166534", background: "#dcfce7", border: "1px solid #bbf7d0", padding: "2px 7px", borderRadius: "4px" }}>
-                                      Allowed: {formatPrice(returnItem.suggested_refund_amount)}
+                                      Suggested: {formatPrice(returnItem.suggested_refund_amount)}
                                     </span>
                                   </div>
+
+                                  {/* Refund Calculation Breakdown Box */}
+                                  {detail?.refund_breakdown ? (
+                                    <div
+                                      style={{
+                                        background: tokens.elevatedSurfaceBg,
+                                        border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                                        borderRadius: "8px",
+                                        padding: "12px 14px",
+                                        marginBottom: "14px",
+                                        fontSize: "12.5px",
+                                      }}
+                                    >
+                                      <div style={{ fontWeight: 700, color: tokens.textPrimary, marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textSecondary }}>
+                                          Refund Breakdown
+                                        </span>
+                                        <span style={{ fontSize: "11px", fontWeight: 500, color: tokens.textSecondary }}>Prorated</span>
+                                      </div>
+
+                                      <div style={{ display: "grid", gap: "6px", color: tokens.textSecondary }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                          <span>Items Subtotal</span>
+                                          <span style={{ fontWeight: 600, color: tokens.textPrimary }}>+{formatPrice(detail.refund_breakdown.items_subtotal)}</span>
+                                        </div>
+
+                                        {detail.refund_breakdown.discounts_prorated > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#b91c1c" }}>
+                                            <span>Discount</span>
+                                            <span style={{ fontWeight: 600 }}>-{formatPrice(detail.refund_breakdown.discounts_prorated)}</span>
+                                          </div>
+                                        )}
+
+                                        {detail.refund_breakdown.tax_refund > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                            <span>Tax (GST)</span>
+                                            <span style={{ fontWeight: 600, color: tokens.textPrimary }}>+{formatPrice(detail.refund_breakdown.tax_refund)}</span>
+                                          </div>
+                                        )}
+
+                                        {detail.refund_breakdown.refundable_charges_added > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#16a34a" }}>
+                                            <span>Refundable Charges</span>
+                                            <span style={{ fontWeight: 600 }}>+{formatPrice(detail.refund_breakdown.refundable_charges_added)}</span>
+                                          </div>
+                                        )}
+
+                                        {detail.refund_breakdown.non_refundable_charges_retained > 0 && (
+                                          <div style={{ display: "flex", justifyContent: "space-between", color: "#b45309" }}>
+                                            <span>Non-Refundable Retained</span>
+                                            <span style={{ fontWeight: 600 }}>-{formatPrice(detail.refund_breakdown.non_refundable_charges_retained)}</span>
+                                          </div>
+                                        )}
+
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            borderTop: `1px solid ${tokens.border}`,
+                                            paddingTop: "8px",
+                                            marginTop: "4px",
+                                            fontWeight: 700,
+                                            fontSize: "13px",
+                                            color: tokens.textPrimary,
+                                          }}
+                                        >
+                                          <span>Suggested Refund</span>
+                                          <span style={{ color: "#16a34a", fontSize: "14px" }}>{formatPrice(detail.refund_breakdown.suggested_refund_amount)}</span>
+                                        </div>
+                                      </div>
+
+                                      {/* Non-Refundable Exception Checkboxes */}
+                                      {detail.refund_breakdown.charge_allocations?.some((c) => !c.refundable && c.allocated_amount > 0) && (
+                                        <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: `1px solid ${tokens.border}` }}>
+                                          <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textSecondary, marginBottom: "6px" }}>
+                                            Refund Retained Charges
+                                          </div>
+
+                                          <div style={{ display: "grid", gap: "6px" }}>
+                                            {detail.refund_breakdown.charge_allocations
+                                              .filter((c) => !c.refundable && c.allocated_amount > 0)
+                                              .map((charge) => {
+                                                const isChecked = Boolean(selectedExtraChargesByReturn[returnItem.id]?.[charge.id]);
+                                                return (
+                                                  <label
+                                                    key={charge.id}
+                                                    style={{
+                                                      display: "flex",
+                                                      alignItems: "center",
+                                                      justifyContent: "space-between",
+                                                      padding: "7px 10px",
+                                                      borderRadius: "6px",
+                                                      background: isChecked ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#f0fdf4") : tokens.surfaceBg,
+                                                      border: isChecked ? `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#86efac"}` : `1px solid ${tokens.border}`,
+                                                      cursor: canRefundOrders ? "pointer" : "not-allowed",
+                                                      fontSize: "12px",
+                                                      transition: "all 0.15s ease",
+                                                    }}
+                                                  >
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                      <input
+                                                        type="checkbox"
+                                                        disabled={!canRefundOrders}
+                                                        checked={isChecked}
+                                                        onChange={() =>
+                                                          toggleExtraCharge(
+                                                            returnItem.id,
+                                                            charge.id,
+                                                            detail.refund_breakdown!.suggested_refund_amount,
+                                                            detail.refund_breakdown!.charge_allocations
+                                                          )
+                                                        }
+                                                        style={{ cursor: canRefundOrders ? "pointer" : "not-allowed", accentColor: "#16a34a" }}
+                                                      />
+                                                      <span style={{ fontWeight: 500, color: tokens.textPrimary }}>{charge.label}</span>
+                                                    </div>
+                                                    <span style={{ color: isChecked ? "#16a34a" : "#64748b", fontWeight: 600 }}>
+                                                      +{formatPrice(charge.allocated_amount)}
+                                                    </span>
+                                                  </label>
+                                                );
+                                              })}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : null}
 
                                   {/* Original Order Payment Source Banner */}
                                   {isOrderOnlinePaid ? (
@@ -4995,8 +6861,8 @@ const AdminOrders: React.FC = () => {
                                       style={{
                                         padding: "10px 12px",
                                         borderRadius: "6px",
-                                        background: "#f0fdf4",
-                                        border: "1px solid #bbf7d0",
+                                        background: isDark ? "rgba(34, 197, 94, 0.12)" : "#f0fdf4",
+                                        border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#bbf7d0"}`,
                                         marginBottom: "14px",
                                         display: "flex",
                                         justifyContent: "space-between",
@@ -5006,15 +6872,15 @@ const AdminOrders: React.FC = () => {
                                       }}
                                     >
                                       <div>
-                                        <div style={{ fontSize: "12.5px", fontWeight: 700, color: "#166534" }}>
-                                          💳 Original Payment: Online ({formatPaymentMethodName(detail?.order?.payment_method)})
+                                        <div style={{ fontSize: "12.5px", fontWeight: 700, color: isDark ? "#86efac" : "#166534" }}>
+                                          Payment Source: Online ({formatPaymentMethodName(detail?.order?.payment_method)})
                                         </div>
-                                        <div style={{ fontSize: "11px", color: "#15803d", marginTop: "2px" }}>
+                                        <div style={{ fontSize: "11px", color: isDark ? "#4ade80" : "#15803d", marginTop: "2px" }}>
                                           {detail?.order?.razorpay_payment_id ? `Razorpay Payment ID: ${detail.order.razorpay_payment_id}` : "Gateway Reversal Enabled"}
                                         </div>
                                       </div>
-                                      <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#15803d", background: "#ffffff", border: "1px solid #86efac", padding: "2px 6px", borderRadius: "4px" }}>
-                                        Instant Auto-Reversal
+                                      <span style={{ fontSize: "10.5px", fontWeight: 700, color: isDark ? "#4ade80" : "#15803d", background: tokens.surfaceBg, border: `1px solid ${isDark ? "rgba(74, 222, 128, 0.3)" : "#86efac"}`, padding: "2px 6px", borderRadius: "4px" }}>
+                                        Auto-Reversal
                                       </span>
                                     </div>
                                   ) : (
@@ -5022,24 +6888,24 @@ const AdminOrders: React.FC = () => {
                                       style={{
                                         padding: "10px 12px",
                                         borderRadius: "6px",
-                                        background: "#fffbeb",
-                                        border: "1px solid #fde68a",
+                                        background: isDark ? "rgba(245, 158, 11, 0.12)" : "#fffbeb",
+                                        border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
                                         marginBottom: "14px",
                                       }}
                                     >
                                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                                        <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#92400e" }}>
-                                          💵 Original Payment: Cash on Delivery (COD)
+                                        <span style={{ fontSize: "12.5px", fontWeight: 700, color: isDark ? "#fde047" : "#92400e" }}>
+                                          Payment Source: Cash on Delivery (COD)
                                         </span>
                                         {(detail?.customer_refund_account || returnItem.customer_refund_account) && (
-                                          <span style={{ fontSize: "10px", fontWeight: 800, color: "#92400e", background: "#fef3c7", border: "1px solid #fde68a", padding: "1px 6px", borderRadius: "4px", textTransform: "uppercase" }}>
+                                          <span style={{ fontSize: "10px", fontWeight: 800, color: isDark ? "#fde047" : "#92400e", background: isDark ? "rgba(245, 158, 11, 0.2)" : "#fef3c7", border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.35)" : "#fde68a"}`, padding: "1px 6px", borderRadius: "4px", textTransform: "uppercase" }}>
                                             {(detail?.customer_refund_account || returnItem.customer_refund_account).type || "UPI"}
                                           </span>
                                         )}
                                       </div>
 
                                       {(detail?.customer_refund_account || returnItem.customer_refund_account) ? (
-                                        <div style={{ fontSize: "12px", color: "#78350f", background: "#ffffff", padding: "8px 10px", borderRadius: "4px", border: "1px solid #fef3c7", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginTop: "6px" }}>
+                                        <div style={{ fontSize: "12px", color: isDark ? "#fcd34d" : "#78350f", background: tokens.surfaceBg, padding: "8px 10px", borderRadius: "4px", border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.25)" : "#fef3c7"}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginTop: "6px" }}>
                                           <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                             {(detail?.customer_refund_account || returnItem.customer_refund_account).type === "upi" ? (
                                               <span><strong>UPI ID:</strong> {(detail?.customer_refund_account || returnItem.customer_refund_account).upi_id}</span>
@@ -5069,6 +6935,8 @@ const AdminOrders: React.FC = () => {
                                     </div>
                                   )}
 
+                                  {!canRefundOrders ? null : (
+                                  <>
                                   <div style={{ display: "grid", gap: "10px", marginBottom: "14px" }}>
                                     <div>
                                       <div style={labelStyle}>Refund Method</div>
@@ -5083,16 +6951,16 @@ const AdminOrders: React.FC = () => {
                                         style={inputStyle}
                                       >
                                         {isOrderOnlinePaid && (
-                                          <option value="original_payment">⚡ Auto-Refund to Source (Razorpay Gateway)</option>
+                                          <option value="original_payment">Auto-Refund to Source (Razorpay Gateway)</option>
                                         )}
-                                        <option value="cod_refund">🏦 Direct Bank Transfer / UPI Refund (Manual Payout)</option>
-                                        <option value="store_credit">🎟️ Store Credit / Gift Voucher Code</option>
+                                        <option value="cod_refund">Direct Bank Transfer / UPI Refund (Manual Payout)</option>
+                                        <option value="store_credit">Store Credit / Voucher Code</option>
                                         {!isOrderOnlinePaid && (
                                           <option value="original_payment">Original Payment Gateway (Fallback)</option>
                                         )}
                                       </select>
 
-                                      <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "4px", fontStyle: "italic" }}>
+                                      <div style={{ fontSize: "11.5px", color: tokens.textSecondary, marginTop: "4px", fontStyle: "italic" }}>
                                         {refundDraft.refundMethod === "original_payment"
                                           ? "Money is automatically reversed back to the customer's original card, UPI, or netbanking account via Razorpay API."
                                           : refundDraft.refundMethod === "cod_refund"
@@ -5169,11 +7037,13 @@ const AdminOrders: React.FC = () => {
                                       ? "Processing Refund..."
                                       : `Confirm & Issue Refund (${formatPrice(Number(refundDraft.finalRefundAmount || returnItem.final_refund_amount || returnItem.suggested_refund_amount))})`}
                                   </button>
+                                  </>
+                                  )}
                                 </div>
                               ) : null}
 
                               {/* Timeline Card */}
-                              <div style={{ ...plainCardStyle, padding: "16px" }}>
+                              <div style={{ ...plainCardStyle, background: isDark ? tokens.surfaceBg : "#ffffff", border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))", padding: "16px" }}>
                                 <div
                                   style={{
                                     display: "flex",
@@ -5181,40 +7051,40 @@ const AdminOrders: React.FC = () => {
                                     alignItems: "center",
                                     marginBottom: "12px",
                                     paddingBottom: "8px",
-                                    borderBottom: "1px solid #f1f5f9",
+                                    borderBottom: `1px solid ${tokens.border}`,
                                   }}
                                 >
-                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                                     Return Timeline
                                   </span>
                                 </div>
 
-                                <div style={{ display: "grid", gap: "6px", fontSize: "13px", color: "#475569" }}>
+                                <div style={{ display: "grid", gap: "6px", fontSize: "13px", color: tokens.textSecondary }}>
                                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                    <span style={{ color: "#64748b" }}>Requested:</span>
-                                    <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(returnItem.created_at)}</span>
+                                    <span style={{ color: tokens.textSecondary }}>Requested:</span>
+                                    <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(returnItem.created_at)}</span>
                                   </div>
                                   {(detail?.approved_at || returnItem.approved_at) && (
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ color: "#64748b" }}>Approved:</span>
-                                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(detail?.approved_at || returnItem.approved_at)}</span>
+                                      <span style={{ color: tokens.textSecondary }}>Approved:</span>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(detail?.approved_at || returnItem.approved_at)}</span>
                                     </div>
                                   )}
                                   {(detail?.received_at || returnItem.received_at) && (
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ color: "#64748b" }}>Received:</span>
-                                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(detail?.received_at || returnItem.received_at)}</span>
+                                      <span style={{ color: tokens.textSecondary }}>Received:</span>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(detail?.received_at || returnItem.received_at)}</span>
                                     </div>
                                   )}
                                   {(detail?.inspected_at || returnItem.inspected_at) && (
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ color: "#64748b" }}>Inspected:</span>
-                                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{formatDate(detail?.inspected_at || returnItem.inspected_at)}</span>
+                                      <span style={{ color: tokens.textSecondary }}>Inspected:</span>
+                                      <span style={{ fontWeight: 600, color: tokens.textPrimary }}>{formatDate(detail?.inspected_at || returnItem.inspected_at)}</span>
                                     </div>
                                   )}
                                   {(detail?.refunded_at || returnItem.refunded_at) && (
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ color: "#64748b" }}>Refunded:</span>
+                                      <span style={{ color: tokens.textSecondary }}>Refunded:</span>
                                       <span style={{ fontWeight: 600, color: "#15803d" }}>{formatDate(detail?.refunded_at || returnItem.refunded_at)}</span>
                                     </div>
                                   )}
@@ -5232,58 +7102,213 @@ const AdminOrders: React.FC = () => {
           </div>
 
           {/* Pagination and page size controls */}
-          {filteredReturns.length > 0 && (
+          {adminReturns.length > 0 && (
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                flexDirection: "column",
                 alignItems: "center",
-                flexWrap: "wrap",
-                gap: "12px",
+                justifyContent: "center",
+                gap: "10px",
                 marginTop: "16px",
                 padding: "8px 4px",
+                width: "100%",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#64748b" }}>
-                <span>Rows per page:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    const newSize = Number(e.target.value);
-                    setPageSize(newSize);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#0f172a",
-                    fontSize: "13px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalReturnPages}
                 onPageChange={(page) => {
                   setCurrentPage(page);
                 }}
-                totalItems={filteredReturns.length}
                 pageSize={pageSize}
-                showRangeText={true}
-                accentColor="#2563eb"
+                pageSizeOptions={[10, 15, 25, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setCurrentPage(1);
+                }}
+                accentColor={isDark ? tokens.accent : "#2563eb"}
+                theme={{ mode: isDark ? "dark" : "light" }}
                 style={{ padding: 0 }}
               />
             </div>
           )}
         </>
+      )}
+
+      {/* ADMIN ORDER CANCELLATION MODAL */}
+      {adminCancelOrder && canCancelOrders && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "16px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setAdminCancelOrder(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              background: tokens.surfaceBg,
+              borderRadius: "16px",
+              padding: "24px",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+              boxSizing: "border-box",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: "#991b1b" }}>
+                  Cancel Order #{adminCancelOrder.id.slice(0, 8).toUpperCase()}
+                </h3>
+                <p style={{ margin: "3px 0 0", fontSize: "12.5px", color: tokens.textSecondary }}>
+                  Customer: {adminCancelOrder.customer_name || "Store Customer"} • Status: {adminCancelOrder.status}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdminCancelOrder(null)}
+                style={{
+                  background: tokens.elevatedSurfaceBg,
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: tokens.textSecondary,
+                  cursor: "pointer",
+                }}
+              >
+                <XMarkIcon />
+              </button>
+            </div>
+
+            <div
+              style={{
+                background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                borderRadius: "8px",
+                border: `1px solid ${isDark ? "rgba(248, 113, 113, 0.3)" : "#fecaca"}`,
+                padding: "12px",
+                marginBottom: "16px",
+                fontSize: "12.5px",
+                color: isDark ? "#fca5a5" : "#991b1b",
+                lineHeight: 1.45,
+              }}
+            >
+              Cancelling this order will restore reserved product inventory, release any assigned delivery riders, and initiate an automatic Razorpay refund if paid online.
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const combined = adminCancelCustomNote.trim()
+                  ? `${adminCancelReason}: ${adminCancelCustomNote.trim()}`
+                  : adminCancelReason;
+                const orderId = adminCancelOrder.id;
+                setAdminCancelOrder(null);
+                await handleCancel(orderId, combined);
+              }}
+              style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+            >
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                  Cancellation Reason Preset
+                </label>
+                <select
+                  value={adminCancelReason}
+                  onChange={(e) => setAdminCancelReason(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                    fontSize: "13px",
+                    color: tokens.textPrimary,
+                    background: tokens.surfaceBg,
+                  }}
+                  required
+                >
+                  {ADMIN_CANCEL_PRESETS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
+                  Custom Admin Note / Attempt Details
+                </label>
+                <textarea
+                  rows={3}
+                  value={adminCancelCustomNote}
+                  onChange={(e) => setAdminCancelCustomNote(e.target.value)}
+                  placeholder="e.g. Rider visited premises 3 times and called phone 4 times with no response. Dropped parcel back at warehouse."
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                    fontSize: "13px",
+                    color: tokens.textPrimary,
+                    resize: "none",
+                    fontFamily: "inherit",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setAdminCancelOrder(null)}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    borderRadius: "8px",
+                    background: tokens.elevatedSurfaceBg,
+                    border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                    color: tokens.textSecondary,
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Keep Order Active
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    flex: 2,
+                    padding: "12px",
+                    borderRadius: "8px",
+                    background: "#dc2626",
+                    border: "none",
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(220, 38, 38, 0.25)",
+                  }}
+                >
+                  Confirm Cancellation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

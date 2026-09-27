@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, request_timeout=20, max_retries=2)
 
 
 def _build_focused_payload_summary(user_message: str, payload: Dict[str, Any]) -> Dict[str, Any]:

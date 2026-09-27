@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import WebCreonAnimatedLogo from "./WebCreonAnimatedLogo";
 import { UserAvatar } from "./UserAvatar";
+import { useAdminTheme } from "../context/ThemeContext";
 
 type BuilderTopControlBarProps = {
   siteName: string;
@@ -9,6 +10,11 @@ type BuilderTopControlBarProps = {
   userName?: string;
   userEmail?: string;
   avatarUrl?: string;
+  gender?: string;
+  isOwner?: boolean;
+  deviceMode?: "desktop" | "mobile";
+  onChangeDeviceMode?: (mode: "desktop" | "mobile") => void;
+  showDeviceSwitcher?: boolean;
 };
 
 export default function BuilderTopControlBar({
@@ -18,7 +24,13 @@ export default function BuilderTopControlBar({
   userName,
   userEmail,
   avatarUrl,
+  gender,
+  isOwner = false,
+  deviceMode = "desktop",
+  onChangeDeviceMode,
+  showDeviceSwitcher = false,
 }: BuilderTopControlBarProps) {
+  const { isDark, tokens } = useAdminTheme();
   const [logoutHovered, setLogoutHovered] = useState(false);
 
   const displayName = useMemo(() => {
@@ -44,26 +56,44 @@ export default function BuilderTopControlBar({
 
   return (
     <div
+      className="builder-top-control-bar-root"
       style={{
         height: "100%",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         padding: "0 20px",
-        background: "#ffffff",
+        background: tokens.surfaceBg,
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        transition: "background 0.2s ease",
       }}
     >
-      <button
-        type="button"
-        onClick={onGoDashboard}
+      <style>{`
+        .builder-top-control-bar-root,
+        .builder-top-control-bar-root button,
+        .builder-top-control-bar-root div,
+        .builder-top-control-bar-root span,
+        .builder-top-control-bar-root p {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+        .builder-device-btn:hover {
+          color: ${tokens.textPrimary} !important;
+        }
+      `}</style>
+      <div
+        onClick={isOwner ? onGoDashboard : undefined}
+        role={isOwner ? "button" : undefined}
+        tabIndex={isOwner ? 0 : undefined}
+        title={isOwner ? "Switch store / AI Onboarding" : "Webcreon"}
         style={{
           display: "flex",
           alignItems: "center",
           gap: "10px",
           border: "none",
           background: "transparent",
-          cursor: "pointer",
+          cursor: isOwner ? "pointer" : "default",
           padding: 0,
+          userSelect: "none",
         }}
       >
         <div
@@ -83,14 +113,108 @@ export default function BuilderTopControlBar({
           </span>
           {siteName ? (
             <>
-              <span style={{ color: "rgba(15,23,42,0.35)", fontWeight: 700 }}>›</span>
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>{siteName}</span>
+              <span style={{ color: tokens.textMuted, fontWeight: 700 }}>›</span>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: tokens.textSecondary }}>{siteName}</span>
             </>
           ) : null}
         </div>
-      </button>
+      </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+        {showDeviceSwitcher && (
+          <>
+            <div
+              className="builder-device-switcher"
+              role="group"
+              aria-label="Device viewport switcher"
+              style={{
+                background: tokens.elevatedSurfaceBg,
+                border: `1px solid ${tokens.border}`,
+                borderRadius: "8px",
+                padding: "3px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "2px",
+                transition: "background 0.2s ease, border-color 0.2s ease",
+              }}
+            >
+              <button
+                type="button"
+                className="builder-device-btn"
+                onClick={() => onChangeDeviceMode?.("desktop")}
+                title="Desktop view"
+                aria-label="Desktop view"
+                style={{
+                  background: deviceMode === "desktop" ? tokens.surfaceBg : "transparent",
+                  color: deviceMode === "desktop" ? tokens.accent : tokens.textSecondary,
+                  borderRadius: "6px",
+                  boxShadow: deviceMode === "desktop" ? (isDark ? "0 1px 3px rgba(0, 0, 0, 0.35)" : "0 1px 3px rgba(15, 23, 42, 0.1)") : "none",
+                  width: "32px",
+                  height: "30px",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  transition: "all 0.18s ease",
+                  padding: 0,
+                }}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                className="builder-device-btn"
+                onClick={() => onChangeDeviceMode?.("mobile")}
+                title="Mobile preview"
+                aria-label="Mobile preview"
+                style={{
+                  background: deviceMode === "mobile" ? tokens.surfaceBg : "transparent",
+                  color: deviceMode === "mobile" ? tokens.accent : tokens.textSecondary,
+                  borderRadius: "6px",
+                  boxShadow: deviceMode === "mobile" ? (isDark ? "0 1px 3px rgba(0, 0, 0, 0.35)" : "0 1px 3px rgba(15, 23, 42, 0.1)") : "none",
+                  width: "32px",
+                  height: "30px",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  transition: "all 0.18s ease",
+                  padding: 0,
+                }}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                  <line x1="12" y1="18" x2="12.01" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <div style={{ width: "1px", height: "18px", background: tokens.divider, margin: "0 2px" }} />
+          </>
+        )}
         <div
           style={{
             display: "flex",
@@ -102,20 +226,20 @@ export default function BuilderTopControlBar({
             padding: "4px 0",
           }}
         >
-          <UserAvatar size={34} avatarUrl={avatarUrl} variant="yellow" />
+          <UserAvatar size={34} avatarUrl={avatarUrl} gender={gender} variant="yellow" />
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", lineHeight: 1.2 }}>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary, lineHeight: 1.2 }}>
               {displayName}
             </span>
             {displayEmail ? (
-              <span style={{ fontSize: "11px", color: "#64748b", lineHeight: 1.2 }}>
+              <span style={{ fontSize: "11px", color: tokens.textSecondary, lineHeight: 1.2 }}>
                 {displayEmail}
               </span>
             ) : null}
           </div>
         </div>
 
-        <div style={{ width: "1px", height: "18px", background: "#e2e8f0", margin: "0 2px" }} />
+        <div style={{ width: "1px", height: "18px", background: tokens.divider, margin: "0 2px" }} />
 
         <button
           type="button"
@@ -129,11 +253,13 @@ export default function BuilderTopControlBar({
             borderRadius: "9px",
             border: "none",
             boxShadow: "none",
-            background: logoutHovered ? "#fef2f2" : "transparent",
+            background: logoutHovered
+              ? (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2")
+              : "transparent",
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
-            color: logoutHovered ? "#dc2626" : "#64748b",
+            color: logoutHovered ? "#ef4444" : tokens.textSecondary,
             transition: "all 0.15s ease",
           }}
         >

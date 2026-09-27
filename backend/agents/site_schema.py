@@ -570,6 +570,12 @@ def _build_pages(
             frontend_config=frontend_config,
         )
 
+        if meta.get("role") == "checkout" or page_id == "checkout":
+            blocks = [
+                b for b in blocks
+                if not any(token in str(b.get("type", "")).lower() for token in ["banner", "hero", "carousel", "grid", "navbar", "footer"])
+            ]
+
         pages.append(
             {
                 "id": page_id,

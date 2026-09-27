@@ -6,11 +6,11 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlmodel import Session, select
+from sqlmodel import Session, select, update
 
 from auth_middleware import enforce_site_ownership
 from db.database import get_session
-from models import Category, Site
+from models import Category, Product, Site
 
 
 router = APIRouter(
@@ -174,6 +174,14 @@ def delete_category(
     if not category or category.site_id != site_id:
         raise HTTPException(status_code=404, detail="Category not found")
 
+    # 1. Reset product references that used this category
+    session.exec(
+        update(Product)
+        .where(Product.site_id == site_id, Product.category_id == category_id)
+        .values(category_id=None)
+    )
+
+    # 2. Delete the category itself
     session.delete(category)
     session.commit()
     return
