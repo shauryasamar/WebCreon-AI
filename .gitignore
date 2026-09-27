@@ -35,4 +35,13 @@ fruntend/tsconfig.json
 # Scratch & Debug
 scratch/
 backend/scratch/
-backend/test/debug_test.py
+backend/test/debug_test.py
+
+# Uploads & Media Assets
+uploads/
+backend/uploads/
+**/uploads/
+
+# Local databases
+*.db
+backend/*.db

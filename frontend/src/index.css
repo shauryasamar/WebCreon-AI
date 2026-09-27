@@ -120,8 +120,6 @@ html {
   width: 100%;
   max-width: 100%;
   min-height: 100%;
-  background-color: var(--admin-workspace, #f8fafc);
-  color: var(--admin-text-primary, #0f172a);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -133,8 +131,6 @@ body {
   padding: 0;
   width: 100%;
   min-height: 100%;
-  background-color: var(--admin-workspace, #f8fafc);
-  color: var(--admin-text-primary, #0f172a);
   position: relative;
 }
 
@@ -143,13 +139,11 @@ body {
   padding: 0;
   width: 100%;
   min-height: 100%;
-  background-color: var(--admin-workspace, #f8fafc);
-  color: var(--admin-text-primary, #0f172a);
 }
 
-[data-theme="dark"],
-[data-theme="dark"] body,
-[data-theme="dark"] #root {
+/* Admin Dashboard theme scope */
+[data-theme="dark"].admin-root,
+.admin-scope[data-theme="dark"] {
   background-color: #121214;
   color: #f4f4f5;
   color-scheme: dark;

@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlmodel import Session, func, select
+from sqlmodel import Session, func, select, delete
 
 from auth_middleware import check_admin_has_permission, enforce_site_ownership
 from db.database import get_session
@@ -392,6 +392,10 @@ def admin_delete_coupon(
         raise HTTPException(status_code=404, detail="Coupon not found")
 
     coupon_code = coupon.code
+    # 1. Clean up historical coupon usages associated with this deleted coupon
+    session.exec(delete(CouponUsage).where(CouponUsage.coupon_id == coupon_uuid))
+
+    # 2. Delete the coupon itself
     session.delete(coupon)
     session.commit()
 

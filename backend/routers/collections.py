@@ -6,11 +6,11 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete
 
 from auth_middleware import enforce_site_ownership
 from db.database import get_session
-from models import Collection, Site
+from models import Collection, ProductCollection, Site
 
 
 router = APIRouter(
@@ -209,6 +209,10 @@ def delete_collection(
     if not collection or collection.site_id != site_id:
         raise HTTPException(status_code=404, detail="Collection not found")
 
+    # 1. Clean up product collection junction mappings
+    session.exec(delete(ProductCollection).where(ProductCollection.collection_id == collection_id))
+
+    # 2. Delete the collection itself
     session.delete(collection)
     session.commit()
     return

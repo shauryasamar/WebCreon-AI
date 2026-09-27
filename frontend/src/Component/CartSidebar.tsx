@@ -687,7 +687,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         successBg: alpha("#22c55e", 0.10),
         successText: "#166534",
         inputBg: cardBg,
-        quantityBg: mixHex(pageBg, "#000000", 0.02),
+        quantityBg: isDark ? "rgba(255, 255, 255, 0.07)" : "#f1f5f9",
         shadow: alpha(cardText, 0.06) ? `0 8px 20px ${alpha("#0f172a", 0.06)}` : "none",
         cardShadow: `0 4px 14px ${alpha("#0f172a", 0.04)}`,
         disabledBg: mixHex(cardText, cardBg, 0.5),
@@ -2119,6 +2119,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         >
                           <button
                             type="button"
+                            aria-label="Decrease quantity"
                             onClick={() =>
                               updateQuantity(
                                 item.id,
@@ -2127,17 +2128,19 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               )
                             }
                             style={{
-                              width: isMobile ? "32px" : "40px",
-                              height: isMobile ? "34px" : "42px",
+                              width: isMobile ? "32px" : "38px",
+                              height: isMobile ? "34px" : "40px",
                               border: "none",
                               background: "transparent",
                               color: palette.text,
                               fontSize: isMobile ? "16px" : "18px",
+                              fontWeight: 600,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               padding: 0,
+                              transition: "background 150ms ease, color 150ms ease",
                             }}
                           >
                             -
@@ -2145,11 +2148,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
                           <div
                             style={{
-                              minWidth: isMobile ? "32px" : "42px",
+                              minWidth: isMobile ? "28px" : "36px",
                               textAlign: "center",
                               fontSize: isMobile ? "13px" : "14px",
                               fontWeight: 700,
                               color: palette.text,
+                              userSelect: "none",
                             }}
                           >
                             {item.quantity}
@@ -2157,6 +2161,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
                           <button
                             type="button"
+                            aria-label="Increase quantity"
                             onClick={() =>
                               updateQuantity(
                                 item.id,
@@ -2165,17 +2170,19 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               )
                             }
                             style={{
-                              width: isMobile ? "32px" : "40px",
-                              height: isMobile ? "34px" : "42px",
+                              width: isMobile ? "32px" : "38px",
+                              height: isMobile ? "34px" : "40px",
                               border: "none",
                               background: "transparent",
                               color: palette.text,
                               fontSize: isMobile ? "16px" : "18px",
+                              fontWeight: 600,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               padding: 0,
+                              transition: "background 150ms ease, color 150ms ease",
                             }}
                           >
                             +

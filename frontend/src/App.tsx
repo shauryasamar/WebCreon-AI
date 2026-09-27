@@ -1753,14 +1753,14 @@ function App() {
   return (
     <AdminAuthProvider>
       <AdminThemeProvider>
-        <CustomerAuthProvider>
-          <CartProvider>
-            <BrowserRouter>
+        <BrowserRouter>
+          <CustomerAuthProvider>
+            <CartProvider>
               <ScrollToTop />
               <AppRoutes />
-            </BrowserRouter>
-          </CartProvider>
-        </CustomerAuthProvider>
+            </CartProvider>
+          </CustomerAuthProvider>
+        </BrowserRouter>
       </AdminThemeProvider>
     </AdminAuthProvider>
   );

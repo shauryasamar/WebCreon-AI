@@ -481,6 +481,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
           boxShadow: palette.shadow,
           boxSizing: "border-box",
           padding: isMobile ? "14px" : `${resolvedPadding}px`,
+          colorScheme: isDark ? "dark" : "light",
         }}
       >
         <div
@@ -621,6 +622,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                           }}
                           style={{
                             accentColor: resolvedAccent,
+                            colorScheme: isDark ? "dark" : "light",
                             width: "16px",
                             height: "16px",
                             margin: 0,

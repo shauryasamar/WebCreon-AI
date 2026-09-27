@@ -335,6 +335,10 @@ class TaxMaster(SQLModel, table=True):
 
 class Product(SQLModel, table=True):
     __tablename__ = "products"
+    __table_args__ = (
+        Index("ix_products_site_active_cat", "site_id", "is_active", "category_id"),
+        Index("ix_products_site_created", "site_id", "created_at"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
@@ -487,7 +491,11 @@ class ProductReview(SQLModel, table=True):
 
 class Cart(SQLModel, table=True):
     __tablename__ = "carts"
-    __table_args__ = (UniqueConstraint("site_id", "user_id", name="uq_carts_site_user"),)
+    __table_args__ = (
+        UniqueConstraint("site_id", "user_id", name="uq_carts_site_user"),
+        Index("ix_carts_updated_at", "updated_at"),
+        Index("ix_carts_site_updated", "site_id", "updated_at"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
@@ -561,6 +569,11 @@ class CartItem(SQLModel, table=True):
 
 class Order(SQLModel, table=True):
     __tablename__ = "orders"
+    __table_args__ = (
+        Index("ix_orders_site_status_created", "site_id", "status", "created_at"),
+        Index("ix_orders_site_created", "site_id", "created_at"),
+        Index("ix_orders_customer_created", "customer_id", "created_at"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
@@ -1219,6 +1232,9 @@ class ReturnStatusHistory(SQLModel, table=True):
 
 class SiteDefinitionHistory(SQLModel, table=True):
     __tablename__ = "site_definition_history"
+    __table_args__ = (
+        Index("ix_site_def_history_site_saved", "site_id", "saved_at"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     site_id: UUID = Field(foreign_key="sites.id", index=True)
@@ -1647,6 +1663,7 @@ class ProcessedProviderEvent(SQLModel, table=True):
     __tablename__ = "processed_provider_events"
     __table_args__ = (
         UniqueConstraint("provider", "event_id", name="uq_provider_event_id"),
+        Index("ix_processed_provider_received_at", "received_at"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -1735,6 +1752,7 @@ class NotificationDeliveryLog(SQLModel, table=True):
         Index("ix_notif_log_site_created", "site_id", "created_at"),
         Index("ix_notif_log_site_status", "site_id", "status"),
         Index("ix_notif_log_idempotency", "site_id", "idempotency_key", unique=True),
+        Index("ix_notif_log_created_at", "created_at"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -2051,6 +2069,7 @@ class BillingIdempotencyKey(SQLModel, table=True):
     __tablename__ = "billing_idempotency_keys"
     __table_args__ = (
         UniqueConstraint("operation_type", "idempotency_key", name="uq_billing_idempotency_type_key"),
+        Index("ix_billing_idempotency_created", "created_at"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -2070,6 +2089,7 @@ class ProcessedBillingWebhookEvent(SQLModel, table=True):
     __tablename__ = "processed_billing_webhook_events"
     __table_args__ = (
         UniqueConstraint("provider", "provider_event_id", name="uq_processed_webhook_provider_event_id"),
+        Index("ix_processed_billing_webhook_received", "received_at"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)

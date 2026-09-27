@@ -167,10 +167,29 @@ def ensure_accessible_contrast(text_hex: Optional[str], bg_hex: str, min_ratio: 
             ratio = calculate_contrast_ratio(t_hex, b_hex)
             if ratio >= min_ratio:
                 return t_clean
+    return calculate_contrast_color(bg_hex)
+
+
+def sanitize_accent_color(accent_hex: Optional[str], is_dark: bool = False) -> str:
+    """Guarantees the accent color is a vibrant, distinct brand color and never stark black/dark charcoal."""
+    if not accent_hex or not isinstance(accent_hex, str) or not accent_hex.strip():
+        return "#3b82f6" if is_dark else "#2563eb"
+    
+    clean = accent_hex.strip().lower()
+    banned_blacks = {"#000000", "#0f172a", "#09090b", "#020617", "#111827", "#18181b", "#1c1917", "#0a0a0a"}
+    if clean in banned_blacks:
+        return "#3b82f6" if is_dark else "#2563eb"
+    
+    try:
+        if re.search(r"#[0-9a-fA-F]{3,6}", clean):
+            h, s, l = hex_to_hsl(re.search(r"#[0-9a-fA-F]{3,6}", clean).group(0))
+            # If saturation is nearly zero on very dark lightness, it's an unstyled monochrome dark neutral
+            if s < 0.15 and l < 0.25:
+                return "#3b82f6" if is_dark else "#2563eb"
     except Exception:
         pass
 
-    return calculate_contrast_color(bg_hex)
+    return accent_hex.strip()
 
 
 def generate_tonal_harmony(base_hex: str, is_dark: bool = False) -> Dict[str, str]:
@@ -441,6 +460,17 @@ CREATIVE DESIGN & SHADE HARMONY GUIDELINES:
         output_palettes = []
         for p in res.palettes:
             p_dict = p.model_dump()
+            is_dark_palette = is_color_dark(p_dict.get("primary_bg", "#ffffff"))
+
+            # Guard against black / stark dark neutrals becoming the interactive accent
+            p_dict["accent_color"] = sanitize_accent_color(p_dict.get("accent_color"), is_dark=is_dark_palette)
+            if not p_dict.get("accent_hover"):
+                try:
+                    ah, as_, al = hex_to_hsl(p_dict["accent_color"])
+                    p_dict["accent_hover"] = hsl_to_hex(ah, as_, max(0.2, al - 0.08 if not is_dark_palette else al + 0.08))
+                except Exception:
+                    p_dict["accent_hover"] = p_dict["accent_color"]
+
             # Smart WCAG AA contrast preservation: keeps designer shades, eliminates camouflage
             if "primary_bg" in p_dict:
                 p_dict["text_color"] = ensure_accessible_contrast(p_dict.get("text_color"), p_dict["primary_bg"], min_ratio=4.5)
@@ -460,6 +490,13 @@ CREATIVE DESIGN & SHADE HARMONY GUIDELINES:
                 p_dict["card_text_color"] = ensure_accessible_contrast(p_dict.get("card_text_color"), p_dict["card_bg"], min_ratio=4.5)
             if "accent_color" in p_dict:
                 p_dict["accent_text"] = ensure_accessible_contrast(p_dict.get("accent_text"), p_dict["accent_color"], min_ratio=4.5)
+            
+            # Ensure borders are never missing or invisible
+            if not p_dict.get("border_color"):
+                p_dict["border_color"] = "rgba(255, 255, 255, 0.14)" if is_dark_palette else "#e2e8f0"
+            if not p_dict.get("soft_border"):
+                p_dict["soft_border"] = "rgba(255, 255, 255, 0.08)" if is_dark_palette else "#f1f5f9"
+
             output_palettes.append(p_dict)
         return output_palettes
     except Exception as e:

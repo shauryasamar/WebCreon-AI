@@ -140,6 +140,13 @@ function setTenantToken(websiteName: string, token: string, siteId?: string, sit
   keys.forEach((k) => {
     if (k) localStorage.setItem(`wc_customer_token_${k}`, token);
   });
+  try {
+    window.dispatchEvent(
+      new CustomEvent("wc_customer_auth_changed", {
+        detail: { token, siteId, websiteName, siteSlug },
+      })
+    );
+  } catch {}
 }
 
 function clearTenantToken(websiteName?: string, siteId?: string, siteSlug?: string) {
@@ -162,8 +169,16 @@ function clearTenantToken(websiteName?: string, siteId?: string, siteSlug?: stri
     if (k) {
       localStorage.removeItem(`wc_customer_token_${k}`);
       localStorage.removeItem(`wc_customer_orders_${k}`);
+      localStorage.removeItem(`guest_cart:${k}`);
     }
   });
+  try {
+    window.dispatchEvent(
+      new CustomEvent("wc_customer_auth_changed", {
+        detail: { token: null, siteId, websiteName, siteSlug },
+      })
+    );
+  } catch {}
 }
 
 export function CustomerAuthProvider({ children }: { children: ReactNode }) {

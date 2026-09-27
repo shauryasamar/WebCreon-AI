@@ -1821,6 +1821,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
           minHeight: "100%",
           padding: isCompactCheckout ? "16px 12px 28px" : "20px 16px 36px",
           background: pageBg,
+          colorScheme: isDark ? "dark" : "light",
         }}
       >
         {Boolean(theme?.festival_theme && theme.festival_theme !== "none") && (
@@ -1920,15 +1921,15 @@ const RenderPage: React.FC<RenderPageProps> = ({
                       background: isActive
                         ? isLight
                           ? "#ffffff"
-                          : "rgba(255,255,255,0.08)"
+                          : "rgba(255,255,255,0.12)"
                         : "transparent",
                       color: isActive
-                        ? textColor
+                        ? (isLight ? "#0f172a" : "#ffffff")
                         : isCompleted
                           ? "#10b981"
-                          : subtleText,
+                          : (isLight ? "rgba(15, 23, 42, 0.70)" : "rgba(255, 255, 255, 0.75)"),
                       cursor: isDisabled ? "not-allowed" : "pointer",
-                      opacity: isDisabled ? 0.45 : 1,
+                      opacity: isDisabled ? 0.70 : 1,
                       transition: "all 0.15s ease",
                       textAlign: stepsAlign as any,
                     }}
@@ -1944,8 +1945,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
                             ? accentColor
                             : isLight
                               ? "#e5e7eb"
-                              : "rgba(255,255,255,0.15)",
-                        color: isCompleted || isActive ? "#ffffff" : subtleText,
+                              : "rgba(255,255,255,0.18)",
+                        color: isCompleted || isActive ? "#ffffff" : (isLight ? "#475569" : "#ffffff"),
                         fontSize: "11px",
                         fontWeight: 700,
                         display: "grid",

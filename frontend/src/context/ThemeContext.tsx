@@ -132,10 +132,13 @@ export function resolveThemeTokens(theme?: SiteTheme | Record<string, any> | nul
   const softBorderColor =
     (isDark
       ? (theme?.soft_border && isColorDarkHex(theme.soft_border) ? theme.soft_border : "rgba(255, 255, 255, 0.08)")
-      : (theme?.soft_border || "rgba(15, 23, 42, 0.06)"));
+      : (theme?.soft_border || "rgba(15, 23, 42, 0.08)"));
 
-  const accentColor = theme?.accent_color || "#2563eb";
-  const accentHover = theme?.accent_hover || (isDark ? "#3b82f6" : "#1d4ed8");
+  // Guard against stark pure black or dark charcoal becoming the interactive accent CTA
+  const rawAccent = theme?.accent_color;
+  const isAccentStarkDark = !rawAccent || rawAccent.toLowerCase() === "#000000" || rawAccent.toLowerCase() === "#0f172a" || rawAccent.toLowerCase() === "#111827" || rawAccent.toLowerCase() === "#18181b";
+  const accentColor = isAccentStarkDark ? (isDark ? "#3b82f6" : "#2563eb") : rawAccent;
+  const accentHover = theme?.accent_hover || (isDark ? "#60a5fa" : "#1d4ed8");
   const accentText = theme?.accent_text || getContrastTextColor(accentColor, "#ffffff", "#0f172a");
 
   const panelBg = isDark ? "rgba(255, 255, 255, 0.06)" : (primaryBg === "#ffffff" ? "#f8fafc" : "#ffffff");
@@ -403,25 +406,55 @@ export const AdminThemeProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     [isDark, themeMode]
   );
 
-  React.useEffect(() => {
-    if (typeof document !== "undefined") {
-      const root = document.documentElement;
-      root.style.setProperty("--admin-surface", tokens.surfaceBg);
-      root.style.setProperty("--admin-elevated-surface", tokens.elevatedSurfaceBg);
-      root.style.setProperty("--admin-workspace", tokens.workspaceBg);
-      root.style.setProperty("--admin-border", tokens.border);
-      root.style.setProperty("--admin-soft-border", tokens.softBorder);
-      root.style.setProperty("--admin-text-primary", tokens.textPrimary);
-      root.style.setProperty("--admin-text-secondary", tokens.textSecondary);
-      root.style.setProperty("--admin-text-muted", tokens.textMuted);
-      root.style.setProperty("--admin-accent", tokens.accent);
-      root.style.setProperty("--admin-accent-bg", tokens.accentBg);
-      root.style.setProperty("--admin-accent-border", tokens.accentBorder);
-      root.style.setProperty("--admin-accent-text", tokens.accentText);
-      root.style.setProperty("--admin-hover-bg", tokens.hoverBg);
-      root.style.setProperty("--admin-active-bg", tokens.activeBg);
-      root.style.setProperty("--admin-shadow", tokens.shadow);
+  const isCurrentAdminRoute = React.useCallback((): boolean => {
+    if (typeof window === "undefined") return false;
+    const path = window.location.pathname.toLowerCase();
+    return (
+      path.startsWith("/admin") ||
+      path.startsWith("/builder") ||
+      path.startsWith("/tenant") ||
+      path.startsWith("/support-agent") ||
+      path.startsWith("/merchant")
+    );
+  }, []);
 
+  const [isAdminPath, setIsAdminPath] = React.useState<boolean>(isCurrentAdminRoute);
+
+  React.useEffect(() => {
+    const handleRouteCheck = () => {
+      setIsAdminPath(isCurrentAdminRoute());
+    };
+    window.addEventListener("popstate", handleRouteCheck);
+    // Observe DOM mutations or URL changes
+    const interval = setInterval(handleRouteCheck, 300);
+    return () => {
+      window.removeEventListener("popstate", handleRouteCheck);
+      clearInterval(interval);
+    };
+  }, [isCurrentAdminRoute]);
+
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+
+    // Always set CSS variables so admin components have access to tokens
+    root.style.setProperty("--admin-surface", tokens.surfaceBg);
+    root.style.setProperty("--admin-elevated-surface", tokens.elevatedSurfaceBg);
+    root.style.setProperty("--admin-workspace", tokens.workspaceBg);
+    root.style.setProperty("--admin-border", tokens.border);
+    root.style.setProperty("--admin-soft-border", tokens.softBorder);
+    root.style.setProperty("--admin-text-primary", tokens.textPrimary);
+    root.style.setProperty("--admin-text-secondary", tokens.textSecondary);
+    root.style.setProperty("--admin-text-muted", tokens.textMuted);
+    root.style.setProperty("--admin-accent", tokens.accent);
+    root.style.setProperty("--admin-accent-bg", tokens.accentBg);
+    root.style.setProperty("--admin-accent-border", tokens.accentBorder);
+    root.style.setProperty("--admin-accent-text", tokens.accentText);
+    root.style.setProperty("--admin-hover-bg", tokens.hoverBg);
+    root.style.setProperty("--admin-active-bg", tokens.activeBg);
+    root.style.setProperty("--admin-shadow", tokens.shadow);
+
+    if (isAdminPath) {
       root.style.backgroundColor = tokens.workspaceBg;
       root.style.color = tokens.textPrimary;
       root.style.colorScheme = isDark ? "dark" : "light";
@@ -429,14 +462,31 @@ export const AdminThemeProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (document.body) {
         document.body.style.backgroundColor = tokens.workspaceBg;
         document.body.style.color = tokens.textPrimary;
+        document.body.style.colorScheme = isDark ? "dark" : "light";
       }
       const rootEl = document.getElementById("root");
       if (rootEl) {
         rootEl.style.backgroundColor = tokens.workspaceBg;
         rootEl.style.color = tokens.textPrimary;
       }
+    } else {
+      // Storefront route: remove admin global theme bleed completely
+      root.removeAttribute("data-theme");
+      root.style.backgroundColor = "";
+      root.style.color = "";
+      root.style.colorScheme = "";
+      if (document.body) {
+        document.body.style.backgroundColor = "";
+        document.body.style.color = "";
+        document.body.style.colorScheme = "";
+      }
+      const rootEl = document.getElementById("root");
+      if (rootEl) {
+        rootEl.style.backgroundColor = "";
+        rootEl.style.color = "";
+      }
     }
-  }, [tokens, isDark]);
+  }, [tokens, isDark, isAdminPath]);
 
   const setThemeMode = (mode: AdminThemeMode) => {
     setThemeModeState(mode);

@@ -303,6 +303,40 @@ class CartResponse(BaseModel):
     blocking_summary: Optional[str] = None
 
 
+def consolidate_cart_items(session: Session, cart_id: UUID) -> list[CartItem]:
+    """
+    Guarantees that no duplicate rows exist in cart_items for the same (product_id, variant_value).
+    If duplicate rows exist, they are merged: quantities are summed into the primary item,
+    and the redundant duplicate rows are permanently deleted.
+    """
+    items = session.exec(
+        select(CartItem).where(CartItem.cart_id == cart_id)
+    ).all()
+
+    seen_groups: dict[tuple[UUID, Optional[str]], CartItem] = {}
+    items_to_delete: list[CartItem] = []
+    has_changes = False
+
+    for item in items:
+        norm_variant = item.selected_variant_value.strip() if item.selected_variant_value else None
+        key = (item.product_id, norm_variant)
+        if key not in seen_groups:
+            seen_groups[key] = item
+        else:
+            primary = seen_groups[key]
+            primary.quantity += max(1, item.quantity)
+            items_to_delete.append(item)
+            has_changes = True
+
+    if has_changes:
+        for it in items_to_delete:
+            session.delete(it)
+        session.commit()
+        return list(seen_groups.values())
+
+    return items
+
+
 @router.get("/{site_id}", response_model=CartResponse)
 def get_cart(
     site_id: str,
@@ -317,9 +351,7 @@ def get_cart(
     customer = get_user_for_site_or_404(session, site.id, UUID(user["userId"]))
     cart = get_or_create_cart(session, site.id, customer.id)
 
-    items = session.exec(
-        select(CartItem).where(CartItem.cart_id == cart.id)
-    ).all()
+    items = consolidate_cart_items(session, cart.id)
 
     return build_cart_response(cart, items, session=session)
 
@@ -355,14 +387,14 @@ def add_cart_item(
     )
 
     cart = get_or_create_cart(session, site.id, customer.id)
+    existing_items = consolidate_cart_items(session, cart.id)
 
-    existing_item = session.exec(
-        select(CartItem).where(
-            CartItem.cart_id == cart.id,
-            CartItem.product_id == payload.product_id,
-            CartItem.selected_variant_value == payload.selected_variant_value,
-        )
-    ).first()
+    variant_val = payload.selected_variant_value.strip() if payload.selected_variant_value else None
+
+    existing_item = next(
+        (it for it in existing_items if it.product_id == payload.product_id and (it.selected_variant_value.strip() if it.selected_variant_value else None) == variant_val),
+        None,
+    )
 
     next_quantity = payload.quantity
     if existing_item:
@@ -389,6 +421,7 @@ def add_cart_item(
         existing_item.product_slug = product.slug
         existing_item.product_image = product.images[0] if product.images else None
         existing_item.selected_variant_label = selected_variant_label
+        existing_item.selected_variant_value = variant_val
         existing_item.is_preorder = is_preorder_active
         existing_item.preorder_release_date = product.preorder_release_date if is_preorder_active else None
         session.add(existing_item)
@@ -403,7 +436,7 @@ def add_cart_item(
             compare_price=compare_price,
             quantity=payload.quantity,
             selected_variant_label=selected_variant_label,
-            selected_variant_value=payload.selected_variant_value,
+            selected_variant_value=variant_val,
             is_preorder=is_preorder_active,
             preorder_release_date=product.preorder_release_date if is_preorder_active else None,
         )
@@ -412,11 +445,90 @@ def add_cart_item(
     session.commit()
     session.refresh(cart)
 
-    items = session.exec(
-        select(CartItem).where(CartItem.cart_id == cart.id)
-    ).all()
-
+    items = consolidate_cart_items(session, cart.id)
     return build_cart_response(cart, items, session=session)
+
+
+class MergeGuestCartRequest(BaseModel):
+    items: list[AddCartItemRequest] = []
+
+
+@router.post("/{site_id}/merge-guest-cart", response_model=CartResponse)
+def merge_guest_cart(
+    site_id: str,
+    payload: MergeGuestCartRequest,
+    user=Depends(authenticate_customer),
+    session: Session = Depends(get_session),
+):
+    site = get_site_or_404(session, site_id)
+    if str(site.id) != str(user["siteId"]) and str(site.slug) != str(user["siteId"]):
+        raise HTTPException(status_code=403, detail="Customer token does not match requested site")
+
+    customer = get_user_for_site_or_404(session, site.id, UUID(user["userId"]))
+    cart = get_or_create_cart(session, site.id, customer.id)
+
+    existing_items = consolidate_cart_items(session, cart.id)
+    now_dt = datetime.now(timezone.utc)
+
+    for item_req in payload.items:
+        product = session.get(Product, item_req.product_id)
+        if not product or product.site_id != site.id or not product.is_active:
+            continue
+
+        rel_date = getattr(product, "preorder_release_date", None)
+        is_preorder_active = bool(product.is_preorder) and (rel_date is None or rel_date > now_dt)
+
+        try:
+            unit_price, compare_price, selected_variant_label, available_stock = extract_variant_details(
+                product,
+                item_req.selected_variant_value,
+                raise_if_out_of_stock=False,
+            )
+        except Exception:
+            continue
+
+        variant_val = item_req.selected_variant_value.strip() if item_req.selected_variant_value else None
+        matching_item = next(
+            (it for it in existing_items if it.product_id == product.id and (it.selected_variant_value.strip() if it.selected_variant_value else None) == variant_val),
+            None,
+        )
+
+        qty_to_add = max(1, item_req.quantity)
+        if matching_item:
+            matching_item.quantity += qty_to_add
+            matching_item.unit_price = unit_price
+            matching_item.compare_price = compare_price
+            matching_item.product_name = product.name
+            matching_item.product_slug = product.slug
+            matching_item.product_image = product.images[0] if product.images else None
+            matching_item.selected_variant_label = selected_variant_label
+            matching_item.selected_variant_value = variant_val
+            matching_item.is_preorder = is_preorder_active
+            matching_item.preorder_release_date = rel_date if is_preorder_active else None
+            session.add(matching_item)
+        else:
+            new_item = CartItem(
+                cart_id=cart.id,
+                product_id=product.id,
+                product_name=product.name,
+                product_slug=product.slug,
+                product_image=product.images[0] if product.images else None,
+                unit_price=unit_price,
+                compare_price=compare_price,
+                quantity=qty_to_add,
+                selected_variant_label=selected_variant_label,
+                selected_variant_value=variant_val,
+                is_preorder=is_preorder_active,
+                preorder_release_date=rel_date if is_preorder_active else None,
+            )
+            session.add(new_item)
+            existing_items.append(new_item)
+
+    session.commit()
+    session.refresh(cart)
+
+    all_items = consolidate_cart_items(session, cart.id)
+    return build_cart_response(cart, all_items, session=session)
 
 
 @router.put("/{site_id}/items/{item_id}", response_model=CartResponse)
@@ -484,10 +596,7 @@ def update_cart_item(
     except Exception:
         session.rollback()
 
-    items = session.exec(
-        select(CartItem).where(CartItem.cart_id == cart.id)
-    ).all()
-
+    items = consolidate_cart_items(session, cart.id)
     return build_cart_response(cart, items, session=session)
 
 
@@ -518,10 +627,7 @@ def remove_cart_item(
         except Exception:
             session.rollback()
 
-    items = session.exec(
-        select(CartItem).where(CartItem.cart_id == cart.id)
-    ).all()
-
+    items = consolidate_cart_items(session, cart.id)
     return build_cart_response(cart, items, session=session)
 
 

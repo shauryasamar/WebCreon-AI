@@ -230,18 +230,16 @@ async def _mature_escrow_cron_task():
 
 
 async def _activity_retention_cron_task():
-    """Runs automatically at startup and once daily to permanently delete activity logs older than 90 days."""
+    """Runs automatically at startup and once daily to permanently purge garbage and enforce TTL retention."""
     while True:
         try:
-            with Session(engine) as session:
-                from routers.audit_logs import cleanup_expired_activity_logs
-                deleted = cleanup_expired_activity_logs(session, retention_days=90)
-                if deleted > 0:
-                    logger.info("Daily Activity Retention Cron: Purged %d expired records older than 90 days", deleted)
+            from db.cleanup_service import run_full_database_retention_sweep
+            summary = await asyncio.to_thread(run_full_database_retention_sweep)
+            logger.info("Daily Database Retention & Garbage Sweep complete: %s", summary)
         except asyncio.CancelledError:
             break
         except Exception as err:
-            logger.error("Error in activity log retention background task: %s", err)
+            logger.error("Error in database retention background task: %s", err, exc_info=True)
         try:
             await asyncio.sleep(86400)  # Run once every 24 hours
         except asyncio.CancelledError:
@@ -2032,14 +2030,33 @@ def delete_site(
     session.exec(delete(InvoiceSequence).where(InvoiceSequence.site_id == site_id))
     session.exec(delete(MerchantTaxProfile).where(MerchantTaxProfile.site_id == site_id))
 
-    # 17. AdminSite associations
+    # 17. Notifications & Delivery Logs
+    from models import CustomerNotification, StoreEmailSettings, NotificationDeliveryLog
+    session.exec(delete(CustomerNotification).where(CustomerNotification.site_id == site_id))
+    session.exec(delete(NotificationDeliveryLog).where(NotificationDeliveryLog.site_id == site_id))
+    session.exec(delete(StoreEmailSettings).where(StoreEmailSettings.site_id == site_id))
+
+    # 18. AdminSite associations
     session.exec(delete(AdminSite).where(AdminSite.site_id == site_id))
 
-    # 18. Delete Site entity
+    # 19. Delete Site entity
     session.delete(site)
     session.commit()
 
     return {"message": "Site deleted successfully", "site_id": str(site_id)}
+
+
+@app.post("/api/admin/maintenance/prune-garbage")
+async def trigger_database_garbage_prune(
+    admin: Admin = Depends(authenticate_admin),
+):
+    """Admin endpoint to manually trigger the full database retention & garbage collection sweep."""
+    if admin.role not in ("super_admin", "Owner", "owner"):
+        raise HTTPException(status_code=403, detail="Super Admin permission required for maintenance sweep.")
+    
+    from db.cleanup_service import run_full_database_retention_sweep
+    summary = await asyncio.to_thread(run_full_database_retention_sweep)
+    return {"message": "Database retention sweep complete", "summary": summary}
 
 
 if __name__ == "__main__":

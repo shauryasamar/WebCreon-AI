@@ -469,44 +469,52 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
       (themeObject as any)?.checkout_card_bg ||
       themeTokens.cardBg;
 
-    const finalCardBg =
-      card_color ||
-      (themeObject as any)?.card_bg ||
-      themeTokens.panelBg ||
-      themeTokens.secondaryBg;
+    const isContainerDark = isColorDarkHex(finalContainerBg);
 
-    const finalSelectedCardBg =
-      selected_card_bg ||
-      (isDark ? (themeTokens.secondaryBg || "#1e3a8a") : "#eff6ff");
-
-    const finalBorder =
-      border_color ||
-      (themeObject as any)?.delivery_form_border ||
-      themeTokens.borderColor;
-
-    const finalSoftBorder =
-      soft_border_color ||
-      themeTokens.softBorderColor;
-
-    const finalText = resolvedText;
+    const finalText =
+      text_color ||
+      (themeObject as any)?.delivery_form_text ||
+      (isContainerDark ? "#f8fafc" : "#0f172a");
 
     const finalTextMuted =
       muted_text_color ||
       (themeObject as any)?.delivery_form_muted_text ||
-      themeTokens.mutedTextColor;
+      (isContainerDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
 
     const finalTextSoft =
       soft_text_color ||
-      themeTokens.softTextColor;
+      (isContainerDark ? "rgba(248, 250, 252, 0.50)" : "rgba(15, 23, 42, 0.45)");
 
     const finalPlaceholder =
       placeholder_color ||
-      themeTokens.softTextColor;
+      (isContainerDark ? "rgba(248, 250, 252, 0.45)" : "rgba(15, 23, 42, 0.40)");
+
+    const finalCardBg =
+      card_color ||
+      (themeObject as any)?.delivery_form_card_bg ||
+      (isContainerDark
+        ? "rgba(255, 255, 255, 0.05)"
+        : (finalContainerBg.toLowerCase() === "#ffffff" || finalContainerBg.toLowerCase() === "#fafafa" || finalContainerBg.toLowerCase() === "#fdfbf7"
+            ? "#f8fafc"
+            : "#ffffff"));
+
+    const finalSelectedCardBg =
+      selected_card_bg ||
+      (isContainerDark ? alpha(resolvedAccent, 0.18) : alpha(resolvedAccent, 0.08));
+
+    const finalBorder =
+      border_color ||
+      (themeObject as any)?.delivery_form_border ||
+      (isContainerDark ? "rgba(255, 255, 255, 0.14)" : "#e2e8f0");
+
+    const finalSoftBorder =
+      soft_border_color ||
+      (isContainerDark ? "rgba(255, 255, 255, 0.10)" : "#e2e8f0");
 
     const finalInputBg =
       input_color ||
       (themeObject as any)?.delivery_form_input_bg ||
-      themeTokens.inputBg;
+      (isContainerDark ? "rgba(255, 255, 255, 0.08)" : "#ffffff");
 
     const finalButtonBg =
       button_bg_color ||
@@ -524,7 +532,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
       panelBg: finalContainerBg,
       listCardBg: finalCardBg, // Address cards background
       listCardSelectedBg: finalSelectedCardBg, // Selected address card background
-      emptyStateBg: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc",
+      emptyStateBg: isContainerDark ? "rgba(255,255,255,0.03)" : "#f8fafc",
       emptyStateBorder: finalBorder,
       inputBg: finalInputBg,
       inputText: (themeObject as any)?.delivery_form_input_text || finalText,
@@ -535,9 +543,9 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
       textMuted: finalTextMuted,
       textSoft: finalTextSoft,
       placeholder: finalPlaceholder,
-      shadow: isDark ? "0 8px 22px rgba(0,0,0,0.25)" : "0 2px 8px rgba(0,0,0,0.05)",
+      shadow: isContainerDark ? "0 8px 22px rgba(0,0,0,0.25)" : "0 4px 16px rgba(15,23,42,0.05)",
       accentRing: `0 0 0 3px ${alpha(resolvedAccent, 0.2)}`,
-      subtleButtonBg: isDark ? "rgba(255,255,255,0.06)" : "#f8fafc",
+      subtleButtonBg: isContainerDark ? "rgba(255,255,255,0.06)" : "#f1f5f9",
       subtleButtonText: finalText,
       subtleButtonBorder: finalBorder,
       secondaryButtonBg: isDark ? "rgba(255,255,255,0.05)" : "#f8fafc",

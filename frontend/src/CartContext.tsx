@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { API_BASE_URL } from "./config/api";
@@ -270,6 +271,26 @@ const buildCartItemKey = (
   variantValue?: string | null
 ) => `${String(productId)}::${variantValue ?? ""}`;
 
+const consolidateCartList = (items: CartItem[]): CartItem[] => {
+  const map = new Map<string, CartItem>();
+  for (const it of items) {
+    if (!it || !it.id) continue;
+    const variantKey = it.selectedVariantValue ? it.selectedVariantValue.trim() : "";
+    const key = `${String(it.id)}::${variantKey}`;
+    const existing = map.get(key);
+    if (existing) {
+      map.set(key, {
+        ...existing,
+        ...it,
+        quantity: (existing.quantity || 1) + (it.quantity || 1),
+      });
+    } else {
+      map.set(key, { ...it, quantity: Math.max(1, it.quantity || 1) });
+    }
+  }
+  return Array.from(map.values());
+};
+
 const readGuestCart = (siteId?: string): CartItem[] => {
   if (typeof window === "undefined") return [];
 
@@ -277,7 +298,7 @@ const readGuestCart = (siteId?: string): CartItem[] => {
     const raw = window.localStorage.getItem(buildGuestStorageKey(siteId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? consolidateCartList(parsed) : [];
   } catch {
     return [];
   }
@@ -285,7 +306,8 @@ const readGuestCart = (siteId?: string): CartItem[] => {
 
 const writeGuestCart = (siteId: string | undefined, items: CartItem[]) => {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(buildGuestStorageKey(siteId), JSON.stringify(items));
+  const consolidated = consolidateCartList(items);
+  window.localStorage.setItem(buildGuestStorageKey(siteId), JSON.stringify(consolidated));
 };
 
 const clearGuestCartStorage = (siteId?: string) => {
@@ -317,6 +339,59 @@ const writePersistedCoupon = (siteId: string | undefined, coupon: ValidatedCoupo
   } catch {}
 };
 
+const detectCurrentSiteId = (explicitSiteId?: string): string | undefined => {
+  if (explicitSiteId && explicitSiteId.trim()) {
+    return explicitSiteId.trim();
+  }
+  if (typeof window === "undefined") return undefined;
+
+  const path = window.location.pathname;
+  if (path.startsWith("/store/")) {
+    const parts = path.split("/");
+    if (parts[2]) return parts[2];
+  }
+  if (path.startsWith("/login/")) {
+    const parts = path.split("/");
+    if (parts[2]) return parts[2];
+  }
+  if (path.startsWith("/signup/")) {
+    const parts = path.split("/");
+    if (parts[2]) return parts[2];
+  }
+  if (path.startsWith("/builder/")) {
+    const parts = path.split("/");
+    if (parts[2]) return parts[2];
+  }
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const qSite = params.get("site_id") || params.get("site") || params.get("slug");
+    if (qSite) return qSite;
+  } catch {}
+
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith("wc_customer_token_")) {
+        const tenant = key.replace("wc_customer_token_", "");
+        if (tenant) return tenant;
+      }
+    }
+  } catch {}
+
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith("guest_cart:")) {
+        const tenant = key.replace("guest_cart:", "");
+        if (tenant && tenant !== "default") return tenant;
+      }
+    }
+  } catch {}
+
+  return undefined;
+};
+
 export function CartProvider({
   children,
   products = [],
@@ -325,16 +400,38 @@ export function CartProvider({
   isProductsLoading = false,
   isAdminMode = false,
 }: CartProviderProps) {
+  const [internalSiteId, setInternalSiteId] = useState<string | undefined>(() =>
+    detectCurrentSiteId(siteId)
+  );
+  const resolvedSiteId = siteId || internalSiteId;
+
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartItemIds, setCartItemIds] = useState<Record<string, string>>({});
   const [isCartLoading, setIsCartLoading] = useState(false);
   const [enableCod, setEnableCod] = useState<boolean>(true);
   const [maxCodAmount, setMaxCodAmount] = useState<number>(5000);
   const [appliedCoupon, setAppliedCouponState] = useState<ValidatedCoupon | null>(() =>
-    readPersistedCoupon(siteId)
+    readPersistedCoupon(resolvedSiteId)
   );
 
-  const resolvedSiteId = siteId;
+  useEffect(() => {
+    const checkTenant = (e?: any) => {
+      const eventSite = e?.detail?.siteId || e?.detail?.websiteName || e?.detail?.siteSlug;
+      const detected = detectCurrentSiteId(siteId || eventSite);
+      if (detected && detected !== internalSiteId) {
+        setInternalSiteId(detected);
+      }
+    };
+
+    window.addEventListener("wc_customer_auth_changed", checkTenant);
+    window.addEventListener("popstate", checkTenant);
+    window.addEventListener("focus", checkTenant);
+    return () => {
+      window.removeEventListener("wc_customer_auth_changed", checkTenant);
+      window.removeEventListener("popstate", checkTenant);
+      window.removeEventListener("focus", checkTenant);
+    };
+  }, [siteId, internalSiteId]);
 
   // Initialize delivery & COD policy from public checkout settings
   useEffect(() => {
@@ -413,16 +510,18 @@ export function CartProvider({
       if (changed && !getCustomerToken(resolvedSiteId)) {
         writeGuestCart(resolvedSiteId, updated);
       }
-      return changed ? updated : prevItems;
+      return changed ? consolidateCartList(updated) : prevItems;
     });
   }, [products, resolvedSiteId]);
 
   const applyCartResponse = useCallback((data: BackendCartResponse) => {
-    const mappedItems = data.items.map(mapBackendCartItemToCartItem);
+    const rawMapped = data.items.map(mapBackendCartItemToCartItem);
+    const mappedItems = consolidateCartList(rawMapped);
 
     const nextItemIds: Record<string, string> = {};
     for (const item of data.items) {
-      const key = `${String(item.product_id)}::${item.selected_variant_value ?? ""}`;
+      const variantKey = item.selected_variant_value ? item.selected_variant_value.trim() : "";
+      const key = `${String(item.product_id)}::${variantKey}`;
       nextItemIds[key] = item.id;
     }
 
@@ -443,6 +542,8 @@ export function CartProvider({
     setCartItemIds({});
   }, [resolvedSiteId]);
 
+  const isMergingGuestCartRef = useRef(false);
+
   const refreshCart = useCallback(async () => {
     if (!resolvedSiteId) {
       setCartItems([]);
@@ -454,6 +555,44 @@ export function CartProvider({
     if (!hasToken) {
       loadGuestCartIntoState();
       return;
+    }
+
+    // Atomic guest cart merge upon login
+    const guestItems = readGuestCart(resolvedSiteId);
+    if (guestItems.length > 0 && !isMergingGuestCartRef.current) {
+      isMergingGuestCartRef.current = true;
+      // Immediately clear guest storage before async call to avoid race conditions or duplicates
+      clearGuestCartStorage(resolvedSiteId);
+
+      try {
+        const mergePayload = {
+          items: guestItems.map((gItem) => ({
+            product_id: gItem.id,
+            quantity: Math.max(1, gItem.quantity || 1),
+            selected_variant_value: gItem.selectedVariantValue ? gItem.selectedVariantValue.trim() : null,
+          })),
+        };
+
+        const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}/merge-guest-cart`, {
+          method: "POST",
+          credentials: "include",
+          headers: getCustomerAuthHeaders(resolvedSiteId, {
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify(mergePayload),
+        });
+
+        if (res.ok) {
+          const data: BackendCartResponse = await res.json();
+          applyCartResponse(data);
+          isMergingGuestCartRef.current = false;
+          return;
+        }
+      } catch (err) {
+        console.error("Failed to merge guest cart", err);
+      } finally {
+        isMergingGuestCartRef.current = false;
+      }
     }
 
     setIsCartLoading(true);
@@ -481,21 +620,34 @@ export function CartProvider({
     } finally {
       setIsCartLoading(false);
     }
-  }, [applyCartResponse, isAdminMode, loadGuestCartIntoState, resolvedSiteId]);
+  }, [applyCartResponse, loadGuestCartIntoState, resolvedSiteId]);
 
   // Initial cart load
   useEffect(() => {
     refreshCart();
   }, [refreshCart]);
 
-  // Cross-tab cart sync: re-fetch whenever the customer token changes in
-  // another tab (e.g. they log in on the storefront tab) or when this tab
-  // regains focus after such a change.
+  // Cross-tab and in-window cart sync: re-fetch immediately whenever
+  // the customer logs in or logs out in the same window (custom event)
+  // or in another window/tab (storage & focus events).
   useEffect(() => {
-    // Snapshot the token so we only re-fetch when it actually changes.
     let lastSeenToken: string | null = resolvedSiteId
       ? getCustomerToken(resolvedSiteId)
       : null;
+
+    const handleAuthSync = () => {
+      if (!resolvedSiteId) return;
+      const currentToken = getCustomerToken(resolvedSiteId);
+      lastSeenToken = currentToken;
+      if (!currentToken) {
+        clearGuestCartStorage(resolvedSiteId);
+        setCartItems([]);
+        setCartItemIds({});
+        setAppliedCouponState(null);
+      } else {
+        refreshCart();
+      }
+    };
 
     const handleStorage = (event: StorageEvent) => {
       if (
@@ -503,26 +655,39 @@ export function CartProvider({
         event.key.startsWith("wc_customer_token_") &&
         resolvedSiteId
       ) {
-        // A login/logout happened in another tab — re-fetch the cart so this
-        // tab (admin or store) reflects the correct state.
         lastSeenToken = event.newValue;
-        refreshCart();
+        if (!event.newValue) {
+          clearGuestCartStorage(resolvedSiteId);
+          setCartItems([]);
+          setCartItemIds({});
+          setAppliedCouponState(null);
+        } else {
+          refreshCart();
+        }
       }
     };
 
     const handleFocus = () => {
       if (!resolvedSiteId) return;
       const currentToken = getCustomerToken(resolvedSiteId);
-      // Only re-fetch if the token actually changed since last check
       if (currentToken !== lastSeenToken) {
         lastSeenToken = currentToken;
-        refreshCart();
+        if (!currentToken) {
+          clearGuestCartStorage(resolvedSiteId);
+          setCartItems([]);
+          setCartItemIds({});
+          setAppliedCouponState(null);
+        } else {
+          refreshCart();
+        }
       }
     };
 
+    window.addEventListener("wc_customer_auth_changed", handleAuthSync);
     window.addEventListener("storage", handleStorage);
     window.addEventListener("focus", handleFocus);
     return () => {
+      window.removeEventListener("wc_customer_auth_changed", handleAuthSync);
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("focus", handleFocus);
     };
@@ -532,70 +697,18 @@ export function CartProvider({
     async (product: Product, quantity = 1) => {
       if (!resolvedSiteId) return;
 
-      const selectedVariantValue = getSelectedVariantValue(product);
+      const rawVariant = getSelectedVariantValue(product);
+      const selectedVariantValue = rawVariant ? rawVariant.trim() : null;
       const safeQuantity = Math.max(1, quantity);
+      const hasToken = Boolean(getCustomerToken(resolvedSiteId));
 
-      try {
-        const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}/items`, {
-          method: "POST",
-          credentials: "include",
-          headers: getCustomerAuthHeaders(resolvedSiteId, {
-            "Content-Type": "application/json",
-          }),
-          body: JSON.stringify({
-            product_id: product.id,
-            quantity: safeQuantity,
-            selected_variant_value: selectedVariantValue,
-          }),
-        });
-
-        if (res.status === 401 || res.status === 403) {
-          const existingItems = readGuestCart(resolvedSiteId);
-          const key = buildCartItemKey(product.id, selectedVariantValue);
-
-          const nextItems = [...existingItems];
-          const existingIndex = nextItems.findIndex(
-            (item) =>
-              buildCartItemKey(item.id, item.selectedVariantValue) === key
-          );
-
-          if (existingIndex >= 0) {
-            nextItems[existingIndex] = {
-              ...nextItems[existingIndex],
-              is_cod_allowed: product.is_cod_allowed !== undefined ? Boolean(product.is_cod_allowed) : nextItems[existingIndex].is_cod_allowed,
-              quantity: nextItems[existingIndex].quantity + safeQuantity,
-            };
-          } else {
-            nextItems.push({
-              ...product,
-              is_cod_allowed: Boolean(product.is_cod_allowed),
-              selectedVariantValue,
-              quantity: safeQuantity,
-            });
-          }
-
-          writeGuestCart(resolvedSiteId, nextItems);
-          setCartItems(nextItems);
-          setCartItemIds({});
-          return;
-        }
-
-        if (!res.ok) {
-          throw new Error("Failed to add item to cart");
-        }
-
-        const data: BackendCartResponse = await res.json();
-        clearGuestCartStorage(resolvedSiteId);
-        applyCartResponse(data);
-      } catch (error) {
-        console.error("Failed to add item to cart", error);
-
+      if (!hasToken) {
         const existingItems = readGuestCart(resolvedSiteId);
         const key = buildCartItemKey(product.id, selectedVariantValue);
 
         const nextItems = [...existingItems];
         const existingIndex = nextItems.findIndex(
-          (item) => buildCartItemKey(item.id, item.selectedVariantValue) === key
+          (item) => buildCartItemKey(item.id, item.selectedVariantValue ? item.selectedVariantValue.trim() : null) === key
         );
 
         if (existingIndex >= 0) {
@@ -613,9 +726,36 @@ export function CartProvider({
           });
         }
 
-        writeGuestCart(resolvedSiteId, nextItems);
-        setCartItems(nextItems);
+        const consolidated = consolidateCartList(nextItems);
+        writeGuestCart(resolvedSiteId, consolidated);
+        setCartItems(consolidated);
         setCartItemIds({});
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}/items`, {
+          method: "POST",
+          credentials: "include",
+          headers: getCustomerAuthHeaders(resolvedSiteId, {
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            product_id: product.id,
+            quantity: safeQuantity,
+            selected_variant_value: selectedVariantValue,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to add item to cart");
+        }
+
+        const data: BackendCartResponse = await res.json();
+        clearGuestCartStorage(resolvedSiteId);
+        applyCartResponse(data);
+      } catch (error) {
+        console.error("Failed to add item to cart", error);
       }
     },
     [applyCartResponse, resolvedSiteId]
@@ -625,8 +765,10 @@ export function CartProvider({
     async (productId: ProductId, variantValue?: string | null) => {
       if (!resolvedSiteId) return;
 
-      const key = `${String(productId)}::${variantValue ?? ""}`;
+      const normVariant = variantValue ? variantValue.trim() : null;
+      const key = `${String(productId)}::${normVariant ?? ""}`;
       const itemId = cartItemIds[key];
+      const hasToken = Boolean(getCustomerToken(resolvedSiteId));
 
       // Optimistic removal from UI & clean up key immediately
       setCartItems((prev) =>
@@ -634,7 +776,7 @@ export function CartProvider({
           (item) =>
             !(
               String(item.id) === String(productId) &&
-              (item.selectedVariantValue ?? null) === (variantValue ?? null)
+              ((item.selectedVariantValue ? item.selectedVariantValue.trim() : null) === normVariant)
             )
         )
       );
@@ -644,12 +786,12 @@ export function CartProvider({
         return next;
       });
 
-      if (!itemId) {
+      if (!hasToken || !itemId) {
         const nextItems = readGuestCart(resolvedSiteId).filter(
           (item) =>
             !(
               String(item.id) === String(productId) &&
-              (item.selectedVariantValue ?? null) === (variantValue ?? null)
+              ((item.selectedVariantValue ? item.selectedVariantValue.trim() : null) === normVariant)
             )
         );
         writeGuestCart(resolvedSiteId, nextItems);
@@ -665,18 +807,6 @@ export function CartProvider({
             headers: getCustomerAuthHeaders(resolvedSiteId),
           }
         );
-
-        if (res.status === 401 || res.status === 403) {
-          const nextItems = readGuestCart(resolvedSiteId).filter(
-            (item) =>
-              !(
-                String(item.id) === String(productId) &&
-                (item.selectedVariantValue ?? null) === (variantValue ?? null)
-              )
-          );
-          writeGuestCart(resolvedSiteId, nextItems);
-          return;
-        }
 
         if (!res.ok) {
           throw new Error("Failed to remove item from cart");
@@ -704,18 +834,20 @@ export function CartProvider({
 
       if (!resolvedSiteId) return;
 
-      const key = `${String(productId)}::${variantValue ?? ""}`;
+      const normVariant = variantValue ? variantValue.trim() : null;
+      const key = `${String(productId)}::${normVariant ?? ""}`;
       const itemId = cartItemIds[key];
+      const hasToken = Boolean(getCustomerToken(resolvedSiteId));
 
-      if (!itemId) {
+      if (!hasToken || !itemId) {
         const nextItems = readGuestCart(resolvedSiteId).map((item) =>
           String(item.id) === String(productId) &&
-          (item.selectedVariantValue ?? null) === (variantValue ?? null)
+          ((item.selectedVariantValue ? item.selectedVariantValue.trim() : null) === normVariant)
             ? { ...item, quantity }
             : item
         );
         writeGuestCart(resolvedSiteId, nextItems);
-        setCartItems(nextItems);
+        setCartItems(consolidateCartList(nextItems));
         setCartItemIds({});
         return;
       }
@@ -724,7 +856,7 @@ export function CartProvider({
       setCartItems((prev) =>
         prev.map((item) =>
           String(item.id) === String(productId) &&
-          (item.selectedVariantValue ?? null) === (variantValue ?? null)
+          ((item.selectedVariantValue ? item.selectedVariantValue.trim() : null) === normVariant)
             ? { ...item, quantity }
             : item
         )
@@ -734,7 +866,7 @@ export function CartProvider({
         const res = await fetch(
           `${API_BASE_URL}/cart/${resolvedSiteId}/items/${itemId}`,
           {
-            method: "PUT",
+            method: "PATCH",
             credentials: "include",
             headers: getCustomerAuthHeaders(resolvedSiteId, {
               "Content-Type": "application/json",
@@ -743,27 +875,14 @@ export function CartProvider({
           }
         );
 
-        if (res.status === 401 || res.status === 403) {
-          const nextItems = readGuestCart(resolvedSiteId).map((item) =>
-            String(item.id) === String(productId) &&
-            (item.selectedVariantValue ?? null) === (variantValue ?? null)
-              ? { ...item, quantity }
-              : item
-          );
-          writeGuestCart(resolvedSiteId, nextItems);
-          setCartItems(nextItems);
-          setCartItemIds({});
-          return;
-        }
-
         if (!res.ok) {
-          throw new Error("Failed to update cart quantity");
+          throw new Error("Failed to update item quantity");
         }
 
         const data: BackendCartResponse = await res.json();
         applyCartResponse(data);
       } catch (error) {
-        console.error("Failed to update cart quantity", error);
+        console.error("Failed to update item quantity", error);
       }
     },
     [applyCartResponse, cartItemIds, removeFromCart, resolvedSiteId]

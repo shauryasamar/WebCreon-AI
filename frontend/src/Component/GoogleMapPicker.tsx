@@ -51,7 +51,11 @@ let googleMapsLoadingPromise: Promise<void> | null = null;
 
 function loadGoogleMapsScript(apiKey: string): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
-  if (window.google?.maps?.places && window.google?.maps?.Geocoder && window.google?.maps?.Map) {
+  if (
+    typeof (window.google?.maps as any)?.Map === "function" &&
+    typeof (window.google?.maps as any)?.Geocoder === "function" &&
+    window.google?.maps?.places
+  ) {
     return Promise.resolve();
   }
   if (googleMapsLoadingPromise) {
@@ -60,11 +64,11 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
 
   googleMapsLoadingPromise = new Promise(async (resolve, reject) => {
     try {
-      const existing = document.getElementById("google-maps-script");
+      let existing = document.getElementById("google-maps-script") as HTMLScriptElement | null;
       if (!existing) {
         const script = document.createElement("script");
         script.id = "google-maps-script";
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&libraries=places,geometry`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
         script.async = true;
         script.defer = true;
         document.head.appendChild(script);
@@ -72,38 +76,71 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
           script.onload = () => res();
           script.onerror = () => rej(new Error("Failed to load Google Maps script"));
         });
-      } else if (!window.google?.maps) {
-        await new Promise<void>((res, rej) => {
-          existing.addEventListener("load", () => res());
-          existing.addEventListener("error", () => rej(new Error("Failed to load Google Maps script")));
-        });
+      } else if (typeof (window.google?.maps as any)?.Map !== "function") {
+        if (typeof (window.google?.maps as any)?.importLibrary !== "function") {
+          await new Promise<void>((res) => {
+            existing.addEventListener("load", () => res());
+            existing.addEventListener("error", () => res());
+            setTimeout(res, 1200);
+          });
+        }
       }
 
       if (window.google?.maps && typeof (window.google.maps as any).importLibrary === "function") {
-        const [mapsLib, placesLib, geocodingLib, markerLib] = await Promise.all([
-          (window.google.maps as any).importLibrary("maps"),
-          (window.google.maps as any).importLibrary("places"),
-          (window.google.maps as any).importLibrary("geocoding"),
-          (window.google.maps as any).importLibrary("marker"),
-        ]);
-        if (geocodingLib?.Geocoder) {
-          (window.google.maps as any).Geocoder = geocodingLib.Geocoder;
-        }
-        if (mapsLib?.Map) {
-          (window.google.maps as any).Map = mapsLib.Map;
-        }
-        if (placesLib?.AutocompleteService) {
-          (window.google.maps as any).places = (window.google.maps as any).places || {};
-          (window.google.maps as any).places.AutocompleteService = placesLib.AutocompleteService;
-          if (placesLib.PlacesServiceStatus) {
-            (window.google.maps as any).places.PlacesServiceStatus = placesLib.PlacesServiceStatus;
+        try {
+          const [mapsLib, placesLib, geocodingLib, markerLib] = await Promise.all([
+            (window.google.maps as any).importLibrary("maps"),
+            (window.google.maps as any).importLibrary("places"),
+            (window.google.maps as any).importLibrary("geocoding"),
+            (window.google.maps as any).importLibrary("marker"),
+          ]);
+          if (mapsLib?.Map) {
+            (window.google.maps as any).Map = mapsLib.Map;
           }
-        }
-        if (markerLib?.Marker) {
-          (window.google.maps as any).Marker = markerLib.Marker;
+          if (mapsLib?.Point) {
+            (window.google.maps as any).Point = mapsLib.Point;
+          }
+          if (mapsLib?.Animation) {
+            (window.google.maps as any).Animation = mapsLib.Animation;
+          }
+          if (geocodingLib?.Geocoder) {
+            (window.google.maps as any).Geocoder = geocodingLib.Geocoder;
+          }
+          if (placesLib?.AutocompleteService) {
+            (window.google.maps as any).places = (window.google.maps as any).places || {};
+            (window.google.maps as any).places.AutocompleteService = placesLib.AutocompleteService;
+            if (placesLib.PlacesServiceStatus) {
+              (window.google.maps as any).places.PlacesServiceStatus = placesLib.PlacesServiceStatus;
+            }
+          }
+          if (markerLib?.Marker) {
+            (window.google.maps as any).Marker = markerLib.Marker;
+          }
+        } catch (libErr) {
+          console.warn("Could not import Google Maps libraries dynamically:", libErr);
         }
       }
-      resolve();
+
+      if (typeof (window.google?.maps as any)?.Map === "function") {
+        resolve();
+      } else {
+        let elapsed = 0;
+        const interval = setInterval(() => {
+          elapsed += 100;
+          if (typeof (window.google?.maps as any)?.Map === "function") {
+            clearInterval(interval);
+            resolve();
+          } else if (elapsed > 3500) {
+            clearInterval(interval);
+            if (typeof (window.google?.maps as any)?.Map === "function") {
+              resolve();
+            } else {
+              googleMapsLoadingPromise = null;
+              reject(new Error("Google Maps Map constructor failed to initialize."));
+            }
+          }
+        }, 100);
+      }
     } catch (err) {
       googleMapsLoadingPromise = null;
       reject(err);
@@ -313,8 +350,9 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
     loadGoogleMapsScript(MAPS_API_KEY)
       .then(() => {
         setMapsLoaded(true);
-        if (window.google?.maps?.places) {
-          autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+        const PlacesServiceClass = (window.google?.maps?.places as any)?.AutocompleteService;
+        if (typeof PlacesServiceClass === "function") {
+          autocompleteServiceRef.current = new PlacesServiceClass();
         }
       })
       .catch(() => setLoadError(true));
@@ -328,8 +366,11 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
       return;
     }
 
-    if (!autocompleteServiceRef.current && window.google?.maps?.places) {
-      autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+    if (!autocompleteServiceRef.current) {
+      const PlacesServiceClass = (window.google?.maps?.places as any)?.AutocompleteService;
+      if (typeof PlacesServiceClass === "function") {
+        autocompleteServiceRef.current = new PlacesServiceClass();
+      }
     }
 
     if (!autocompleteServiceRef.current) return;
@@ -340,8 +381,9 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
           input: searchQuery.trim(),
           componentRestrictions: { country: "in" },
         },
-        (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+        (results: any, status: any) => {
+          const isOk = status === "OK" || status === (window.google?.maps?.places as any)?.PlacesServiceStatus?.OK;
+          if (isOk && results) {
             setPredictions(results);
             setShowPredictionsDropdown(true);
           } else {
@@ -487,76 +529,100 @@ export const GoogleMapPicker: React.FC<GoogleMapPickerProps> = ({
   // Initialize Map
   useEffect(() => {
     if (!mapsLoaded || !isOpen || !mapRef.current) return;
-    const GeocoderClass = (window.google?.maps as any)?.Geocoder;
-    if (GeocoderClass) {
-      geocoderRef.current = new GeocoderClass();
-    } else if (typeof (window.google?.maps as any)?.importLibrary === "function") {
-      (window.google.maps as any).importLibrary("geocoding").then((geoLib: any) => {
-        if (geoLib?.Geocoder) {
-          (window.google.maps as any).Geocoder = geoLib.Geocoder;
-          geocoderRef.current = new geoLib.Geocoder();
-        }
-      });
-    }
-
     if (mapInstanceRef.current) return;
 
-    const startCenter =
-      initialLat && initialLng
-        ? { lat: initialLat, lng: initialLng }
-        : DEFAULT_CENTER;
+    const MapConstructor = (window.google?.maps as any)?.Map;
+    if (typeof MapConstructor !== "function") {
+      loadGoogleMapsScript(MAPS_API_KEY)
+        .then(() => {
+          if (typeof (window.google?.maps as any)?.Map === "function") {
+            setMapsLoaded(true);
+          } else {
+            setLoadError(true);
+          }
+        })
+        .catch(() => setLoadError(true));
+      return;
+    }
 
-    const map = new google.maps.Map(mapRef.current, {
-      center: startCenter,
-      zoom: initialLat ? 17 : 5,
-      disableDefaultUI: true,
-      zoomControl: true,
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: false,
-      clickableIcons: false,
-      gestureHandling: "greedy",
-      styles: isDark ? DARK_MAP_STYLES : LIGHT_MAP_STYLES,
-    });
-    mapInstanceRef.current = map;
-
-    // SVG Marker Pin
-    const marker = new google.maps.Marker({
-      map,
-      position: startCenter,
-      draggable: true,
-      animation: google.maps.Animation.DROP,
-      icon: {
-        path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
-        fillColor: palette.accent,
-        fillOpacity: 1,
-        strokeColor: "#ffffff",
-        strokeWeight: 2.5,
-        scale: 2.2,
-        anchor: new google.maps.Point(12, 22),
-      },
-    });
-    markerRef.current = marker;
-
-    marker.addListener("dragend", (e: google.maps.MapMouseEvent) => {
-      if (!e.latLng) return;
-      moveMarkerTo(e.latLng.lat(), e.latLng.lng());
-    });
-
-    map.addListener("click", (e: google.maps.MapMouseEvent) => {
-      if (!e.latLng) return;
-      moveMarkerTo(e.latLng.lat(), e.latLng.lng());
-    });
-
-    if (initialLat && initialLng) {
-      setCurrentLat(initialLat);
-      setCurrentLng(initialLng);
-      reverseGeocode(initialLat, initialLng);
-      if (mode !== "store") {
-        checkDeliverabilityForPin(initialLat, initialLng);
+    try {
+      const GeocoderClass = (window.google?.maps as any)?.Geocoder;
+      if (GeocoderClass) {
+        geocoderRef.current = new GeocoderClass();
+      } else if (typeof (window.google?.maps as any)?.importLibrary === "function") {
+        (window.google.maps as any).importLibrary("geocoding").then((geoLib: any) => {
+          if (geoLib?.Geocoder) {
+            (window.google.maps as any).Geocoder = geoLib.Geocoder;
+            geocoderRef.current = new geoLib.Geocoder();
+          }
+        });
       }
-    } else {
-      locateUser();
+
+      const startCenter =
+        initialLat && initialLng
+          ? { lat: initialLat, lng: initialLng }
+          : DEFAULT_CENTER;
+
+      const map = new MapConstructor(mapRef.current, {
+        center: startCenter,
+        zoom: initialLat ? 17 : 5,
+        disableDefaultUI: true,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        clickableIcons: false,
+        gestureHandling: "greedy",
+        styles: isDark ? DARK_MAP_STYLES : LIGHT_MAP_STYLES,
+      });
+      mapInstanceRef.current = map;
+
+      const MarkerConstructor = (window.google?.maps as any)?.Marker;
+      const PointConstructor = (window.google?.maps as any)?.Point || function(x: number, y: number) { return { x, y }; };
+      const AnimationObj = (window.google?.maps as any)?.Animation || { DROP: 1 };
+
+      if (typeof MarkerConstructor === "function") {
+        const marker = new MarkerConstructor({
+          map,
+          position: startCenter,
+          draggable: true,
+          animation: AnimationObj.DROP,
+          icon: {
+            path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
+            fillColor: palette.accent,
+            fillOpacity: 1,
+            strokeColor: "#ffffff",
+            strokeWeight: 2.5,
+            scale: 2.2,
+            anchor: new PointConstructor(12, 22),
+          },
+        });
+        markerRef.current = marker;
+
+        marker.addListener("dragend", (e: any) => {
+          if (!e?.latLng) return;
+          moveMarkerTo(e.latLng.lat(), e.latLng.lng());
+        });
+      }
+
+      map.addListener("click", (e: any) => {
+        if (!e?.latLng) return;
+        moveMarkerTo(e.latLng.lat(), e.latLng.lng());
+      });
+
+      if (initialLat && initialLng) {
+        setCurrentLat(initialLat);
+        setCurrentLng(initialLng);
+        reverseGeocode(initialLat, initialLng);
+        if (mode !== "store") {
+          checkDeliverabilityForPin(initialLat, initialLng);
+        }
+      } else {
+        locateUser();
+      }
+    } catch (mapInitErr) {
+      console.error("Failed to initialize Google Map:", mapInitErr);
+      setLoadError(true);
     }
   }, [mapsLoaded, isOpen, initialLat, initialLng, palette.accent, isDark, moveMarkerTo, reverseGeocode, checkDeliverabilityForPin, mode, locateUser]);
 

@@ -1021,7 +1021,17 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
             </>
           )}
 
-              <span style={{ fontSize: "9px", color: "#94a3b8", marginTop: "2px" }}>{msg.time}</span>
+              <span
+                style={{
+                  fontSize: "9px",
+                  color: "#94a3b8",
+                  marginTop: "3px",
+                  marginLeft: isUser ? "0" : "32px",
+                  marginRight: isUser ? "4px" : "0",
+                }}
+              >
+                {msg.time}
+              </span>
             </div>
           );
         })
