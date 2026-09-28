@@ -52,17 +52,22 @@ export function normalizeStorefrontProduct(raw: any): Product {
     Array.isArray(variantOption.optionValues) &&
     variantOption.optionValues.length > 0;
 
+  const variantHasInStock = hasVariantOpts
+    ? variantOption.optionValues.some((v: any) => {
+        const isVInStock = v.inStock !== false && v.in_stock !== false && (v as any).isInStock !== false;
+        if (!isVInStock) return false;
+        const hasQty = (v.stockQty != null && String(v.stockQty).trim() !== "") || v.inventory_quantity != null || v.stock != null;
+        if (hasQty) {
+          const qty = Number(v.stockQty ?? v.inventory_quantity ?? v.stock);
+          return !Number.isNaN(qty) && qty > 0;
+        }
+        return true;
+      })
+    : false;
+
   const hasExplicitVariantStock = hasVariantOpts && variantOption.optionValues.some(
     (v: any) => v.stockQty != null && String(v.stockQty).trim() !== ""
   );
-
-  const variantHasInStock = hasVariantOpts
-    ? variantOption.optionValues.some(
-        (v: any) =>
-          v.inStock !== false &&
-          (Number(v.stockQty ?? 0) > 0)
-      )
-    : false;
 
   const variantTotalStock =
     hasExplicitVariantStock
@@ -94,8 +99,8 @@ export function normalizeStorefrontProduct(raw: any): Product {
       ? raw.inStock
       : (baseRawStock !== null ? baseRawStock > 0 : true);
 
-  const inStock = hasExplicitVariantStock
-    ? (variantHasInStock || (baseRawStock !== null && baseRawStock > 0))
+  const inStock = hasVariantOpts
+    ? variantHasInStock
     : (baseRawStock !== null ? (baseRawStock > 0 && baseInStock) : baseInStock);
   const originalPrice =
     comparePrice != null && comparePrice > 0 ? comparePrice : price;

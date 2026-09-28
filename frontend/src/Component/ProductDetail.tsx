@@ -1813,15 +1813,16 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const variantStockQty =
     typeof selectedVariantMeta?.stockQty === "number" ? selectedVariantMeta.stockQty : null;
 
-  const hasExplicitVariantStock = hasVariants && optionValues.some(
-    (v) => v.stockQty != null && String(v.stockQty).trim() !== ""
-  );
-
-  const anyVariantInStock = hasVariants && optionValues.some(
-    (option) =>
-      option.inStock !== false &&
-      (Number(option.stockQty ?? 0) > 0)
-  );
+  const anyVariantInStock = hasVariants && optionValues.some((option) => {
+    const isVInStock = option.inStock !== false && (option as any).in_stock !== false;
+    if (!isVInStock) return false;
+    const hasQty = option.stockQty != null && String(option.stockQty).trim() !== "";
+    if (hasQty) {
+      const qty = Number(option.stockQty);
+      return !Number.isNaN(qty) && qty > 0;
+    }
+    return true;
+  });
 
   const baseProductStock = typeof product.stock === "number"
     ? product.stock
@@ -1835,8 +1836,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     ? anyProduct.in_stock
     : (baseProductStock !== null ? baseProductStock > 0 : true);
 
-  const normalizedInStock = hasExplicitVariantStock
-    ? (anyVariantInStock || (baseProductStock !== null && baseProductStock > 0))
+  const normalizedInStock = hasVariants
+    ? anyVariantInStock
     : (baseProductStock !== null ? (baseProductStock > 0 && baseProductInStock) : baseProductInStock);
 
   const showOriginal =

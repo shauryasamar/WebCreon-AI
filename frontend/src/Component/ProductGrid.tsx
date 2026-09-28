@@ -485,12 +485,16 @@ const ProductGrid: React.FC<ProductGridProps> = ({
 
       const variantList: any[] = product.variant_option?.optionValues || (product as any).variants || [];
       const hasVariants = Array.isArray(variantList) && variantList.length > 0;
-      const hasExplicitVariantStock = hasVariants && variantList.some(
-        (v: any) => (v.stockQty != null && String(v.stockQty).trim() !== "") || v.inventory_quantity != null || v.stock != null
-      );
-      const anyVariantInStock = hasVariants && variantList.some(
-        (v: any) => v.inStock !== false && v.in_stock !== false && (Number(v.stockQty ?? v.inventory_quantity ?? v.stock ?? 0) > 0)
-      );
+      const anyVariantInStock = hasVariants && variantList.some((v: any) => {
+        const isVInStock = v.inStock !== false && v.in_stock !== false && (v as any).isInStock !== false;
+        if (!isVInStock) return false;
+        const hasQty = (v.stockQty != null && String(v.stockQty).trim() !== "") || v.inventory_quantity != null || v.stock != null;
+        if (hasQty) {
+          const qty = Number(v.stockQty ?? v.inventory_quantity ?? v.stock);
+          return !Number.isNaN(qty) && qty > 0;
+        }
+        return true;
+      });
 
       const baseStock = typeof product.stock === "number"
         ? product.stock
@@ -508,8 +512,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
         ? (product as any).is_in_stock
         : (baseStock !== null ? baseStock > 0 : true);
 
-      const normalizedInStock = hasExplicitVariantStock
-        ? (anyVariantInStock || (baseStock !== null && baseStock > 0))
+      const normalizedInStock = hasVariants
+        ? anyVariantInStock
         : (baseStock !== null ? (baseStock > 0 && baseInStock) : baseInStock);
 
       const normalizedDiscountPercent =
