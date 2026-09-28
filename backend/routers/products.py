@@ -1289,32 +1289,41 @@ def list_products(
 
         has_variant_low = False
         has_variant_in_stock = False
+        has_variants = False
 
         if isinstance(v_opt, dict):
             opt_vals = v_opt.get("optionValues")
             if isinstance(opt_vals, list) and len(opt_vals) > 0:
+                has_variants = True
                 for v in opt_vals:
                     if isinstance(v, dict):
                         qty = v.get("stockQty")
+                        v_in_stock = v.get("inStock")
                         if qty is not None:
                             try:
                                 q_val = int(qty)
-                                if 0 < q_val <= 5:
+                                if 0 < q_val <= 5 and v_in_stock is not False:
                                     has_variant_low = True
-                                if q_val > 0:
+                                if q_val > 0 and v_in_stock is not False:
                                     has_variant_in_stock = True
                             except (ValueError, TypeError):
                                 pass
-                        elif v.get("inStock"):
+                        elif v_in_stock is not False:
                             has_variant_in_stock = True
 
         flat_low = bool(in_stock and stock is not None and 0 < stock <= 5)
         flat_in_stock = bool(in_stock and stock is not None and stock > 0)
 
-        if flat_low or has_variant_low:
-            low_stock_ids.add(pid)
-        if flat_in_stock or has_variant_in_stock:
-            in_stock_ids.add(pid)
+        if has_variants:
+            if has_variant_low:
+                low_stock_ids.add(pid)
+            if has_variant_in_stock:
+                in_stock_ids.add(pid)
+        else:
+            if flat_low:
+                low_stock_ids.add(pid)
+            if flat_in_stock:
+                in_stock_ids.add(pid)
 
     draft_count = max(0, all_count - active_count)
     in_stock_count = len(in_stock_ids)

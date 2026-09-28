@@ -387,7 +387,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
     : cardStyleKey === "beauty"
     ? "22px"
     : cardStyleKey === "grocery" || cardStyleKey === "books"
-    ? "16px"
+    ? "20px"
     : "20px";
 
   let computedCardBg = cardBg;
@@ -585,9 +585,34 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               ? product.compare_price
               : undefined;
 
-      const normalizedInStock =
-        product.in_stock !== false &&
-        (product.stock === undefined || product.stock > 0);
+      const variantList: any[] = product.variant_option?.optionValues || (product as any).variants || [];
+      const hasVariants = Array.isArray(variantList) && variantList.length > 0;
+      const hasExplicitVariantStock = hasVariants && variantList.some(
+        (v: any) => (v.stockQty != null && String(v.stockQty).trim() !== "") || v.inventory_quantity != null || v.stock != null
+      );
+      const anyVariantInStock = hasVariants && variantList.some(
+        (v: any) => v.inStock !== false && v.in_stock !== false && (Number(v.stockQty ?? v.inventory_quantity ?? v.stock ?? 0) > 0)
+      );
+
+      const baseStock = typeof product.stock === "number"
+        ? product.stock
+        : typeof (product as any).stockQty === "number"
+        ? (product as any).stockQty
+        : typeof (product as any).inventory_quantity === "number"
+        ? (product as any).inventory_quantity
+        : null;
+
+      const baseInStock = typeof product.inStock === "boolean"
+        ? product.inStock
+        : typeof product.in_stock === "boolean"
+        ? product.in_stock
+        : typeof (product as any).is_in_stock === "boolean"
+        ? (product as any).is_in_stock
+        : (baseStock !== null ? baseStock > 0 : true);
+
+      const normalizedInStock = hasExplicitVariantStock
+        ? (anyVariantInStock || (baseStock !== null && baseStock > 0))
+        : (baseStock !== null ? (baseStock > 0 && baseInStock) : baseInStock);
 
       const normalizedDiscountPercent =
         normalizedOriginalPrice && normalizedOriginalPrice > normalizedDisplayPrice
@@ -632,34 +657,39 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
   }
 
   const resolvedImageFit = image_fit || "cover";
-  const resolvedImageBg = image_bg || (isLight ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.2)");
-  const activePriceColor = price_color || (cardStyleKey === "beauty" ? "#dc2626" : pageText);
+  const resolvedImageBg = image_bg || (isLight ? "#f8fafc" : "rgba(255,255,255,0.04)");
+  const activePriceColor = price_color || pageText;
 
   // Exact Card Renderer with Uniform Proportional Scaling (Width & Height scale together)
-  const renderSingleProductCard = (product: typeof normalizedProducts[0], isSingleInColumn = false) => {
+  const renderSingleProductCard = (
+    product: typeof normalizedProducts[0],
+    isSingleInColumn = false,
+    cardIndex = 0
+  ) => {
     const showOriginal =
       show_original_price &&
       typeof product.normalizedOriginalPrice === "number" &&
       product.normalizedOriginalPrice > product.normalizedDisplayPrice;
-
     const showDiscount =
       show_discount_badge &&
       product.normalizedDiscountPercent > 0 &&
       product.normalizedInStock;
 
     const isDisabled = !product.normalizedInStock;
-    const ratingValue = Number(product.average_rating ?? 0);
-    const reviewCount = Number(product.review_count ?? 0);
+    const ratingValue = Number(product.average_rating ?? (product as any).averageRating ?? 0);
+    const reviewCount = Number(product.review_count ?? (product as any).reviewCount ?? 0);
     const hasReviews = reviewCount > 0 && ratingValue > 0;
-    const ratingDisplay = hasReviews ? `${ratingValue.toFixed(1)} (${reviewCount})` : "New";
+    const ratingDisplay = hasReviews
+      ? `${ratingValue.toFixed(1)} (${reviewCount})`
+      : "New";
 
-    const brandText = product.brand || product.category || "Collection";
+    const brandText = product.brand || product.category || "OYELA";
     const badgeCollections = (product.collections || []).filter((c: any) => c && c.is_badge);
 
     const isGrocery = cardStyleKey === "grocery";
-    const baseCardWidth = isGrocery ? 280 : 190;
-    const minCardWidth = isGrocery ? 220 : 140;
-    const maxCardWidth = isGrocery ? 320 : 280;
+    const baseCardWidth = isGrocery ? 340 : 230;
+    const minCardWidth = isGrocery ? 240 : 150;
+    const maxCardWidth = isGrocery ? 460 : 340;
 
     const parsedCardWidthNum = (() => {
       if (card_width !== undefined && card_width !== null && String(card_width).trim() !== "") {
@@ -674,10 +704,6 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
     const scalePx = (base: number, min = 8): string =>
       `${Math.max(min, Math.round(base * scaleRatio))}px`;
 
-    // Grocery card proportional height & image size (both width & height scale together in 280:108 ratio)
-    const groceryHeightPx = Math.round(parsedCardWidthNum * (108 / 280));
-    const groceryImgSizePx = Math.max(68, Math.round(groceryHeightPx - Math.round(18 * scaleRatio)));
-
     const renderCollectionBadges = (isCompact = false) => {
       if (!badgeCollections || badgeCollections.length === 0) return null;
       return (
@@ -685,12 +711,12 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
           style={{
             position: "absolute",
             top: scalePx(6, 4),
-            right: scalePx(6, 4),
-            zIndex: 2,
+            left: scalePx(6, 4),
+            zIndex: 3,
             display: "flex",
             flexDirection: "column",
             gap: "3px",
-            alignItems: "flex-end",
+            alignItems: "flex-start",
             maxWidth: isCompact ? "60px" : "110px",
           }}
         >
@@ -722,27 +748,30 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
 
     const isPreorder = isProductPreorderActive(product);
 
-    const renderDiscountBadge = () => {
-      return show_discount_badge && product.normalizedDiscountPercent > 0 ? (
+    const renderDiscountBadge = (isFrosted = true, badgePos: "top-right" | "top-left" = "top-right") => {
+      if (!show_discount_badge || product.normalizedDiscountPercent <= 0) return null;
+      return (
         <div
           style={{
             position: "absolute",
             top: scalePx(6, 4),
-            left: scalePx(6, 4),
-            zIndex: 2,
-            padding: `${scalePx(2.5, 2)} ${scalePx(6, 4)}`,
-            borderRadius: "999px",
-            background: "#166534",
+            ...(badgePos === "top-left" ? { left: scalePx(6, 4) } : { right: scalePx(6, 4) }),
+            zIndex: 3,
+            padding: `${scalePx(3.5, 2.5)} ${scalePx(8, 6)}`,
+            borderRadius: "6px",
+            background: "linear-gradient(135deg, #16a34a, #15803d)",
             color: "#ffffff",
-            fontSize: scalePx(9, 7.5),
+            fontSize: scalePx(9.5, 8),
             fontWeight: 800,
-            letterSpacing: "0.04em",
-            boxShadow: "0 2px 8px rgba(22,101,52,0.25)",
+            letterSpacing: "0.03em",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
           }}
         >
           {product.normalizedDiscountPercent}% OFF
         </div>
-      ) : null;
+      );
     };
 
     const renderInStockBadge = (centered = false) => {
@@ -815,18 +844,16 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
       ) : null;
     };
 
+    const isOutOfStock = !product.normalizedInStock;
+
     const cardBaseStyle: React.CSSProperties = {
       cursor: isDisabled ? "not-allowed" : "pointer",
       border: computedBorder,
       borderRadius: !isNaN(parsedCardRadiusNum) && parsedCardRadiusNum >= 0
         ? `${Math.min(parsedCardRadiusNum, isMobile ? 24 : 48)}px`
         : isMobile ? "14px" : computedRadius,
-      padding: scalePx(10, 6),
-      background: isDisabled
-        ? isLight
-          ? "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(241,245,249,0.96) 100%)"
-          : "linear-gradient(180deg, rgba(30,41,59,0.82) 0%, rgba(15,23,42,0.78) 100%)"
-        : computedCardBg,
+      padding: isMobile ? "6px" : scalePx(8, 6),
+      background: computedCardBg,
       backdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
       WebkitBackdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
       boxShadow: isMobile
@@ -834,12 +861,12 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
         : computedShadow,
       display: "flex",
       flexDirection: "column",
-      gap: scalePx(6, 4),
+      gap: isMobile ? "4px" : scalePx(5, 4),
       minHeight: "100%",
       boxSizing: "border-box",
       overflow: "hidden",
-      opacity: isDisabled ? 0.72 : 1,
-      transition: "border-color 150ms ease, box-shadow 150ms ease",
+      userSelect: "none",
+      WebkitUserSelect: "none",
     };
 
     const baseProductNameSize =
@@ -847,11 +874,12 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
     const resolvedProductNameSize = scalePx(baseProductNameSize, 10);
 
     const resolvedProductNameWeight =
-      product_name_font_weight || product_title_font_weight || 700;
+      product_name_font_weight || product_title_font_weight || 600;
 
     const resolvedProductNameFamily = resolveFontFamily(
       product_name_font_family || product_title_font_family
     );
+    const resolvedFontFamily = resolvedProductNameFamily;
 
     const resolvedProductNameStyle =
       product_name_font_style || product_title_font_style || "normal";
@@ -873,12 +901,14 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
         const num = typeof raw === "number" ? raw : parseInt(String(raw), 10);
         if (!isNaN(num) && num >= 0) return `${num}px`;
       }
-      return isMobile ? "10px" : "14px";
+      return isMobile ? "10px" : "12px";
     })();
 
+    const resolvedImageBg = image_bg || (isLight ? "#f8fafc" : "rgba(255,255,255,0.04)");
+
     const getImgContainerStyle = (defaultAspect: string): React.CSSProperties => {
-      const chosenAspect = image_aspect_ratio
-        ? (image_aspect_ratio === "auto" ? undefined : formatAspectRatio(image_aspect_ratio))
+      const chosenAspect = image_aspect_ratio && image_aspect_ratio !== "auto" && image_aspect_ratio !== "natural"
+        ? formatAspectRatio(image_aspect_ratio)
         : formatAspectRatio(defaultAspect);
 
       return {
@@ -896,44 +926,114 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
 
     // 1. FASHION PRESET
     if (cardStyleKey === "fashion") {
+      const fashionCardStyle: React.CSSProperties = {
+        ...cardBaseStyle,
+        padding: 0,
+        gap: 0,
+      };
+
+      const fashionImgAspect = image_aspect_ratio && image_aspect_ratio !== "auto" && image_aspect_ratio !== "natural"
+        ? formatAspectRatio(image_aspect_ratio)
+        : "3 / 4";
+
       return (
         <article
           key={product.id}
           className="product-card"
           onClick={() => handleProductClick(product)}
-          style={cardBaseStyle}
+          style={fashionCardStyle}
         >
-          <div style={getImgContainerStyle("3 / 4")}>
-            {renderDiscountBadge()}
+          <div
+            style={{
+              position: "relative",
+              width: "100%",
+              aspectRatio: fashionImgAspect,
+              borderTopLeftRadius: cardBaseStyle.borderRadius,
+              borderTopRightRadius: cardBaseStyle.borderRadius,
+              borderBottomLeftRadius: 0,
+              borderBottomRightRadius: 0,
+              overflow: "hidden",
+              background: resolvedImageBg,
+              flex: "0 0 auto",
+              flexShrink: 0,
+              flexGrow: 0,
+              borderBottom: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(15,23,42,0.08)",
+            }}
+          >
+            {renderDiscountBadge(true)}
             {renderCollectionBadges(isMobile)}
+            {isOutOfStock && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  zIndex: 4,
+                  background: "#ff0000",
+                  color: "#ffffff",
+                  fontSize: scalePx(13.5, 11),
+                  fontWeight: 800,
+                  padding: `${scalePx(6, 4.5)} ${scalePx(22, 14)}`,
+                  borderRadius: "2px",
+                  boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                  whiteSpace: "nowrap",
+                  letterSpacing: "0.02em",
+                  textAlign: "center",
+                  userSelect: "none",
+                }}
+              >
+                Sold Out
+              </div>
+            )}
             {product.normalizedImage ? (
               <img
                 src={product.normalizedImage}
                 alt={product.name}
-                loading="lazy"
                 style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
                   width: "100%",
                   height: "100%",
                   objectFit: resolvedImageFit,
                   display: "block",
+                  borderTopLeftRadius: "inherit",
+                  borderTopRightRadius: "inherit",
+                  borderBottomLeftRadius: 0,
+                  borderBottomRightRadius: 0,
+                  filter: isOutOfStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                  opacity: isOutOfStock ? 0.85 : 1,
                 }}
               />
             ) : (
               <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
             )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: scalePx(2, 1.5),
+              padding: `${scalePx(8, 6)} ${scalePx(10, 7)} ${scalePx(8, 6)}`,
+              flex: 1,
+              opacity: isOutOfStock ? 0.65 : 1,
+            }}
+          >
             {show_brand_name && (
-              <span style={{ fontSize: scalePx(10, 8), fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <span
+                style={{
+                  fontSize: scalePx(9.5, 8),
+                  fontWeight: 600,
+                  color: brand_color || faintText,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  lineHeight: 1.2,
+                }}
+              >
                 {brandText}
               </span>
             )}
             <h3
               style={{
-                margin: 0,
+                margin: "1px 0 3px 0",
                 fontSize: resolvedProductNameSize,
                 lineHeight: "1.3",
                 fontWeight: resolvedProductNameWeight as any,
@@ -941,35 +1041,49 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 fontStyle: resolvedProductNameStyle,
                 textTransform: resolvedProductNameTransform as any,
                 color: resolvedProductNameColor,
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
+                whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
-                minHeight: "2.6em",
-                maxHeight: "2.6em",
               }}
             >
               {product.name}
             </h3>
-            {show_ratings && (
-              <div style={{ fontSize: scalePx(11, 9), fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
-                <span style={{ color: starColor }}>★</span> {ratingDisplay}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: "auto",
+                paddingTop: scalePx(1, 1),
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline" }}>
+                <span style={{ fontSize: scalePx(15.5, 13), fontWeight: 800, color: activePriceColor }}>
+                  ₹{product.normalizedDisplayPrice}
+                </span>
               </div>
-            )}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: scalePx(4, 2), flexWrap: "wrap", gap: scalePx(4, 2) }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: scalePx(5, 3) }}>
-                <span style={{ fontSize: scalePx(16, 12), fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                {showOriginal && <span style={{ fontSize: scalePx(11, 9), color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-              </div>
-              {renderInStockBadge()}
+              {show_ratings && (
+                <div
+                  style={{
+                    fontSize: scalePx(11, 9),
+                    fontWeight: 600,
+                    color: faintText,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "3px",
+                  }}
+                >
+                  <span style={{ color: starColor }}>★</span>
+                  <span>{ratingDisplay}</span>
+                </div>
+              )}
             </div>
           </div>
         </article>
       );
     }
 
-    // 2. ELECTRONICS PRESET
+    // 2. ELECTRONICS & TECH PRESET
     if (cardStyleKey === "electronics") {
       return (
         <article
@@ -978,37 +1092,88 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
           onClick={() => handleProductClick(product)}
           style={cardBaseStyle}
         >
-          <div style={getImgContainerStyle("4 / 3")}>
-            {renderDiscountBadge()}
+          <div
+            style={{
+              ...getImgContainerStyle("4 / 3"),
+              borderRadius: resolvedImageRadius || scalePx(12, 10),
+              border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(15,23,42,0.06)",
+            }}
+          >
+            {renderDiscountBadge(true)}
             {renderCollectionBadges(isMobile)}
+            {isOutOfStock && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  zIndex: 4,
+                  background: "#ff0000",
+                  color: "#ffffff",
+                  fontSize: scalePx(13.5, 11),
+                  fontWeight: 800,
+                  padding: `${scalePx(6, 4.5)} ${scalePx(22, 14)}`,
+                  borderRadius: "2px",
+                  boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                  whiteSpace: "nowrap",
+                  letterSpacing: "0.02em",
+                  textAlign: "center",
+                  userSelect: "none",
+                }}
+              >
+                Sold Out
+              </div>
+            )}
             {product.normalizedImage ? (
               <img
                 src={product.normalizedImage}
                 alt={product.name}
-                loading="lazy"
                 style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
                   width: "100%",
                   height: "100%",
                   objectFit: resolvedImageFit,
+                  borderRadius: "inherit",
                   display: "block",
+                  filter: isOutOfStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                  opacity: isOutOfStock ? 0.85 : 1,
                 }}
               />
             ) : (
-              <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
+              <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
             )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: scalePx(2, 1.5),
+              padding: `${scalePx(6, 4)} ${scalePx(4, 2)} ${scalePx(2, 1)}`,
+              flex: 1,
+              opacity: isOutOfStock ? 0.65 : 1,
+            }}
+          >
             {show_brand_name && (
-              <span style={{ fontSize: scalePx(10, 8), fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <span
+                style={{
+                  fontSize: scalePx(9.5, 8),
+                  fontWeight: 600,
+                  color: brand_color || faintText,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  lineHeight: 1.2,
+                  borderBottom: `1px solid ${brand_color || faintText}`,
+                  paddingBottom: "1px",
+                  display: "inline-block",
+                  alignSelf: "flex-start",
+                }}
+              >
                 {brandText}
               </span>
             )}
             <h3
               style={{
-                margin: 0,
+                margin: "1px 0 3px 0",
                 fontSize: resolvedProductNameSize,
                 lineHeight: "1.3",
                 fontWeight: resolvedProductNameWeight as any,
@@ -1016,75 +1181,167 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 fontStyle: resolvedProductNameStyle,
                 textTransform: resolvedProductNameTransform as any,
                 color: resolvedProductNameColor,
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
+                whiteSpace: "nowrap",
                 overflow: "hidden",
-                minHeight: "2.6em",
-                maxHeight: "2.6em",
+                textOverflow: "ellipsis",
               }}
             >
               {product.name}
             </h3>
-            {show_ratings && (
-              <div style={{ fontSize: scalePx(11, 9), fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
-                <span style={{ color: starColor }}>★</span> {ratingDisplay}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: "auto",
+                paddingTop: scalePx(1, 1),
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline" }}>
+                <span style={{ fontSize: scalePx(15.5, 13), fontWeight: 800, color: activePriceColor }}>
+                  ₹{product.normalizedDisplayPrice}
+                </span>
               </div>
-            )}
-            <div style={{ display: "flex", alignItems: "baseline", gap: scalePx(5, 3), margin: "2px 0" }}>
-              <span style={{ fontSize: scalePx(16, 12), fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-              {showOriginal && <span style={{ fontSize: scalePx(11, 9), color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-            </div>
-            <div style={{ marginTop: "auto" }}>
-              {renderInStockBadge()}
+              {show_ratings && (
+                <div
+                  style={{
+                    fontSize: scalePx(11, 9),
+                    fontWeight: 600,
+                    color: faintText,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "3px",
+                  }}
+                >
+                  <span style={{ color: starColor }}>★</span>
+                  <span>{ratingDisplay}</span>
+                </div>
+              )}
             </div>
           </div>
         </article>
       );
     }
 
-    // 3. BEAUTY PRESET
+    // 3. BEAUTY PRESET (Clean, Luxury Cosmetic Layout)
     if (cardStyleKey === "beauty") {
       return (
         <article
           key={product.id}
           className="product-card"
           onClick={() => handleProductClick(product)}
-          style={{ ...cardBaseStyle, textAlign: "center" }}
+          style={cardBaseStyle}
         >
-          <div style={getImgContainerStyle("1 / 1")}>
-            {renderDiscountBadge()}
+          <div
+            style={{
+              ...getImgContainerStyle("3 / 4"),
+              borderRadius: resolvedImageRadius || scalePx(12, 10),
+              border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(15,23,42,0.06)",
+            }}
+          >
+            {renderDiscountBadge(true)}
             {renderCollectionBadges(isMobile)}
+            {isOutOfStock && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  zIndex: 4,
+                  background: "#ff0000",
+                  color: "#ffffff",
+                  fontSize: scalePx(13.5, 11),
+                  fontWeight: 800,
+                  padding: `${scalePx(6, 4.5)} ${scalePx(22, 14)}`,
+                  borderRadius: "2px",
+                  boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                  whiteSpace: "nowrap",
+                  letterSpacing: "0.02em",
+                  textAlign: "center",
+                  userSelect: "none",
+                }}
+              >
+                Sold Out
+              </div>
+            )}
+            {/* Star Rating Badge on Bottom-Right of Image */}
+            {show_ratings && (
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: scalePx(8, 6),
+                  right: scalePx(8, 6),
+                  zIndex: 3,
+                  color: isDark ? "#ffffff" : "#0f172a",
+                  fontSize: scalePx(10, 8.5),
+                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "3.5px",
+                  userSelect: "none",
+                  background: isDark ? "rgba(15, 23, 42, 0.88)" : "rgba(255, 255, 255, 0.92)",
+                  backdropFilter: "blur(6px)",
+                  WebkitBackdropFilter: "blur(6px)",
+                  padding: `${scalePx(3, 2)} ${scalePx(8, 6)}`,
+                  borderRadius: "999px",
+                  border: isDark ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid rgba(15, 23, 42, 0.09)",
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
+                }}
+              >
+                <span style={{ color: starColor }}>★</span>
+                <span>{ratingDisplay}</span>
+              </div>
+            )}
             {product.normalizedImage ? (
               <img
                 src={product.normalizedImage}
                 alt={product.name}
-                loading="lazy"
                 style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
                   width: "100%",
                   height: "100%",
                   objectFit: resolvedImageFit,
+                  borderRadius: "inherit",
                   display: "block",
+                  filter: isOutOfStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                  opacity: isOutOfStock ? 0.85 : 1,
                 }}
               />
             ) : (
               <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
             )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", padding: "2px", flex: 1 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              textAlign: "center",
+              gap: scalePx(1.5, 1),
+              padding: `${scalePx(4, 2)} ${scalePx(4, 2)} ${scalePx(2, 1)}`,
+              flex: 1,
+              opacity: isOutOfStock ? 0.65 : 1,
+            }}
+          >
             {show_brand_name && (
-              <span style={{ fontSize: scalePx(10, 8), fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <span
+                style={{
+                  fontSize: scalePx(9.5, 8),
+                  fontWeight: 600,
+                  color: brand_color || faintText,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                  lineHeight: 1.2,
+                }}
+              >
                 {brandText}
               </span>
             )}
             <h3
               style={{
-                margin: 0,
+                margin: "1px 0 2px",
                 fontSize: resolvedProductNameSize,
-                lineHeight: "1.3",
+                lineHeight: "1.25",
                 fontWeight: resolvedProductNameWeight as any,
                 fontFamily: resolvedProductNameFamily,
                 fontStyle: resolvedProductNameStyle,
@@ -1095,123 +1352,207 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: "vertical",
                 overflow: "hidden",
-                minHeight: "2.6em",
-                maxHeight: "2.6em",
+                textOverflow: "ellipsis",
               }}
             >
               {product.name}
             </h3>
-            {show_ratings && (
-              <div style={{ fontSize: scalePx(11, 9), fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
-                <span style={{ color: starColor }}>★</span> {ratingDisplay}
-              </div>
-            )}
-            <div style={{ display: "flex", alignItems: "baseline", gap: scalePx(5, 3), margin: "2px 0" }}>
-              <span style={{ fontSize: scalePx(17, 12), fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-              {showOriginal && <span style={{ fontSize: scalePx(11, 9), color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-            </div>
-            <div style={{ marginTop: "auto", width: "100%", display: "flex", justifyContent: "center" }}>
-              {renderInStockBadge(true)}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "100%",
+                marginTop: "auto",
+                paddingTop: scalePx(1, 1),
+              }}
+            >
+              <span style={{ fontSize: scalePx(15.5, 13), fontWeight: 800, color: activePriceColor }}>
+                ₹{product.normalizedDisplayPrice}
+              </span>
             </div>
           </div>
         </article>
       );
     }
 
-    // 4. GROCERY PRESET (100% IDENTICAL TO PRODUCT GRID CARD, SCALES IN EXACT SAME RATIO)
+    // 4. GROCERY PRESET (Modern Horizontal Card Layout)
     if (cardStyleKey === "grocery") {
+      const groceryCardHeight = isMobile ? 96 : 104;
+      const groceryCardStyle: React.CSSProperties = {
+        ...cardBaseStyle,
+        flexDirection: "row",
+        alignItems: "stretch",
+        padding: 0,
+        gap: 0,
+        overflow: "hidden",
+        width: "100%",
+        height: `${groceryCardHeight}px`,
+        minHeight: `${groceryCardHeight}px`,
+        maxHeight: `${groceryCardHeight}px`,
+        boxSizing: "border-box",
+      };
+
       return (
         <article
           key={product.id}
           className="product-card"
           onClick={() => handleProductClick(product)}
-          style={{
-            ...cardBaseStyle,
-            flexDirection: "row",
-            alignItems: "center",
-            padding: `${scalePx(10, 6)} ${scalePx(12, 8)}`,
-            gap: scalePx(12, 8),
-            overflow: "hidden",
-            width: "100%",
-            minHeight: isMobile ? "88px" : `${groceryHeightPx}px`,
-            height: isSingleInColumn ? "auto" : `${groceryHeightPx}px`,
-            maxHeight: `${groceryHeightPx}px`,
-            boxSizing: "border-box",
-          }}
+          style={groceryCardStyle}
         >
-          {/* Left: Scaled Square Image container with Discount Badge */}
+          {/* Left: Clean unobstructed image container */}
           <div
             style={{
               position: "relative",
-              width: `${groceryImgSizePx}px`,
-              height: `${groceryImgSizePx}px`,
-              minWidth: `${groceryImgSizePx}px`,
-              borderRadius: image_radius !== undefined && image_radius !== "" ? resolvedImageRadius : (isMobile ? "10px" : "12px"),
+              height: "100%",
+              aspectRatio: image_aspect_ratio && image_aspect_ratio !== "auto" ? formatAspectRatio(image_aspect_ratio) : "1 / 1",
+              borderTopLeftRadius: cardBaseStyle.borderRadius,
+              borderBottomLeftRadius: cardBaseStyle.borderRadius,
+              borderTopRightRadius: 0,
+              borderBottomRightRadius: 0,
               overflow: "hidden",
               background: resolvedImageBg,
               flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            {renderDiscountBadge()}
+            {isOutOfStock && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  zIndex: 4,
+                  background: "#ff0000",
+                  color: "#ffffff",
+                  fontSize: scalePx(10.5, 8.5),
+                  fontWeight: 800,
+                  padding: `${scalePx(3.5, 2.5)} ${scalePx(10, 7)}`,
+                  borderRadius: "2px",
+                  boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                  whiteSpace: "nowrap",
+                  letterSpacing: "0.02em",
+                  textAlign: "center",
+                  userSelect: "none",
+                }}
+              >
+                Sold Out
+              </div>
+            )}
             {product.normalizedImage ? (
               <img
                 src={product.normalizedImage}
                 alt={product.name}
-                loading="lazy"
                 style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
                   width: "100%",
                   height: "100%",
                   objectFit: resolvedImageFit,
                   display: "block",
+                  filter: isOutOfStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                  opacity: isOutOfStock ? 0.85 : 1,
                 }}
               />
             ) : (
-              <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "12px" }}>No image</div>
+              <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "12px" }}>No image</div>
             )}
           </div>
 
-          {/* Right: Info container with Brand, Badge, Title, Rating, Price & Stock Badge */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
-            {/* Top row: Brand & Badge */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px", minWidth: 0 }}>
-              {show_brand_name && (
-                <span style={{ fontSize: scalePx(10, 8), fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {/* Right: Info container with Brand & Top-Right Badges, Title, Price, Rating */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: scalePx(1.5, 1),
+              padding: `${scalePx(6, 5)} ${scalePx(12, 8)} ${scalePx(6, 5)} ${scalePx(10, 7)}`,
+              flex: "1 1 0",
+              minWidth: 0,
+              overflow: "hidden",
+              opacity: isOutOfStock ? 0.65 : 1,
+            }}
+          >
+            {/* Top Row: Brand (Left) + Badges & % OFF (Right) */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "4px",
+                width: "100%",
+                minWidth: 0,
+              }}
+            >
+              {show_brand_name ? (
+                <span
+                  style={{
+                    fontSize: scalePx(9.5, 7.5),
+                    fontWeight: 600,
+                    color: brand_color || faintText,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    lineHeight: 1.2,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    flex: "1 1 auto",
+                    minWidth: 0,
+                  }}
+                >
                   {brandText}
                 </span>
+              ) : (
+                <div style={{ flex: 1 }} />
               )}
-              {badgeCollections.length > 0 && (
-                <div style={{ display: "flex", gap: "3px", flexShrink: 0 }}>
-                  {badgeCollections.slice(0, 1).map((col: any) => (
-                    <span
-                      key={col.id || col.name}
-                      style={{
-                        fontSize: scalePx(8, 7),
-                        fontWeight: 800,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.04em",
-                        padding: `${scalePx(2, 1.5)} ${scalePx(5, 3)}`,
-                        borderRadius: "4px",
-                        background: col.badge_color || "#d97706",
-                        color: "#fff",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {col.name}
-                    </span>
-                  ))}
-                </div>
-              )}
+
+              {/* Right Corner Badges: Collection Badges on left, % OFF on right */}
+              <div style={{ display: "flex", alignItems: "center", gap: "3px", flexShrink: 0 }}>
+                {badgeCollections.slice(0, 1).map((col: any) => (
+                  <span
+                    key={col.id || col.name}
+                    style={{
+                      padding: `${scalePx(1.5, 1)} ${scalePx(5, 3)}`,
+                      borderRadius: "3px",
+                      background: col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
+                      color: "#ffffff",
+                      fontSize: scalePx(7.5, 6.5),
+                      fontWeight: 700,
+                      letterSpacing: "0.02em",
+                      textTransform: "uppercase",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {col.name}
+                  </span>
+                ))}
+                {show_discount_badge && product.normalizedDiscountPercent > 0 && (
+                  <span
+                    style={{
+                      padding: `${scalePx(1.5, 1)} ${scalePx(5.5, 3.5)}`,
+                      borderRadius: "3px",
+                      background: "linear-gradient(135deg, #16a34a, #15803d)",
+                      color: "#ffffff",
+                      fontSize: scalePx(8, 7),
+                      fontWeight: 800,
+                      letterSpacing: "0.02em",
+                      textTransform: "uppercase",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {product.normalizedDiscountPercent}% OFF
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Product Name */}
             <h3
               style={{
-                margin: "1px 0 0",
+                margin: "1px 0 2px",
                 fontSize: resolvedProductNameSize,
-                lineHeight: "1.25",
+                lineHeight: "1.3",
                 fontWeight: resolvedProductNameWeight as any,
                 fontFamily: resolvedProductNameFamily,
                 fontStyle: resolvedProductNameStyle,
@@ -1227,20 +1568,39 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               {product.name}
             </h3>
 
-            {/* Star Rating */}
-            {show_ratings && (
-              <div style={{ fontSize: scalePx(11, 9), fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px", margin: "1px 0" }}>
-                <span style={{ color: starColor }}>★</span> {ratingDisplay}
+            {/* Bottom Row: Price & Star Rating */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "4px",
+                marginTop: "auto",
+                paddingTop: scalePx(1, 1),
+                minWidth: 0,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline", flexShrink: 0 }}>
+                <span style={{ fontSize: scalePx(15.5, 12.5), fontWeight: 800, color: activePriceColor }}>
+                  ₹{product.normalizedDisplayPrice}
+                </span>
               </div>
-            )}
-
-            {/* Price & In Stock Pill */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", marginTop: "auto", paddingTop: scalePx(4, 2), minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: scalePx(5, 3), flexShrink: 0 }}>
-                <span style={{ fontSize: scalePx(16, 12), fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                {showOriginal && <span style={{ fontSize: scalePx(11, 9), color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-              </div>
-              {renderInStockBadge()}
+              {show_ratings && (
+                <div
+                  style={{
+                    fontSize: scalePx(10.5, 8.5),
+                    fontWeight: 600,
+                    color: faintText,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "3px",
+                    flexShrink: 0,
+                  }}
+                >
+                  <span style={{ color: starColor }}>★</span>
+                  <span>{ratingDisplay}</span>
+                </div>
+              )}
             </div>
           </div>
         </article>
@@ -1255,37 +1615,66 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
         onClick={() => handleProductClick(product)}
         style={cardBaseStyle}
       >
-        <div style={getImgContainerStyle("1 / 1")}>
+        <div
+          style={{
+            ...getImgContainerStyle(cardStyleKey === "books" ? "3 / 4" : "1 / 1"),
+            borderRadius: resolvedImageRadius || (isMobile ? "10px" : "12px"),
+            border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(15,23,42,0.06)",
+          }}
+        >
           {renderDiscountBadge()}
           {renderCollectionBadges(isMobile)}
+          {isOutOfStock && (
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                zIndex: 4,
+                background: "#ff0000",
+                color: "#ffffff",
+                fontSize: scalePx(13.5, 11),
+                fontWeight: 800,
+                padding: `${scalePx(6, 4.5)} ${scalePx(22, 14)}`,
+                borderRadius: "2px",
+                boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                whiteSpace: "nowrap",
+                letterSpacing: "0.02em",
+                textAlign: "center",
+                userSelect: "none",
+              }}
+            >
+              Sold Out
+            </div>
+          )}
           {product.normalizedImage ? (
             <img
               src={product.normalizedImage}
               alt={product.name}
-              loading="lazy"
               style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
                 width: "100%",
                 height: "100%",
                 objectFit: resolvedImageFit,
+                borderRadius: "inherit",
                 display: "block",
+                filter: isOutOfStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                opacity: isOutOfStock ? 0.85 : 1,
               }}
             />
           ) : (
             <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
           )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: scalePx(2, 1.5), padding: `${scalePx(4, 2)} ${scalePx(4, 2)} ${scalePx(2, 1)}`, flex: 1, opacity: isOutOfStock ? 0.65 : 1 }}>
           {show_brand_name && (
-            <span style={{ fontSize: scalePx(10, 8), fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            <span style={{ fontSize: scalePx(9.5, 8), fontWeight: 600, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em", lineHeight: 1.2 }}>
               {brandText}
             </span>
           )}
           <h3
             style={{
-              margin: 0,
+              margin: "1px 0 2px",
               fontSize: resolvedProductNameSize,
               lineHeight: "1.3",
               fontWeight: resolvedProductNameWeight as any,
@@ -1297,26 +1686,20 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
               overflow: "hidden",
-              minHeight: "2.6em",
-              maxHeight: "2.6em",
             }}
           >
             {product.name}
           </h3>
-          <div style={{ borderTop: "1px solid rgba(148,163,184,0.2)", margin: "4px 0" }} />
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: scalePx(4, 2) }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: scalePx(5, 3) }}>
-              <span style={{ fontSize: scalePx(16, 12), fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-              {showOriginal && <span style={{ fontSize: scalePx(11, 9), color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
+          <div style={{ borderTop: "1px solid rgba(148,163,184,0.15)", margin: "2px 0" }} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: scalePx(1, 1) }}>
+            <div style={{ display: "flex", alignItems: "baseline" }}>
+              <span style={{ fontSize: scalePx(15.5, 12.5), fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
             </div>
             {show_ratings && (
-              <div style={{ fontSize: scalePx(11, 9), fontWeight: 600, color: faintText }}>
+              <div style={{ fontSize: scalePx(10.5, 8.5), fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
                 <span style={{ color: starColor }}>★</span> {ratingDisplay}
               </div>
             )}
-          </div>
-          <div style={{ marginTop: "auto", width: "100%", display: "flex", justifyContent: "center" }}>
-            {renderInStockBadge(true)}
           </div>
         </div>
       </article>
@@ -1354,30 +1737,31 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
 
   // ── Card sizing ──────────────────────────────────────────────────────────────
   const defaultCardWidths: Record<string, string> = {
-    fashion: "190px",
-    electronics: "205px",
-    books: "185px",
-    beauty: "190px",
-    grocery: "280px",
+    fashion: "230px",
+    electronics: "230px",
+    books: "230px",
+    beauty: "230px",
+    grocery: "340px",
+    standard: "230px",
   };
 
   const resolvedCardWidth = (() => {
     const isGrocery = cardStyleKey === "grocery";
-    const minCardWidth = isGrocery ? 220 : 140;
-    const maxCardWidth = isGrocery ? 320 : 280;
+    const minCardWidth = isGrocery ? 240 : 150;
+    const maxCardWidth = isGrocery ? 460 : 340;
     if (card_width !== undefined && card_width !== null && String(card_width).trim() !== "") {
-      const rawPx = typeof card_width === "number" ? card_width : parseInt(String(card_width), 10) || (isGrocery ? 280 : 190);
+      const rawPx = typeof card_width === "number" ? card_width : parseInt(String(card_width), 10) || (isGrocery ? 340 : 230);
       const px = Math.max(minCardWidth, Math.min(maxCardWidth, rawPx));
       return isMobile
         ? isGrocery
-          ? `min(${px}px, 78vw)`
+          ? `min(${px}px, 86vw)`
           : `min(${px}px, 48vw)`
         : `${px}px`;
     }
     if (isMobile) {
-      return isGrocery ? "min(280px, 78vw)" : "min(190px, 48vw)";
+      return isGrocery ? "min(340px, 86vw)" : "min(230px, 48vw)";
     }
-    return defaultCardWidths[cardStyleKey] || (isGrocery ? "280px" : "190px");
+    return defaultCardWidths[cardStyleKey] || (isGrocery ? "340px" : "230px");
   })();
 
   const resolvedTitleSize =
@@ -1537,7 +1921,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
             paddingBottom: "8px",
           }}
         >
-          {normalizedProducts.map((p) => renderSingleProductCard(p))}
+          {normalizedProducts.map((p, idx) => renderSingleProductCard(p, false, idx))}
         </div>
       ) : cardStyleKey === "grocery" ? (
         /* 2-ROW STACKED CAROUSEL (Zepto / Blinkit / Instamart style) */
@@ -1574,7 +1958,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 boxSizing: "border-box",
               }}
             >
-              {col.map((p) => renderSingleProductCard(p, col.length === 1))}
+              {col.map((p, pIdx) => renderSingleProductCard(p, col.length === 1, colIdx * 2 + pIdx))}
             </div>
           ))}
         </div>
@@ -1596,7 +1980,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
             WebkitOverflowScrolling: "touch",
           }}
         >
-          {normalizedProducts.map((p) => (
+          {normalizedProducts.map((p, idx) => (
             <div
               key={p.id}
               style={{
@@ -1611,7 +1995,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 boxSizing: "border-box",
               }}
             >
-              {renderSingleProductCard(p)}
+              {renderSingleProductCard(p, false, idx)}
             </div>
           ))}
         </div>

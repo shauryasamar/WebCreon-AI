@@ -47,16 +47,56 @@ export function normalizeStorefrontProduct(raw: any): Product {
           })),
         }
       : null);
-  const stock =
+  const hasVariantOpts =
+    variantOption?.optionValues &&
+    Array.isArray(variantOption.optionValues) &&
+    variantOption.optionValues.length > 0;
+
+  const hasExplicitVariantStock = hasVariantOpts && variantOption.optionValues.some(
+    (v: any) => v.stockQty != null && String(v.stockQty).trim() !== ""
+  );
+
+  const variantHasInStock = hasVariantOpts
+    ? variantOption.optionValues.some(
+        (v: any) =>
+          v.inStock !== false &&
+          (Number(v.stockQty ?? 0) > 0)
+      )
+    : false;
+
+  const variantTotalStock =
+    hasExplicitVariantStock
+      ? variantOption.optionValues.reduce(
+          (sum: number, v: any) =>
+            sum + (typeof v?.stockQty === "number" && v.stockQty > 0 ? v.stockQty : 0),
+          0
+        )
+      : null;
+
+  const baseRawStock =
     raw?.stock != null && !Number.isNaN(Number(raw.stock))
       ? Number(raw.stock)
+      : typeof raw?.stockQty === "number"
+      ? raw.stockQty
+      : null;
+
+  const stock =
+    variantTotalStock !== null
+      ? variantTotalStock
+      : baseRawStock !== null
+      ? baseRawStock
       : 0;
-  const inStock =
+
+  const baseInStock =
     typeof raw?.in_stock === "boolean"
       ? raw.in_stock
       : typeof raw?.inStock === "boolean"
       ? raw.inStock
-      : stock > 0;
+      : (baseRawStock !== null ? baseRawStock > 0 : true);
+
+  const inStock = hasExplicitVariantStock
+    ? (variantHasInStock || (baseRawStock !== null && baseRawStock > 0))
+    : (baseRawStock !== null ? (baseRawStock > 0 && baseInStock) : baseInStock);
   const originalPrice =
     comparePrice != null && comparePrice > 0 ? comparePrice : price;
   const discountPercent =

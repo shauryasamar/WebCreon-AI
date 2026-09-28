@@ -140,6 +140,21 @@ type NormalizedProduct = Product & {
   normalizedDiscountPercent: number;
 };
 
+function formatAspectRatio(ratio?: string): string {
+  if (!ratio) return "3 / 4";
+  const trimmed = String(ratio).trim();
+  if (trimmed === "auto" || trimmed === "natural") return "auto";
+  if (trimmed.includes(":")) {
+    const [w, h] = trimmed.split(":").map((s) => s.trim());
+    if (w && h) return `${w} / ${h}`;
+  }
+  if (trimmed.includes("/") && !trimmed.includes(" / ")) {
+    const [w, h] = trimmed.split("/").map((s) => s.trim());
+    if (w && h) return `${w} / ${h}`;
+  }
+  return trimmed;
+}
+
 const ProductGrid: React.FC<ProductGridProps> = ({
   siteId,
   products: productsProp,
@@ -396,7 +411,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
       : cardStyleKey === "beauty"
         ? "22px"
         : cardStyleKey === "grocery" || cardStyleKey === "books"
-          ? "16px"
+          ? "20px"
           : "20px";
 
   let computedCardBg = cardBg;
@@ -468,16 +483,34 @@ const ProductGrid: React.FC<ProductGridProps> = ({
               ? product.compare_price
               : undefined;
 
-      const normalizedInStock =
-        product.variant_option?.optionValues?.length
-          ? product.variant_option.optionValues.some(
-            (variant) =>
-              variant.inStock !== false &&
-              (variant.stockQty == null || Number(variant.stockQty) > 0)
-          )
-          : typeof product.inStock === "boolean"
-            ? product.inStock
-            : true;
+      const variantList: any[] = product.variant_option?.optionValues || (product as any).variants || [];
+      const hasVariants = Array.isArray(variantList) && variantList.length > 0;
+      const hasExplicitVariantStock = hasVariants && variantList.some(
+        (v: any) => (v.stockQty != null && String(v.stockQty).trim() !== "") || v.inventory_quantity != null || v.stock != null
+      );
+      const anyVariantInStock = hasVariants && variantList.some(
+        (v: any) => v.inStock !== false && v.in_stock !== false && (Number(v.stockQty ?? v.inventory_quantity ?? v.stock ?? 0) > 0)
+      );
+
+      const baseStock = typeof product.stock === "number"
+        ? product.stock
+        : typeof (product as any).stockQty === "number"
+        ? (product as any).stockQty
+        : typeof (product as any).inventory_quantity === "number"
+        ? (product as any).inventory_quantity
+        : null;
+
+      const baseInStock = typeof product.inStock === "boolean"
+        ? product.inStock
+        : typeof product.in_stock === "boolean"
+        ? product.in_stock
+        : typeof (product as any).is_in_stock === "boolean"
+        ? (product as any).is_in_stock
+        : (baseStock !== null ? baseStock > 0 : true);
+
+      const normalizedInStock = hasExplicitVariantStock
+        ? (anyVariantInStock || (baseStock !== null && baseStock > 0))
+        : (baseStock !== null ? (baseStock > 0 && baseInStock) : baseInStock);
 
       const normalizedDiscountPercent =
         normalizedOriginalPrice && normalizedOriginalPrice > normalizedDisplayPrice
@@ -519,8 +552,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   const resolvedGridGap = !isNaN(parsedGapNum) && parsedGapNum >= 0
     ? `${parsedGapNum}px`
     : isMobile
-      ? isLargePhone ? "12px" : "10px"
-      : "16px";
+      ? isLargePhone ? "10px" : "8px"
+      : "12px";
 
   const parsedPaddingYNum =
     padding_y !== undefined && padding_y !== null && String(padding_y).trim() !== ""
@@ -530,7 +563,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
       : NaN;
   const resolvedPaddingY = !isNaN(parsedPaddingYNum) && parsedPaddingYNum >= 0
     ? `${parsedPaddingYNum}px`
-    : isMobile ? "12px" : "24px";
+    : isMobile ? "8px" : "16px";
 
   const parsedPaddingXNum =
     padding_x !== undefined && padding_x !== null && String(padding_x).trim() !== ""
@@ -540,7 +573,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
       : NaN;
   const resolvedPaddingX = !isNaN(parsedPaddingXNum) && parsedPaddingXNum >= 0
     ? `${parsedPaddingXNum}px`
-    : isMobile ? "10px" : "16px";
+    : isMobile ? "8px" : "16px";
 
   const resolvedColumns =
     cardStyleKey === "grocery"
@@ -567,7 +600,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
         maxWidth: resolvedMaxWidth,
         margin: "0 auto",
         boxSizing: "border-box",
-        padding: `${resolvedPaddingY} ${resolvedPaddingX} ${isMobile ? "32px" : "44px"}`,
+        padding: `${resolvedPaddingY} ${resolvedPaddingX} ${isMobile ? "16px" : "24px"}`,
         background: outer_bg_color || "transparent",
         borderRadius: outer_bg_color ? "16px" : undefined,
         transition: "all 0.2s ease",
@@ -732,7 +765,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
               : "New";
 
             const brandText = product.brand || product.category || "Collection";
-            const activePriceColor = price_color || (cardStyleKey === "beauty" ? "#dc2626" : pageText);
+            const activePriceColor = price_color || pageText;
 
             const badgeCollections = (product.collections || []).filter((c: any) => c && c.is_badge);
 
@@ -744,12 +777,12 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                   style={{
                     position: "absolute",
                     top: isCompact ? "6px" : "10px",
-                    right: isCompact ? "6px" : "10px",
-                    zIndex: 2,
+                    left: isCompact ? "6px" : "10px",
+                    zIndex: 3,
                     display: "flex",
                     flexDirection: "column",
                     gap: "3px",
-                    alignItems: "flex-end",
+                    alignItems: "flex-start",
                     maxWidth: isCompact ? "60px" : "110px",
                   }}
                 >
@@ -782,28 +815,30 @@ const ProductGrid: React.FC<ProductGridProps> = ({
             const festTheme = (theme as any)?.festival_theme;
             const isPreorder = isProductPreorderActive(product);
 
-            const renderDiscountBadge = () => {
+            const renderDiscountBadge = (isFrosted = true, badgePos: "top-right" | "top-left" = "top-right") => {
+              if (!show_discount_badge || product.normalizedDiscountPercent <= 0) return null;
               return (
-                show_discount_badge && product.normalizedDiscountPercent > 0 ? (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: isMobile ? "6px" : "10px",
-                      left: isMobile ? "6px" : "10px",
-                      zIndex: 2,
-                      padding: isMobile ? "2px 6px" : "4px 8px",
-                      borderRadius: "999px",
-                      background: "#166534",
-                      color: "#ffffff",
-                      fontSize: isMobile ? "9px" : "10px",
-                      fontWeight: 800,
-                      letterSpacing: "0.04em",
-                      boxShadow: "0 2px 8px rgba(22,101,52,0.25)",
-                    }}
-                  >
-                    {product.normalizedDiscountPercent}% OFF
-                  </div>
-                ) : null
+                <div
+                  style={{
+                    position: "absolute",
+                    top: isMobile ? "6px" : "10px",
+                    ...(badgePos === "top-left"
+                      ? { left: isMobile ? "6px" : "10px" }
+                      : { right: isMobile ? "6px" : "10px" }),
+                    zIndex: 3,
+                    padding: isMobile ? "3px 7px" : "4px 9px",
+                    borderRadius: "6px",
+                    background: "linear-gradient(135deg, #16a34a, #15803d)",
+                    color: "#ffffff",
+                    fontSize: isMobile ? "9px" : "10px",
+                    fontWeight: 800,
+                    letterSpacing: "0.03em",
+                    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.18)",
+                    userSelect: "none",
+                  }}
+                >
+                  {product.normalizedDiscountPercent}% OFF
+                </div>
               );
             };
 
@@ -901,7 +936,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
               borderRadius: !isNaN(parsedCardRadiusNum) && parsedCardRadiusNum >= 0
                 ? `${Math.min(parsedCardRadiusNum, isMobile ? 24 : 48)}px`
                 : isMobile ? "14px" : computedRadius,
-              padding: isMobile ? "8px" : "10px",
+              padding: isMobile ? "6px" : "8px",
               background: isDisabled
                 ? isLight
                   ? "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(241,245,249,0.96) 100%)"
@@ -914,7 +949,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                 : computedShadow,
               display: "flex",
               flexDirection: "column",
-              gap: isMobile ? "6px" : "8px",
+              gap: isMobile ? "4px" : "6px",
               minHeight: "100%",
               boxSizing: "border-box",
               overflow: "hidden",
@@ -922,50 +957,179 @@ const ProductGrid: React.FC<ProductGridProps> = ({
               transition: "border-color 150ms ease, box-shadow 150ms ease",
             };
 
-            const resolvedImageBg = image_bg || (isLight ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.2)");
+            const resolvedImageRadius = (() => {
+              const raw = image_radius !== undefined && image_radius !== null && String(image_radius).trim() !== ""
+                ? image_radius
+                : image_corner_radius !== undefined && image_corner_radius !== null && String(image_corner_radius).trim() !== ""
+                ? image_corner_radius
+                : undefined;
+              if (raw !== undefined) {
+                const num = typeof raw === "number" ? raw : parseInt(String(raw), 10);
+                if (!isNaN(num) && num >= 0) return `${num}px`;
+              }
+              return isMobile ? "10px" : "12px";
+            })();
 
-            const getImgContainerStyle = (defaultAspect: string): React.CSSProperties => ({
-              position: "relative",
-              borderRadius: resolvedImageRadius,
-              overflow: "hidden",
-              background: resolvedImageBg,
-              aspectRatio: image_aspect_ratio || defaultAspect,
-            });
+            const getImgContainerStyle = (defaultAspect: string): React.CSSProperties => {
+              const chosenAspect = image_aspect_ratio && image_aspect_ratio !== "auto" && image_aspect_ratio !== "natural"
+                ? formatAspectRatio(image_aspect_ratio)
+                : formatAspectRatio(defaultAspect);
 
-            const imageLoadingMode: "eager" | "lazy" = cardIndex < 8 ? "eager" : "lazy";
+              return {
+                position: "relative",
+                width: "100%",
+                borderRadius: resolvedImageRadius,
+                overflow: "hidden",
+                background: resolvedImageBg,
+                aspectRatio: chosenAspect,
+              };
+            };
+
 
             if (cardStyleKey === "fashion") {
+              const fashionCardStyle: React.CSSProperties = {
+                ...cardBaseStyle,
+                padding: 0,
+                gap: 0,
+                opacity: 1,
+              };
+
+              const fashionImgAspect = image_aspect_ratio && image_aspect_ratio !== "auto" && image_aspect_ratio !== "natural"
+                ? formatAspectRatio(image_aspect_ratio)
+                : "3 / 4";
+
               return (
-                <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
-                  <div style={getImgContainerStyle("3 / 4")}>
-                    {renderDiscountBadge()}
+                <article key={product.id} {...commonArticleProps} style={fashionCardStyle}>
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      aspectRatio: fashionImgAspect,
+                      borderTopLeftRadius: cardBaseStyle.borderRadius,
+                      borderTopRightRadius: cardBaseStyle.borderRadius,
+                      borderBottomLeftRadius: 0,
+                      borderBottomRightRadius: 0,
+                      overflow: "hidden",
+                      background: resolvedImageBg,
+                      borderBottom: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(15,23,42,0.08)",
+                    }}
+                  >
+                    {renderDiscountBadge(true)}
                     {renderCollectionBadges(isMobile)}
+                    {!product.normalizedInStock && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          zIndex: 4,
+                          background: "#ff0000",
+                          color: "#ffffff",
+                          fontSize: isMobile ? "11px" : "13.5px",
+                          fontWeight: 800,
+                          padding: isMobile ? "4px 14px" : "6px 22px",
+                          borderRadius: "2px",
+                          boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                          whiteSpace: "nowrap",
+                          letterSpacing: "0.02em",
+                          textAlign: "center",
+                          userSelect: "none",
+                        }}
+                      >
+                        Sold Out
+                      </div>
+                    )}
                     {product.normalizedImage ? (
-                      <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
+                      <img
+                        src={product.normalizedImage}
+                        alt={product.name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: resolvedImageFit,
+                          display: "block",
+                          borderTopLeftRadius: "inherit",
+                          borderTopRightRadius: "inherit",
+                          borderBottomLeftRadius: 0,
+                          borderBottomRightRadius: 0,
+                          filter: !product.normalizedInStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                          opacity: !product.normalizedInStock ? 0.85 : 1,
+                        }}
+                      />
                     ) : (
-                      <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
+                      <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                     )}
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                      padding: isMobile ? "6px 7px 7px" : "8px 10px 9px",
+                      flex: 1,
+                      opacity: !product.normalizedInStock ? 0.65 : 1,
+                    }}
+                  >
                     {show_brand_name && (
-                      <span style={{ fontSize: isMobile ? "9px" : "11px", fontWeight: 700, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      <span
+                        style={{
+                          fontSize: isMobile ? "8px" : "9.5px",
+                          fontWeight: 600,
+                          color: brand_color || faintText,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                          lineHeight: 1.2,
+                        }}
+                      >
                         {brandText}
                       </span>
                     )}
-                    <h3 style={{ margin: 0, fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: isMobile ? "1.25" : "1.35", color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis", minHeight: isMobile ? "32px" : "auto" }}>
+                    <h3
+                      style={{
+                        margin: "1px 0 3px 0",
+                        fontFamily: resolvedFontFamily,
+                        fontSize: resolvedProductNameSize,
+                        fontWeight: resolvedProductNameWeight,
+                        fontStyle: resolvedProductNameStyle,
+                        lineHeight: isMobile ? "1.25" : "1.3",
+                        color: pageText,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
                       {product.name}
                     </h3>
-                    {show_ratings && (
-                      <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
-                        <span style={{ color: starColor }}>★</span> {ratingDisplay}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginTop: "auto",
+                        paddingTop: "1px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "baseline" }}>
+                        <span style={{ fontSize: isMobile ? "13px" : "15.5px", fontWeight: 800, color: activePriceColor }}>
+                          ₹{product.normalizedDisplayPrice}
+                        </span>
                       </div>
-                    )}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: "4px", flexWrap: "wrap", gap: "4px" }}>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px" }}>
-                        <span style={{ fontSize: isMobile ? "15px" : "17px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                        {showOriginal && <span style={{ fontSize: isMobile ? "11px" : "12px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-                      </div>
-                      {renderInStockBadge()}
+                      {show_ratings && (
+                        <div
+                          style={{
+                            fontSize: isMobile ? "9px" : "11px",
+                            fontWeight: 600,
+                            color: faintText,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "3px",
+                          }}
+                        >
+                          <span style={{ color: starColor }}>★</span>
+                          <span>{ratingDisplay}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -975,33 +1139,130 @@ const ProductGrid: React.FC<ProductGridProps> = ({
             if (cardStyleKey === "electronics") {
               return (
                 <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
-                  <div style={getImgContainerStyle("4 / 3")}>
-                    {renderDiscountBadge()}
+                  <div
+                    style={{
+                      ...getImgContainerStyle("4 / 3"),
+                      borderRadius: resolvedImageRadius || (isMobile ? "10px" : "12px"),
+                      border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(15,23,42,0.06)",
+                    }}
+                  >
+                    {renderDiscountBadge(true)}
                     {renderCollectionBadges(isMobile)}
+                    {!product.normalizedInStock && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          zIndex: 4,
+                          background: "#ff0000",
+                          color: "#ffffff",
+                          fontSize: isMobile ? "11px" : "13.5px",
+                          fontWeight: 800,
+                          padding: isMobile ? "4px 14px" : "6px 22px",
+                          borderRadius: "2px",
+                          boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                          whiteSpace: "nowrap",
+                          letterSpacing: "0.02em",
+                          textAlign: "center",
+                          userSelect: "none",
+                        }}
+                      >
+                        Sold Out
+                      </div>
+                    )}
                     {product.normalizedImage ? (
-                      <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
+                      <img
+                        src={product.normalizedImage}
+                        alt={product.name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: resolvedImageFit,
+                          borderRadius: "inherit",
+                          display: "block",
+                          filter: !product.normalizedInStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                          opacity: !product.normalizedInStock ? 0.85 : 1,
+                        }}
+                      />
                     ) : (
                       <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                     )}
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                      padding: isMobile ? "5px 3px 2px" : "6px 4px 2px",
+                      flex: 1,
+                      opacity: !product.normalizedInStock ? 0.65 : 1,
+                    }}
+                  >
                     {show_brand_name && (
-                      <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                      <span
+                        style={{
+                          fontSize: isMobile ? "8px" : "9.5px",
+                          fontWeight: 600,
+                          color: brand_color || faintText,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                          lineHeight: 1.2,
+                          borderBottom: `1px solid ${brand_color || faintText}`,
+                          paddingBottom: "1px",
+                          display: "inline-block",
+                          alignSelf: "flex-start",
+                        }}
+                      >
                         {brandText}
                       </span>
                     )}
-                    <h3 style={{ margin: 0, fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: isMobile ? "1.25" : "1.35", color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
-                    {show_ratings && (
-                      <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
-                        <span style={{ color: starColor }}>★</span> {ratingDisplay}
+                    <h3
+                      style={{
+                        margin: "1px 0 3px 0",
+                        fontFamily: resolvedFontFamily,
+                        fontSize: resolvedProductNameSize,
+                        fontWeight: resolvedProductNameWeight,
+                        fontStyle: resolvedProductNameStyle,
+                        lineHeight: isMobile ? "1.25" : "1.3",
+                        color: pageText,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {product.name}
+                    </h3>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginTop: "auto",
+                        paddingTop: "1px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "baseline" }}>
+                        <span style={{ fontSize: isMobile ? "13px" : "15.5px", fontWeight: 800, color: activePriceColor }}>
+                          ₹{product.normalizedDisplayPrice}
+                        </span>
                       </div>
-                    )}
-                    <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", margin: "2px 0" }}>
-                      <span style={{ fontSize: isMobile ? "15px" : "18px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                      {showOriginal && <span style={{ fontSize: isMobile ? "11px" : "12px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-                    </div>
-                    <div style={{ marginTop: "auto" }}>
-                      {renderInStockBadge()}
+                      {show_ratings && (
+                        <div
+                          style={{
+                            fontSize: isMobile ? "9px" : "11px",
+                            fontWeight: 600,
+                            color: faintText,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "3px",
+                          }}
+                        >
+                          <span style={{ color: starColor }}>★</span>
+                          <span>{ratingDisplay}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -1010,34 +1271,143 @@ const ProductGrid: React.FC<ProductGridProps> = ({
 
             if (cardStyleKey === "beauty") {
               return (
-                <article key={product.id} {...commonArticleProps} style={{ ...cardBaseStyle, textAlign: "center" }}>
-                  <div style={getImgContainerStyle("1 / 1")}>
-                    {renderDiscountBadge()}
+                <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
+                  <div
+                    style={{
+                      ...getImgContainerStyle("3 / 4"),
+                      borderRadius: resolvedImageRadius || (isMobile ? "10px" : "12px"),
+                      border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(15,23,42,0.06)",
+                    }}
+                  >
+                    {renderDiscountBadge(true)}
                     {renderCollectionBadges(isMobile)}
+                    {!product.normalizedInStock && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          zIndex: 4,
+                          background: "#ff0000",
+                          color: "#ffffff",
+                          fontSize: isMobile ? "11px" : "13.5px",
+                          fontWeight: 800,
+                          padding: isMobile ? "4px 14px" : "6px 22px",
+                          borderRadius: "2px",
+                          boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                          whiteSpace: "nowrap",
+                          letterSpacing: "0.02em",
+                          textAlign: "center",
+                          userSelect: "none",
+                        }}
+                      >
+                        Sold Out
+                      </div>
+                    )}
+                    {/* Star Rating Badge on Bottom-Right of Image */}
+                    {show_ratings && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: isMobile ? "6px" : "8px",
+                          right: isMobile ? "6px" : "8px",
+                          zIndex: 3,
+                          color: isDark ? "#ffffff" : "#0f172a",
+                          fontSize: isMobile ? "9px" : "10px",
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "3.5px",
+                          userSelect: "none",
+                          background: isDark ? "rgba(15, 23, 42, 0.88)" : "rgba(255, 255, 255, 0.92)",
+                          backdropFilter: "blur(6px)",
+                          WebkitBackdropFilter: "blur(6px)",
+                          padding: isMobile ? "2.5px 6.5px" : "3.5px 8px",
+                          borderRadius: "999px",
+                          border: isDark ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid rgba(15, 23, 42, 0.09)",
+                          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
+                        }}
+                      >
+                        <span style={{ color: starColor }}>★</span>
+                        <span>{ratingDisplay}</span>
+                      </div>
+                    )}
                     {product.normalizedImage ? (
-                      <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
+                      <img
+                        src={product.normalizedImage}
+                        alt={product.name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: resolvedImageFit,
+                          borderRadius: "inherit",
+                          display: "block",
+                          filter: !product.normalizedInStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                          opacity: !product.normalizedInStock ? 0.85 : 1,
+                        }}
+                      />
                     ) : (
                       <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                     )}
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", padding: "2px", flex: 1 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      textAlign: "center",
+                      gap: "2px",
+                      padding: isMobile ? "4px 2px 2px" : "6px 4px 2px",
+                      flex: 1,
+                      opacity: !product.normalizedInStock ? 0.65 : 1,
+                    }}
+                  >
                     {show_brand_name && (
-                      <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                      <span
+                        style={{
+                          fontSize: isMobile ? "8px" : "9.5px",
+                          fontWeight: 600,
+                          color: brand_color || faintText,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.12em",
+                          lineHeight: 1.2,
+                        }}
+                      >
                         {brandText}
                       </span>
                     )}
-                    <h3 style={{ margin: 0, fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: isMobile ? "1.25" : "1.35", color: pageText, textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
-                    {show_ratings && (
-                      <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
-                        <span style={{ color: starColor }}>★</span> {ratingDisplay}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", margin: "2px 0" }}>
-                      <span style={{ fontSize: isMobile ? "15px" : "20px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                      {showOriginal && <span style={{ fontSize: isMobile ? "10px" : "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-                    </div>
-                    <div style={{ marginTop: "auto", width: "100%", display: "flex", justifyContent: "center" }}>
-                      {renderInStockBadge(true)}
+                    <h3
+                      style={{
+                        margin: "1px 0 2px",
+                        fontFamily: resolvedFontFamily,
+                        fontSize: resolvedProductNameSize,
+                        fontWeight: resolvedProductNameWeight,
+                        fontStyle: resolvedProductNameStyle,
+                        lineHeight: isMobile ? "1.25" : "1.3",
+                        color: pageText,
+                        textAlign: "center",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {product.name}
+                    </h3>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginTop: "auto",
+                        paddingTop: "2px",
+                      }}
+                    >
+                      <span style={{ fontSize: isMobile ? "14px" : "16px", fontWeight: 800, color: activePriceColor }}>
+                        ₹{product.normalizedDisplayPrice}
+                      </span>
                     </div>
                   </div>
                 </article>
@@ -1045,60 +1415,221 @@ const ProductGrid: React.FC<ProductGridProps> = ({
             }
 
             if (cardStyleKey === "grocery") {
+              const groceryCardStyle: React.CSSProperties = {
+                ...cardBaseStyle,
+                flexDirection: "row",
+                alignItems: "stretch",
+                padding: 0,
+                gap: 0,
+                overflow: "hidden",
+                height: isMobile ? "96px" : "104px",
+                minHeight: isMobile ? "96px" : "104px",
+                maxHeight: isMobile ? "96px" : "104px",
+                boxSizing: "border-box",
+              };
+
               return (
-                <article key={product.id} {...commonArticleProps} style={{ ...cardBaseStyle, flexDirection: "row", alignItems: "center", padding: isMobile ? "8px 10px" : "10px 12px", gap: isMobile ? "10px" : "12px", overflow: "hidden" }}>
-                  <div style={{ position: "relative", width: isMobile ? "84px" : "96px", height: isMobile ? "84px" : "96px", minWidth: isMobile ? "84px" : "96px", borderRadius: isMobile ? "10px" : "12px", overflow: "hidden", background: resolvedImageBg, flexShrink: 0 }}>
-                    {renderDiscountBadge()}
+                <article key={product.id} {...commonArticleProps} style={groceryCardStyle}>
+                  {/* Left: Wide landscape image container matching mockup */}
+                  <div
+                    style={{
+                      position: "relative",
+                      height: "100%",
+                      aspectRatio: image_aspect_ratio && image_aspect_ratio !== "auto" ? formatAspectRatio(image_aspect_ratio) : "1 / 1",
+                      borderTopLeftRadius: cardBaseStyle.borderRadius,
+                      borderBottomLeftRadius: cardBaseStyle.borderRadius,
+                      borderTopRightRadius: 0,
+                      borderBottomRightRadius: 0,
+                      overflow: "hidden",
+                      background: resolvedImageBg,
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {!product.normalizedInStock && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          zIndex: 4,
+                          background: "#ff0000",
+                          color: "#ffffff",
+                          fontSize: isMobile ? "10px" : "11.5px",
+                          fontWeight: 800,
+                          padding: isMobile ? "3px 8px" : "4px 12px",
+                          borderRadius: "2px",
+                          boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                          whiteSpace: "nowrap",
+                          letterSpacing: "0.02em",
+                          textAlign: "center",
+                          userSelect: "none",
+                        }}
+                      >
+                        Sold Out
+                      </div>
+                    )}
                     {product.normalizedImage ? (
-                      <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
+                      <img
+                        src={product.normalizedImage}
+                        alt={product.name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: resolvedImageFit,
+                          display: "block",
+                          filter: !product.normalizedInStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                          opacity: !product.normalizedInStock ? 0.85 : 1,
+                        }}
+                      />
                     ) : (
                       <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "12px" }}>No image</div>
                     )}
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px", minWidth: 0 }}>
-                      {show_brand_name && (
-                        <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+
+                  {/* Right: Info container with Brand & Top-Right Badges, Title, Price, Rating */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      gap: "2px",
+                      padding: isMobile ? "6px 10px 6px 8px" : "8px 12px 8px 10px",
+                      flex: "1 1 0",
+                      minWidth: 0,
+                      overflow: "hidden",
+                      opacity: !product.normalizedInStock ? 0.65 : 1,
+                    }}
+                  >
+                    {/* Top Row: Brand on left + Badges & % OFF on right */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "4px",
+                        width: "100%",
+                        minWidth: 0,
+                      }}
+                    >
+                      {show_brand_name ? (
+                        <span
+                          style={{
+                            fontSize: isMobile ? "8px" : "9px",
+                            fontWeight: 600,
+                            color: brand_color || faintText,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.08em",
+                            lineHeight: 1.2,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            flex: "1 1 auto",
+                            minWidth: 0,
+                          }}
+                        >
                           {brandText}
                         </span>
+                      ) : (
+                        <div style={{ flex: 1 }} />
                       )}
-                      {badgeCollections.length > 0 && (
-                        <div style={{ display: "flex", gap: "3px", flexShrink: 0 }}>
-                          {badgeCollections.slice(0, 1).map((col: any) => (
-                            <span
-                              key={col.id || col.name}
-                              style={{
-                                fontSize: "8px",
-                                fontWeight: 800,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.04em",
-                                padding: "2px 5px",
-                                borderRadius: "4px",
-                                background: col.badge_color || "#d97706",
-                                color: "#fff",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {col.name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+
+                      {/* Right Corner Badges */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "3px", flexShrink: 0 }}>
+                        {badgeCollections.slice(0, 1).map((col: any) => (
+                          <span
+                            key={col.id || col.name}
+                            style={{
+                              padding: isMobile ? "1.5px 4px" : "2px 5px",
+                              borderRadius: "3px",
+                              background: col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
+                              color: "#ffffff",
+                              fontSize: isMobile ? "7px" : "8px",
+                              fontWeight: 700,
+                              letterSpacing: "0.02em",
+                              textTransform: "uppercase",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {col.name}
+                          </span>
+                        ))}
+                        {show_discount_badge && product.normalizedDiscountPercent > 0 && (
+                          <span
+                            style={{
+                              padding: isMobile ? "1.5px 4px" : "2px 5.5px",
+                              borderRadius: "3px",
+                              background: "linear-gradient(135deg, #16a34a, #15803d)",
+                              color: "#ffffff",
+                              fontSize: isMobile ? "7.5px" : "8.5px",
+                              fontWeight: 800,
+                              letterSpacing: "0.02em",
+                              textTransform: "uppercase",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {product.normalizedDiscountPercent}% OFF
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <h3 style={{ margin: "1px 0 0", fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: "1.25", color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis" }}>
+
+                    {/* Product Name */}
+                    <h3
+                      style={{
+                        margin: "1px 0 2px",
+                        fontFamily: resolvedFontFamily,
+                        fontSize: resolvedProductNameSize,
+                        fontWeight: resolvedProductNameWeight,
+                        fontStyle: resolvedProductNameStyle,
+                        lineHeight: "1.25",
+                        color: pageText,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
                       {product.name}
                     </h3>
-                    {show_ratings && (
-                      <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px", margin: "1px 0" }}>
-                        <span style={{ color: starColor }}>★</span> {ratingDisplay}
+
+                    {/* Bottom Row: Price & Star Rating */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "4px",
+                        marginTop: "auto",
+                        paddingTop: "1px",
+                        minWidth: 0,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "baseline", flexShrink: 0 }}>
+                        <span style={{ fontSize: isMobile ? "13.5px" : "15.5px", fontWeight: 800, color: activePriceColor }}>
+                          ₹{product.normalizedDisplayPrice}
+                        </span>
                       </div>
-                    )}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", marginTop: "auto", paddingTop: "4px", minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "5px", flexShrink: 0 }}>
-                        <span style={{ fontSize: isMobile ? "15px" : "16px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                        {showOriginal && <span style={{ fontSize: isMobile ? "10px" : "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-                      </div>
-                      {renderInStockBadge()}
+                      {show_ratings && (
+                        <div
+                          style={{
+                            fontSize: isMobile ? "8.5px" : "10.5px",
+                            fontWeight: 600,
+                            color: faintText,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <span style={{ color: starColor }}>★</span>
+                          <span>{ratingDisplay}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -1107,36 +1638,74 @@ const ProductGrid: React.FC<ProductGridProps> = ({
 
             return (
               <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
-                <div style={getImgContainerStyle("1 / 1")}>
+                <div
+                  style={{
+                    ...getImgContainerStyle(cardStyleKey === "books" ? "3 / 4" : "1 / 1"),
+                    borderRadius: resolvedImageRadius || (isMobile ? "10px" : "12px"),
+                    border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(15,23,42,0.06)",
+                  }}
+                >
                   {renderDiscountBadge()}
                   {renderCollectionBadges(isMobile)}
+                  {!product.normalizedInStock && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
+                        zIndex: 4,
+                        background: "#ff0000",
+                        color: "#ffffff",
+                        fontSize: isMobile ? "11px" : "13.5px",
+                        fontWeight: 800,
+                        padding: isMobile ? "4px 14px" : "6px 22px",
+                        borderRadius: "2px",
+                        boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                        whiteSpace: "nowrap",
+                        letterSpacing: "0.02em",
+                        textAlign: "center",
+                        userSelect: "none",
+                      }}
+                    >
+                      Sold Out
+                    </div>
+                  )}
                   {product.normalizedImage ? (
-                    <img src={product.normalizedImage} alt={product.name} loading={imageLoadingMode} decoding="async" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
+                    <img
+                      src={product.normalizedImage}
+                      alt={product.name}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: resolvedImageFit,
+                        borderRadius: "inherit",
+                        display: "block",
+                        filter: !product.normalizedInStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                        opacity: !product.normalizedInStock ? 0.85 : 1,
+                      }}
+                    />
                   ) : (
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                   )}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1, opacity: !product.normalizedInStock ? 0.65 : 1 }}>
                   {show_brand_name && (
-                    <span style={{ fontSize: isMobile ? "9px" : "10px", fontWeight: 700, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    <span style={{ fontSize: isMobile ? "8.5px" : "9.5px", fontWeight: 600, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em", lineHeight: 1.2 }}>
                       {brandText}
                     </span>
                   )}
-                  <h3 style={{ margin: 0, fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: isMobile ? "1.25" : "1.35", color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: isMobile ? "32px" : "auto" }}>{product.name}</h3>
-                  <div style={{ borderTop: "1px solid rgba(148,163,184,0.2)", margin: "4px 0" }} />
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "4px" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px" }}>
-                      <span style={{ fontSize: isMobile ? "15px" : "18px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                      {showOriginal && <span style={{ fontSize: isMobile ? "10px" : "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
+                  <h3 style={{ margin: "1px 0 2px", fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: isMobile ? "1.25" : "1.3", color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{product.name}</h3>
+                  <div style={{ borderTop: "1px solid rgba(148,163,184,0.15)", margin: "2px 0" }} />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: "1px" }}>
+                    <div style={{ display: "flex", alignItems: "baseline" }}>
+                      <span style={{ fontSize: isMobile ? "14px" : "16px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
                     </div>
                     {show_ratings && (
-                      <div style={{ fontSize: isMobile ? "10px" : "11px", fontWeight: 600, color: faintText }}>
+                      <div style={{ fontSize: isMobile ? "9.5px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
                         <span style={{ color: starColor }}>★</span> {ratingDisplay}
                       </div>
                     )}
-                  </div>
-                  <div style={{ marginTop: "auto", width: "100%", display: "flex", justifyContent: "center" }}>
-                    {renderInStockBadge(true)}
                   </div>
                 </div>
               </article>

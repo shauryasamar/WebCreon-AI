@@ -1812,17 +1812,31 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const variantStockQty =
     typeof selectedVariantMeta?.stockQty === "number" ? selectedVariantMeta.stockQty : null;
 
-  const normalizedInStock = hasVariants
-    ? optionValues.some(
-        (option) =>
-          option.inStock !== false &&
-          (option.stockQty == null || Number(option.stockQty) > 0)
-      )
-    : typeof anyProduct?.inStock === "boolean"
+  const hasExplicitVariantStock = hasVariants && optionValues.some(
+    (v) => v.stockQty != null && String(v.stockQty).trim() !== ""
+  );
+
+  const anyVariantInStock = hasVariants && optionValues.some(
+    (option) =>
+      option.inStock !== false &&
+      (Number(option.stockQty ?? 0) > 0)
+  );
+
+  const baseProductStock = typeof product.stock === "number"
+    ? product.stock
+    : typeof anyProduct?.stock === "number"
+    ? anyProduct.stock
+    : null;
+
+  const baseProductInStock = typeof anyProduct?.inStock === "boolean"
     ? anyProduct.inStock
     : typeof anyProduct?.in_stock === "boolean"
     ? anyProduct.in_stock
-    : Number(anyProduct?.stock ?? 0) > 0;
+    : (baseProductStock !== null ? baseProductStock > 0 : true);
+
+  const normalizedInStock = hasExplicitVariantStock
+    ? (anyVariantInStock || (baseProductStock !== null && baseProductStock > 0))
+    : (baseProductStock !== null ? (baseProductStock > 0 && baseProductInStock) : baseProductInStock);
 
   const showOriginal =
     typeof effectiveOriginalPrice === "number" && effectiveOriginalPrice > effectivePrice;
@@ -1833,13 +1847,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     hasVariants &&
     (!selectedVariantMeta ||
       selectedVariantMeta.inStock === false ||
-      (variantStockQty != null && variantStockQty <= 0));
+      (variantStockQty != null && variantStockQty <= 0 && (!baseProductStock || baseProductStock <= 0)));
 
   const availableQty = hasVariants
-    ? variantStockQty
-    : typeof product.stock === "number"
-    ? product.stock
-    : null;
+    ? (variantStockQty !== null ? variantStockQty : baseProductStock)
+    : baseProductStock;
 
   const quantityAlreadyInCart = cartItems.reduce((sum, item) => {
     const sameProduct = String(item.id) === String(product.id);
@@ -2243,7 +2255,57 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 </button>
               )}
 
-              {/* Bottom-Left Fixed Rating Badge (Clickable to jump to Reviews) */}
+              {/* Top-Left Discount Badge */}
+              {show_discount_badge && showDiscount && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "10px",
+                    left: "10px",
+                    zIndex: 3,
+                    padding: "6px 10px",
+                    borderRadius: "999px",
+                    background: isLight ? "rgba(15,23,42,0.85)" : "rgba(30,41,59,0.92)",
+                    color: "#ffffff",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    letterSpacing: "0.04em",
+                    backdropFilter: "blur(4px)",
+                    WebkitBackdropFilter: "blur(4px)",
+                  }}
+                >
+                  {normalizedDiscountPercent}% OFF
+                </div>
+              )}
+
+              {/* Centered Sold Out Badge (Matching ProductGrid & Carousel) */}
+              {!normalizedInStock && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    zIndex: 5,
+                    background: "#ff0000",
+                    color: "#ffffff",
+                    fontSize: isMobile ? "12px" : "14.5px",
+                    fontWeight: 800,
+                    padding: isMobile ? "5px 18px" : "7px 26px",
+                    borderRadius: "3px",
+                    boxShadow: "0 4px 16px rgba(255, 0, 0, 0.45)",
+                    whiteSpace: "nowrap",
+                    letterSpacing: "0.03em",
+                    textAlign: "center",
+                    userSelect: "none",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Sold Out
+                </div>
+              )}
+
+              {/* Bottom-Right Frosted Glass Rating Badge */}
               {show_ratings && (
                 <button
                   type="button"
@@ -2258,75 +2320,35 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   aria-label="View customer reviews"
                   style={{
                     position: "absolute",
-                    bottom: "10px",
-                    left: "10px",
+                    bottom: "12px",
+                    right: "12px",
                     zIndex: 4,
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "4px",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                    background: isLight ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.85)",
+                    padding: "4px 10px",
+                    borderRadius: "999px",
+                    background: isLight ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.88)",
                     backdropFilter: "blur(8px)",
                     WebkitBackdropFilter: "blur(8px)",
-                    border: subtleBorder,
-                    fontSize: "11px",
+                    border: isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(15,23,42,0.09)",
+                    fontSize: "12px",
                     fontWeight: 700,
                     color: pageText,
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.14)",
                     cursor: "pointer",
                     transition: "transform 0.15s ease",
                   }}
                 >
-                  <span style={{ color: "#f59e0b", fontSize: "11px" }}>★</span>
+                  <span style={{ color: "#f59e0b", fontSize: "12px" }}>★</span>
                   <span>{ratingDisplay}</span>
                   {reviewCountDisplay && (
                     <>
                       <span style={{ color: mutedText, opacity: 0.5 }}>|</span>
-                      <span style={{ color: mutedText, fontWeight: 600 }}>{reviewCountDisplay}</span>
+                      <span style={{ color: mutedText, fontWeight: 600, fontSize: "11px" }}>{reviewCountDisplay}</span>
                     </>
                   )}
                 </button>
-              )}
-
-              {show_discount_badge && showDiscount && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "10px",
-                    left: "10px",
-                    zIndex: 2,
-                    padding: "6px 10px",
-                    borderRadius: "999px",
-                    background: isLight ? "rgba(15,23,42,0.85)" : "rgba(30,41,59,0.92)",
-                    color: "#ffffff",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  {normalizedDiscountPercent}% OFF
-                </div>
-              )}
-
-              {show_stock_badge && !normalizedInStock && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "10px",
-                    right: "52px",
-                    zIndex: 2,
-                    padding: "6px 10px",
-                    borderRadius: "999px",
-                    background: isLight ? "rgba(255,255,255,0.94)" : "rgba(15,23,42,0.84)",
-                    border: subtleBorder,
-                    color: isLight ? "#b91c1c" : "#fecaca",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                  }}
-                >
-                  Out of stock
-                </div>
               )}
 
               {/* Swipeable & Scrollable Gallery Track */}
@@ -2403,6 +2425,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                             objectFit: resolvedImageFit,
                             objectPosition: image_position || (isTablet && parsedAspectNum < 0.95 ? "top center" : "center"),
                             display: "block",
+                            filter: !normalizedInStock ? "blur(2px) grayscale(20%) brightness(0.90)" : undefined,
+                            opacity: !normalizedInStock ? 0.85 : 1,
                           }}
                         />
                       ) : (
@@ -2580,7 +2604,15 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     alt={`${product?.name || "Product"} view ${index + 1}`}
                     loading="lazy"
                     decoding="async"
-                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      objectPosition: "center",
+                      display: "block",
+                      filter: !normalizedInStock ? "grayscale(20%)" : undefined,
+                      opacity: !normalizedInStock ? 0.85 : 1,
+                    }}
                   />
                 </button>
               );
@@ -3495,12 +3527,13 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                           borderRadius: badge_border_radius != null ? `${badge_border_radius}px` : "14px",
                           background: resolvedBadgeBg,
                           border: resolvedBadgeBorder,
-                          textAlign: isMobile ? "center" : "left",
+                          textAlign: "center",
                           boxSizing: "border-box",
                           minWidth: 0,
                           minHeight: isMobile ? "54px" : "60px",
                           display: "flex",
                           flexDirection: "column",
+                          alignItems: "center",
                           justifyContent: "center",
                           overflow: "hidden",
                         }}
@@ -3516,6 +3549,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                             whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
+                            textAlign: "center",
+                            width: "100%",
                           }}
                         >
                           {b.title}
@@ -3529,6 +3564,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                             color: isNoReturn ? (isLight ? "#dc2626" : "#f87171") : pageText,
                             overflowWrap: "break-word",
                             wordBreak: "break-word",
+                            textAlign: "center",
+                            width: "100%",
                           }}
                         >
                           {b.subtitle}

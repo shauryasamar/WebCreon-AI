@@ -23,6 +23,7 @@ import {
   removePendingAsset,
   resolveAndUploadPendingAssets,
 } from "../utils/pendingAssetRegistry";
+import { API_BASE_URL } from "../config/api";
 
 function PageBlocksTreeView({
   siteDefinition: _siteDefinition,
@@ -362,8 +363,11 @@ type JsonFieldControlProps = {
   onChange: (value: any) => void;
 };
 
-function sharedInputStyle(isLightMode: boolean = false): React.CSSProperties {
-  const isDark = !isLightMode;
+function sharedInputStyle(isLightMode?: boolean): React.CSSProperties {
+  const isLight = typeof isLightMode === "boolean"
+    ? isLightMode
+    : (typeof document !== "undefined" && (document.documentElement.getAttribute("data-theme") === "light" || document.body?.getAttribute("data-theme") === "light"));
+  const isDark = !isLight;
   return {
     width: "100%",
     maxWidth: "100%",
@@ -600,8 +604,11 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
   );
 };
 
-function colorInputStyle(isLightMode: boolean = false): React.CSSProperties {
-  const isDark = !isLightMode;
+function colorInputStyle(isLightMode?: boolean): React.CSSProperties {
+  const isLight = typeof isLightMode === "boolean"
+    ? isLightMode
+    : (typeof document !== "undefined" && (document.documentElement.getAttribute("data-theme") === "light" || document.body?.getAttribute("data-theme") === "light"));
+  const isDark = !isLight;
   return {
     width: "100%",
     maxWidth: "100%",
@@ -616,8 +623,11 @@ function colorInputStyle(isLightMode: boolean = false): React.CSSProperties {
   };
 }
 
-function sectionCardStyle(isLightMode: boolean = false): React.CSSProperties {
-  const isDark = !isLightMode;
+function sectionCardStyle(isLightMode?: boolean): React.CSSProperties {
+  const isLight = typeof isLightMode === "boolean"
+    ? isLightMode
+    : (typeof document !== "undefined" && (document.documentElement.getAttribute("data-theme") === "light" || document.body?.getAttribute("data-theme") === "light"));
+  const isDark = !isLight;
   return {
     display: "grid",
     gap: "10px",
@@ -1137,18 +1147,87 @@ export function exportCanvasTemplate({
 }
 
 
+function parseColorToValidHex6(colorStr?: string, fallback = "#ffffff"): string {
+  if (!colorStr || typeof colorStr !== "string") return fallback;
+  const str = colorStr.trim().toLowerCase();
+  if (str === "transparent" || str === "none" || str === "") return fallback;
+
+  // 1. #RRGGBB
+  if (/^#[0-9a-f]{6}$/i.test(str)) {
+    return str.toLowerCase();
+  }
+
+  // 2. #RGB -> #RRGGBB (e.g. #fff -> #ffffff)
+  if (/^#[0-9a-f]{3}$/i.test(str)) {
+    return `#${str[1]}${str[1]}${str[2]}${str[2]}${str[3]}${str[3]}`.toLowerCase();
+  }
+
+  // 3. #RRGGBBAA -> #RRGGBB
+  if (/^#[0-9a-f]{8}$/i.test(str)) {
+    return str.substring(0, 7).toLowerCase();
+  }
+
+  // 4. rgba(r, g, b, a) or rgb(r, g, b)
+  if (str.startsWith("rgb")) {
+    const match = str.match(/\d+(\.\d+)?/g);
+    if (match && match.length >= 3) {
+      const r = Math.min(255, Math.max(0, Math.round(Number(match[0]))));
+      const g = Math.min(255, Math.max(0, Math.round(Number(match[1]))));
+      const b = Math.min(255, Math.max(0, Math.round(Number(match[2]))));
+      const hexR = r.toString(16).padStart(2, "0");
+      const hexG = g.toString(16).padStart(2, "0");
+      const hexB = b.toString(16).padStart(2, "0");
+      return `#${hexR}${hexG}${hexB}`;
+    }
+  }
+
+  // 5. Named CSS colors
+  const namedColors: Record<string, string> = {
+    white: "#ffffff",
+    black: "#000000",
+    red: "#ef4444",
+    blue: "#3b82f6",
+    green: "#22c55e",
+    yellow: "#eab308",
+    orange: "#f97316",
+    purple: "#a855f7",
+    gray: "#6b7280",
+    grey: "#6b7280",
+    slate: "#64748b",
+    zinc: "#71717a",
+  };
+  if (namedColors[str]) {
+    return namedColors[str];
+  }
+
+  // 6. Hex without #
+  if (/^[0-9a-f]{6}$/i.test(str)) {
+    return `#${str.toLowerCase()}`;
+  }
+  if (/^[0-9a-f]{3}$/i.test(str)) {
+    return `#${str[0]}${str[0]}${str[1]}${str[1]}${str[2]}${str[2]}`.toLowerCase();
+  }
+
+  return fallback;
+}
+
 function CompactColorRow({
   label,
   value,
   onChange,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (val: string) => void;
+  placeholder?: string;
 }) {
   const { isDark, tokens } = useAdminTheme();
-  const hexVal = typeof value === "string" && value ? value : "#2563eb";
-  const isValidHex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(hexVal);
+  const rawStr = typeof value === "string" ? value : "";
+  const isTransparent = rawStr.toLowerCase() === "transparent";
+  const defaultFallbackHex = isDark ? "#0f172a" : "#ffffff";
+  const pickerHexVal = parseColorToValidHex6(rawStr || placeholder, defaultFallbackHex);
+  const displayVal = rawStr ? rawStr.toUpperCase() : "";
 
   return (
     <div
@@ -1173,7 +1252,12 @@ function CompactColorRow({
             width: "18px",
             height: "18px",
             borderRadius: "4px",
-            background: hexVal,
+            background: isTransparent ? "transparent" : (rawStr || placeholder || defaultFallbackHex),
+            backgroundImage: isTransparent
+              ? "linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)"
+              : undefined,
+            backgroundSize: isTransparent ? "6px 6px" : undefined,
+            backgroundPosition: isTransparent ? "0 0, 0 3px, 3px -3px, -3px 0px" : undefined,
             border: `1px solid ${isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)"}`,
             boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
             cursor: "pointer",
@@ -1186,7 +1270,7 @@ function CompactColorRow({
         >
           <input
             type="color"
-            value={isValidHex && hexVal.startsWith("#") ? hexVal : "#2563eb"}
+            value={pickerHexVal}
             onChange={(e) => onChange(e.target.value)}
             style={{
               position: "absolute",
@@ -1199,21 +1283,21 @@ function CompactColorRow({
             }}
           />
         </label>
-        <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={label}>
           {label}
         </span>
       </div>
 
       <input
         type="text"
-        value={hexVal.toUpperCase()}
-        placeholder="#000000"
+        value={displayVal}
+        placeholder={placeholder || (pickerHexVal ? pickerHexVal.toUpperCase() : "#000000")}
         onChange={(e) => {
           const raw = e.target.value.trim();
-          onChange(raw.startsWith("#") || raw === "" ? raw : `#${raw}`);
+          onChange(raw);
         }}
         style={{
-          width: "68px",
+          width: "74px",
           height: "22px",
           textAlign: "center",
           fontFamily: "'Inter', monospace",
@@ -1237,14 +1321,19 @@ function ModernColorPicker({
   value,
   onChange,
   label,
+  placeholder,
 }: {
   value: string;
   onChange: (val: string) => void;
   label?: string;
+  placeholder?: string;
 }) {
   const { isDark, tokens } = useAdminTheme();
-  const hexVal = typeof value === "string" && value ? value : "#2563eb";
-  const isValidHex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(hexVal);
+  const rawStr = typeof value === "string" ? value : "";
+  const isTransparent = rawStr.toLowerCase() === "transparent";
+  const defaultFallbackHex = isDark ? "#0f172a" : "#ffffff";
+  const pickerHexVal = parseColorToValidHex6(rawStr || placeholder, defaultFallbackHex);
+  const displayVal = rawStr ? rawStr.toUpperCase() : "";
 
   return (
     <div style={{ display: "grid", gap: "4px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -1254,7 +1343,7 @@ function ModernColorPicker({
             {label}
           </label>
           <span style={{ fontSize: "10px", fontFamily: "'Inter', monospace", fontWeight: 700, color: tokens.textSecondary, background: isDark ? "rgba(255,255,255,0.06)" : "rgba(100,116,139,0.08)", padding: "1px 5px", borderRadius: "3px", flexShrink: 0, lineHeight: 1.2 }}>
-            {hexVal.toUpperCase()}
+            {displayVal || pickerHexVal.toUpperCase()}
           </span>
         </div>
       )}
@@ -1282,7 +1371,12 @@ function ModernColorPicker({
             width: "20px",
             height: "20px",
             borderRadius: "4px",
-            background: hexVal,
+            background: isTransparent ? "transparent" : (rawStr || placeholder || defaultFallbackHex),
+            backgroundImage: isTransparent
+              ? "linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)"
+              : undefined,
+            backgroundSize: isTransparent ? "6px 6px" : undefined,
+            backgroundPosition: isTransparent ? "0 0, 0 3px, 3px -3px, -3px 0px" : undefined,
             border: `1px solid ${isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)"}`,
             boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
             cursor: "pointer",
@@ -1295,7 +1389,7 @@ function ModernColorPicker({
         >
           <input
             type="color"
-            value={isValidHex && hexVal.startsWith("#") ? hexVal : "#2563eb"}
+            value={pickerHexVal}
             onChange={(e) => onChange(e.target.value)}
             style={{
               position: "absolute",
@@ -1312,11 +1406,11 @@ function ModernColorPicker({
         {/* Clean Uppercase HEX Input */}
         <input
           type="text"
-          value={hexVal.toUpperCase()}
-          placeholder="#000000"
+          value={displayVal}
+          placeholder={placeholder || (pickerHexVal ? pickerHexVal.toUpperCase() : "#000000")}
           onChange={(e) => {
             const raw = e.target.value.trim();
-            onChange(raw.startsWith("#") || raw === "" ? raw : `#${raw}`);
+            onChange(raw);
           }}
           style={{
             flex: 1,
@@ -1543,6 +1637,7 @@ function renderFieldControl(
       <CompactColorRow
         label={field.label || "Color"}
         value={typeof currentValue === "string" ? currentValue : ""}
+        placeholder={typeof field.defaultValue === "string" ? field.defaultValue : undefined}
         onChange={onChange}
       />
     );
@@ -3646,6 +3741,87 @@ function ProductCarouselEditor({
       {activeTab === "layout" && (
         <div style={{ display: "grid", gap: "8px" }}>
           <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Card Style & Preset</div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Card Style</label>
+                <CustomSelectDropdown
+                  value={p.card_style || p.cardStyle || "default"}
+                  placeholder="Card Style"
+                  options={[
+                    { label: `Store Theme Default (${(siteDefinition.theme?.card_style || "fashion").toUpperCase()})`, value: "default" },
+                    { label: "Grocery & Daily Needs (Horizontal Row)", value: "grocery" },
+                    { label: "Fashion & Apparel (3:4 Portrait)", value: "fashion" },
+                    { label: "Electronics & Tech (4:3 Landscape)", value: "electronics" },
+                    { label: "Beauty & Minimal (1:1 Rounded)", value: "beauty" },
+                    { label: "Standard Square (1:1)", value: "standard" },
+                    { label: "Books & Stationery (3:4 Portrait)", value: "books" },
+                  ]}
+                  onChange={(val) => {
+                    if (val === "default") {
+                      updateProps({ card_style: val, cardStyle: val });
+                    } else if (val === "fashion") {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "3/4",
+                        image_radius: undefined,
+                        image_corner_radius: undefined,
+                        card_radius: "16px",
+                      });
+                    } else if (val === "electronics") {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "4/3",
+                        image_radius: "12px",
+                        image_corner_radius: "12px",
+                        card_radius: "16px",
+                      });
+                    } else if (val === "beauty") {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "3/4",
+                        image_radius: "12px",
+                        image_corner_radius: "12px",
+                        card_radius: "16px",
+                      });
+                    } else if (val === "books") {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "3/4",
+                        image_radius: "10px",
+                        image_corner_radius: "10px",
+                        card_radius: "16px",
+                      });
+                    } else if (val === "grocery") {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "1/1",
+                        image_radius: "10px",
+                        image_corner_radius: "10px",
+                        card_radius: "14px",
+                      });
+                    } else {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "1/1",
+                        image_radius: "12px",
+                        image_corner_radius: "12px",
+                        card_radius: "16px",
+                      });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Layout & Card Size</div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gap: "2px" }}>
@@ -4032,9 +4208,67 @@ function ProductGridEditor({
                     { label: "Electronics & Tech (4:3 Landscape)", value: "electronics" },
                     { label: "Beauty & Minimal (1:1 Rounded)", value: "beauty" },
                     { label: "Standard Square (1:1)", value: "standard" },
-                    { label: "Books & Stationery", value: "books" },
+                    { label: "Books & Stationery (3:4 Portrait)", value: "books" },
                   ]}
-                  onChange={(val) => updateProps({ card_style: val, cardStyle: val })}
+                  onChange={(val) => {
+                    if (val === "default") {
+                      updateProps({ card_style: val, cardStyle: val });
+                    } else if (val === "fashion") {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "3/4",
+                        image_radius: undefined,
+                        image_corner_radius: undefined,
+                        card_radius: "16px",
+                      });
+                    } else if (val === "electronics") {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "4/3",
+                        image_radius: "12px",
+                        image_corner_radius: "12px",
+                        card_radius: "16px",
+                      });
+                    } else if (val === "beauty") {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "3/4",
+                        image_radius: "12px",
+                        image_corner_radius: "12px",
+                        card_radius: "16px",
+                      });
+                    } else if (val === "books") {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "3/4",
+                        image_radius: "10px",
+                        image_corner_radius: "10px",
+                        card_radius: "16px",
+                      });
+                    } else if (val === "grocery") {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "1/1",
+                        image_radius: "10px",
+                        image_corner_radius: "10px",
+                        card_radius: "14px",
+                      });
+                    } else {
+                      updateProps({
+                        card_style: val,
+                        cardStyle: val,
+                        image_aspect_ratio: "1/1",
+                        image_radius: "12px",
+                        image_corner_radius: "12px",
+                        card_radius: "16px",
+                      });
+                    }
+                  }}
                 />
               </div>
             </div>
@@ -4073,6 +4307,19 @@ function ProductGridEditor({
                   />
                 </div>
               </div>
+              <NumberStepperField
+                label="Card Width"
+                value={
+                  p.card_width !== undefined && p.card_width !== null && String(p.card_width).trim() !== ""
+                    ? parseInt(String(p.card_width), 10) || 230
+                    : 230
+                }
+                min={150}
+                max={360}
+                step={10}
+                unit="px"
+                onChange={(val) => updateProps({ card_width: `${val}px` })}
+              />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <NumberStepperField
                   label="Vertical Pad"
@@ -4637,14 +4884,14 @@ function FooterEditor({
                       value={s.platform}
                       placeholder="Platform"
                       onChange={(e) => handleUpdateSocial(idx, "platform", e.target.value)}
-                      style={{ ...sharedInputStyle(), fontSize: "11px", padding: "4px 6px" }}
+                      style={{ ...sharedInputStyle(!isDark), fontSize: "11px", padding: "4px 6px" }}
                     />
                     <input
                       type="text"
                       value={s.url}
                       placeholder="https://..."
                       onChange={(e) => handleUpdateSocial(idx, "url", e.target.value)}
-                      style={{ ...sharedInputStyle(), fontSize: "11px", padding: "4px 6px" }}
+                      style={{ ...sharedInputStyle(!isDark), fontSize: "11px", padding: "4px 6px" }}
                     />
                     <button
                       type="button"
@@ -4687,7 +4934,7 @@ function FooterEditor({
                   value={brandName}
                   placeholder="Website"
                   onChange={(e) => updateProps({ brandName: e.target.value, brand_name: e.target.value })}
-                  style={sharedInputStyle()}
+                  style={sharedInputStyle(!isDark)}
                 />
               </div>
 
@@ -4698,7 +4945,7 @@ function FooterEditor({
                   value={tagline}
                   placeholder="Your premium shopping destination."
                   onChange={(e) => updateProps({ tagline: e.target.value })}
-                  style={{ ...sharedInputStyle(), resize: "none" }}
+                  style={{ ...sharedInputStyle(!isDark), resize: "none" }}
                 />
               </div>
 
@@ -4709,7 +4956,7 @@ function FooterEditor({
                   value={copyrightText}
                   placeholder="© 2026 Brand. All rights reserved."
                   onChange={(e) => updateProps({ copyrightText: e.target.value, copyright_text: e.target.value })}
-                  style={sharedInputStyle()}
+                  style={sharedInputStyle(!isDark)}
                 />
               </div>
 
@@ -4768,7 +5015,7 @@ function FooterEditor({
                       value={newsletterTitle}
                       placeholder="Subscribe to Our Newsletter"
                       onChange={(e) => updateProps({ newsletter_title: e.target.value })}
-                      style={sharedInputStyle()}
+                      style={sharedInputStyle(!isDark)}
                     />
                   </div>
 
@@ -4779,7 +5026,7 @@ function FooterEditor({
                       value={newsletterSubtitle}
                       placeholder="Get weekly updates..."
                       onChange={(e) => updateProps({ newsletter_subtitle: e.target.value })}
-                      style={sharedInputStyle()}
+                      style={sharedInputStyle(!isDark)}
                     />
                   </div>
 
@@ -4791,7 +5038,7 @@ function FooterEditor({
                         value={newsletterPlaceholder}
                         placeholder="Enter email..."
                         onChange={(e) => updateProps({ newsletter_placeholder: e.target.value })}
-                        style={sharedInputStyle()}
+                        style={sharedInputStyle(!isDark)}
                       />
                     </div>
                     <div style={{ display: "grid", gap: "2px" }}>
@@ -4801,7 +5048,7 @@ function FooterEditor({
                         value={newsletterButtonText}
                         placeholder="Join"
                         onChange={(e) => updateProps({ newsletter_button_text: e.target.value })}
-                        style={sharedInputStyle()}
+                        style={sharedInputStyle(!isDark)}
                       />
                     </div>
                   </div>
@@ -11165,7 +11412,7 @@ function NavbarEditor({
   const brandFontWeight = String(getVal("brand_font_weight", "700"));
   const brandFontStyle = getVal("brand_font_style", "normal");
   const brandFontSize = Number(getVal("brand_font_size", 18));
-  const brandTextColor = getVal("brand_text_color", theme.accent_color || (isSiteDark ? "#f8fafc" : "#15803d"));
+  const brandTextColor = getVal("brand_text_color", theme.brand_text_color || theme.navbar_text_color || theme.text_color || (isSiteDark ? "#f8fafc" : "#0f172a"));
 
   const searchDisplayMode = getVal("search_display_mode", "bar");
   const searchPlacement = getVal("search_placement", "center");
@@ -11377,7 +11624,7 @@ function NavbarEditor({
                     value={brandName}
                     placeholder="Enter brand name..."
                     onChange={(e) => updateField("brandName", e.target.value)}
-                    style={sharedInputStyle()}
+                    style={sharedInputStyle(!isDark)}
                   />
                 </div>
 

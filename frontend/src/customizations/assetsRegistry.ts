@@ -173,7 +173,7 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
     id: "product-fashion-apparel",
     category: "products",
     title: "Fashion & Apparel",
-    description: "Large editorial image focus with clean brand and pricing labels.",
+    description: "Large editorial 3:4 portrait focus with clean brand and pricing labels.",
     tag: "Editorial",
     targetType: "product_grid",
     patch: {
@@ -182,6 +182,9 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
       },
       blockPatch: {
         card_style: "fashion",
+        cardStyle: "fashion",
+        image_aspect_ratio: "3/4",
+        card_radius: "16px",
       },
     },
   },
@@ -189,7 +192,7 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
     id: "product-electronics",
     category: "products",
     title: "Electronics & Tech",
-    description: "Structured card with spec emphasis and stock availability pill.",
+    description: "Structured card with 4:3 spec emphasis and clean badge alignment.",
     tag: "Tech Specs",
     targetType: "product_grid",
     patch: {
@@ -198,6 +201,11 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
       },
       blockPatch: {
         card_style: "electronics",
+        cardStyle: "electronics",
+        image_aspect_ratio: "4/3",
+        image_radius: "12px",
+        image_corner_radius: "12px",
+        card_radius: "16px",
       },
     },
   },
@@ -205,7 +213,7 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
     id: "product-beauty-cosmetics",
     category: "products",
     title: "Beauty & Skincare",
-    description: "Soft pastel spacing with centered product focus and rating.",
+    description: "Soft pastel spacing with centered product focus and rating on image.",
     tag: "Pastel Clean",
     targetType: "product_grid",
     patch: {
@@ -214,6 +222,11 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
       },
       blockPatch: {
         card_style: "beauty",
+        cardStyle: "beauty",
+        image_aspect_ratio: "3/4",
+        image_radius: "12px",
+        image_corner_radius: "12px",
+        card_radius: "16px",
       },
     },
   },
@@ -230,6 +243,11 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
       },
       blockPatch: {
         card_style: "grocery",
+        cardStyle: "grocery",
+        image_aspect_ratio: "1/1",
+        image_radius: "10px",
+        image_corner_radius: "10px",
+        card_radius: "14px",
       },
     },
   },
@@ -237,7 +255,7 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
     id: "product-books-stationery",
     category: "products",
     title: "Books & Stationery",
-    description: "Portrait book-cover aspect ratio with author and review details.",
+    description: "Portrait 3:4 book-cover aspect ratio with author and review details.",
     tag: "Book Cover",
     targetType: "product_grid",
     patch: {
@@ -246,6 +264,11 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
       },
       blockPatch: {
         card_style: "books",
+        cardStyle: "books",
+        image_aspect_ratio: "3/4",
+        image_radius: "10px",
+        image_corner_radius: "10px",
+        card_radius: "16px",
       },
     },
   },

@@ -135,43 +135,72 @@ const presetMap: Record<
   custom: { optionName: "", values: [] },
 };
 
-const normalizeProduct = (p: any): Product => ({
-  id: String(p.id),
-  name: p.name ?? "",
-  brand: p.brand ?? "",
-  category: p.category ?? "",
-  category_id: p.category_id ? String(p.category_id) : null,
-  category_name: p.category_name ?? null,
-  collections: Array.isArray(p.collections) ? p.collections : [],
-  price: Number(p.price ?? 0),
-  compare_price: p.compare_price != null ? Number(p.compare_price) : null,
-  images: Array.isArray(p.images)
-    ? p.images.filter(Boolean).map((img: string) => optimizeImageUrl(img))
-    : [],
-  description: p.description ?? "",
-  highlights: Array.isArray(p.highlights) ? p.highlights : [],
-  in_stock: Boolean(p.in_stock ?? Number(p.stock ?? 0) > 0),
-  stock: Number(p.stock ?? 0),
-  is_active: p.is_active !== false,
-  sku: p.sku ?? null,
-  hsn_code: p.hsn_code ?? null,
-  video_url: p.video_url ?? null,
-  video_position: p.video_position != null ? Number(p.video_position) : 2,
-  sibling_group: p.sibling_group ?? null,
-  sibling_label: p.sibling_label ?? null,
-  weight_grams: Number(p.weight_grams ?? 500),
-  length_cm: p.length_cm != null ? Number(p.length_cm) : null,
-  width_cm: p.width_cm != null ? Number(p.width_cm) : null,
-  height_cm: p.height_cm != null ? Number(p.height_cm) : null,
-  slug: p.slug ?? null,
-  variant_option: p.variant_option ?? null,
-  return_window_days: p.return_window_days != null ? Number(p.return_window_days) : null,
-  is_cod_allowed: typeof p.is_cod_allowed === "boolean" ? p.is_cod_allowed : (p.is_cod_allowed != null ? Boolean(p.is_cod_allowed) : null),
-  is_preorder: Boolean(p.is_preorder),
-  preorder_release_date: p.preorder_release_date ?? null,
-  preorder_message: p.preorder_message ?? null,
-  preorder_limit: p.preorder_limit != null ? Number(p.preorder_limit) : null,
-});
+const normalizeProduct = (p: any): Product => {
+  const variantOpts = p.variant_option?.optionValues;
+  const hasVariants = Array.isArray(variantOpts) && variantOpts.length > 0;
+  const hasExplicitVariantStock = hasVariants && variantOpts.some(
+    (v: any) => v.stockQty != null && String(v.stockQty).trim() !== ""
+  );
+  const variantHasInStock = hasVariants
+    ? variantOpts.some((v: any) => v.inStock !== false && (Number(v.stockQty ?? 0) > 0))
+    : false;
+  const variantTotalStock = hasExplicitVariantStock
+    ? variantOpts.reduce((sum: number, v: any) => sum + (typeof v?.stockQty === "number" && v.stockQty > 0 ? v.stockQty : 0), 0)
+    : null;
+
+  const baseRawStock = p.stock != null && !Number.isNaN(Number(p.stock)) ? Number(p.stock) : null;
+  const baseInStock = typeof p.in_stock === "boolean"
+    ? p.in_stock
+    : typeof p.inStock === "boolean"
+    ? p.inStock
+    : (baseRawStock !== null ? baseRawStock > 0 : true);
+
+  const in_stock = hasExplicitVariantStock
+    ? (variantHasInStock || (baseRawStock !== null && baseRawStock > 0))
+    : (baseRawStock !== null ? (baseRawStock > 0 && baseInStock) : baseInStock);
+
+  const stock = variantTotalStock !== null
+    ? variantTotalStock
+    : (baseRawStock !== null ? baseRawStock : 0);
+
+  return {
+    id: String(p.id),
+    name: p.name ?? "",
+    brand: p.brand ?? "",
+    category: p.category ?? "",
+    category_id: p.category_id ? String(p.category_id) : null,
+    category_name: p.category_name ?? null,
+    collections: Array.isArray(p.collections) ? p.collections : [],
+    price: Number(p.price ?? 0),
+    compare_price: p.compare_price != null ? Number(p.compare_price) : null,
+    images: Array.isArray(p.images)
+      ? p.images.filter(Boolean).map((img: string) => optimizeImageUrl(img))
+      : [],
+    description: p.description ?? "",
+    highlights: Array.isArray(p.highlights) ? p.highlights : [],
+    in_stock,
+    stock,
+    is_active: p.is_active !== false,
+    sku: p.sku ?? null,
+    hsn_code: p.hsn_code ?? null,
+    video_url: p.video_url ?? null,
+    video_position: p.video_position != null ? Number(p.video_position) : 2,
+    sibling_group: p.sibling_group ?? null,
+    sibling_label: p.sibling_label ?? null,
+    weight_grams: Number(p.weight_grams ?? 500),
+    length_cm: p.length_cm != null ? Number(p.length_cm) : null,
+    width_cm: p.width_cm != null ? Number(p.width_cm) : null,
+    height_cm: p.height_cm != null ? Number(p.height_cm) : null,
+    slug: p.slug ?? null,
+    variant_option: p.variant_option ?? null,
+    return_window_days: p.return_window_days != null ? Number(p.return_window_days) : null,
+    is_cod_allowed: typeof p.is_cod_allowed === "boolean" ? p.is_cod_allowed : (p.is_cod_allowed != null ? Boolean(p.is_cod_allowed) : null),
+    is_preorder: Boolean(p.is_preorder),
+    preorder_release_date: p.preorder_release_date ?? null,
+    preorder_message: p.preorder_message ?? null,
+    preorder_limit: p.preorder_limit != null ? Number(p.preorder_limit) : null,
+  };
+};
 
 const buildVariantRowsFromText = (
   text: string,
@@ -963,13 +992,18 @@ const AdminProducts = () => {
     if (!formValues.optionName.trim() && rowsToUse.length === 0) return null;
 
     const optionValues = rowsToUse
-      .map((row) => ({
-        value: row.value.trim(),
-        inStock: row.inStock,
-        stockQty: row.stockQty.trim() === "" ? null : Number(row.stockQty),
-        price: row.price.trim() === "" ? null : Number(row.price),
-        comparePrice: row.comparePrice.trim() === "" ? null : Number(row.comparePrice),
-      }))
+      .map((row) => {
+        const qtyNum = row.stockQty.trim() === "" ? null : Number(row.stockQty);
+        const inStockComputed = qtyNum !== null ? (qtyNum > 0 && row.inStock) : row.inStock;
+        return {
+          value: row.value.trim(),
+          inStock: inStockComputed,
+          in_stock: inStockComputed,
+          stockQty: qtyNum,
+          price: row.price.trim() === "" ? null : Number(row.price),
+          comparePrice: row.comparePrice.trim() === "" ? null : Number(row.comparePrice),
+        };
+      })
       .filter((row) => row.value);
 
     if (optionValues.length === 0) return null;
@@ -1144,16 +1178,22 @@ const AdminProducts = () => {
     const optionValues = product.variant_option?.optionValues ?? [];
     setEditingProduct(product);
     setErrors({});
-    setVariantRows(
-      optionValues.map((v) => ({
-        value: v.value,
-        price: v.price != null ? String(v.price) : "",
-        comparePrice:
-          (v as any).comparePrice != null ? String((v as any).comparePrice) : "",
-        stockQty: v.stockQty != null ? String(v.stockQty) : "",
-        inStock: v.inStock !== false,
-      }))
-    );
+    const mappedVariantRows = optionValues.map((v) => ({
+      value: v.value,
+      price: v.price != null ? String(v.price) : "",
+      comparePrice:
+        (v as any).comparePrice != null ? String((v as any).comparePrice) : "",
+      stockQty: v.stockQty != null ? String(v.stockQty) : "",
+      inStock: v.inStock !== false,
+    }));
+    setVariantRows(mappedVariantRows);
+
+    const hasVariantQuantities = mappedVariantRows.some((r) => r.stockQty.trim() !== "");
+    const variantStockSum = mappedVariantRows.reduce((sum, r) => {
+      const q = r.stockQty.trim() === "" ? 0 : Number(r.stockQty);
+      return sum + (Number.isFinite(q) && q > 0 ? q : 0);
+    }, 0);
+
     const productHighlights =
       Array.isArray(product.highlights)
         ? product.highlights.join("\n")
@@ -1183,7 +1223,7 @@ const AdminProducts = () => {
       height_cm: product.height_cm != null ? String(product.height_cm) : "",
       price: product.price != null && product.price > 0 ? String(product.price) : "",
       compare_price: product.compare_price != null ? String(product.compare_price) : "",
-      stock: product.stock != null ? String(product.stock) : "10",
+      stock: hasVariantQuantities ? String(variantStockSum) : product.stock != null ? String(product.stock) : "10",
       optionType: product.variant_option?.optionType ?? "custom",
       optionName: product.variant_option?.optionName ?? "",
       optionValuesText: optionValues.map((v) => v.value).join(", "),
@@ -1824,11 +1864,34 @@ const AdminProducts = () => {
     field: keyof VariantRow,
     value: string | boolean
   ) => {
-    setVariantRows((prev) =>
-      prev.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [field]: value } : row
-      )
-    );
+    setVariantRows((prev) => {
+      const nextRows = prev.map((row, rowIndex) => {
+        if (rowIndex !== index) return row;
+        const updated = { ...row, [field]: value };
+        if (field === "stockQty") {
+          const qtyStr = String(value).trim();
+          if (qtyStr !== "") {
+            const num = Number(qtyStr);
+            if (!isNaN(num)) {
+              updated.inStock = num > 0;
+            }
+          }
+        }
+        return updated;
+      });
+
+      // Synchronize overall stock if variant rows have stock counts
+      const hasAnyQty = nextRows.some((r) => r.stockQty.trim() !== "");
+      if (hasAnyQty) {
+        const sumQty = nextRows.reduce((sum, r) => {
+          const q = r.stockQty.trim() === "" ? 0 : Number(r.stockQty);
+          return sum + (Number.isFinite(q) && q > 0 ? q : 0);
+        }, 0);
+        setFormValues((fPrev) => ({ ...fPrev, stock: String(sumQty) }));
+      }
+
+      return nextRows;
+    });
   };
 
   // Batch Image Handler - Instant Client Preview (Uploads only on Save Product)
@@ -2249,11 +2312,12 @@ const AdminProducts = () => {
       : formValues.compare_price.trim()
       ? Number(formValues.compare_price)
       : null;
+    const userEnteredStock = formValues.stock.trim() !== "" ? Number(formValues.stock) : null;
+    const variantFallbackStock = getFallbackStock();
+    const hasExplicitVariantStock = variantRows.some((r) => r.stockQty.trim() !== "");
     const effectiveStock = hasVariantOptions
-      ? getFallbackStock()
-      : formValues.stock.trim()
-      ? Number(formValues.stock)
-      : 0;
+      ? (hasExplicitVariantStock ? variantFallbackStock : (userEnteredStock != null ? userEnteredStock : 0))
+      : (userEnteredStock != null ? userEnteredStock : 0);
 
     const cleanHighlights = formValues.highlights
       .split("\n")
@@ -2338,7 +2402,7 @@ const AdminProducts = () => {
       compare_price: effectiveComparePrice,
       stock: effectiveStock,
       in_stock: hasVariantOptions
-        ? finalVariantRows.some((row) => row.inStock && Number(row.stockQty || 0) > 0)
+        ? finalVariantRows.some((row) => (row.stockQty.trim() === "" ? row.inStock : Number(row.stockQty) > 0 && row.inStock))
         : effectiveStock > 0,
       is_active: formValues.is_active,
       sku: formValues.sku.trim() || null,
@@ -4195,16 +4259,38 @@ const AdminProducts = () => {
                     </div>
 
                     <FormField
-                      label="Available Stock Quantity *"
+                      label={
+                        variantRows.some((r) => r.stockQty.trim() !== "")
+                          ? "Available Stock Quantity (Sum of Variants) *"
+                          : "Available Stock Quantity *"
+                      }
                       type="number"
                       value={formValues.stock}
                       onChange={(v) => handleFormChange("stock", v)}
                       error={errors.stock}
                       placeholder="50"
                     />
-                    <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
-                      Set stock to 0 to mark product as Out of Stock.
-                    </span>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
+                      <span style={{ fontSize: "11px", color: tokens.textSecondary }}>
+                        {variantRows.some((r) => r.stockQty.trim() !== "")
+                          ? `Auto-summed from ${variantRows.length} variants. Set variant quantities to 0 to mark out of stock.`
+                          : "Set stock to 0 to mark product as Out of Stock."}
+                      </span>
+                      {variantRows.some((r) => r.stockQty.trim() !== "") && (
+                        <span
+                          style={{
+                            fontSize: "10.5px",
+                            fontWeight: 700,
+                            color: Number(formValues.stock) > 0 ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#fca5a5" : "#b91c1c"),
+                            background: Number(formValues.stock) > 0 ? (isDark ? "rgba(34, 197, 94, 0.15)" : "#dcfce7") : (isDark ? "rgba(239, 68, 68, 0.15)" : "#fee2e2"),
+                            padding: "2px 8px",
+                            borderRadius: "999px",
+                          }}
+                        >
+                          Total Units: {formValues.stock || "0"}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Card 5a: Cash on Delivery (COD) Setup */}

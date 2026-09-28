@@ -1308,11 +1308,42 @@ export default function BuilderDrawerPanel({
 
           if (
             blockType === targetType ||
-            (targetType === "product_grid" && (blockType.includes("product") || blockType === "product_grid")) ||
+            (targetType === "product_grid" && (blockType.includes("product") || blockType === "product_grid" || blockType === "product_carousel")) ||
             (targetType === "footer" && blockType.includes("footer")) ||
             (targetType === "navbar" && blockType.includes("nav"))
           ) {
             const currentProps = block.props ?? {};
+            const isProductBlock = targetType === "product_grid" || blockType.includes("product") || blockType === "product_grid" || blockType === "product_carousel";
+
+            // If applying a product card preset, clean out all stale manual style overrides so the new preset applies freshly
+            let baseProps = { ...currentProps };
+            if (isProductBlock && (mergedPatch.card_style || mergedPatch.cardStyle)) {
+              delete baseProps.image_aspect_ratio;
+              delete baseProps.image_radius;
+              delete baseProps.image_corner_radius;
+              delete baseProps.card_radius;
+              delete baseProps.card_bg_color;
+              delete baseProps.card_border_color;
+              delete baseProps.card_shadow;
+              delete baseProps.card_width;
+              delete baseProps.padding_y;
+              delete baseProps.padding_x;
+              delete baseProps.gap;
+              delete baseProps.grid_gap;
+              delete baseProps.price_color;
+              delete baseProps.original_price_color;
+              delete baseProps.rating_star_color;
+              delete baseProps.product_name_font_size;
+              delete baseProps.product_name_font_weight;
+              delete baseProps.product_name_font_family;
+              delete baseProps.product_name_font_style;
+              delete baseProps.product_name_color;
+              delete baseProps.product_title_font_size;
+              delete baseProps.product_title_font_weight;
+              delete baseProps.product_title_font_family;
+              delete baseProps.product_title_color;
+            }
+
             const patchToApply = { ...mergedPatch };
             if (patchToApply.card_style) {
               patchToApply.cardStyle = patchToApply.card_style;
@@ -1330,7 +1361,7 @@ export default function BuilderDrawerPanel({
             return {
               ...block,
               props: {
-                ...currentProps,
+                ...baseProps,
                 ...patchToApply,
               },
             };
@@ -1768,6 +1799,18 @@ export default function BuilderDrawerPanel({
               const heroBlock = (siteDefinition?.pages?.[0]?.blocks ?? []).find((b: any) => String(b.type || "").toLowerCase().includes("hero"));
               const activeSlidesList = Array.isArray(heroBlock?.props?.slides) ? heroBlock.props.slides : [];
 
+              const effectiveProductCardStyle = (() => {
+                const productBlock = (siteDefinition?.pages?.[0]?.blocks ?? []).find((b: any) => {
+                  const t = String(b.type || "").toLowerCase();
+                  return t.includes("product") || t === "product_grid" || t === "product_carousel";
+                });
+                const blockStyle = productBlock?.props?.card_style || productBlock?.props?.cardStyle;
+                if (blockStyle && blockStyle !== "default" && blockStyle !== "inherit" && blockStyle !== "theme" && blockStyle !== "auto") {
+                  return String(blockStyle).toLowerCase().trim();
+                }
+                return String(siteDefinition?.theme?.card_style || "fashion").toLowerCase().trim();
+              })();
+
               return (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {filteredAssets.map((asset) => {
@@ -1776,7 +1819,7 @@ export default function BuilderDrawerPanel({
                       asset.category === "navbar"
                         ? siteDefinition?.theme?.navbar_layout === asset.patch.themePatch?.navbar_layout || (asset.id === "navbar-apple-minimal" && !siteDefinition?.theme?.navbar_layout)
                         : asset.category === "products"
-                          ? siteDefinition?.theme?.card_style === asset.patch.themePatch?.card_style || (asset.id === "product-fashion-apparel" && !siteDefinition?.theme?.card_style)
+                          ? effectiveProductCardStyle === (asset.patch.themePatch?.card_style || asset.patch.blockPatch?.card_style)
                           : asset.category === "footer"
                             ? siteDefinition?.theme?.footer_layout === asset.patch.themePatch?.footer_layout || (asset.id === "footer-apple-minimal" && !siteDefinition?.theme?.footer_layout)
                             : false;
