@@ -529,14 +529,49 @@ def update_delivery_settings(
 
 
 def _parse_shiprocket_error_message(exc: Exception) -> str:
-    exc_str = str(exc)
-    if "User blocked" in exc_str or "too many failed" in exc_str:
-        return "Shiprocket Account Temporarily Locked: Too many failed login attempts were detected on Shiprocket. Shiprocket's security firewall has temporarily locked API logins for this email for 15 to 20 minutes. Please wait or create a new API User in your Shiprocket dashboard."
+    import json
+    exc_str = str(exc).strip()
+    
+    # Check for embedded JSON payload in the exception string
+    if "{" in exc_str and "}" in exc_str:
+        try:
+            start_idx = exc_str.find("{")
+            end_idx = exc_str.rfind("}")
+            json_str = exc_str[start_idx : end_idx + 1]
+            parsed = json.loads(json_str)
+            if parsed.get("message"):
+                msg_val = parsed["message"]
+                if isinstance(msg_val, str):
+                    exc_str = msg_val
+                elif isinstance(msg_val, dict):
+                    exc_str = " | ".join(f"{k}: {v}" for k, v in msg_val.items())
+            elif parsed.get("errors"):
+                errs = parsed["errors"]
+                if isinstance(errs, dict):
+                    exc_str = " | ".join(f"{k}: {v}" for k, v in errs.items())
+                elif isinstance(errs, list):
+                    exc_str = " | ".join(str(e) for e in errs)
+        except Exception:
+            pass
+
+    if "User blocked" in exc_str or "too many failed" in exc_str or "temporarily locked" in exc_str.lower():
+        return "Shiprocket Account Temporarily Locked: Too many failed login attempts were detected on Shiprocket. Shiprocket's security firewall has temporarily locked API logins for 15 to 20 minutes. Please wait before retrying or verify credentials in Delivery Settings."
     if "Invalid email" in exc_str or "Invalid credentials" in exc_str or "401" in exc_str or "422" in exc_str:
-        return "Invalid Shiprocket Credentials: The email or password does not match your Shiprocket account."
+        return "Invalid Shiprocket Credentials: The email or password does not match your Shiprocket account. Please check your Delivery Settings."
     if "403" in exc_str:
-        return "Invalid Shiprocket Credentials: Authentication failed with Shiprocket (HTTP 403)."
-    return f"Shiprocket connection failed: {exc_str}"
+        return "Invalid Shiprocket Credentials: Authentication failed with Shiprocket (HTTP 403). Please verify your API credentials."
+    if "Wrong Pickup location" in exc_str or "pickup_location" in exc_str:
+        return "Shiprocket Pickup Location Missing: Please verify the pickup address or warehouse nickname in your Shiprocket account and Delivery Settings."
+    if "KYC" in exc_str:
+        return "Shiprocket KYC Required: Please complete 1-minute KYC verification on your Shiprocket dashboard for live carrier booking."
+
+    # Strip raw prefixes
+    clean_msg = exc_str
+    for prefix in ["Shiprocket dispatch failed:", "Shiprocket login failed [400]:", "Shiprocket login failed [403]:", "Shiprocket error:"]:
+        if clean_msg.startswith(prefix):
+            clean_msg = clean_msg[len(prefix):].strip()
+
+    return f"Shiprocket Error: {clean_msg}"
 
 
 @router.post("/settings/{site_id}/test-shiprocket")
@@ -1497,9 +1532,12 @@ def _dispatch_shiprocket(
             response["warning"] = test_awb_warning
         return response
 
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Shiprocket dispatch error: %s", exc, exc_info=True)
-        raise HTTPException(500, f"Shiprocket dispatch failed: {exc}")
+        friendly_msg = _parse_shiprocket_error_message(exc)
+        raise HTTPException(status_code=400, detail=friendly_msg)
 
 
 def _dispatch_manual(

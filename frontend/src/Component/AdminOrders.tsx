@@ -863,8 +863,51 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   const [isBulkActionLoading, setIsBulkActionLoading] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
+  const formatFriendlyErrorMessage = (raw: string): string => {
+    if (!raw) return "An unexpected error occurred.";
+    let clean = String(raw).trim();
+
+    // Check for Shiprocket / Courier specific error signatures
+    if (clean.includes("User blocked") || clean.includes("too many failed") || clean.toLowerCase().includes("temporarily locked")) {
+      return "Shiprocket Account Locked: Too many failed login attempts. Shiprocket's security firewall has temporarily locked API logins for 15–20 minutes. Please wait before retrying or verify credentials in Delivery Settings.";
+    }
+    if (clean.includes("Invalid email and password") || clean.includes("Invalid credentials") || clean.includes("401") || clean.includes("403")) {
+      return "Shiprocket Login Failed: The email or password does not match your Shiprocket account. Please check your Delivery Settings.";
+    }
+    if (clean.includes("KYC") || clean.includes("kyc")) {
+      return "Shiprocket KYC Pending: Please complete the 1-minute KYC verification on your Shiprocket dashboard for live carrier booking.";
+    }
+    if (clean.includes("Wrong Pickup location") || clean.includes("pickup_location")) {
+      return "Shiprocket Pickup Location Missing: Please verify your pickup address/nickname in Delivery Settings.";
+    }
+
+    // Extract message from embedded JSON strings e.g. {"message": "...", "status_code": ...}
+    if (clean.includes("{") && clean.includes("}")) {
+      try {
+        const jsonStart = clean.indexOf("{");
+        const jsonEnd = clean.lastIndexOf("}");
+        const parsed = JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
+        if (parsed.message && typeof parsed.message === "string") {
+          return formatFriendlyErrorMessage(parsed.message);
+        }
+        if (parsed.detail && typeof parsed.detail === "string") {
+          return formatFriendlyErrorMessage(parsed.detail);
+        }
+      } catch {}
+    }
+
+    // Clean redundant backend prefixes
+    clean = clean.replace(/^Shiprocket dispatch failed:\s*/i, "");
+    clean = clean.replace(/^Shiprocket Return Order Creation Failed:\s*/i, "");
+    clean = clean.replace(/^Shiprocket login failed\s*\[\d+\]:\s*/i, "");
+    clean = clean.replace(/^Shiprocket error:\s*/i, "");
+
+    return clean;
+  };
+
   const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
-    setToast({ message, type });
+    const finalMsg = type === "error" ? formatFriendlyErrorMessage(message) : message;
+    setToast({ message: finalMsg, type });
   };
 
   const getOrderDefaultWeight = (orderItem?: AdminOrderListItem | AdminOrderDetail | null): number => {

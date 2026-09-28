@@ -1633,10 +1633,14 @@ def dispatch_return_pickup(
                 detail="Shiprocket credentials not configured. Please configure your Shiprocket account in Delivery Settings."
             )
 
-        from routers.delivery import _get_or_refresh_shiprocket_token
+        from routers.delivery import _get_or_refresh_shiprocket_token, _parse_shiprocket_error_message
         from services.shiprocket import ShiprocketClient, ShiprocketError
 
-        token = _get_or_refresh_shiprocket_token(settings, session)
+        try:
+            token = _get_or_refresh_shiprocket_token(settings, session)
+        except Exception as t_err:
+            friendly_t_err = _parse_shiprocket_error_message(t_err)
+            raise HTTPException(status_code=400, detail=friendly_t_err)
 
         order = get_order_or_404(session, site_id, return_request.order_id)
         items = session.exec(
@@ -1737,8 +1741,9 @@ def dispatch_return_pickup(
 
         try:
             sr_return_data = ShiprocketClient.create_return_order(token, sr_payload)
-        except ShiprocketError as err:
-            raise HTTPException(status_code=400, detail=f"Shiprocket Return Order Creation Failed: {str(err)}")
+        except Exception as err:
+            friendly_err = _parse_shiprocket_error_message(err)
+            raise HTTPException(status_code=400, detail=friendly_err)
 
         sr_order_id = sr_return_data.get("order_id")
         sr_shipment_id = sr_return_data.get("shipment_id")
