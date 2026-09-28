@@ -167,6 +167,8 @@ def ensure_accessible_contrast(text_hex: Optional[str], bg_hex: str, min_ratio: 
             ratio = calculate_contrast_ratio(t_hex, b_hex)
             if ratio >= min_ratio:
                 return t_clean
+    except Exception:
+        pass
     return calculate_contrast_color(bg_hex)
 
 
