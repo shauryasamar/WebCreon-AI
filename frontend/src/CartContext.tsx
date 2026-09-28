@@ -555,7 +555,8 @@ export function CartProvider({
   }, []);
 
   const loadGuestCartIntoState = useCallback(() => {
-    const guestItems = readGuestCart(resolvedSiteId);
+    const targetSiteKey = resolvedSiteId || "default";
+    const guestItems = readGuestCart(targetSiteKey);
     setCartItems(guestItems);
     setCartItemIds({});
   }, [resolvedSiteId]);
@@ -563,24 +564,20 @@ export function CartProvider({
   const isMergingGuestCartRef = useRef(false);
 
   const refreshCart = useCallback(async () => {
-    if (!resolvedSiteId) {
-      setCartItems([]);
-      setCartItemIds({});
-      return;
-    }
+    const targetSiteKey = resolvedSiteId || "default";
+    const hasToken = resolvedSiteId ? Boolean(getCustomerToken(resolvedSiteId)) : false;
 
-    const hasToken = Boolean(getCustomerToken(resolvedSiteId));
-    if (!hasToken) {
+    if (!hasToken || !resolvedSiteId) {
       loadGuestCartIntoState();
       return;
     }
 
     // Atomic guest cart merge upon login
-    const guestItems = readGuestCart(resolvedSiteId);
+    const guestItems = readGuestCart(targetSiteKey);
     if (guestItems.length > 0 && !isMergingGuestCartRef.current) {
       isMergingGuestCartRef.current = true;
       // Immediately clear guest storage before async call to avoid race conditions or duplicates
-      clearGuestCartStorage(resolvedSiteId);
+      clearGuestCartStorage(targetSiteKey);
 
       try {
         const mergePayload = {
@@ -713,15 +710,14 @@ export function CartProvider({
 
   const addToCart = useCallback(
     async (product: Product, quantity = 1) => {
-      if (!resolvedSiteId) return;
-
+      const targetSiteKey = resolvedSiteId || "default";
       const rawVariant = getSelectedVariantValue(product);
       const selectedVariantValue = rawVariant ? rawVariant.trim() : null;
       const safeQuantity = Math.max(1, quantity);
-      const hasToken = Boolean(getCustomerToken(resolvedSiteId));
+      const hasToken = Boolean(getCustomerToken(targetSiteKey));
 
-      if (!hasToken) {
-        const existingItems = readGuestCart(resolvedSiteId);
+      if (!hasToken || !resolvedSiteId) {
+        const existingItems = readGuestCart(targetSiteKey);
         const key = buildCartItemKey(product.id, selectedVariantValue);
 
         const nextItems = [...existingItems];
@@ -745,7 +741,7 @@ export function CartProvider({
         }
 
         const consolidated = consolidateCartList(nextItems);
-        writeGuestCart(resolvedSiteId, consolidated);
+        writeGuestCart(targetSiteKey, consolidated);
         setCartItems(consolidated);
         setCartItemIds({});
         return;
@@ -781,12 +777,11 @@ export function CartProvider({
 
   const removeFromCart = useCallback(
     async (productId: ProductId, variantValue?: string | null) => {
-      if (!resolvedSiteId) return;
-
+      const targetSiteKey = resolvedSiteId || "default";
       const normVariant = variantValue ? variantValue.trim() : null;
       const key = `${String(productId)}::${normVariant ?? ""}`;
       const itemId = cartItemIds[key];
-      const hasToken = Boolean(getCustomerToken(resolvedSiteId));
+      const hasToken = Boolean(getCustomerToken(targetSiteKey));
 
       // Optimistic removal from UI & clean up key immediately
       setCartItems((prev) =>
@@ -804,15 +799,15 @@ export function CartProvider({
         return next;
       });
 
-      if (!hasToken || !itemId) {
-        const nextItems = readGuestCart(resolvedSiteId).filter(
+      if (!hasToken || !itemId || !resolvedSiteId) {
+        const nextItems = readGuestCart(targetSiteKey).filter(
           (item) =>
             !(
               String(item.id) === String(productId) &&
               ((item.selectedVariantValue ? item.selectedVariantValue.trim() : null) === normVariant)
             )
         );
-        writeGuestCart(resolvedSiteId, nextItems);
+        writeGuestCart(targetSiteKey, nextItems);
         return;
       }
 
@@ -850,21 +845,20 @@ export function CartProvider({
         return;
       }
 
-      if (!resolvedSiteId) return;
-
+      const targetSiteKey = resolvedSiteId || "default";
       const normVariant = variantValue ? variantValue.trim() : null;
       const key = `${String(productId)}::${normVariant ?? ""}`;
       const itemId = cartItemIds[key];
-      const hasToken = Boolean(getCustomerToken(resolvedSiteId));
+      const hasToken = Boolean(getCustomerToken(targetSiteKey));
 
-      if (!hasToken || !itemId) {
-        const nextItems = readGuestCart(resolvedSiteId).map((item) =>
+      if (!hasToken || !itemId || !resolvedSiteId) {
+        const nextItems = readGuestCart(targetSiteKey).map((item) =>
           String(item.id) === String(productId) &&
           ((item.selectedVariantValue ? item.selectedVariantValue.trim() : null) === normVariant)
             ? { ...item, quantity }
             : item
         );
-        writeGuestCart(resolvedSiteId, nextItems);
+        writeGuestCart(targetSiteKey, nextItems);
         setCartItems(consolidateCartList(nextItems));
         setCartItemIds({});
         return;
@@ -907,7 +901,16 @@ export function CartProvider({
   );
 
   const clearCart = useCallback(async () => {
-    if (!resolvedSiteId) return;
+    const targetSiteKey = resolvedSiteId || "default";
+    const hasToken = Boolean(getCustomerToken(targetSiteKey));
+
+    if (!hasToken || !resolvedSiteId) {
+      clearGuestCartStorage(targetSiteKey);
+      clearAppliedCoupon();
+      setCartItems([]);
+      setCartItemIds({});
+      return;
+    }
 
     try {
       const res = await fetch(`${API_BASE_URL}/cart/${resolvedSiteId}/clear`, {
@@ -917,7 +920,7 @@ export function CartProvider({
       });
 
       if (res.status === 401 || res.status === 403) {
-        clearGuestCartStorage(resolvedSiteId);
+        clearGuestCartStorage(targetSiteKey);
         clearAppliedCoupon();
         setCartItems([]);
         setCartItemIds({});

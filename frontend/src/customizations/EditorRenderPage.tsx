@@ -1966,8 +1966,37 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     { key: "review", label: resolvedStep3 },
   ];
 
-  const stepsBg = stepsProps.background_color || shellBg;
-  const stepsBorder = stepsProps.border_color ? `1px solid ${stepsProps.border_color}` : shellBorder;
+  const rawStepsBg =
+    stepsProps.background_color ||
+    stepsProps.card_bg ||
+    stepsProps.card_color ||
+    (theme as any)?.checkout_steps_bg ||
+    (theme as any)?.checkout_card_bg ||
+    (theme as any)?.delivery_form_bg ||
+    cardBg ||
+    shellBg;
+
+  const isStepsBgTransparent =
+    rawStepsBg === "transparent" ||
+    rawStepsBg.startsWith("rgba(0, 0, 0, 0)") ||
+    rawStepsBg.startsWith("rgba(255, 255, 255, 0)");
+
+  const stepsBg = isStepsBgTransparent ? "transparent" : rawStepsBg;
+  const isStepsDark = isStepsBgTransparent ? isDark : isColorDarkHex(stepsBg);
+
+  const stepsBorder = stepsProps.border_color
+    ? stepsProps.border_color === "transparent" || stepsProps.border_color === "none"
+      ? "none"
+      : `1px solid ${stepsProps.border_color}`
+    : (isStepsBgTransparent ? "none" : cardBorder);
+
+  const stepsShadow =
+    isStepsBgTransparent
+      ? "none"
+      : isStepsDark
+        ? "0 10px 24px rgba(0,0,0,0.14)"
+        : "0 1px 2px rgba(16,24,40,0.04)";
+
   const stepsRadius = stepsProps.border_radius !== undefined ? `${stepsProps.border_radius}px` : "18px";
   const rawStepRadius = stepsProps.step_radius !== undefined ? Number(stepsProps.step_radius) : 11;
   const stepsBadgeRadius = `${rawStepRadius > 20 ? 11 : rawStepRadius}px`;
@@ -1978,15 +2007,15 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   const stepsGap = stepsProps.step_gap !== undefined ? Number(stepsProps.step_gap) : (isCompactCheckout ? 10 : 16);
 
   const stepsActiveBadgeBg = stepsProps.active_step_bg || accentColor;
-  const stepsActiveBadgeText = stepsProps.active_step_text || "#ffffff";
-  const stepsActiveTitle = stepsProps.active_text_color || textColor;
+  const stepsActiveBadgeText = stepsProps.active_step_text || (isStepsDark ? "#ffffff" : "#ffffff");
+  const stepsActiveTitle = stepsProps.active_text_color || (isStepsDark ? "#f8fafc" : "#0f172a");
   const stepsActiveLine = stepsProps.line_active_color || accentColor;
 
-  const stepsInactiveBadgeBg = stepsProps.inactive_step_bg || "transparent";
-  const stepsInactiveBadgeBorder = stepsProps.inactive_step_border || (isLight ? "#d5dbe4" : "rgba(255,255,255,0.16)");
-  const stepsInactiveBadgeText = stepsProps.inactive_step_text || subtleText;
-  const stepsInactiveTitle = stepsProps.inactive_text_color || subtleText;
-  const stepsInactiveLine = stepsProps.line_inactive_color || (isLight ? "#e5e7eb" : "rgba(255,255,255,0.12)");
+  const stepsInactiveBadgeBg = stepsProps.inactive_step_bg || (isStepsDark ? "rgba(255,255,255,0.06)" : "#f1f5f9");
+  const stepsInactiveBadgeBorder = stepsProps.inactive_step_border || (isStepsDark ? "rgba(255,255,255,0.16)" : "#d5dbe4");
+  const stepsInactiveBadgeText = stepsProps.inactive_step_text || (isStepsDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
+  const stepsInactiveTitle = stepsProps.inactive_text_color || (isStepsDark ? "rgba(248, 250, 252, 0.82)" : "rgba(15, 23, 42, 0.75)");
+  const stepsInactiveLine = stepsProps.line_inactive_color || (isStepsDark ? "rgba(255,255,255,0.12)" : "#e5e7eb");
 
   const isStepperSelected = Boolean(
     selectedBlockId &&

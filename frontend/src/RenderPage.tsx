@@ -19,6 +19,7 @@ import {
   ChristmasGraphics,
   EidGraphics,
 } from "./Component/FestiveGraphics";
+import { getContrastTextColor, getAccessibleAccentColor } from "./hooks/usePublicSiteTheme";
 import { useDeviceMode } from "./context/DeviceModeContext";
 
 type Block = {
@@ -2100,8 +2101,37 @@ const RenderPage: React.FC<RenderPageProps> = ({
     { key: "review", label: resolvedStep3 },
   ];
 
-  const stepsBg = stepsProps.background_color || shellBg;
-  const stepsBorder = stepsProps.border_color ? `1px solid ${stepsProps.border_color}` : shellBorder;
+  const rawStepsBg =
+    stepsProps.background_color ||
+    stepsProps.card_bg ||
+    stepsProps.card_color ||
+    (theme as any)?.checkout_steps_bg ||
+    (theme as any)?.checkout_card_bg ||
+    (theme as any)?.delivery_form_bg ||
+    cardBg ||
+    shellBg;
+
+  const isStepsBgTransparent =
+    rawStepsBg === "transparent" ||
+    rawStepsBg.startsWith("rgba(0, 0, 0, 0)") ||
+    rawStepsBg.startsWith("rgba(255, 255, 255, 0)");
+
+  const stepsBg = isStepsBgTransparent ? "transparent" : rawStepsBg;
+  const isStepsDark = isStepsBgTransparent ? isDark : isColorDarkHex(stepsBg);
+
+  const stepsBorder = stepsProps.border_color
+    ? stepsProps.border_color === "transparent" || stepsProps.border_color === "none"
+      ? "none"
+      : `1px solid ${stepsProps.border_color}`
+    : (isStepsBgTransparent ? "none" : cardBorder);
+
+  const stepsShadow =
+    isStepsBgTransparent
+      ? "none"
+      : isStepsDark
+        ? "0 10px 24px rgba(0,0,0,0.14)"
+        : "0 1px 2px rgba(16,24,40,0.04)";
+
   const stepsRadius = stepsProps.border_radius !== undefined ? `${stepsProps.border_radius}px` : "18px";
   const rawStepRadius = stepsProps.step_radius !== undefined ? Number(stepsProps.step_radius) : 11;
   const stepsBadgeRadius = `${rawStepRadius > 20 ? 11 : rawStepRadius}px`;
@@ -2110,6 +2140,17 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
   const stepsAlign = stepsProps.text_align || "left";
   const stepsGap = stepsProps.step_gap !== undefined ? Number(stepsProps.step_gap) : (isCompactCheckout ? 8 : 14);
+
+  const stepsActiveBadgeBg = stepsProps.active_step_bg || accentColor;
+  const stepsActiveBadgeText = stepsProps.active_step_text || getContrastTextColor(stepsActiveBadgeBg);
+  const stepsActiveTitle = stepsProps.active_text_color || (isStepsDark ? "#f8fafc" : "#0f172a");
+  const stepsActiveLine = stepsProps.line_active_color || accentColor;
+
+  const stepsInactiveBadgeBg = stepsProps.inactive_step_bg || (isStepsDark ? "rgba(255,255,255,0.06)" : "#f1f5f9");
+  const stepsInactiveBadgeBorder = stepsProps.inactive_step_border || (isStepsDark ? "rgba(255,255,255,0.16)" : "#d5dbe4");
+  const stepsInactiveBadgeText = stepsProps.inactive_step_text || (isStepsDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
+  const stepsInactiveTitle = stepsProps.inactive_text_color || (isStepsDark ? "rgba(248, 250, 252, 0.82)" : "rgba(15, 23, 42, 0.75)");
+  const stepsInactiveLine = stepsProps.line_inactive_color || (isStepsDark ? "rgba(255,255,255,0.12)" : "#e5e7eb");
 
   return (
     <ThemeProvider theme={theme as any}>
@@ -2171,9 +2212,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
               borderRadius: stepsRadius,
               border: stepsBorder,
               background: stepsBg,
-              boxShadow: isLight
-                ? "0 1px 2px rgba(16,24,40,0.04)"
-                : "0 18px 44px rgba(0,0,0,0.22)",
+              boxShadow: stepsShadow,
               padding: stepsPadding,
               marginBottom: stepsMarginBottom,
               boxSizing: "border-box",
@@ -2182,91 +2221,109 @@ const RenderPage: React.FC<RenderPageProps> = ({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: `repeat(${resolvedCheckoutSteps.length}, minmax(0, 1fr))`,
+                gridTemplateColumns: isCompactCheckout
+                  ? "minmax(0,1fr)"
+                  : "repeat(3, minmax(0, 1fr))",
                 gap: `${stepsGap}px`,
                 alignItems: "center",
               }}
             >
               {resolvedCheckoutSteps.map((step, index) => {
-                const isActive = step.key === checkoutStep;
                 const isCompleted = index < currentStepIndex;
+                const isCurrent = step.key === checkoutStep;
                 const isDisabled =
                   (step.key === "payment" && !canContinueDelivery) ||
                   (step.key === "review" &&
                     (!canContinueDelivery || !canContinuePayment));
 
                 return (
-                  <button
+                  <div
                     key={step.key}
-                    type="button"
-                    onClick={() => !isDisabled && goToStep(step.key)}
-                    disabled={isDisabled}
                     style={{
-                      display: "flex",
+                      display: "grid",
+                      gridTemplateColumns:
+                        !isCompactCheckout && index < resolvedCheckoutSteps.length - 1
+                          ? "1fr auto"
+                          : "1fr",
                       alignItems: "center",
-                      justifyContent:
-                        stepsAlign === "center"
-                          ? "center"
-                          : stepsAlign === "right"
-                            ? "flex-end"
-                            : "flex-start",
-                      gap: "8px",
-                      padding: isCompactCheckout ? "8px 10px" : "10px 14px",
-                      borderRadius: "12px",
-                      border: isActive
-                        ? `1.5px solid ${accentColor}`
-                        : "1.5px solid transparent",
-                      background: isActive
-                        ? isLight
-                          ? "#ffffff"
-                          : "rgba(255,255,255,0.12)"
-                        : "transparent",
-                      color: isActive
-                        ? (isLight ? "#0f172a" : "#ffffff")
-                        : isCompleted
-                          ? "#10b981"
-                          : (isLight ? "rgba(15, 23, 42, 0.70)" : "rgba(255, 255, 255, 0.75)"),
-                      cursor: isDisabled ? "not-allowed" : "pointer",
-                      opacity: isDisabled ? 0.70 : 1,
-                      transition: "all 0.15s ease",
-                      textAlign: stepsAlign as any,
+                      gap: `${Math.max(6, Math.round(stepsGap / 2))}px`,
                     }}
                   >
-                    <div
+                    <button
+                      type="button"
+                      onClick={() => !isDisabled && goToStep(step.key)}
+                      disabled={isDisabled}
                       style={{
-                        width: "22px",
-                        height: "22px",
-                        borderRadius: "50%",
-                        background: isCompleted
-                          ? "#10b981"
-                          : isActive
-                            ? accentColor
-                            : isLight
-                              ? "#e5e7eb"
-                              : "rgba(255,255,255,0.18)",
-                        color: isCompleted || isActive ? "#ffffff" : (isLight ? "#475569" : "#ffffff"),
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        display: "grid",
-                        placeItems: "center",
-                        flexShrink: 0,
+                        border: "none",
+                        background: "transparent",
+                        padding: 0,
+                        cursor: isDisabled ? "not-allowed" : "pointer",
+                        textAlign: stepsAlign as any,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent:
+                          stepsAlign === "center"
+                            ? "center"
+                            : stepsAlign === "right"
+                              ? "flex-end"
+                              : "flex-start",
+                        gap: "10px",
+                        opacity: isDisabled ? 0.65 : 1,
+                        width: "100%",
+                        transition: "all 0.15s ease",
                       }}
                     >
-                      {isCompleted ? "✓" : index + 1}
-                    </div>
+                      <div
+                        style={{
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: stepsBadgeRadius,
+                          display: "grid",
+                          placeItems: "center",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          border:
+                            isCurrent || isCompleted
+                              ? `1px solid ${stepsActiveBadgeBg}`
+                              : `1px solid ${stepsInactiveBadgeBorder}`,
+                          background:
+                            isCurrent || isCompleted ? stepsActiveBadgeBg : stepsInactiveBadgeBg,
+                          color:
+                            isCurrent || isCompleted ? stepsActiveBadgeText : stepsInactiveBadgeText,
+                          flexShrink: 0,
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {isCompleted ? "✓" : index + 1}
+                      </div>
 
-                    <span
-                      style={{
-                        fontSize: isCompactCheckout ? "12px" : "13px",
-                        fontWeight: isActive ? 700 : 600,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {step.label}
-                    </span>
-                  </button>
+                      <span
+                        style={{
+                          fontSize: isCompactCheckout ? "12px" : "13px",
+                          fontWeight: isCurrent ? 700 : 600,
+                          color: isCurrent ? stepsActiveTitle : stepsInactiveTitle,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          transition: "color 0.15s ease",
+                        }}
+                      >
+                        {step.label}
+                      </span>
+                    </button>
+
+                    {!isCompactCheckout && index < resolvedCheckoutSteps.length - 1 ? (
+                      <div
+                        style={{
+                          height: "1px",
+                          background:
+                            index < currentStepIndex ? stepsActiveLine : stepsInactiveLine,
+                          width: "100%",
+                          transition: "background 0.2s ease",
+                        }}
+                      />
+                    ) : null}
+                  </div>
                 );
               })}
             </div>
