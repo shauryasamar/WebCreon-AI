@@ -2503,6 +2503,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                         helperText: reviewProps.helper_text,
                         reviewMode: true,
                         disabled: false,
+                        editMode: true,
                       })
                       : null}
                   </div>

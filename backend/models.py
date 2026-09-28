@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
+import re
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
@@ -13,6 +14,20 @@ from sqlmodel import Field, SQLModel
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def format_clean_site_name(name: Optional[str]) -> str:
+    if not name or not isinstance(name, str):
+        return "Store"
+    clean = name.strip()
+    # Strip long numeric hashes, timestamps (e.g. -17283948293, _8492048, -a84f9b20)
+    clean = re.sub(r"[-_]\d{4,}$", "", clean)
+    clean = re.sub(r"[-_][0-9a-fA-F]{6,}$", "", clean)
+    clean = re.sub(r"\d{6,}$", "", clean)
+    clean = clean.replace("-", " ").replace("_", " ").strip()
+    if not clean:
+        return "Store"
+    return " ".join(w.capitalize() for w in clean.split())
 
 
 class Role(SQLModel, table=True):
@@ -116,8 +131,18 @@ class Site(SQLModel, table=True):
     @property
     def name(self) -> str:
         if self.site_definition and isinstance(self.site_definition, dict):
-            return self.site_definition.get("site_name") or self.site_definition.get("name") or self.slug
-        return self.slug
+            raw = (
+                self.site_definition.get("site", {}).get("brand_name")
+                or self.site_definition.get("brand_name")
+                or self.site_definition.get("site_name")
+                or self.site_definition.get("navbar", {}).get("brandName")
+                or self.site_definition.get("header", {}).get("brand_name")
+                or self.site_definition.get("title")
+                or self.site_definition.get("name")
+            )
+            if raw and isinstance(raw, str) and raw.strip():
+                return format_clean_site_name(raw)
+        return format_clean_site_name(self.slug)
 
     @property
     def is_published(self) -> bool:

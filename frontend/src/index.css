@@ -250,6 +250,39 @@ body.is-mobile-preview *::-webkit-scrollbar {
   }
 }
 
+/* ==========================================================================
+   Razorpay Checkout Modal - 100% Crystal Clear Transparent (No Blur, No Dim)
+   ========================================================================== */
+.razorpay-container {
+  background: transparent !important;
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  z-index: 2147483647 !important;
+}
+
+.razorpay-backdrop {
+  display: none !important;
+  opacity: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  pointer-events: none !important;
+}
+
+.razorpay-container > iframe,
+iframe.razorpay-checkout-frame,
+iframe[name*="razorpay"],
+iframe[src*="razorpay"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  color-scheme: light !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* html,
 body,
 #root {

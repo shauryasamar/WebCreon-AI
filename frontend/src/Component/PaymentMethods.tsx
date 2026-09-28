@@ -570,17 +570,27 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                     : cod_subtitle || "Pay with cash upon package delivery";
                 }
 
+                const handleSelectThisMethod = () => {
+                  if (isMethodDisabled) return;
+                  setSelectedMethod(methodKey);
+                  onPaymentDataChange?.({
+                    method: methodKey,
+                    upiId: methodKey.toUpperCase() === "UPI" ? upiId : "",
+                  });
+                };
+
                 return (
                   <label
                     key={methodKey}
                     htmlFor={isMethodDisabled ? undefined : inputId}
+                    onClick={handleSelectThisMethod}
                     style={{
                       display: "flex",
                       flexDirection: "column",
                       gap: "8px",
                       padding: isMobile ? "12px" : "14px 16px",
                       borderRadius: `${resolvedItemRadius}px`,
-                      border: `1px solid ${
+                      border: `1.5px solid ${
                         isSelected ? resolvedAccent : palette.border
                       }`,
                       background: isSelected
@@ -590,8 +600,19 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                       opacity: isMethodDisabled ? 0.65 : 1,
                       boxShadow: isSelected ? palette.selectedRing : "none",
                       transition: "all 180ms ease",
+                      userSelect: "none",
                     }}
                   >
+                    <input
+                      type="radio"
+                      id={inputId}
+                      name="checkout_payment_method"
+                      value={methodKey}
+                      checked={isSelected}
+                      disabled={isMethodDisabled}
+                      onChange={handleSelectThisMethod}
+                      style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }}
+                    />
                     <div
                       style={{
                         display: "flex",
@@ -613,6 +634,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                           role="radio"
                           aria-checked={isSelected}
                           aria-disabled={isMethodDisabled}
+                          onClick={handleSelectThisMethod}
                           style={{
                             width: "18px",
                             height: "18px",
@@ -699,6 +721,48 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                         </div>
                       </div>
                     </div>
+
+                    {isSelected && methodKey.toUpperCase() === "UPI" && (
+                      <div
+                        style={{
+                          marginTop: "6px",
+                          paddingTop: "8px",
+                          borderTop: `1px dashed ${palette.border}`,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "4px",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <label style={{ fontSize: "11px", fontWeight: 600, color: palette.textMuted }}>
+                          UPI ID / VPA (Optional — you can also scan QR or pay via installed UPI app)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. yourname@okhdfcbank or 9876543210@paytm"
+                          value={upiId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setUpiId(val);
+                            onPaymentDataChange?.({
+                              method: "UPI",
+                              upiId: val,
+                            });
+                          }}
+                          style={{
+                            padding: "8px 12px",
+                            borderRadius: `${resolvedFieldRadius}px`,
+                            border: `1px solid ${palette.border}`,
+                            background: palette.inputBg,
+                            color: palette.text,
+                            fontSize: "13px",
+                            outline: "none",
+                            width: "100%",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      </div>
+                    )}
                   </label>
                 );
               })

@@ -1785,7 +1785,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     color: subtleText,
   };
 
-  const selectedVariantMeta = optionValues.find((option) => option.value === selectedOption);
+  const effectiveOption = selectedOption || (hasVariants ? firstAvailableVariant : "");
+  const selectedVariantMeta = optionValues.find((option) => option.value === effectiveOption);
 
   const effectivePrice =
     typeof selectedVariantMeta?.price === "number" && selectedVariantMeta.price > 0
@@ -1856,7 +1857,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const quantityAlreadyInCart = cartItems.reduce((sum, item) => {
     const sameProduct = String(item.id) === String(product.id);
     const sameVariant =
-      (item.selectedVariantValue ?? null) === (hasVariants ? selectedOption : null);
+      (item.selectedVariantValue ?? null) === (hasVariants ? effectiveOption : null);
     return sameProduct && sameVariant ? sum + item.quantity : sum;
   }, 0);
 
@@ -1872,16 +1873,16 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     ? "Pre-order open"
     : isEntireProductOutOfStock
     ? "Out of stock"
-    : selectedVariantOutOfStock && selectedOption
-    ? `${selectedOption} is out of stock`
+    : selectedVariantOutOfStock && effectiveOption
+    ? `${effectiveOption} is out of stock`
     : isCartLimitReached
     ? "All available stock is already in your cart"
     : hasVariants &&
-      selectedOption &&
+      effectiveOption &&
       typeof remainingQty === "number" &&
       remainingQty > 0 &&
       remainingQty <= 5
-    ? `Only ${remainingQty} left in ${selectedOption}`
+    ? `Only ${remainingQty} left in ${effectiveOption}`
     : typeof remainingQty === "number" && remainingQty > 0 && remainingQty <= 5
     ? `Only ${remainingQty} left in stock`
     : "";
@@ -1891,7 +1892,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
   const isAtMaxQty = isPreorder ? false : (typeof maxAllowedQty === "number" ? quantity >= maxAllowedQty : false);
 
-  const canAddToCart = (isPreorder || normalizedInStock) && (!hasVariants || Boolean(selectedOption));
+  const canAddToCart = (isPreorder || normalizedInStock) && (!hasVariants || Boolean(effectiveOption));
   const finalCanAddToCart =
     canAddToCart && !selectedVariantOutOfStock && !isCartLimitReached;
 
@@ -1917,9 +1918,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
       compare_price: showOriginal ? effectiveOriginalPrice ?? null : null,
       in_stock: true,
       stock: variantStockQty ?? product.stock,
-      selectedVariantValue: hasVariants ? selectedOption : null,
+      selectedVariantValue: hasVariants ? effectiveOption : null,
       selectedVariantLabel: hasVariants ? optionLabel : null,
-      ...(hasVariants && selectedOption
+      ...(hasVariants && effectiveOption
         ? {
             variant_option: {
               optionType: variantOption?.optionType,

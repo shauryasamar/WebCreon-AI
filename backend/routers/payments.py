@@ -364,6 +364,7 @@ class CreatePaymentOrderResponse(BaseModel):
     platform_fee: float
     tenant_share: float
     pricing_snapshot: dict[str, Any]
+    store_name: Optional[str] = None
 
 
 class VerifyPaymentRequest(BaseModel):
@@ -864,6 +865,7 @@ def create_payment_order(
         "platform_fee": float(platform_fee),
         "tenant_share": float(tenant_share),
         "pricing_snapshot": pricing_snapshot,
+        "store_name": getattr(site, "website_name", None) or getattr(site, "name", None) or "Store",
     }
 
 

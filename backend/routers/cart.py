@@ -228,10 +228,13 @@ def extract_variant_details(
                 else product.compare_price
             )
             stock_qty = option.get("stockQty")
-            variant_stock_qty = int(stock_qty) if stock_qty is not None else product.stock
+            variant_stock_qty = int(stock_qty) if stock_qty is not None and str(stock_qty).strip() != "" else product.stock
             option_in_stock = option.get("inStock")
+            if option_in_stock is None:
+                option_in_stock = option.get("in_stock", True)
 
-            if (option_in_stock is False or variant_stock_qty <= 0) and raise_if_out_of_stock:
+            is_var_out = (option_in_stock is False) or (stock_qty is not None and str(stock_qty).strip() != "" and variant_stock_qty <= 0) or (product.in_stock is False)
+            if is_var_out and raise_if_out_of_stock:
                 raise HTTPException(status_code=400, detail="Selected variant is out of stock")
 
             return price, compare_price, option_name, variant_stock_qty

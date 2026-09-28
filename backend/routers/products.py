@@ -3329,6 +3329,61 @@ def create_product(
 
     slug_value = product_in.slug or make_slug(product_in.name)
 
+    variant_option_dict = (
+        json_safe(product_in.variant_option.model_dump())
+        if product_in.variant_option
+        else None
+    )
+
+    computed_price = product_in.price
+    computed_stock = product_in.stock
+    computed_in_stock = product_in.in_stock
+
+    if variant_option_dict and isinstance(variant_option_dict, dict):
+        option_values = variant_option_dict.get("optionValues", [])
+        if option_values:
+            total_stock = 0
+            min_price = None
+            any_variant_in_stock = False
+            has_explicit_stock_control = False
+
+            for opt in option_values:
+                is_opt_in_stock = opt.get("inStock")
+                if is_opt_in_stock is None:
+                    is_opt_in_stock = opt.get("in_stock", True)
+
+                qty = opt.get("stockQty")
+                if qty is not None and str(qty).strip() != "":
+                    try:
+                        parsed_qty = int(qty)
+                        has_explicit_stock_control = True
+                        if is_opt_in_stock and parsed_qty > 0:
+                            total_stock += parsed_qty
+                            any_variant_in_stock = True
+                    except Exception:
+                        pass
+                else:
+                    if is_opt_in_stock:
+                        any_variant_in_stock = True
+
+                p = opt.get("price")
+                if p is not None:
+                    try:
+                        p_val = Decimal(str(p))
+                        if min_price is None or p_val < min_price:
+                            min_price = p_val
+                    except Exception:
+                        pass
+
+            if min_price is not None and min_price > 0:
+                computed_price = min_price
+
+            computed_in_stock = any_variant_in_stock
+            if has_explicit_stock_control:
+                computed_stock = total_stock
+            else:
+                computed_stock = product_in.stock if product_in.stock is not None else (100 if any_variant_in_stock else 0)
+
     product = Product(
         site_id=site_id,
         name=product_in.name,
@@ -3337,10 +3392,10 @@ def create_product(
         category_id=product_in.category_id,
         description=product_in.description,
         slug=slug_value,
-        price=product_in.price,
+        price=computed_price,
         compare_price=product_in.compare_price,
-        stock=product_in.stock,
-        in_stock=product_in.in_stock,
+        stock=computed_stock,
+        in_stock=computed_in_stock,
         is_active=product_in.is_active,
         draft_reason=draft_reason_val,
         drafted_at=drafted_at_val,
@@ -3362,11 +3417,7 @@ def create_product(
         preorder_limit=product_in.preorder_limit,
         images=product_in.images,
         highlights=product_in.highlights or [],
-        variant_option=(
-            json_safe(product_in.variant_option.model_dump())
-            if product_in.variant_option
-            else None
-        ),
+        variant_option=variant_option_dict,
     )
 
     session.add(product)
@@ -3490,13 +3541,28 @@ def update_product(
             # Compute min_price and total stock across variants
             total_stock = 0
             min_price = None
+            any_variant_in_stock = False
+            has_explicit_stock_control = False
+
             for opt in option_values:
+                is_opt_in_stock = opt.get("inStock")
+                if is_opt_in_stock is None:
+                    is_opt_in_stock = opt.get("in_stock", True)
+
                 qty = opt.get("stockQty")
-                if qty is not None:
+                if qty is not None and str(qty).strip() != "":
                     try:
-                        total_stock += int(qty)
+                        parsed_qty = int(qty)
+                        has_explicit_stock_control = True
+                        if is_opt_in_stock and parsed_qty > 0:
+                            total_stock += parsed_qty
+                            any_variant_in_stock = True
                     except Exception:
                         pass
+                else:
+                    if is_opt_in_stock:
+                        any_variant_in_stock = True
+
                 p = opt.get("price")
                 if p is not None:
                     try:
@@ -3511,9 +3577,11 @@ def update_product(
             elif product_in.price is not None:
                 product.price = product_in.price
 
-            if total_stock > 0 or any(opt.get("stockQty") is not None for opt in option_values):
+            product.in_stock = any_variant_in_stock
+            if has_explicit_stock_control:
                 product.stock = total_stock
-                product.in_stock = total_stock > 0
+            else:
+                product.stock = product_in.stock if product_in.stock is not None else (100 if any_variant_in_stock else 0)
         else:
             product.price = product_in.price
 
@@ -3841,13 +3909,28 @@ def quick_edit_product(
         if option_values:
             total_stock = 0
             min_price = None
+            any_variant_in_stock = False
+            has_explicit_stock_control = False
+
             for v in option_values:
+                is_opt_in_stock = v.get("inStock")
+                if is_opt_in_stock is None:
+                    is_opt_in_stock = v.get("in_stock", True)
+
                 qty = v.get("stockQty")
-                if qty is not None:
+                if qty is not None and str(qty).strip() != "":
                     try:
-                        total_stock += int(qty)
+                        parsed_qty = int(qty)
+                        has_explicit_stock_control = True
+                        if is_opt_in_stock and parsed_qty > 0:
+                            total_stock += parsed_qty
+                            any_variant_in_stock = True
                     except Exception:
                         pass
+                else:
+                    if is_opt_in_stock:
+                        any_variant_in_stock = True
+
                 p = v.get("price")
                 if p is not None:
                     try:
@@ -3856,8 +3939,13 @@ def quick_edit_product(
                             min_price = p_val
                     except Exception:
                         pass
-            product.stock = total_stock
-            product.in_stock = total_stock > 0
+
+            product.in_stock = any_variant_in_stock
+            if has_explicit_stock_control:
+                product.stock = total_stock
+            else:
+                product.stock = 100 if any_variant_in_stock else 0
+
             if min_price is not None and min_price > 0:
                 product.price = min_price
 

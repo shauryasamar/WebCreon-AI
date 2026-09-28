@@ -599,8 +599,8 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
               response.method
                 ? (response.method === "netbanking" ? (response.bank ? `Net Banking (${response.bank})` : "Net Banking")
                   : response.method === "card" ? "Credit / Debit Card"
-                  : response.method === "upi" ? "UPI"
-                  : response.method)
+                    : response.method === "upi" ? "UPI"
+                      : response.method)
                 : undefined;
 
             await executeUpgrade({
@@ -766,44 +766,44 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
           position: "relative",
         }}
       >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
+          {/* Mode Pill: "Billing & Plans" (identical style as "Domains & URLs") */}
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: "10px",
+              display: "inline-flex",
+              background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+              padding: "3px",
+              borderRadius: "8px",
+              border: `1px solid ${tokens.border}`,
             }}
           >
-            {/* Mode Pill: "Billing & Plans" (identical style as "Domains & URLs") */}
-            <div
+            <span
               style={{
-                display: "inline-flex",
-                background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-                padding: "3px",
-                borderRadius: "8px",
-                border: `1px solid ${tokens.border}`,
+                borderRadius: "6px",
+                padding: "6px 16px",
+                background: isDark ? tokens.surfaceBg : "#ffffff",
+                color: tokens.textPrimary,
+                boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+                fontSize: "13px",
+                fontWeight: 700,
+                display: "inline-block",
+                userSelect: "none",
               }}
             >
-              <span
-                style={{
-                  borderRadius: "6px",
-                  padding: "6px 16px",
-                  background: isDark ? tokens.surfaceBg : "#ffffff",
-                  color: tokens.textPrimary,
-                  boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  display: "inline-block",
-                  userSelect: "none",
-                }}
-              >
-                Billing & Plans
-              </span>
-            </div>
-
+              Billing & Plans
+            </span>
           </div>
+
         </div>
+      </div>
 
       {/* ========================================================================= */}
       {/* 2. ACCOUNT AI CREDITS CARD (ALWAYS AT THE TOP)                             */}
@@ -912,60 +912,60 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
           />
         </div>
 
-          {showBatchDrawer && (() => {
-            const activeBatches = (aiCredits?.batches || []).filter((b) => {
-              if (!b.expiry_date) return true;
-              const isExpired = new Date(b.expiry_date).getTime() <= Date.now();
-              return !isExpired && (b.remaining > 0 || b.is_free_base);
-            });
+        {showBatchDrawer && (() => {
+          const activeBatches = (aiCredits?.batches || []).filter((b) => {
+            if (!b.expiry_date) return true;
+            const isExpired = new Date(b.expiry_date).getTime() <= Date.now();
+            return !isExpired && (b.remaining > 0 || b.is_free_base);
+          });
 
-            return (
-              <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: `1px solid ${tokens.border}` }}>
-                <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "8px" }}>
-                  Active Credit Batches (FIFO Order):
-                </div>
-                {activeBatches.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                    {activeBatches.map((b) => (
-                      <div
-                        key={b.batch_id}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
-                          padding: "8px 12px",
-                          borderRadius: "7px",
-                          fontSize: "12px",
-                          border: `1px solid ${tokens.border}`,
-                        }}
-                      >
-                        <div>
-                          <span style={{ fontWeight: 600, color: tokens.textPrimary }}>
-                            {b.is_free_base ? "Base Free Batch" : `${b.batch_type.replace("PAID_", "")} Website Batch`}
-                          </span>
-                          <span style={{ color: tokens.textSecondary, marginLeft: "8px" }}>
-                            ({b.allocated.toLocaleString()} credits)
-                          </span>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <span style={{ fontWeight: 700, color: b.remaining === 0 ? "#ef4444" : (isDark ? "#60a5fa" : "#2563eb") }}>
-                            {b.remaining.toLocaleString()} left
-                          </span>
-                          <span style={{ fontSize: "11px", color: tokens.textMuted, marginLeft: "10px" }}>
-                            Expires {formatRenewalDate(b.expiry_date)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: "12px", color: tokens.textSecondary }}>No active credit batches found.</div>
-                )}
+          return (
+            <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: `1px solid ${tokens.border}` }}>
+              <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "8px" }}>
+                Active Credit Batches (FIFO Order):
               </div>
-            );
-          })()}
-        </div>
+              {activeBatches.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {activeBatches.map((b) => (
+                    <div
+                      key={b.batch_id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
+                        padding: "8px 12px",
+                        borderRadius: "7px",
+                        fontSize: "12px",
+                        border: `1px solid ${tokens.border}`,
+                      }}
+                    >
+                      <div>
+                        <span style={{ fontWeight: 600, color: tokens.textPrimary }}>
+                          {b.is_free_base ? "Base Free Batch" : `${b.batch_type.replace("PAID_", "")} Website Batch`}
+                        </span>
+                        <span style={{ color: tokens.textSecondary, marginLeft: "8px" }}>
+                          ({b.allocated.toLocaleString()} credits)
+                        </span>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <span style={{ fontWeight: 700, color: b.remaining === 0 ? "#ef4444" : (isDark ? "#60a5fa" : "#2563eb") }}>
+                          {b.remaining.toLocaleString()} left
+                        </span>
+                        <span style={{ fontSize: "11px", color: tokens.textMuted, marginLeft: "10px" }}>
+                          Expires {formatRenewalDate(b.expiry_date)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: "12px", color: tokens.textSecondary }}>No active credit batches found.</div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
 
       {/* ========================================================================= */}
       {/* 3. MAIN SECTION: SITES OVERVIEW LIST OR OPENED WEBPAGE BILLING VIEW        */}
@@ -1503,853 +1503,853 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
                   <RefreshIcon spin /> Loading website details...
                 </div>
               ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {/* TOP STORE CARD */}
-              <div
-                style={{
-                  background: isDark ? tokens.surfaceBg : "#ffffff",
-                  borderRadius: "10px",
-                  border: `1px solid ${tokens.border}`,
-                  padding: "10px 16px",
-                  boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.02)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: "10px",
-                }}
-              >
-                {/* Left: Clean Store Name & Renewal */}
-                <div style={{ display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap" }}>
-                  <span
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: 700,
-                      color: tokens.textPrimary,
-                      letterSpacing: "-0.01em",
-                    }}
-                  >
-                    {currentSiteCleanName}
-                  </span>
-                  <span style={{ fontSize: "12px", color: tokens.textSecondary }}>
-                    30-Day Cycle • Next renewal on {formatRenewalDate(selectedDetails.billing_cycle_end_date)}
-                  </span>
-                </div>
-
-                {/* Right: Plan Pill */}
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      padding: "4px 10px",
-                      borderRadius: "6px",
-                      background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-                      color: tokens.textSecondary,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      border: `1px solid ${tokens.border}`,
-                    }}
-                  >
-                    {selectedDetails.current_plan} PLAN
-                  </span>
-                </div>
-              </div>
-
-              {/* GRACE PERIOD ALERT BANNER (IF ACTIVE) */}
-              {selectedDetails.is_grace_period && (
-                <div
-                  style={{
-                    background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
-                    borderRadius: "10px",
-                    border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
-                    padding: "10px 14px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "10px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <AlertTriangleIcon />
-                    <div>
-                      <div style={{ fontSize: "13px", fontWeight: 700, color: isDark ? "#fbbf24" : "#92400e" }}>
-                        Payment issue detected — {selectedDetails.grace_days_left} days left in grace period
-                      </div>
-                      <div style={{ fontSize: "12px", color: isDark ? "#fcd34d" : "#b45309" }}>
-                        Resolve before {formatRenewalDate(selectedDetails.grace_period_ends_at)} or website will revert to Free.
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleUpgrade(selectedDetails.current_plan === "PRO" ? "PRO" : "STARTER")}
-                    disabled={mutationLoading || upgradingPlan !== null}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: "6px",
-                      background: "#d97706",
-                      color: "#ffffff",
-                      border: "none",
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      cursor: (mutationLoading || upgradingPlan !== null) ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {upgradingPlan ? "Processing..." : "Retry Payment"}
-                  </button>
-                </div>
-              )}
-
-              {/* SELECT SUBSCRIPTION PLAN CARD */}
-              <div
-                style={{
-                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                  borderRadius: "12px",
-                  border: `1px solid ${tokens.border}`,
-                  padding: "16px 20px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
-                }}
-              >
-                {/* Header with Title & Monthly/3 Months/Yearly Interval Switcher */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "12px",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <div>
-                    <h3 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>
-                      Select Subscription Plan
-                    </h3>
-                    <p style={{ margin: 0, fontSize: "12.5px", color: tokens.textSecondary }}>
-                      Choose the plan that fits your business needs. You can upgrade or downgrade anytime.
-                    </p>
-                  </div>
-
-                  {/* Interval Switcher */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {/* TOP STORE CARD */}
                   <div
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      background: isDark ? tokens.surfaceBg : "#f8fafc",
-                      border: `1px solid ${tokens.border}`,
-                      borderRadius: "8px",
-                      padding: "3px",
-                      gap: "2px",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setBillingInterval("monthly")}
-                      style={{
-                        padding: "5px 12px",
-                        borderRadius: "6px",
-                        fontSize: "12px",
-                        fontWeight: billingInterval === "monthly" ? 700 : 500,
-                        background: billingInterval === "monthly" ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
-                        color: billingInterval === "monthly" ? tokens.textPrimary : tokens.textSecondary,
-                        boxShadow: billingInterval === "monthly" ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06)") : "none",
-                        border: "none",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      Monthly
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBillingInterval("3months")}
-                      style={{
-                        padding: "5px 12px",
-                        borderRadius: "6px",
-                        fontSize: "12px",
-                        fontWeight: billingInterval === "3months" ? 700 : 500,
-                        background: billingInterval === "3months" ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
-                        color: billingInterval === "3months" ? tokens.textPrimary : tokens.textSecondary,
-                        boxShadow: billingInterval === "3months" ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06)") : "none",
-                        border: "none",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      3 Months
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBillingInterval("yearly")}
-                      style={{
-                        padding: "5px 12px",
-                        borderRadius: "6px",
-                        fontSize: "12px",
-                        fontWeight: billingInterval === "yearly" ? 700 : 500,
-                        background: billingInterval === "yearly" ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
-                        color: billingInterval === "yearly" ? tokens.textPrimary : tokens.textSecondary,
-                        boxShadow: billingInterval === "yearly" ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06)") : "none",
-                        border: "none",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      Yearly
-                    </button>
-                  </div>
-                </div>
-
-                {/* 3 PLAN COMPARISON CARDS */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                    gap: "16px",
-                  }}
-                >
-                  {/* FREE PLAN */}
-                  <div
-                    style={{
-                      border: selectedDetails.current_plan === "FREE" ? "2px solid #3b82f6" : "1px solid #e2e8f0",
-                      borderRadius: "14px",
-                      padding: "20px",
-                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      boxShadow: selectedDetails.current_plan === "FREE" ? "0 4px 14px rgba(59,130,246,0.08)" : "none",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    <div>
-                      {/* Top icon and Current badge */}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-                        <div
-                          style={{
-                            width: "40px",
-                            height: "40px",
-                            borderRadius: "50%",
-                            background: "#ecfdf5",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <SproutIcon />
-                        </div>
-                        {selectedDetails.current_plan === "FREE" && (
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              fontWeight: 700,
-                              color: isDark ? "#93c5fd" : "#2563eb",
-                              background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
-                              padding: "3px 8px",
-                              borderRadius: "5px",
-                              letterSpacing: "0.03em",
-                            }}
-                          >
-                            CURRENT PLAN
-                          </span>
-                        )}
-                      </div>
-
-                      <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>Free</h4>
-                      <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginBottom: "14px" }}>
-                        Forever free base cycle
-                      </div>
-
-                      <div style={{ fontSize: "28px", fontWeight: 800, color: tokens.textPrimary, marginBottom: "18px" }}>
-                        ₹0
-                      </div>
-
-                      {/* Feature checklist */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: tokens.textPrimary }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>200 products (shared pool)</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>300 AI credits / 30 days</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>5% Platform fee</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CrossIcon /> <span style={{ color: tokens.textSecondary }}>Custom domain</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CrossIcon /> <span style={{ color: tokens.textSecondary }}>Team & roles</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: "20px" }}>
-                      {selectedDetails.current_plan === "FREE" ? (
-                        <button
-                          disabled
-                          style={{
-                            width: "100%",
-                            padding: "10px",
-                            borderRadius: "8px",
-                            background: isDark ? "rgba(255, 255, 255, 0.06)" : "#e8edf5",
-                            color: tokens.textSecondary,
-                            border: "none",
-                            fontSize: "13px",
-                            fontWeight: 700,
-                            cursor: "default",
-                          }}
-                        >
-                          Current Plan
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDowngradeTargetPlan("FREE");
-                            setDowngradeModalOpen(true);
-                          }}
-                          disabled={mutationLoading}
-                          style={{
-                            width: "100%",
-                            padding: "10px",
-                            borderRadius: "8px",
-                            background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                            color: "#dc2626",
-                            border: "1px solid #fca5a5",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Downgrade to Free
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* STARTER PLAN */}
-                  <div
-                    style={{
-                      border: selectedDetails.current_plan === "STARTER" ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : `1px solid ${tokens.border}`, 
-                      boxShadow: selectedDetails.current_plan === "STARTER" ? (isDark ? "0 4px 14px rgba(59, 130, 246, 0.2)" : "0 4px 14px rgba(37, 99, 235, 0.08)") : "none",
-                      borderRadius: "14px",
-                      padding: "20px",
-                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      
-                    }}
-                  >
-                    <div>
-                      {/* Top icon and Current badge */}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-                        <div
-                          style={{
-                            width: "40px",
-                            height: "40px",
-                            borderRadius: "50%",
-                            background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <LightningIcon />
-                        </div>
-                        {selectedDetails.current_plan === "STARTER" && (
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              fontWeight: 700,
-                              color: isDark ? "#93c5fd" : "#2563eb",
-                              background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
-                              padding: "3px 8px",
-                              borderRadius: "5px",
-                              letterSpacing: "0.03em",
-                            }}
-                          >
-                            CURRENT PLAN
-                          </span>
-                        )}
-                      </div>
-
-                      <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>Starter</h4>
-                      <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginBottom: "14px" }}>
-                        Best for small businesses
-                      </div>
-
-                      <div style={{ marginBottom: "18px" }}>
-                        <div style={{ fontSize: "28px", fontWeight: 800, color: tokens.textPrimary, lineHeight: 1 }}>
-                          {billingInterval === "yearly" ? "₹1,999" : billingInterval === "3months" ? "₹549" : "₹199"}
-                        </div>
-                        <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "4px" }}>
-                          {billingInterval === "yearly"
-                            ? "₹166 / mo • billed annually"
-                            : billingInterval === "3months"
-                            ? "₹183 / mo • billed quarterly"
-                            : "per website / 30 days"}
-                        </div>
-                      </div>
-
-                      {/* Feature checklist */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: tokens.textPrimary }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>1,000 dedicated products</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>1,000 AI credits / 30 days</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>2.5% Platform fee</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>1 custom domain</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CrossIcon /> <span style={{ color: tokens.textSecondary }}>Team & roles</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: "20px" }}>
-                      {selectedDetails.current_plan === "STARTER" ? (
-                        <button
-                          disabled
-                          style={{
-                            width: "100%",
-                            padding: "10px",
-                            borderRadius: "8px",
-                            background: isDark ? "rgba(255, 255, 255, 0.06)" : "#e8edf5",
-                            color: tokens.textSecondary,
-                            border: "none",
-                            fontSize: "13px",
-                            fontWeight: 700,
-                            cursor: "default",
-                          }}
-                        >
-                          Current Plan
-                        </button>
-                      ) : selectedDetails.current_plan === "PRO" ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDowngradeTargetPlan("STARTER");
-                            setDowngradeModalOpen(true);
-                          }}
-                          disabled={mutationLoading}
-                          style={{
-                            width: "100%",
-                            padding: "10px",
-                            borderRadius: "8px",
-                            background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                            color: "#dc2626",
-                            border: "1px solid #fca5a5",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Downgrade to Starter
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleUpgrade("STARTER")}
-                          disabled={mutationLoading || upgradingPlan !== null}
-                          style={{
-                            width: "100%",
-                            padding: "10px",
-                            borderRadius: "8px",
-                            background: "#0f62ab",
-                            color: "#ffffff",
-                            border: "none",
-                            fontSize: "13px",
-                            fontWeight: 700,
-                            cursor: (mutationLoading || upgradingPlan !== null) ? "not-allowed" : "pointer",
-                            boxShadow: "0 2px 8px rgba(15,98,171,0.25)",
-                            transition: "all 0.15s ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!mutationLoading && !upgradingPlan) e.currentTarget.style.background = "#0b4c85";
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!mutationLoading && !upgradingPlan) e.currentTarget.style.background = "#0f62ab";
-                          }}
-                        >
-                          {upgradingPlan === "STARTER" ? "Processing..." : "Upgrade to Starter"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* PRO PLAN */}
-                  <div
-                    style={{
-                      border: selectedDetails.current_plan === "PRO" ? "2px solid #0f62ab" : "1px solid #e2e8f0",
-                      borderRadius: "14px",
-                      padding: "20px",
-                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      boxShadow: selectedDetails.current_plan === "PRO" ? "0 4px 14px rgba(15,98,171,0.08)" : "none",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    <div>
-                      {/* Top icon and Current badge */}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-                        <div
-                          style={{
-                            width: "40px",
-                            height: "40px",
-                            borderRadius: "50%",
-                            background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "#d97706",
-                          }}
-                        >
-                          <CrownIcon />
-                        </div>
-                        {selectedDetails.current_plan === "PRO" && (
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              fontWeight: 700,
-                              color: "#b45309",
-                              background: "#fef3c7",
-                              padding: "3px 8px",
-                              borderRadius: "5px",
-                              letterSpacing: "0.03em",
-                            }}
-                          >
-                            CURRENT PLAN
-                          </span>
-                        )}
-                      </div>
-
-                      <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>Pro</h4>
-                      <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginBottom: "14px" }}>
-                        For growing businesses
-                      </div>
-
-                      <div style={{ marginBottom: "18px" }}>
-                        <div style={{ fontSize: "28px", fontWeight: 800, color: tokens.textPrimary, lineHeight: 1 }}>
-                          {billingInterval === "yearly" ? "₹4,999" : billingInterval === "3months" ? "₹1,299" : "₹499"}
-                        </div>
-                        <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "4px" }}>
-                          {billingInterval === "yearly"
-                            ? "₹416 / mo • billed annually"
-                            : billingInterval === "3months"
-                            ? "₹433 / mo • billed quarterly"
-                            : "per website / 30 days"}
-                        </div>
-                      </div>
-
-                      {/* Feature checklist */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: tokens.textPrimary }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>Unlimited products</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>2,000 AI credits / 30 days</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>1% Platform fee</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>1 custom domain</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                          <CheckIcon /> <span>Up to 10 team members</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: "20px" }}>
-                      {selectedDetails.current_plan === "PRO" ? (
-                        <button
-                          disabled
-                          style={{
-                            width: "100%",
-                            padding: "10px",
-                            borderRadius: "8px",
-                            background: isDark ? "rgba(255, 255, 255, 0.06)" : "#e8edf5",
-                            color: tokens.textSecondary,
-                            border: "none",
-                            fontSize: "13px",
-                            fontWeight: 700,
-                            cursor: "default",
-                          }}
-                        >
-                          Current Plan
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleUpgrade("PRO")}
-                          disabled={mutationLoading || upgradingPlan !== null}
-                          style={{
-                            width: "100%",
-                            padding: "10px",
-                            borderRadius: "8px",
-                            background: "#091a38",
-                            color: "#ffffff",
-                            border: "none",
-                            fontSize: "13px",
-                            fontWeight: 700,
-                            cursor: (mutationLoading || upgradingPlan !== null) ? "not-allowed" : "pointer",
-                            boxShadow: "0 2px 8px rgba(9,26,56,0.25)",
-                            transition: "all 0.15s ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!mutationLoading && !upgradingPlan) e.currentTarget.style.background = "#0f2b5c";
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!mutationLoading && !upgradingPlan) e.currentTarget.style.background = "#091a38";
-                          }}
-                        >
-                          {upgradingPlan === "PRO" ? "Processing..." : "Upgrade to Pro"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* BILLING & PAYMENT HISTORY CARD (LAST 3 BILLS) */}
-              <div
-                style={{
-                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                  borderRadius: "16px",
-                  border: `1px solid ${tokens.border}`,
-                  padding: "24px 28px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
-                }}
-              >
-                {/* Table Header */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "18px",
-                    flexWrap: "wrap",
-                    gap: "10px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div
-                      style={{
-                        width: "42px",
-                        height: "42px",
-                        borderRadius: "12px",
-                        background: "#eff6ff",
-                        color: "#2563eb",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <InvoiceFileIcon />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
-                        Billing & Payment History
-                      </div>
-                      <div style={{ fontSize: "13px", color: tokens.textSecondary }}>
-                        View your past payments and download invoices.
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowAllInvoices(true)}
-                    style={{
-                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                      border: `1px solid ${tokens.border}`,
+                      background: isDark ? tokens.surfaceBg : "#ffffff",
                       borderRadius: "10px",
-                      padding: "8px 16px",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      color: tokens.textPrimary,
-                      cursor: "pointer",
-                      display: "inline-flex",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "10px 16px",
+                      boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.02)",
+                      display: "flex",
+                      justifyContent: "space-between",
                       alignItems: "center",
-                      gap: "5px",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-                      transition: "all 0.15s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "#cbd5e1";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = "#e2e8f0";
+                      flexWrap: "wrap",
+                      gap: "10px",
                     }}
                   >
-                    <span>View All</span>
-                    <ChevronRightIcon size={12} />
-                  </button>
-                </div>
-
-                {/* History Table */}
-                {invoicesLoading ? (
-                  <div style={{ textAlign: "center", padding: "32px 0", color: tokens.textSecondary, fontSize: "13px" }}>
-                    <RefreshIcon spin /> Loading invoices...
-                  </div>
-                ) : invoices.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "32px 0", color: tokens.textSecondary, fontSize: "13px" }}>
-                    No past bills found for this website yet.
-                  </div>
-                ) : (
-                  <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: "8px", border: `1px solid ${tokens.border}` }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
-                      <thead>
-                        <tr style={{ background: isDark ? tokens.surfaceBg : "#f8fafc", color: tokens.textSecondary, fontSize: "12px", fontWeight: 700 }}>
-                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Invoice #</th>
-                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Date</th>
-                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Description</th>
-                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Amount</th>
-                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Status</th>
-                          <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, textAlign: "right", whiteSpace: "nowrap", width: "50px" }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {invoices.slice(0, 3).map((inv) => (
-                          <tr key={inv.id} style={{ borderBottom: `1px solid ${tokens.border}` }}>
-                            <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 700, fontFamily: "monospace", fontSize: "12px", whiteSpace: "nowrap" }}>
-                              {inv.invoice_number}
-                            </td>
-                            <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 500, whiteSpace: "nowrap" }}>
-                              {formatRenewalDate(inv.invoice_date)}
-                            </td>
-                            <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 600, whiteSpace: "nowrap" }}>
-                              {cleanPlanDescription(inv.plan_name, inv.plan, inv.billing_interval)}
-                            </td>
-                            <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 700, whiteSpace: "nowrap" }}>
-                              ₹{inv.total_amount.toFixed(2)}
-                            </td>
-                            <td style={{ padding: "11px 14px", whiteSpace: "nowrap" }}>
-                              <span
-                                style={{
-                                  background: "#ecfdf5",
-                                  color: "#059669",
-                                  fontSize: "11.5px",
-                                  fontWeight: 700,
-                                  padding: "3px 10px",
-                                  borderRadius: "12px",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "5px",
-                                  border: "1px solid #d1fae5",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                <span style={{ fontSize: "7px", color: "#10b981" }}>●</span> Paid
-                              </span>
-                            </td>
-                            <td style={{ padding: "11px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
-                              <button
-                                type="button"
-                                onClick={() => handleDownloadInvoice(inv.id, inv.invoice_number)}
-                                style={{
-                                  width: "30px",
-                                  height: "30px",
-                                  borderRadius: "6px",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  background: isDark ? tokens.surfaceBg : "#f8fafc",
-                                  border: `1px solid ${tokens.border}`,
-                                  color: "#2563eb",
-                                  cursor: "pointer",
-                                  transition: "all 0.15s ease",
-                                  padding: 0,
-                                  flexShrink: 0,
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = "#eff6ff";
-                                  e.currentTarget.style.borderColor = "#bfdbfe";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = "#f8fafc";
-                                  e.currentTarget.style.borderColor = "#e2e8f0";
-                                }}
-                                title={`Download Invoice ${inv.invoice_number}`}
-                              >
-                                <DownloadIcon size={14} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {/* SHARED PRODUCT POOL TABLE (FREE PLAN ONLY) */}
-              {selectedDetails.current_plan === "FREE" && selectedDetails.product_usage?.pool_detail && (
-                <div
-                  style={{
-                    background: isDark ? tokens.surfaceBg : "#ffffff",
-                    borderRadius: "16px",
-                    border: `1px solid ${tokens.border}`,
-                    padding: "20px 24px",
-                    boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.02)",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                    <div>
-                      <div style={{ fontSize: "14.5px", fontWeight: 700, color: tokens.textPrimary }}>Shared Free Product Pool</div>
-                      <div style={{ fontSize: "12px", color: tokens.textSecondary }}>200 active products shared across all Free websites under your account</div>
-                    </div>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: isDark ? "#60a5fa" : "#2563eb" }}>
-                      {selectedDetails.product_usage.pool_detail.total_used} / 200 Products
-                    </span>
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                    {selectedDetails.product_usage.pool_detail.sibling_breakdown?.map((sibling) => (
-                      <div
-                        key={sibling.website_id}
+                    {/* Left: Clean Store Name & Renewal */}
+                    <div style={{ display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap" }}>
+                      <span
                         style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          padding: "9px 12px",
-                          background: sibling.website_id === selectedWebsiteId
-                            ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
-                            : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
-                          borderRadius: "8px",
-                          fontSize: "12.5px",
-                          border: sibling.website_id === selectedWebsiteId
-                            ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe"}`
-                            : `1px solid ${tokens.border}`,
+                          fontSize: "16px",
+                          fontWeight: 700,
+                          color: tokens.textPrimary,
+                          letterSpacing: "-0.01em",
                         }}
                       >
-                        <span style={{ fontWeight: sibling.website_id === selectedWebsiteId ? 700 : 500, color: tokens.textPrimary }}>
-                          {formatSiteName(sibling.website_name)} {sibling.website_id === selectedWebsiteId && "(This Website)"}
-                        </span>
-                        <span style={{ fontWeight: 600, color: tokens.textSecondary }}>
-                          {sibling.active_products_count} active products
+                        {currentSiteCleanName}
+                      </span>
+                      <span style={{ fontSize: "12px", color: tokens.textSecondary }}>
+                        30-Day Cycle • Next renewal on {formatRenewalDate(selectedDetails.billing_cycle_end_date)}
+                      </span>
+                    </div>
+
+                    {/* Right: Plan Pill */}
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          padding: "4px 10px",
+                          borderRadius: "6px",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+                          color: tokens.textSecondary,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          border: `1px solid ${tokens.border}`,
+                        }}
+                      >
+                        {selectedDetails.current_plan} PLAN
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* GRACE PERIOD ALERT BANNER (IF ACTIVE) */}
+                  {selectedDetails.is_grace_period && (
+                    <div
+                      style={{
+                        background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
+                        borderRadius: "10px",
+                        border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a"}`,
+                        padding: "10px 14px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "10px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <AlertTriangleIcon />
+                        <div>
+                          <div style={{ fontSize: "13px", fontWeight: 700, color: isDark ? "#fbbf24" : "#92400e" }}>
+                            Payment issue detected — {selectedDetails.grace_days_left} days left in grace period
+                          </div>
+                          <div style={{ fontSize: "12px", color: isDark ? "#fcd34d" : "#b45309" }}>
+                            Resolve before {formatRenewalDate(selectedDetails.grace_period_ends_at)} or website will revert to Free.
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleUpgrade(selectedDetails.current_plan === "PRO" ? "PRO" : "STARTER")}
+                        disabled={mutationLoading || upgradingPlan !== null}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: "6px",
+                          background: "#d97706",
+                          color: "#ffffff",
+                          border: "none",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          cursor: (mutationLoading || upgradingPlan !== null) ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {upgradingPlan ? "Processing..." : "Retry Payment"}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* SELECT SUBSCRIPTION PLAN CARD */}
+                  <div
+                    style={{
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      borderRadius: "12px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "16px 20px",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    {/* Header with Title & Monthly/3 Months/Yearly Interval Switcher */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "12px",
+                        marginBottom: "16px",
+                      }}
+                    >
+                      <div>
+                        <h3 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>
+                          Select Subscription Plan
+                        </h3>
+                        <p style={{ margin: 0, fontSize: "12.5px", color: tokens.textSecondary }}>
+                          Choose the plan that fits your business needs. You can upgrade or downgrade anytime.
+                        </p>
+                      </div>
+
+                      {/* Interval Switcher */}
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          background: isDark ? tokens.surfaceBg : "#f8fafc",
+                          border: `1px solid ${tokens.border}`,
+                          borderRadius: "8px",
+                          padding: "3px",
+                          gap: "2px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setBillingInterval("monthly")}
+                          style={{
+                            padding: "5px 12px",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            fontWeight: billingInterval === "monthly" ? 700 : 500,
+                            background: billingInterval === "monthly" ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
+                            color: billingInterval === "monthly" ? tokens.textPrimary : tokens.textSecondary,
+                            boxShadow: billingInterval === "monthly" ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06)") : "none",
+                            border: "none",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          Monthly
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBillingInterval("3months")}
+                          style={{
+                            padding: "5px 12px",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            fontWeight: billingInterval === "3months" ? 700 : 500,
+                            background: billingInterval === "3months" ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
+                            color: billingInterval === "3months" ? tokens.textPrimary : tokens.textSecondary,
+                            boxShadow: billingInterval === "3months" ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06)") : "none",
+                            border: "none",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          3 Months
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBillingInterval("yearly")}
+                          style={{
+                            padding: "5px 12px",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            fontWeight: billingInterval === "yearly" ? 700 : 500,
+                            background: billingInterval === "yearly" ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
+                            color: billingInterval === "yearly" ? tokens.textPrimary : tokens.textSecondary,
+                            boxShadow: billingInterval === "yearly" ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.06)") : "none",
+                            border: "none",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          Yearly
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 3 PLAN COMPARISON CARDS */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                        gap: "16px",
+                      }}
+                    >
+                      {/* FREE PLAN */}
+                      <div
+                        style={{
+                          border: selectedDetails.current_plan === "FREE" ? "2px solid #3b82f6" : "1px solid #e2e8f0",
+                          borderRadius: "14px",
+                          padding: "20px",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                          boxShadow: selectedDetails.current_plan === "FREE" ? "0 4px 14px rgba(59,130,246,0.08)" : "none",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <div>
+                          {/* Top icon and Current badge */}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                            <div
+                              style={{
+                                width: "40px",
+                                height: "40px",
+                                borderRadius: "50%",
+                                background: "#ecfdf5",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <SproutIcon />
+                            </div>
+                            {selectedDetails.current_plan === "FREE" && (
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  color: isDark ? "#93c5fd" : "#2563eb",
+                                  background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                                  padding: "3px 8px",
+                                  borderRadius: "5px",
+                                  letterSpacing: "0.03em",
+                                }}
+                              >
+                                CURRENT PLAN
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>Free</h4>
+                          <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginBottom: "14px" }}>
+                            Forever free base cycle
+                          </div>
+
+                          <div style={{ fontSize: "28px", fontWeight: 800, color: tokens.textPrimary, marginBottom: "18px" }}>
+                            ₹0
+                          </div>
+
+                          {/* Feature checklist */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: tokens.textPrimary }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>200 products (shared pool)</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>300 AI credits / 30 days</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>5% Platform fee</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CrossIcon /> <span style={{ color: tokens.textSecondary }}>Custom domain</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CrossIcon /> <span style={{ color: tokens.textSecondary }}>Team & roles</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: "20px" }}>
+                          {selectedDetails.current_plan === "FREE" ? (
+                            <button
+                              disabled
+                              style={{
+                                width: "100%",
+                                padding: "10px",
+                                borderRadius: "8px",
+                                background: isDark ? "rgba(255, 255, 255, 0.06)" : "#e8edf5",
+                                color: tokens.textSecondary,
+                                border: "none",
+                                fontSize: "13px",
+                                fontWeight: 700,
+                                cursor: "default",
+                              }}
+                            >
+                              Current Plan
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDowngradeTargetPlan("FREE");
+                                setDowngradeModalOpen(true);
+                              }}
+                              disabled={mutationLoading}
+                              style={{
+                                width: "100%",
+                                padding: "10px",
+                                borderRadius: "8px",
+                                background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                color: "#dc2626",
+                                border: "1px solid #fca5a5",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Downgrade to Free
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* STARTER PLAN */}
+                      <div
+                        style={{
+                          border: selectedDetails.current_plan === "STARTER" ? (isDark ? "2px solid #60a5fa" : "2px solid #2563eb") : `1px solid ${tokens.border}`,
+                          boxShadow: selectedDetails.current_plan === "STARTER" ? (isDark ? "0 4px 14px rgba(59, 130, 246, 0.2)" : "0 4px 14px rgba(37, 99, 235, 0.08)") : "none",
+                          borderRadius: "14px",
+                          padding: "20px",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+
+                        }}
+                      >
+                        <div>
+                          {/* Top icon and Current badge */}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                            <div
+                              style={{
+                                width: "40px",
+                                height: "40px",
+                                borderRadius: "50%",
+                                background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <LightningIcon />
+                            </div>
+                            {selectedDetails.current_plan === "STARTER" && (
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  color: isDark ? "#93c5fd" : "#2563eb",
+                                  background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                                  padding: "3px 8px",
+                                  borderRadius: "5px",
+                                  letterSpacing: "0.03em",
+                                }}
+                              >
+                                CURRENT PLAN
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>Starter</h4>
+                          <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginBottom: "14px" }}>
+                            Best for small businesses
+                          </div>
+
+                          <div style={{ marginBottom: "18px" }}>
+                            <div style={{ fontSize: "28px", fontWeight: 800, color: tokens.textPrimary, lineHeight: 1 }}>
+                              {billingInterval === "yearly" ? "₹1,999" : billingInterval === "3months" ? "₹549" : "₹199"}
+                            </div>
+                            <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "4px" }}>
+                              {billingInterval === "yearly"
+                                ? "₹166 / mo • billed annually"
+                                : billingInterval === "3months"
+                                  ? "₹183 / mo • billed quarterly"
+                                  : "per website / 30 days"}
+                            </div>
+                          </div>
+
+                          {/* Feature checklist */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: tokens.textPrimary }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>1,000 dedicated products</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>1,000 AI credits / 30 days</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>2.5% Platform fee</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>1 custom domain</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CrossIcon /> <span style={{ color: tokens.textSecondary }}>Team & roles</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: "20px" }}>
+                          {selectedDetails.current_plan === "STARTER" ? (
+                            <button
+                              disabled
+                              style={{
+                                width: "100%",
+                                padding: "10px",
+                                borderRadius: "8px",
+                                background: isDark ? "rgba(255, 255, 255, 0.06)" : "#e8edf5",
+                                color: tokens.textSecondary,
+                                border: "none",
+                                fontSize: "13px",
+                                fontWeight: 700,
+                                cursor: "default",
+                              }}
+                            >
+                              Current Plan
+                            </button>
+                          ) : selectedDetails.current_plan === "PRO" ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDowngradeTargetPlan("STARTER");
+                                setDowngradeModalOpen(true);
+                              }}
+                              disabled={mutationLoading}
+                              style={{
+                                width: "100%",
+                                padding: "10px",
+                                borderRadius: "8px",
+                                background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                color: "#dc2626",
+                                border: "1px solid #fca5a5",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Downgrade to Starter
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleUpgrade("STARTER")}
+                              disabled={mutationLoading || upgradingPlan !== null}
+                              style={{
+                                width: "100%",
+                                padding: "10px",
+                                borderRadius: "8px",
+                                background: "#0f62ab",
+                                color: "#ffffff",
+                                border: "none",
+                                fontSize: "13px",
+                                fontWeight: 700,
+                                cursor: (mutationLoading || upgradingPlan !== null) ? "not-allowed" : "pointer",
+                                boxShadow: "0 2px 8px rgba(15,98,171,0.25)",
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!mutationLoading && !upgradingPlan) e.currentTarget.style.background = "#0b4c85";
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!mutationLoading && !upgradingPlan) e.currentTarget.style.background = "#0f62ab";
+                              }}
+                            >
+                              {upgradingPlan === "STARTER" ? "Processing..." : "Upgrade to Starter"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* PRO PLAN */}
+                      <div
+                        style={{
+                          border: selectedDetails.current_plan === "PRO" ? "2px solid #0f62ab" : "1px solid #e2e8f0",
+                          borderRadius: "14px",
+                          padding: "20px",
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                          boxShadow: selectedDetails.current_plan === "PRO" ? "0 4px 14px rgba(15,98,171,0.08)" : "none",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <div>
+                          {/* Top icon and Current badge */}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                            <div
+                              style={{
+                                width: "40px",
+                                height: "40px",
+                                borderRadius: "50%",
+                                background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#d97706",
+                              }}
+                            >
+                              <CrownIcon />
+                            </div>
+                            {selectedDetails.current_plan === "PRO" && (
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  color: "#b45309",
+                                  background: "#fef3c7",
+                                  padding: "3px 8px",
+                                  borderRadius: "5px",
+                                  letterSpacing: "0.03em",
+                                }}
+                              >
+                                CURRENT PLAN
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 2px 0", color: tokens.textPrimary }}>Pro</h4>
+                          <div style={{ fontSize: "12.5px", color: tokens.textSecondary, marginBottom: "14px" }}>
+                            For growing businesses
+                          </div>
+
+                          <div style={{ marginBottom: "18px" }}>
+                            <div style={{ fontSize: "28px", fontWeight: 800, color: tokens.textPrimary, lineHeight: 1 }}>
+                              {billingInterval === "yearly" ? "₹4,999" : billingInterval === "3months" ? "₹1,299" : "₹499"}
+                            </div>
+                            <div style={{ fontSize: "12px", color: tokens.textSecondary, marginTop: "4px" }}>
+                              {billingInterval === "yearly"
+                                ? "₹416 / mo • billed annually"
+                                : billingInterval === "3months"
+                                  ? "₹433 / mo • billed quarterly"
+                                  : "per website / 30 days"}
+                            </div>
+                          </div>
+
+                          {/* Feature checklist */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: tokens.textPrimary }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>Unlimited products</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>2,000 AI credits / 30 days</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>1% Platform fee</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>1 custom domain</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                              <CheckIcon /> <span>Up to 10 team members</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: "20px" }}>
+                          {selectedDetails.current_plan === "PRO" ? (
+                            <button
+                              disabled
+                              style={{
+                                width: "100%",
+                                padding: "10px",
+                                borderRadius: "8px",
+                                background: isDark ? "rgba(255, 255, 255, 0.06)" : "#e8edf5",
+                                color: tokens.textSecondary,
+                                border: "none",
+                                fontSize: "13px",
+                                fontWeight: 700,
+                                cursor: "default",
+                              }}
+                            >
+                              Current Plan
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleUpgrade("PRO")}
+                              disabled={mutationLoading || upgradingPlan !== null}
+                              style={{
+                                width: "100%",
+                                padding: "10px",
+                                borderRadius: "8px",
+                                background: "#091a38",
+                                color: "#ffffff",
+                                border: "none",
+                                fontSize: "13px",
+                                fontWeight: 700,
+                                cursor: (mutationLoading || upgradingPlan !== null) ? "not-allowed" : "pointer",
+                                boxShadow: "0 2px 8px rgba(9,26,56,0.25)",
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!mutationLoading && !upgradingPlan) e.currentTarget.style.background = "#0f2b5c";
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!mutationLoading && !upgradingPlan) e.currentTarget.style.background = "#091a38";
+                              }}
+                            >
+                              {upgradingPlan === "PRO" ? "Processing..." : "Upgrade to Pro"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* BILLING & PAYMENT HISTORY CARD (LAST 3 BILLS) */}
+                  <div
+                    style={{
+                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                      borderRadius: "16px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "24px 28px",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    {/* Table Header */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "18px",
+                        flexWrap: "wrap",
+                        gap: "10px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <div
+                          style={{
+                            width: "42px",
+                            height: "42px",
+                            borderRadius: "12px",
+                            background: "#eff6ff",
+                            color: "#2563eb",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <InvoiceFileIcon />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
+                            Billing & Payment History
+                          </div>
+                          <div style={{ fontSize: "13px", color: tokens.textSecondary }}>
+                            View your past payments and download invoices.
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowAllInvoices(true)}
+                        style={{
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          border: `1px solid ${tokens.border}`,
+                          borderRadius: "10px",
+                          padding: "8px 16px",
+                          fontSize: "13px",
+                          fontWeight: 600,
+                          color: tokens.textPrimary,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                          transition: "all 0.15s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = "#cbd5e1";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = "#e2e8f0";
+                        }}
+                      >
+                        <span>View All</span>
+                        <ChevronRightIcon size={12} />
+                      </button>
+                    </div>
+
+                    {/* History Table */}
+                    {invoicesLoading ? (
+                      <div style={{ textAlign: "center", padding: "32px 0", color: tokens.textSecondary, fontSize: "13px" }}>
+                        <RefreshIcon spin /> Loading invoices...
+                      </div>
+                    ) : invoices.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "32px 0", color: tokens.textSecondary, fontSize: "13px" }}>
+                        No past bills found for this website yet.
+                      </div>
+                    ) : (
+                      <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: "8px", border: `1px solid ${tokens.border}` }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
+                          <thead>
+                            <tr style={{ background: isDark ? tokens.surfaceBg : "#f8fafc", color: tokens.textSecondary, fontSize: "12px", fontWeight: 700 }}>
+                              <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Invoice #</th>
+                              <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Date</th>
+                              <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Description</th>
+                              <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Amount</th>
+                              <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, whiteSpace: "nowrap" }}>Status</th>
+                              <th style={{ padding: "10px 14px", borderBottom: `1px solid ${tokens.border}`, textAlign: "right", whiteSpace: "nowrap", width: "50px" }}></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {invoices.slice(0, 3).map((inv) => (
+                              <tr key={inv.id} style={{ borderBottom: `1px solid ${tokens.border}` }}>
+                                <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 700, fontFamily: "monospace", fontSize: "12px", whiteSpace: "nowrap" }}>
+                                  {inv.invoice_number}
+                                </td>
+                                <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 500, whiteSpace: "nowrap" }}>
+                                  {formatRenewalDate(inv.invoice_date)}
+                                </td>
+                                <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 600, whiteSpace: "nowrap" }}>
+                                  {cleanPlanDescription(inv.plan_name, inv.plan, inv.billing_interval)}
+                                </td>
+                                <td style={{ padding: "11px 14px", color: tokens.textPrimary, fontWeight: 700, whiteSpace: "nowrap" }}>
+                                  ₹{inv.total_amount.toFixed(2)}
+                                </td>
+                                <td style={{ padding: "11px 14px", whiteSpace: "nowrap" }}>
+                                  <span
+                                    style={{
+                                      background: "#ecfdf5",
+                                      color: "#059669",
+                                      fontSize: "11.5px",
+                                      fontWeight: 700,
+                                      padding: "3px 10px",
+                                      borderRadius: "12px",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      border: "1px solid #d1fae5",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    <span style={{ fontSize: "7px", color: "#10b981" }}>●</span> Paid
+                                  </span>
+                                </td>
+                                <td style={{ padding: "11px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadInvoice(inv.id, inv.invoice_number)}
+                                    style={{
+                                      width: "30px",
+                                      height: "30px",
+                                      borderRadius: "6px",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      background: isDark ? tokens.surfaceBg : "#f8fafc",
+                                      border: `1px solid ${tokens.border}`,
+                                      color: "#2563eb",
+                                      cursor: "pointer",
+                                      transition: "all 0.15s ease",
+                                      padding: 0,
+                                      flexShrink: 0,
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.background = "#eff6ff";
+                                      e.currentTarget.style.borderColor = "#bfdbfe";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "#f8fafc";
+                                      e.currentTarget.style.borderColor = "#e2e8f0";
+                                    }}
+                                    title={`Download Invoice ${inv.invoice_number}`}
+                                  >
+                                    <DownloadIcon size={14} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SHARED PRODUCT POOL TABLE (FREE PLAN ONLY) */}
+                  {selectedDetails.current_plan === "FREE" && selectedDetails.product_usage?.pool_detail && (
+                    <div
+                      style={{
+                        background: isDark ? tokens.surfaceBg : "#ffffff",
+                        borderRadius: "16px",
+                        border: `1px solid ${tokens.border}`,
+                        padding: "20px 24px",
+                        boxShadow: isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.02)",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                        <div>
+                          <div style={{ fontSize: "14.5px", fontWeight: 700, color: tokens.textPrimary }}>Shared Free Product Pool</div>
+                          <div style={{ fontSize: "12px", color: tokens.textSecondary }}>200 active products shared across all Free websites under your account</div>
+                        </div>
+                        <span style={{ fontSize: "13px", fontWeight: 700, color: isDark ? "#60a5fa" : "#2563eb" }}>
+                          {selectedDetails.product_usage.pool_detail.total_used} / 200 Products
                         </span>
                       </div>
-                    ))}
-                  </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        {selectedDetails.product_usage.pool_detail.sibling_breakdown?.map((sibling) => (
+                          <div
+                            key={sibling.website_id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              padding: "9px 12px",
+                              background: sibling.website_id === selectedWebsiteId
+                                ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                                : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
+                              borderRadius: "8px",
+                              fontSize: "12.5px",
+                              border: sibling.website_id === selectedWebsiteId
+                                ? `1px solid ${isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe"}`
+                                : `1px solid ${tokens.border}`,
+                            }}
+                          >
+                            <span style={{ fontWeight: sibling.website_id === selectedWebsiteId ? 700 : 500, color: tokens.textPrimary }}>
+                              {formatSiteName(sibling.website_name)} {sibling.website_id === selectedWebsiteId && "(This Website)"}
+                            </span>
+                            <span style={{ fontWeight: 600, color: tokens.textSecondary }}>
+                              {sibling.active_products_count} active products
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
         </div>
       )}
-    </div>
-  )}
 
       {/* ========================================================================= */}
       {/* 5. DOWNGRADE CONFIRMATION MODAL                                            */}
