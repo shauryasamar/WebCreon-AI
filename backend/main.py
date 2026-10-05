@@ -9,7 +9,8 @@ load_dotenv(find_dotenv(usecwd=True))
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
+
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -896,8 +897,54 @@ async def conversation_rehydrate_endpoint(
 class CoPilotChatRequest(BaseModel):
     site_id: str
     message: str
+    thread_id: Optional[str] = None
+    operation_id: Optional[str] = None
+    idempotency_key: Optional[str] = None
+    base_version: Optional[int] = None
     chat_history: Optional[List[Dict[str, str]]] = None
     draft_definition: Optional[Dict[str, Any]] = None
+    previous_draft_definition: Optional[Dict[str, Any]] = None
+    snapshot_history: Optional[List[Dict[str, Any]]] = None
+
+
+class CoPilotUndoRequest(BaseModel):
+    site_id: str
+    operation_id: Optional[str] = None
+
+
+@app.post("/copilot/undo")
+async def copilot_undo_endpoint(
+    req: CoPilotUndoRequest,
+    admin=Depends(authenticate_admin),
+    session: Session = Depends(get_session),
+):
+    from services.copilot_context import authorize_site_action
+    auth_decision = authorize_site_action(
+        admin_id=admin["adminId"],
+        requested_site_id=req.site_id,
+        action="theme:modify",
+        session=session,
+        operation_id=req.operation_id,
+    )
+    if not auth_decision.allowed:
+        raise HTTPException(status_code=403, detail=auth_decision.reason)
+
+    from services.site_revision_service import undo_site_revision
+    success, new_version, restored_def, err = undo_site_revision(
+        session=session,
+        site_id=req.site_id,
+        actor_id=admin["adminId"],
+        operation_id=req.operation_id,
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=err or "Undo failed")
+
+    return {
+        "success": True,
+        "site_id": req.site_id,
+        "new_version": new_version,
+        "restored_definition": restored_def,
+    }
 
 
 @app.post("/copilot/chat")
@@ -906,16 +953,36 @@ async def copilot_chat_endpoint(
     admin=Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
-    if not (check_admin_has_permission(admin["adminId"], "chat:access", session) or check_admin_has_permission(admin["adminId"], "chat:send", session)):
-        raise HTTPException(status_code=403, detail="You do not have permission to access AI Copilot.")
+    from services.copilot_context import authorize_site_action
+    auth_decision = authorize_site_action(
+        admin_id=admin["adminId"],
+        requested_site_id=req.site_id,
+        action="chat:send",
+        session=session,
+        thread_id=req.thread_id,
+        operation_id=req.operation_id,
+        idempotency_key=req.idempotency_key,
+    )
+    if not auth_decision.allowed:
+        raise HTTPException(status_code=403, detail=auth_decision.reason)
 
     admin_id = UUID(str(admin["adminId"]))
-    site_uuid = None
-    if req.site_id:
-        try:
-            site_uuid = UUID(req.site_id)
-        except Exception:
-            pass
+    site_uuid = UUID(str(req.site_id))
+
+    # Idempotency check
+    from services.idempotency_service import reserve_operation, complete_operation
+    can_proceed, cached_result, conflict_err = reserve_operation(
+        operation_id=req.operation_id or str(uuid4()),
+        site_id=req.site_id,
+        user_id=admin["adminId"],
+        action_type="copilot_chat",
+        payload={"message": req.message, "site_id": req.site_id},
+        idempotency_key=req.idempotency_key,
+    )
+    if not can_proceed:
+        if cached_result:
+            return cached_result
+        raise HTTPException(status_code=409, detail=conflict_err or "Operation conflict")
 
     from services.ai_credit_service import check_account_has_credits
     has_credits, total_rem, reset_date = check_account_has_credits(session, admin_id)
@@ -939,6 +1006,12 @@ async def copilot_chat_endpoint(
             site_id=req.site_id,
             chat_history=req.chat_history,
             draft_definition=req.draft_definition,
+            previous_draft_definition=req.previous_draft_definition,
+            snapshot_history=req.snapshot_history,
+            actor_id=str(admin["adminId"]),
+            actor_name=admin.get("name"),
+            actor_email=admin.get("email"),
+            actor_role=admin.get("role"),
         )
 
     result = await call_ai_with_metering(
@@ -946,6 +1019,12 @@ async def copilot_chat_endpoint(
         website_id=site_uuid,
         feature_name="copilot_chat",
         ai_call_fn=_run_copilot,
+    )
+
+    complete_operation(
+        operation_id=req.operation_id or str(uuid4()),
+        result=result,
+        idempotency_key=req.idempotency_key,
     )
     return result
 
@@ -956,16 +1035,21 @@ async def copilot_chat_stream_endpoint(
     admin=Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
-    if not (check_admin_has_permission(admin["adminId"], "chat:access", session) or check_admin_has_permission(admin["adminId"], "chat:send", session)):
-        raise HTTPException(status_code=403, detail="You do not have permission to access AI Copilot.")
+    from services.copilot_context import authorize_site_action
+    auth_decision = authorize_site_action(
+        admin_id=admin["adminId"],
+        requested_site_id=req.site_id,
+        action="chat:send",
+        session=session,
+        thread_id=req.thread_id,
+        operation_id=req.operation_id,
+        idempotency_key=req.idempotency_key,
+    )
+    if not auth_decision.allowed:
+        raise HTTPException(status_code=403, detail=auth_decision.reason)
 
     admin_id = UUID(str(admin["adminId"]))
-    site_uuid = None
-    if req.site_id:
-        try:
-            site_uuid = UUID(req.site_id)
-        except Exception:
-            pass
+    site_uuid = UUID(str(req.site_id))
 
     from services.ai_credit_service import check_account_has_credits
     has_credits, total_rem, reset_date = check_account_has_credits(session, admin_id)
@@ -974,6 +1058,7 @@ async def copilot_chat_stream_endpoint(
             paywall_event = {
                 "type": "paywall_exhausted",
                 "error_code": "AI_CREDIT_LIMIT_REACHED",
+                "site_id": req.site_id,
                 "assistant_reply": "",
                 "total_remaining": 0,
                 "reset_date": reset_date,
@@ -1000,7 +1085,15 @@ async def copilot_chat_stream_endpoint(
                 site_id=req.site_id,
                 chat_history=req.chat_history,
                 draft_definition=req.draft_definition,
+                previous_draft_definition=req.previous_draft_definition,
+                snapshot_history=req.snapshot_history,
+                actor_id=str(admin["adminId"]),
+                actor_name=admin.get("name"),
+                actor_email=admin.get("email"),
+                actor_role=admin.get("role"),
             ):
+                event["site_id"] = req.site_id
+                event["protocol_version"] = "2.0"
                 if event.get("type") == "token":
                     total_output_chars += len(str(event.get("content", "")))
                 elif event.get("type") == "done":
@@ -1023,8 +1116,13 @@ async def copilot_chat_stream_endpoint(
                     model_name="gpt-4o-mini",
                 )
         except Exception as e:
+            print(f"Copilot Event Generator Error: {e}")
+            import traceback
+            traceback.print_exc()
             error_payload = {
                 "type": "done",
+                "site_id": req.site_id,
+                "protocol_version": "2.0",
                 "assistant_reply": "I ran into an issue processing your request. Please try again.",
                 "data_cards": [],
                 "design_modified": False,
@@ -1033,6 +1131,7 @@ async def copilot_chat_stream_endpoint(
             yield f"data: {json.dumps(error_payload)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 
 
 

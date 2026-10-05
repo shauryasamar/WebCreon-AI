@@ -133,7 +133,7 @@ def get_customer_notifications(
     website_name: str,
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=50),
-    filter: str = Query("all", regex="^(all|unread)$"),
+    filter: str = Query("all", pattern="^(all|unread)$"),
     category: Optional[str] = Query(None),
     auth_user=Depends(authenticate_customer),
     session: Session = Depends(get_session),

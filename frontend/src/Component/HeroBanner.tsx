@@ -115,17 +115,21 @@ function useCountdown(
   explicitMode?: "starts_in" | "ends_in"
 ) {
   const [state, setState] = useState<{
+    days?: string;
     hours: string;
     minutes: string;
     seconds: string;
     label: "STARTS IN:" | "ENDS IN:";
     isExpired: boolean;
+    units: string[];
   }>({
-    hours: "04h",
-    minutes: "22m",
-    seconds: "15s",
+    days: "03d",
+    hours: "00h",
+    minutes: "00m",
+    seconds: "00s",
     label: explicitMode === "starts_in" ? "STARTS IN:" : "ENDS IN:",
     isExpired: false,
+    units: ["03d", "00h", "00m", "00s"],
   });
 
   useEffect(() => {
@@ -163,16 +167,27 @@ function useCountdown(
       }
 
       const diff = Math.max(0, targetTime - now);
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      const dStr = `${String(days).padStart(2, "0")}d`;
+      const hStr = `${String(hours).padStart(2, "0")}h`;
+      const mStr = `${String(minutes).padStart(2, "0")}m`;
+      const sStr = `${String(seconds).padStart(2, "0")}s`;
+
+      const units = days > 0 ? [dStr, hStr, mStr, sStr] : [hStr, mStr, sStr];
 
       setState({
-        hours: `${String(hours).padStart(2, "0")}h`,
-        minutes: `${String(minutes).padStart(2, "0")}m`,
-        seconds: `${String(seconds).padStart(2, "0")}s`,
+        days: dStr,
+        hours: hStr,
+        minutes: mStr,
+        seconds: sStr,
         label: currentLabel,
         isExpired: diff <= 0,
+        units,
       });
     };
 
@@ -985,7 +1000,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             <div style={{ display: "flex", alignItems: "center", gap: "6px", justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start" }}>
               <span style={{ fontSize: badgeFontSize, fontWeight: 700, color: slideTextColor, opacity: 0.8 }}>{liveCountdown.label}</span>
               <div style={{ display: "flex", gap: "4px" }}>
-                {[liveCountdown.hours, liveCountdown.minutes, liveCountdown.seconds].map((unit, idx) => (
+                {(liveCountdown.units || [liveCountdown.hours, liveCountdown.minutes, liveCountdown.seconds]).map((unit, idx) => (
                   <span
                     key={idx}
                     style={{
@@ -1030,10 +1045,31 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 margin: slideMargin,
               }}
             >
-              {currentSlide.badge && (
-                <span style={{ background: "rgba(37,99,235,0.15)", color: accentColor, fontSize: badgeFontSize, fontWeight: 800, padding: "3px 9px", borderRadius: "999px", width: "fit-content", textTransform: "uppercase" }}>
-                  {currentSlide.badge}
-                </span>
+              {/* Badge & Coupon */}
+              {(currentSlide.badge || currentSlide.coupon_code) && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start" }}>
+                  {currentSlide.badge && (
+                    <span style={{ background: "rgba(37,99,235,0.15)", color: accentColor, fontSize: badgeFontSize, fontWeight: 800, padding: "3px 9px", borderRadius: "999px", width: "fit-content", textTransform: "uppercase" }}>
+                      {currentSlide.badge}
+                    </span>
+                  )}
+                  {currentSlide.coupon_code && (
+                    <span
+                      style={{
+                        background: isDarkMode ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.06)",
+                        border: isDarkMode ? "1px dashed rgba(255,255,255,0.3)" : "1px dashed rgba(15,23,42,0.2)",
+                        color: slideTextColor,
+                        fontSize: badgeFontSize,
+                        fontWeight: 700,
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      CODE: {currentSlide.coupon_code}
+                    </span>
+                  )}
+                </div>
               )}
               <h1
                 style={{
@@ -1101,11 +1137,9 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         );
 
       case "minimal_brand":
-      case "standard":
-      default:
-        const trustBadgesList = Array.isArray(currentSlide.trust_badges)
+        const minimalTrustBadges = Array.isArray(currentSlide.trust_badges) && currentSlide.trust_badges.length > 0
           ? currentSlide.trust_badges
-          : (variant === "minimal_brand" ? ["Free Shipping", "30-Day Money Back", "24/7 VIP Support"] : []);
+          : ["Free Express Delivery", "100% Authentic Guarantee", "24/7 VIP Support"];
 
         return (
           <div
@@ -1119,23 +1153,44 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               margin: slideMargin,
             }}
           >
-            {currentSlide.badge && (
-              <span
-                style={{
-                  background: isDarkMode ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.08)",
-                  color: slideTextColor,
-                  fontSize: badgeFontSize,
-                  fontWeight: 800,
-                  padding: "3px 10px",
-                  borderRadius: "999px",
-                  width: "fit-content",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                  border: isDarkMode ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(15,23,42,0.1)",
-                }}
-              >
-                {currentSlide.badge}
-              </span>
+            {/* Badge & Coupon */}
+            {(currentSlide.badge || currentSlide.coupon_code) && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start" }}>
+                {currentSlide.badge && (
+                  <span
+                    style={{
+                      background: isDarkMode ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.08)",
+                      color: slideTextColor,
+                      fontSize: badgeFontSize,
+                      fontWeight: 800,
+                      padding: "3px 10px",
+                      borderRadius: "999px",
+                      width: "fit-content",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                      border: isDarkMode ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(15,23,42,0.1)",
+                    }}
+                  >
+                    {currentSlide.badge}
+                  </span>
+                )}
+                {currentSlide.coupon_code && (
+                  <span
+                    style={{
+                      background: isDarkMode ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.06)",
+                      border: isDarkMode ? "1px dashed rgba(255,255,255,0.3)" : "1px dashed rgba(15,23,42,0.2)",
+                      color: slideTextColor,
+                      fontSize: badgeFontSize,
+                      fontWeight: 700,
+                      padding: "3px 8px",
+                      borderRadius: "6px",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    CODE: {currentSlide.coupon_code}
+                  </span>
+                )}
+              </div>
             )}
 
             <h1
@@ -1171,9 +1226,135 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             )}
 
             {/* Trust Badges */}
-            {trustBadgesList.length > 0 && responsiveHeight >= 250 && (
+            {minimalTrustBadges.length > 0 && responsiveHeight >= 250 && (
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", fontSize: badgeFontSize, fontWeight: 700, color: slideTextColor, opacity: 0.9, justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start", marginTop: "2px" }}>
+                {minimalTrustBadges.map((tb, idx) => (
+                  <span key={idx} style={{ padding: "2px 8px", borderRadius: "6px", background: isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.04)" }}>✓ {tb}</span>
+                ))}
+              </div>
+            )}
+
+            {/* CTAs */}
+            {renderButtonsRow()}
+          </div>
+        );
+
+      case "standard":
+      default:
+        const standardTrustBadges = Array.isArray(currentSlide.trust_badges) ? currentSlide.trust_badges : [];
+
+        return (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: contentGap,
+              maxWidth: slideContentMaxWidth,
+              alignItems: slideAlignItems,
+              textAlign: slideTextAlign as any,
+              margin: slideMargin,
+            }}
+          >
+            {/* Badge & Coupon */}
+            {(currentSlide.badge || currentSlide.coupon_code) && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start" }}>
+                {currentSlide.badge && (
+                  <span
+                    style={{
+                      background: isDarkMode ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.08)",
+                      color: slideTextColor,
+                      fontSize: badgeFontSize,
+                      fontWeight: 800,
+                      padding: "3px 10px",
+                      borderRadius: "999px",
+                      width: "fit-content",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      border: isDarkMode ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(15,23,42,0.1)",
+                    }}
+                  >
+                    {currentSlide.badge}
+                  </span>
+                )}
+                {currentSlide.coupon_code && (
+                  <span
+                    style={{
+                      background: isDarkMode ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.06)",
+                      border: isDarkMode ? "1px dashed rgba(255,255,255,0.3)" : "1px dashed rgba(15,23,42,0.2)",
+                      color: slideTextColor,
+                      fontSize: badgeFontSize,
+                      fontWeight: 700,
+                      padding: "3px 8px",
+                      borderRadius: "6px",
+                    }}
+                  >
+                    CODE: {currentSlide.coupon_code}
+                  </span>
+                )}
+              </div>
+            )}
+
+            <h1
+              style={{
+                fontSize: resolvedHeadlineFontSize,
+                fontWeight: headlineFontWeight as any,
+                fontFamily: headlineFontFamily,
+                fontStyle: headlineFontStyle,
+                color: slideTextColor,
+                lineHeight: 1.15,
+                margin: 0,
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
+              }}
+            >
+              {currentSlide.headline}
+            </h1>
+
+            {showSubheadline && (
+              <p
+                style={{
+                  fontSize: resolvedSubheadlineFontSize,
+                  color: slideTextColor,
+                  opacity: 0.92,
+                  margin: 0,
+                  lineHeight: 1.4,
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
+                }}
+              >
+                {currentSlide.subheadline}
+              </p>
+            )}
+
+            {/* Live Countdown Bar ONLY IF explicitly active */}
+            {Boolean(currentSlide.show_countdown && (currentSlide.sale_end_time || currentSlide.sale_start_time)) && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start" }}>
+                <span style={{ fontSize: badgeFontSize, fontWeight: 700, color: slideTextColor, opacity: 0.8 }}>{liveCountdown.label}</span>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  {(liveCountdown.units || [liveCountdown.hours, liveCountdown.minutes, liveCountdown.seconds]).map((unit, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        background: isDarkMode ? "#0f172a" : "rgba(15,23,42,0.85)",
+                        color: "#ffffff",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        fontSize: badgeFontSize,
+                        fontWeight: 800,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {unit}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Trust Badges */}
+            {standardTrustBadges.length > 0 && responsiveHeight >= 250 && (
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", fontSize: badgeFontSize, fontWeight: 600, color: slideTextColor, opacity: 0.8, justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start" }}>
-                {trustBadgesList.map((tb, idx) => (
+                {standardTrustBadges.map((tb, idx) => (
                   <span key={idx}>✓ {tb}</span>
                 ))}
               </div>

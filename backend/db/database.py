@@ -1,4 +1,6 @@
 import os
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(usecwd=True))
 
 from sqlmodel import SQLModel, Session, create_engine
 
@@ -689,6 +691,193 @@ def create_db_and_tables():
                 CREATE INDEX IF NOT EXISTS ix_products_name_trgm ON products USING gin (name gin_trgm_ops);
                 CREATE INDEX IF NOT EXISTS ix_products_brand_trgm ON products USING gin (brand gin_trgm_ops);
                 CREATE INDEX IF NOT EXISTS ix_products_category_trgm ON products USING gin (category gin_trgm_ops);
+
+                -- Drop existing analytical views before recreation to allow column signature updates
+                DROP VIEW IF EXISTS v_promotions_and_returns CASCADE;
+                DROP VIEW IF EXISTS v_customer_analytics CASCADE;
+                DROP VIEW IF EXISTS v_product_inventory CASCADE;
+                DROP VIEW IF EXISTS v_order_items_detail CASCADE;
+                DROP VIEW IF EXISTS v_store_orders CASCADE;
+
+                -- 5 Canonical Co-Pilot Analytical Views
+                CREATE VIEW v_store_orders AS
+                SELECT 
+                    o.id AS order_id,
+                    o.site_id,
+                    o.status AS order_status,
+                    o.total AS total_amount,
+                    o.discount_amount,
+                    o.coupon_code,
+                    o.payment_method,
+                    o.payment_status,
+                    COALESCE(
+                        (SELECT SUM(oi.quantity) FROM order_items oi WHERE oi.order_id = o.id),
+                        CASE 
+                            WHEN jsonb_typeof(o.items) = 'array' THEN jsonb_array_length(o.items)
+                            ELSE 0 
+                        END,
+                        0
+                    ) AS item_count,
+                    COALESCE(u.name, 'Guest Customer') AS customer_name,
+                    COALESCE(u.email, '-') AS customer_email,
+                    COALESCE(u.phone, '-') AS customer_phone,
+                    COALESCE(
+                        NULLIF(TRIM(CONCAT_WS(', ',
+                            o.shipping_address->>'address_line1',
+                            o.shipping_address->>'city',
+                            o.shipping_address->>'state',
+                            o.shipping_address->>'postal_code'
+                        )), ''),
+                        'No address provided'
+                    ) AS formatted_delivery_address,
+                    COALESCE(o.shipping_address->>'city', '-') AS delivery_city,
+                    COALESCE(o.shipping_address->>'postal_code', '-') AS delivery_pincode,
+                    o.contains_preorder,
+                    o.preorder_released,
+                    o.created_at,
+                    o.confirmed_at,
+                    o.shipped_at,
+                    o.delivered_at,
+                    o.cancelled_at
+                FROM orders o
+                LEFT JOIN users u ON o.customer_id = u.id
+                WHERE o.status != 'pending';
+
+                CREATE VIEW v_order_items_detail AS
+                WITH raw_items AS (
+                    SELECT 
+                        oi.id AS order_item_id,
+                        oi.order_id,
+                        COALESCE(oi.site_id, o.site_id) AS site_id,
+                        oi.product_id,
+                        oi.product_name,
+                        COALESCE(oi.selected_variant_label, oi.selected_variant_value, 'Standard') AS variant_selected,
+                        oi.quantity AS quantity_ordered,
+                        oi.unit_price,
+                        oi.line_total,
+                        o.status AS order_status,
+                        o.created_at AS order_date,
+                        o.customer_id
+                    FROM order_items oi
+                    JOIN orders o ON oi.order_id = o.id
+                    WHERE o.status != 'pending'
+
+                    UNION ALL
+
+                    SELECT 
+                        gen_random_uuid() AS order_item_id,
+                        o.id AS order_id,
+                        o.site_id,
+                        CASE 
+                            WHEN elem->>'product_id' ~ '^[0-9a-fA-F-]{36}$' THEN (elem->>'product_id')::uuid
+                            WHEN elem->>'productId' ~ '^[0-9a-fA-F-]{36}$' THEN (elem->>'productId')::uuid
+                            WHEN elem->>'id' ~ '^[0-9a-fA-F-]{36}$' THEN (elem->>'id')::uuid
+                            ELSE NULL
+                        END AS product_id,
+                        COALESCE(elem->>'product_name', elem->>'name', elem->>'title', 'Product') AS product_name,
+                        COALESCE(elem->>'variant', elem->>'selected_variant', elem->>'variant_label', 'Standard') AS variant_selected,
+                        COALESCE((elem->>'quantity')::integer, (elem->>'qty')::integer, 1) AS quantity_ordered,
+                        COALESCE((elem->>'unit_price')::numeric, (elem->>'price')::numeric, 0.0) AS unit_price,
+                        COALESCE((elem->>'line_total')::numeric, ((COALESCE((elem->>'quantity')::integer, (elem->>'qty')::integer, 1)) * (COALESCE((elem->>'price')::numeric, 0.0))), 0.0) AS line_total,
+                        o.status AS order_status,
+                        o.created_at AS order_date,
+                        o.customer_id
+                    FROM orders o
+                    CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(o.items) = 'array' THEN o.items ELSE '[]'::jsonb END) elem
+                    WHERE o.status != 'pending' AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id)
+                )
+                SELECT 
+                    ri.order_item_id,
+                    ri.order_id,
+                    ri.site_id,
+                    COALESCE(ri.product_id, p.id) AS product_id,
+                    COALESCE(p.name, ri.product_name) AS product_name,
+                    COALESCE(c.name, 'General') AS category,
+                    ri.variant_selected,
+                    ri.quantity_ordered,
+                    ri.unit_price,
+                    ri.line_total,
+                    ri.order_status,
+                    ri.order_date,
+                    COALESCE(u.name, 'Customer') AS customer_name,
+                    COALESCE(p.stock, 0) AS current_stock
+                FROM raw_items ri
+                LEFT JOIN (
+                    SELECT DISTINCT ON (site_id, LOWER(TRIM(name))) 
+                        id, site_id, name, category_id, stock
+                    FROM products
+                    ORDER BY site_id, LOWER(TRIM(name)), is_active DESC, created_at DESC
+                ) p ON (ri.product_id IS NOT NULL AND ri.product_id = p.id) OR (ri.product_id IS NULL AND LOWER(TRIM(ri.product_name)) = LOWER(TRIM(p.name)) AND ri.site_id = p.site_id)
+                LEFT JOIN categories c ON p.category_id = c.id
+                LEFT JOIN users u ON ri.customer_id = u.id;
+
+                CREATE VIEW v_product_inventory AS
+                SELECT 
+                    p.id AS product_id,
+                    p.site_id,
+                    p.name AS product_name,
+                    COALESCE(c.name, p.category, 'General') AS category,
+                    p.sku,
+                    p.stock AS total_product_stock,
+                    COALESCE(v->>'value', 'Default') AS variant_name,
+                    COALESCE(
+                        (v->>'stockQty')::integer,
+                        (v->>'stock_qty')::integer,
+                        (v->>'stock')::integer,
+                        (v->>'quantity')::integer,
+                        (v->>'qty')::integer,
+                        p.stock,
+                        0
+                    ) AS variant_stock,
+                    COALESCE((v->>'price')::numeric, p.price) AS variant_price,
+                    p.price AS base_price,
+                    p.compare_price,
+                    p.in_stock,
+                    p.is_active,
+                    p.is_preorder
+                FROM products p
+                LEFT JOIN categories c ON p.category_id = c.id
+                LEFT JOIN LATERAL jsonb_array_elements(
+                    CASE 
+                        WHEN jsonb_typeof(COALESCE(p.variant_option->'optionValues', p.variant_option->'option_values')) = 'array' 
+                             AND jsonb_array_length(COALESCE(p.variant_option->'optionValues', p.variant_option->'option_values')) > 0
+                        THEN COALESCE(p.variant_option->'optionValues', p.variant_option->'option_values') 
+                        ELSE '[{"value": "Default"}]'::jsonb 
+                    END
+                ) AS v ON true
+                WHERE p.is_active = TRUE;
+
+                CREATE VIEW v_customer_analytics AS
+                SELECT 
+                    u.id AS customer_id,
+                    u.site_id,
+                    u.name AS customer_name,
+                    u.email AS customer_email,
+                    u.phone AS customer_phone,
+                    u.is_guest,
+                    u.is_active,
+                    COUNT(DISTINCT o.id) AS total_orders_count,
+                    COALESCE(SUM(CASE WHEN o.status NOT IN ('cancelled', 'refunded') THEN o.total ELSE 0 END), 0.00) AS lifetime_spend,
+                    COALESCE(AVG(CASE WHEN o.status NOT IN ('cancelled', 'refunded') THEN o.total ELSE NULL END), 0.00) AS average_order_value,
+                    MAX(o.created_at) AS last_order_date,
+                    u.created_at AS customer_registered_at
+                FROM users u
+                LEFT JOIN orders o ON u.id = o.customer_id AND u.site_id = o.site_id AND o.status != 'pending'
+                GROUP BY u.id, u.site_id, u.name, u.email, u.phone, u.is_guest, u.is_active, u.created_at;
+
+                CREATE VIEW v_promotions_and_returns AS
+                SELECT 
+                    c.id AS coupon_id,
+                    c.site_id,
+                    c.code AS coupon_code,
+                    c.discount_type,
+                    c.discount_value,
+                    c.times_used,
+                    c.is_active AS is_coupon_active,
+                    COALESCE((SELECT SUM(cu.discount_amount) FROM coupon_usages cu WHERE cu.coupon_id = c.id), 0.00) AS total_discount_given,
+                    c.starts_at,
+                    c.expires_at
+                FROM coupons c;
             """))
             conn.commit()
     except Exception as e:

@@ -528,18 +528,18 @@ export default function CustomerSupportPage({
   const badgeRadius = parseDimension(blockProps?.badge_radius, "4px");
 
   // Consistent theme colors inheriting dynamically from active store theme
-  const accentColor = blockProps?.accent_color || activeTheme.accent_color || themeTokens.accentColor;
-  const primaryBg = blockProps?.primary_bg || activeTheme.primary_bg || themeTokens.primaryBg;
-  const cardBg = blockProps?.card_bg || activeTheme.card_bg || themeTokens.cardBg;
-  const surfaceBg = blockProps?.surface_bg || activeTheme.secondary_bg || themeTokens.secondaryBg;
-  const chatBg = blockProps?.chat_bg || cardBg;
+  const accentColor = blockProps?.accent_color || activeTheme.support_accent_color || activeTheme.accent_color || themeTokens.accentColor;
+  const primaryBg = blockProps?.primary_bg || activeTheme.support_bg || activeTheme.primary_bg || themeTokens.primaryBg;
+  const cardBg = blockProps?.card_bg || activeTheme.support_card_bg || activeTheme.card_bg || themeTokens.cardBg;
+  const surfaceBg = blockProps?.surface_bg || activeTheme.support_surface_bg || activeTheme.secondary_bg || themeTokens.secondaryBg;
+  const chatBg = blockProps?.chat_bg || activeTheme.support_chat_bg || cardBg;
 
   const isPrimaryDark = isColorDarkHex(primaryBg);
   const isCardDark = isColorDarkHex(cardBg);
   const isSurfaceDark = isColorDarkHex(surfaceBg);
   const isChatDark = isColorDarkHex(chatBg);
 
-  const rawTextColor = blockProps?.text_color || activeTheme.text_color || themeTokens.textColor;
+  const rawTextColor = blockProps?.text_color || activeTheme.support_text_color || activeTheme.text_color || themeTokens.textColor;
   const textColor = (rawTextColor && (isColorDarkHex(rawTextColor) !== isCardDark))
     ? rawTextColor
     : (isCardDark ? "#f8fafc" : "#0f172a");
@@ -550,7 +550,7 @@ export default function CustomerSupportPage({
 
   const titleColor = blockProps?.title_color || textColor;
 
-  const rawTextMuted = blockProps?.subtext_color || activeTheme.muted_text || activeTheme.muted_text_color || themeTokens.mutedTextColor;
+  const rawTextMuted = blockProps?.subtext_color || activeTheme.support_muted_text || activeTheme.muted_text || activeTheme.muted_text_color || themeTokens.mutedTextColor;
   const textMuted = (rawTextMuted && (isColorDarkHex(rawTextMuted) !== isCardDark))
     ? rawTextMuted
     : (isCardDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)");
@@ -559,7 +559,7 @@ export default function CustomerSupportPage({
     ? rawTextMuted
     : (isPrimaryDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)");
 
-  const borderColor = blockProps?.border_color || activeTheme.border_color || (isCardDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
+  const borderColor = blockProps?.border_color || activeTheme.support_border_color || activeTheme.border_color || (isCardDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
   const buttonTextColor = blockProps?.button_text_color || activeTheme.accent_text || themeTokens.accentText || "#ffffff";
 
   const isLightInput = isLight && !isCardDark;
@@ -579,10 +579,10 @@ export default function CustomerSupportPage({
   const dropdownMutedText = isDropdownDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)";
   const dropdownBorder = isDropdownDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)";
 
-  const customerBubbleBg = blockProps?.customer_bubble_bg || accentColor;
-  const customerBubbleText = blockProps?.customer_bubble_text || (isColorDarkHex(customerBubbleBg) ? "#ffffff" : "#0f172a");
-  const agentBubbleBg = blockProps?.agent_bubble_bg || surfaceBg;
-  const agentBubbleText = blockProps?.agent_bubble_text || (isColorDarkHex(agentBubbleBg) ? "#f8fafc" : "#0f172a");
+  const customerBubbleBg = blockProps?.customer_bubble_bg || activeTheme.support_customer_bubble_bg || activeTheme.customer_bubble_bg || accentColor;
+  const customerBubbleText = blockProps?.customer_bubble_text || activeTheme.support_customer_bubble_text || activeTheme.customer_bubble_text || (isColorDarkHex(customerBubbleBg) ? "#ffffff" : "#0f172a");
+  const agentBubbleBg = blockProps?.agent_bubble_bg || activeTheme.support_agent_bubble_bg || activeTheme.agent_bubble_bg || surfaceBg;
+  const agentBubbleText = blockProps?.agent_bubble_text || activeTheme.support_agent_bubble_text || activeTheme.agent_bubble_text || (isColorDarkHex(agentBubbleBg) ? "#f8fafc" : "#0f172a");
   const allowOrderSelection = blockProps?.allowOrderSelection !== false;
   const allowAttachments = blockProps?.allowAttachments !== false;
   const showContactInfo = blockProps?.showContactInfo !== false;

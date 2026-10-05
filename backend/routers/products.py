@@ -51,6 +51,18 @@ except ImportError:
     HAS_PIL = False
 
 
+def json_safe(obj: Any) -> Any:
+    if isinstance(obj, Decimal):
+        return float(obj)
+    elif isinstance(obj, UUID):
+        return str(obj)
+    elif isinstance(obj, dict):
+        return {str(k): json_safe(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, set)):
+        return [json_safe(v) for v in obj]
+    return obj
+
+
 def save_optimized_upload_image(content: bytes, destination_dir: Path, original_ext: str = ".webp") -> str:
     if HAS_PIL:
         try:
@@ -3585,7 +3597,7 @@ def update_product(
         else:
             product.price = product_in.price
 
-        product.variant_option = new_variant_opt
+        product.variant_option = json_safe(new_variant_opt)
     else:
         product.variant_option = None
         product.price = product_in.price

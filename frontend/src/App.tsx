@@ -892,6 +892,7 @@ function AdminSitesPage() {
       topBar={topBar}
       leftPanel={leftPanel}
       drawer={drawerNode}
+      isResizableDrawer={activeDrawer === "chat"}
       plainCenter={true}
     >
       {activeSettingsNavKey === "profile" ? (

@@ -5,6 +5,7 @@ type BuilderShellProps = {
   topBar: React.ReactNode;
   leftPanel: React.ReactNode;
   drawer?: React.ReactNode;
+  isResizableDrawer?: boolean;
   rightPanel?: React.ReactNode;
   children: React.ReactNode;
   previewPaneRef?: React.RefObject<HTMLDivElement | null>;
@@ -171,6 +172,7 @@ export default function BuilderShell({
   topBar,
   leftPanel,
   drawer,
+  isResizableDrawer = false,
   rightPanel,
   children,
   previewPaneRef,
@@ -198,6 +200,52 @@ export default function BuilderShell({
     }
   }, [drawer]);
 
+  const DEFAULT_COPILOT_WIDTH = 300;
+  const MIN_COPILOT_WIDTH = 300;
+
+  const [copilotWidth, setCopilotWidth] = React.useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("webcreon_copilot_drawer_width") || localStorage.getItem("webcreon_drawer_width");
+      const maxAllowed = typeof window !== "undefined" ? Math.max(MIN_COPILOT_WIDTH, Math.floor(window.innerWidth * 0.5) - 80) : 500;
+      return saved ? Math.max(MIN_COPILOT_WIDTH, Math.min(maxAllowed, parseInt(saved, 10))) : DEFAULT_COPILOT_WIDTH;
+    } catch {
+      return DEFAULT_COPILOT_WIDTH;
+    }
+  });
+  const [isDragging, setIsDragging] = React.useState(false);
+  const copilotWidthRef = React.useRef(copilotWidth);
+  copilotWidthRef.current = copilotWidth;
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+
+    const startX = e.clientX;
+    const startWidth = copilotWidthRef.current;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      // Strictly cap total left width (72px nav + 8px gap + drawer) to half screen (50vw)
+      const maxAllowed = Math.max(MIN_COPILOT_WIDTH, Math.floor(window.innerWidth * 0.5) - 80);
+      const nextW = Math.max(MIN_COPILOT_WIDTH, Math.min(maxAllowed, startWidth + deltaX));
+      setCopilotWidth(nextW);
+    };
+
+    const onMouseUp = () => {
+      setIsDragging(false);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      try {
+        localStorage.setItem("webcreon_copilot_drawer_width", String(copilotWidthRef.current));
+      } catch {}
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+  const effectiveDrawerWidth = isResizableDrawer ? copilotWidth : SIDE_PANEL_WIDTH;
+
   if (!hasAdminChrome) {
     return <>{children}</>;
   }
@@ -216,7 +264,8 @@ export default function BuilderShell({
         color: tokens.textPrimary,
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         overflow: "hidden",
-        transition: "grid-template-columns 0.22s ease, background 0.2s ease",
+        userSelect: isDragging ? "none" : "auto",
+        transition: isDragging ? "none" : "grid-template-columns 0.22s ease, background 0.2s ease",
       }}
     >
       <style>{`
@@ -283,7 +332,8 @@ export default function BuilderShell({
             border: isDark ? `1px solid ${tokens.border}` : "none",
             boxShadow: tokens.shadow,
             overflow: "hidden",
-            transition: "background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease",
+            position: "relative",
+            transition: isDragging ? "none" : "background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease",
           }}
         >
           {/* LEFT ICON PANEL */}
@@ -306,25 +356,75 @@ export default function BuilderShell({
           <div
             style={{
               height: "100%",
-              width: isDrawerOpen ? `${SIDE_PANEL_WIDTH}px` : "0px",
-              transition: "width 0.22s cubic-bezier(0.2, 0, 0, 1)",
+              width: isDrawerOpen ? `${effectiveDrawerWidth}px` : "0px",
+              transition: isDragging ? "none" : "width 0.22s cubic-bezier(0.2, 0, 0, 1)",
               overflow: "hidden",
               flexShrink: 0,
               boxSizing: "border-box",
               borderLeft: isDrawerOpen ? `1px solid ${tokens.divider}` : "none",
+              position: "relative",
             }}
           >
             {activeDrawerNode && (
               <div
                 style={{
-                  width: `${SIDE_PANEL_WIDTH}px`,
-                  minWidth: `${SIDE_PANEL_WIDTH}px`,
+                  width: `${effectiveDrawerWidth}px`,
+                  minWidth: `${effectiveDrawerWidth}px`,
                   height: "100%",
                   boxSizing: "border-box",
                   overflow: "hidden",
                 }}
               >
                 {activeDrawerNode}
+              </div>
+            )}
+
+            {/* VERTICAL DRAGGER RESIZE HANDLE (ONLY FOR RESIZABLE DRAWER, E.G. COPILOT) */}
+            {isDrawerOpen && isResizableDrawer && (
+              <div
+                onMouseDown={handleDragStart}
+                title="Drag to resize Copilot (up to half screen)"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: "6px",
+                  cursor: "col-resize",
+                  zIndex: 100,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  userSelect: "none",
+                }}
+                onMouseEnter={(e) => {
+                  const line = e.currentTarget.firstElementChild as HTMLElement;
+                  if (line && !isDragging) {
+                    line.style.opacity = "1";
+                    line.style.background = "#3b82f6";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  const line = e.currentTarget.firstElementChild as HTMLElement;
+                  if (line && !isDragging) {
+                    line.style.opacity = "0.35";
+                    line.style.background = isDark ? "rgba(255, 255, 255, 0.3)" : "rgba(15, 23, 42, 0.25)";
+                  }
+                }}
+              >
+                <div
+                  style={{
+                    width: "2px",
+                    height: "24px",
+                    borderRadius: "2px",
+                    background: isDragging
+                      ? "#3b82f6"
+                      : isDark ? "rgba(255, 255, 255, 0.3)" : "rgba(15, 23, 42, 0.25)",
+                    opacity: isDragging ? 1 : 0.35,
+                    transition: isDragging ? "none" : "all 0.15s ease",
+                  }}
+                />
               </div>
             )}
           </div>

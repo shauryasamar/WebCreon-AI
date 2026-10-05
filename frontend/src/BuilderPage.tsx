@@ -2835,6 +2835,7 @@ function BuilderPageContent() {
         topBar={topBar}
         leftPanel={leftPanel}
         drawer={drawerNode}
+        isResizableDrawer={activeDrawer === "chat"}
         rightPanel={rightPanel}
         previewPaneRef={previewPaneRef}
         plainCenter={isAdminRoute}
