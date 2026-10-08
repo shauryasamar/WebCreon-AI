@@ -145,9 +145,16 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
             "active_agent": "Color & Design Agent (Revert)",
         }
 
-    # 1C. Palette / Theme Suggestion fast-path check (e.g. "give me some color theme", "give me few thmese", "suggest themes")
+    # 1C. Palette / Theme Suggestion fast-path check (ONLY for explicit suggestion requests, never for styling commands)
+    is_styling_command = any(
+        w in user_msg_clean for w in [
+            "change", "make", "set", "turn", "apply", "switch", "update", "style", "replace", "put", "use",
+            "filter", "navbar", "nav", "carousel", "crowsel", "crowsels", "card", "cards", "hero", "banner",
+            "footer", "notification", "dropdown", "button", "grid", "cart", "sidebar"
+        ]
+    )
+
     palette_suggestion_triggers = [
-        "color theme", "colour theme", "color themes", "colour themes",
         "theme suggestion", "themes suggestion", "suggest theme", "suggest themes",
         "give me theme", "give me themes", "give me some theme", "give me some themes",
         "give me color theme", "give me color themes", "give me few theme", "give me few themes",
@@ -158,7 +165,7 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
         "color palette", "colour palette", "color palettes", "colour palettes",
         "best theme for", "theme options", "palette options"
     ]
-    if any(t in user_msg_clean for t in palette_suggestion_triggers) and not any(a in user_msg_clean for a in ["how to", "where is", "help with", "explain how", "documentation"]):
+    if not is_styling_command and any(t in user_msg_clean for t in palette_suggestion_triggers) and not any(a in user_msg_clean for a in ["how to", "where is", "help with", "explain how", "documentation"]):
         return {
             "intent": "DESIGN",
             "is_compound": False,

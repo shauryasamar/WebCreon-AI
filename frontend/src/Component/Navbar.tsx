@@ -1622,6 +1622,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const resolvedNotificationBg =
     (theme as any)?.notification_drawer_bg ||
+    (theme as any)?.notification_bg ||
+    (theme as any)?.notification_dropdown_bg ||
     theme?.dialog_bg ||
     theme?.surface_bg ||
     (isSiteThemeDark ? (theme?.card_bg || "#0f172a") : "#ffffff");
@@ -1629,6 +1631,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const resolvedDialogBg = resolvedProfileDropdownBg;
 
   const resolvedDialogBorder =
+    (theme as any)?.notification_border_color ||
     (theme as any)?.border_color ||
     (isSiteThemeDark ? "rgba(255,255,255,0.12)" : "#e2e8f0");
 

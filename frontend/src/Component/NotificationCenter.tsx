@@ -502,8 +502,8 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     theme || { isDark, accentColor, dialogBg, borderColor }
   );
 
-  const customDrawerBg = (theme as any)?.notification_drawer_bg;
-  const customDrawerText = (theme as any)?.notification_drawer_text;
+  const customDrawerBg = (theme as any)?.notification_drawer_bg || (theme as any)?.notification_bg || (theme as any)?.notification_dropdown_bg;
+  const customDrawerText = (theme as any)?.notification_drawer_text || (theme as any)?.notification_text || (theme as any)?.notification_dropdown_text;
 
   const resolvedBg =
     customDrawerBg ||
@@ -512,6 +512,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
       : (dialogBg || (isDark ? "#0f172a" : "#ffffff")));
   const isPanelDark = isColorDarkHex(resolvedBg);
   const resolvedBorder =
+    (theme as any)?.notification_border_color ||
     (theme as any)?.border_color ||
     (isMobileEffective
       ? mobileDrawerTheme.drawerBorder

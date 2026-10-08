@@ -7,7 +7,7 @@ component color patching, live block styling, whole-site theme matching, and AI 
 import copy
 import json
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union, Tuple
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(usecwd=True))
 
@@ -590,8 +590,8 @@ COMPONENT_ALLOWED_KEYS = {
     "review": {"review_card_bg", "review_text_color", "review_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "review_card_radius", "review_padding"},
     "support": {"support_bg", "support_card_bg", "support_chat_bg", "support_accent_color", "support_customer_bubble_bg", "support_customer_bubble_text", "support_agent_bubble_bg", "support_agent_bubble_text", "support_text_color", "support_muted_text", "support_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "muted_text", "accent_color"},
     "customer_support": {"support_bg", "support_card_bg", "support_chat_bg", "support_accent_color", "support_customer_bubble_bg", "support_customer_bubble_text", "support_agent_bubble_bg", "support_agent_bubble_text", "support_text_color", "support_muted_text", "support_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "muted_text", "accent_color"},
-    "notification": {"notification_drawer_bg", "notification_drawer_text", "navbar_notification_icon_variant", "visual_style", "border_color", "background_color", "text_color", "accent_color"},
-    "profile": {"profile_dropdown_bg", "profile_dropdown_text", "navbar_account_icon_variant", "visual_style", "border_color", "background_color", "text_color", "accent_color"},
+    "notification": {"notification_drawer_bg", "notification_drawer_text", "notification_bg", "notification_text", "notification_border_color", "navbar_notification_icon_variant", "visual_style", "border_color", "background_color", "text_color", "accent_color"},
+    "profile": {"profile_dropdown_bg", "profile_dropdown_text", "profile_dropdown_border", "navbar_account_icon_variant", "visual_style", "border_color", "background_color", "text_color", "accent_color"},
     "background": {"primary_bg", "secondary_bg", "text_color", "muted_text"},
 }
 
@@ -699,6 +699,7 @@ COMPONENT_ALIASES = {
     # Filter
     "filter": "filter", "filters": "filter", "filter bar": "filter", "filter toolbar": "filter",
     "filter modal": "filter", "filter sidebar": "filter", "filter drawer": "filter", "filter theme": "filter",
+    "filters theme": "filter", "filter section": "filter", "filter options": "filter", "filter dropdown": "filter",
 
     # Sort
     "sort": "sort", "sort by": "sort", "sorting": "sort", "sort dropdown": "sort",
@@ -719,11 +720,18 @@ COMPONENT_ALIASES = {
 
     # Notification
     "notification": "notification", "notifications": "notification", "notification drawer": "notification",
-    "notification dropdown": "notification", "notification bell": "notification", "bell icon": "notification",
+    "notification dropdown": "notification", "notification drow down": "notification", "notification drop down": "notification",
+    "notification drowdown": "notification", "notifications dropdown": "notification", "notifications drop down": "notification",
+    "notifications drow down": "notification", "notification center": "notification", "notifications center": "notification",
+    "notification bell": "notification", "bell icon": "notification", "bell dropdown": "notification",
+    "notification menu": "notification", "notifications menu": "notification", "notification panel": "notification",
+    "notification popup": "notification", "notification theme": "notification", "notifications theme": "notification",
 
     # Profile
     "profile": "profile", "account": "profile", "profile dropdown": "profile", "account dropdown": "profile",
     "profile menu": "profile", "account menu": "profile", "customer profile": "profile",
+    "profile drow down": "profile", "profile drop down": "profile", "profile drowdown": "profile",
+    "account drow down": "profile", "account drop down": "profile", "profile theme": "profile",
 
     # Background (explicit page canvas targets only)
     "page background": "background", "canvas": "background",
@@ -968,7 +976,11 @@ async def generate_agentic_design_plan(
             allowed_keys_for_target.update(COMPONENT_ALLOWED_KEYS.get(st, set()))
 
     filtered_theme: Dict[str, Any] = {}
-    for k in ["primary_bg", "text_color", "accent_color", "border_color", "mode", "visual_style", "surface_materiality", "card_radius", "navbar_height", "hero_bg", "hero_accent"]:
+    for k in [
+        "primary_bg", "text_color", "accent_color", "border_color", "mode", "visual_style",
+        "surface_materiality", "card_radius", "navbar_height", "hero_bg", "hero_accent",
+        "navbar_bg", "navbar_outer_bg", "navbar_text_color", "navbar_border_color"
+    ]:
         if k in current_theme:
             filtered_theme[k] = current_theme[k]
     for k in allowed_keys_for_target:
@@ -979,43 +991,125 @@ async def generate_agentic_design_plan(
         ("system", """You are WebCreon AI's Expert Design Systems & Color Theory Agent.
 Your job is to translate the user's design instructions into a clean, precise list of atomic DesignActions.
 
-COMPONENT PROPERTY REFERENCE:
+COMPONENT PROPERTY REFERENCE FOR ALL 20 COMPONENTS:
 - Carousels & Grids ('product_carousel', 'section_group_carousel', 'product_grid', 'category_grid'):
   - Section backdrop / container background: outer_bg_color, grid_bg
   - Inner card background: card_bg, card_bg_color
   - Inner card geometry: card_radius (0 for boxy/sharp, 8-16 for rounded, 24 for pill), card_padding, card_border_color
   - Section header text: title_color, grid_text_color, subtitle_color
   - Card text & price: card_text_color, product_name_color, price_color
+- Product Card ('card', 'product_card'):
+  - card_bg_color, card_bg, card_text_color, product_name_color, price_color, card_radius, card_border_color, card_shadow, rating_star_color
 - Hero Banner ('hero'):
   - Banner background: hero_bg
   - Banner headline / text: hero_text_color
-  - Banner CTA button: hero_accent (and accent_color)
+  - Banner CTA button: hero_accent (and accent_color, button_bg_color)
   - Dimensions: banner_height (240-800), border_radius
 - Navbar ('navbar'):
   - Background: navbar_bg, navbar_outer_bg
   - Text: navbar_text_color
   - Border: navbar_border_color
+  - Cart badge: cart_badge_bg, cart_badge_text
   - Dimensions: navbar_height (44-120), navbar_padding_x (8-48)
   - Variants: navbar_variant ('floating', 'soft', 'solid')
+- Notification Center / Dropdown ('notification'):
+  - Drawer / Dropdown background: notification_drawer_bg, notification_bg
+  - Drawer / Dropdown text: notification_drawer_text, notification_text
+  - Border: notification_border_color
+- Profile / Account Dropdown ('profile'):
+  - Dropdown background: profile_dropdown_bg
+  - Dropdown text: profile_dropdown_text
+  - Border: profile_dropdown_border
+- Filter Sidebar / Toolbar ('filter'):
+  - Container background: filter_bg
+  - Card / Button background: filter_card_bg, filter_btn_bg
+  - Text: filter_text_color, filter_btn_text
+  - Border: filter_border_color
+  - Accent / Highlights: filter_accent_color
+  - Radius: filter_radius
 - Footer ('footer'):
   - Background: footer_bg
   - Text: footer_text_color, footer_muted_color
   - Border: footer_border_color
-  - Dimensions: footer_padding_y (16-96)
+  - Dimensions: footer_padding_y (16-96), footer_max_width
+- Cart Drawer ('cart'):
+  - Drawer / Panel background: cart_bg, cart_panel_bg
+  - Card background: cart_card_bg
+  - Text: cart_text_color
+  - Accent / Checkout CTA: cart_accent_color
+  - Border: cart_border_color
+  - Radius: cart_radius
+- Order Summary ('order_summary'):
+  - Container background: summary_bg
+  - Summary card background: summary_card_bg
+  - Text: summary_text_color
+  - Accent: summary_accent_color
+  - Border: summary_border_color
+  - Radius: summary_radius
+- Delivery Form ('delivery_form'):
+  - Form background: delivery_form_bg
+  - Input field background: delivery_form_input_bg
+  - Input field text: delivery_form_input_text
+  - Label & body text: delivery_form_text
+  - Button background: delivery_form_btn_bg
+  - Button text: delivery_form_btn_text
+  - Border: delivery_form_border
+  - Radius: delivery_form_radius
+- Payment Methods ('payment'):
+  - Container background: payment_bg
+  - Card background: payment_card_bg
+  - Text: payment_text_color
+  - Accent: payment_accent_color
+  - Border: payment_border_color
+  - Radius: payment_radius
+- Place Order ('place_order'):
+  - Container background: place_order_bg
+  - CTA Button background: place_order_btn_bg
+  - CTA Button text: place_order_btn_text
+  - Text: place_order_text
+  - Radius: place_order_radius
+- Pagination ('pagination'):
+  - Container background: pagination_bg
+  - Active button background: pagination_active_bg
+  - Text: pagination_text_color
+  - Border: pagination_border_color
+  - Radius: pagination_radius
+- Reviews ('review'):
+  - Card background: review_card_bg
+  - Review text: review_text_color
+  - Border: review_border_color
+  - Radius: review_card_radius
+  - Rating stars: rating_star_color
+- Customer Support ('support'):
+  - Container background: support_bg
+  - Card background: support_card_bg
+  - Chat background: support_chat_bg
+  - Text: support_text_color
+  - Muted text: support_muted_text
+  - Accent: support_accent_color
+  - Border: support_border_color
+- Order History ('order_history'):
+  - Container background: order_history_bg
+  - Card background: order_history_card_bg
+  - Text: order_history_text
+  - Muted text: order_history_muted_text
+  - Border: order_history_border
+  - Radius: order_history_radius
+- Product Detail ('product_detail'):
+  - Background: product_detail_bg
+  - Text: product_detail_text
+  - Button background: product_detail_btn_bg
+  - Button text: product_detail_btn_text
+  - Radius: product_detail_radius
 - Global Canvas ('background' or 'global'):
   - primary_bg, secondary_bg, text_color, muted_text, accent_color, border_color
-- Other Components:
-  - cart: cart_bg, cart_card_bg, cart_text_color, cart_accent_color, cart_radius
-  - delivery_form: delivery_form_bg, delivery_form_text, delivery_form_btn_bg, delivery_form_radius
-  - payment: payment_bg, payment_card_bg, payment_text_color, payment_radius
-  - place_order: place_order_bg, place_order_btn_bg, place_order_btn_text, place_order_radius
-  - pagination: pagination_bg, pagination_text_color, pagination_active_bg, pagination_radius
-  - review: review_card_bg, review_text_color, review_border_color, review_card_radius
-  - filter: filter_bg, filter_card_bg, filter_text_color, filter_radius
-  - support: support_bg, support_card_bg, support_text_color, support_accent_color
 
 RULES:
 1. STRICT ELEMENT FIDELITY:
+   - When user says "notification dropdown", "notification drawer", "notification drow down", or "notification":
+     Target 'notification'. Set notification_drawer_bg (and notification_bg) for background, and notification_drawer_text (and notification_text) for text.
+   - When user says "filter theme", "filter background", or "filters":
+     Target 'filter'. Set filter_bg for background, filter_text_color for text, filter_card_bg/filter_btn_bg for buttons, and filter_border_color for borders.
    - When user says "carousel background", target section_background (outer_bg_color and grid_bg).
    - When user says "card background", target card_background (card_bg).
    - When user says "boxy card" or "sharp corners", target card_radius with value 0.
@@ -1024,25 +1118,35 @@ RULES:
      Set BOTH navbar_bg and navbar_outer_bg to ensure the inner shell and outer wrapper never clash or retain stale colors.
    - When user says "outer border of navbar", "outer border", or "outer background":
      Target BOTH navbar_outer_bg and navbar_border_color with the user's requested color.
-2. DISAMBIGUATE CURRENT STATE VS DESIRED TARGET STATE:
+2. MATCHING / SYNCING THEME TO WEBPAGE OR NAVBAR:
+   - When user says "make the theme same as webpage theme, for notification, the yellow webpage or navbar theme", "make notification same as navbar", or "match filter to navbar theme":
+     Target that specific component ('notification', 'filter', etc.).
+     If user specifies a color in the request (e.g. 'the yellow webpage or navbar theme'):
+       Use that color (e.g. yellow #FFFF00) for the target's background!
+     Otherwise inspect Current Theme:
+     - For background: use navbar_bg or primary_bg.
+     - For text: use navbar_text_color or text_color.
+     - For border: use navbar_border_color or border_color.
+     Emit actions setting the target component's background, text, and border to these matched colors!
+3. DISAMBIGUATE CURRENT STATE VS DESIRED TARGET STATE:
    - When user says "outer border of navbar is yellow color, please keep that as well blue color please":
      The user is stating that the outer border is CURRENTLY yellow (unwanted) and wants it changed to BLUE!
      Target: BLUE (#0000FF) for navbar_outer_bg and navbar_border_color. NEVER set it to yellow!
-3. REFERENCE COMPONENT VS TARGET COMPONENT:
+4. REFERENCE COMPONENT VS TARGET COMPONENT:
    - When user says "The navbar has yellow and red theme, why did you make the carousel theme all white, please use these colors":
      The navbar is cited ONLY as a color reference! DO NOT modify the navbar!
      The component to style is the CAROUSEL (both product_carousel and section_group_carousel).
      Extract the colors mentioned (yellow and red) and apply them to the carousel: yellow (#FFFF00) for outer_bg_color/grid_bg, red (#FF0000) for card_bg or title_color/accent_color.
-4. CAROUSEL THEME & ALL CAROUSELS:
+5. CAROUSEL THEME & ALL CAROUSELS:
    - When user says "crowsels", "all carousels", "crowsel theme", or "other carousel as well":
      Emit actions for BOTH 'product_carousel' AND 'section_group_carousel'. Never leave one carousel white while styling the other.
-5. CONVERSATIONAL FOLLOW-UP & MEMORY:
+6. CONVERSATIONAL FOLLOW-UP & MEMORY:
    - When user says "not just product carousel other all carousel as well" or "make other carousel as well":
      Inspect Recent Chat History to identify the active theme colors (e.g. yellow #FFFF00).
      Apply that SAME color to section_group_carousel. NEVER default to white (#FFFFFF)!
-6. Only emit actions for properties explicitly mentioned or directly implied by the request. Never modify unrequested attributes.
-7. If user specifies a relative change (e.g. "make navbar taller"), compute the new value from Current Theme (e.g. current 64 -> 80).
-8. If glassmorphism/frosted glass requested, set visual_style='glassmorphic' and surface_materiality='glass_navbar' (or 'full_glass').
+7. Only emit actions for properties explicitly mentioned or directly implied by the request. Never modify unrequested attributes.
+8. If user specifies a relative change (e.g. "make navbar taller"), compute the new value from Current Theme (e.g. current 64 -> 80).
+9. If glassmorphism/frosted glass requested, set visual_style='glassmorphic' and surface_materiality='glass_navbar' (or 'full_glass').
 """),
         ("user", "Target Component Hint: {target_hint}\nCurrent Theme: {current_theme}\nRecent Chat History: {history_str}\nUser Request: {user_message}"),
     ])
@@ -1132,7 +1236,7 @@ THEME_COMPONENT_OVERRIDE_KEYS = {
     # pagination
     "pagination_bg", "pagination_text_color", "pagination_active_bg", "pagination_border_color", "pagination_radius", "pagination_padding",
     # review
-    "review_card_bg", "review_text_color", "review_border_color", "review_card_radius", "review_padding",
+    "review_card_bg", "review_text_color", "review_border_color", "review_card_radius", "review_padding", "rating_star_color",
     # support
     "support_bg", "support_card_bg", "support_chat_bg", "support_accent_color", "support_customer_bubble_bg", "support_customer_bubble_text", "support_agent_bubble_bg", "support_agent_bubble_text", "support_text_color", "support_muted_text", "support_border_color",
     # navbar
@@ -1140,7 +1244,8 @@ THEME_COMPONENT_OVERRIDE_KEYS = {
     # footer
     "footer_bg", "footer_text_color", "footer_muted_color", "footer_border_color", "footer_padding_y", "footer_max_width", "footer_layout",
     # notification & profile
-    "notification_drawer_bg", "notification_drawer_text", "profile_dropdown_bg", "profile_dropdown_text",
+    "notification_drawer_bg", "notification_drawer_text", "notification_bg", "notification_text", "notification_border_color",
+    "profile_dropdown_bg", "profile_dropdown_text", "profile_dropdown_border",
 }
 
 
@@ -1185,12 +1290,500 @@ BG_TO_TEXT_MAP: Dict[str, Tuple[str, str]] = {
     "primary_bg": ("global", "text_color"),
     "secondary_bg": ("global", "text_color"),
     "cart_bg": ("cart", "cart_text_color"),
+    "cart_panel_bg": ("cart", "cart_text_color"),
+    "cart_card_bg": ("cart", "cart_text_color"),
+    "summary_bg": ("order_summary", "summary_text_color"),
+    "summary_card_bg": ("order_summary", "summary_text_color"),
     "delivery_form_bg": ("delivery_form", "delivery_form_text"),
+    "delivery_form_input_bg": ("delivery_form", "delivery_form_input_text"),
+    "delivery_form_btn_bg": ("delivery_form", "delivery_form_btn_text"),
     "payment_bg": ("payment", "payment_text_color"),
+    "payment_card_bg": ("payment", "payment_text_color"),
+    "place_order_bg": ("place_order", "place_order_text"),
+    "place_order_btn_bg": ("place_order", "place_order_btn_text"),
     "filter_bg": ("filter", "filter_text_color"),
+    "filter_card_bg": ("filter", "filter_text_color"),
+    "filter_btn_bg": ("filter", "filter_btn_text"),
     "pagination_bg": ("pagination", "pagination_text_color"),
     "review_card_bg": ("review", "review_text_color"),
     "support_bg": ("support", "support_text_color"),
+    "support_card_bg": ("support", "support_text_color"),
+    "order_history_bg": ("order_history", "order_history_text"),
+    "order_history_card_bg": ("order_history", "order_history_text"),
+    "notification_drawer_bg": ("notification", "notification_drawer_text"),
+    "notification_bg": ("notification", "notification_drawer_text"),
+    "profile_dropdown_bg": ("profile", "profile_dropdown_text"),
+    "product_detail_bg": ("product_detail", "product_detail_text"),
+    "product_detail_btn_bg": ("product_detail", "product_detail_btn_text"),
+}
+
+CANONICAL_COMPONENT_PROPERTY_MAP: Dict[str, Dict[str, Union[str, List[str]]]] = {
+    "notification": {
+        "background": ["notification_drawer_bg", "notification_bg"],
+        "bg": ["notification_drawer_bg", "notification_bg"],
+        "background_color": ["notification_drawer_bg", "notification_bg"],
+        "drawer_bg": ["notification_drawer_bg", "notification_bg"],
+        "dropdown_bg": ["notification_drawer_bg", "notification_bg"],
+        "notification_bg": ["notification_drawer_bg", "notification_bg"],
+        "notification_drawer_bg": ["notification_drawer_bg", "notification_bg"],
+        "text": ["notification_drawer_text", "notification_text"],
+        "text_color": ["notification_drawer_text", "notification_text"],
+        "textColor": ["notification_drawer_text", "notification_text"],
+        "font_color": ["notification_drawer_text", "notification_text"],
+        "notification_text": ["notification_drawer_text", "notification_text"],
+        "notification_drawer_text": ["notification_drawer_text", "notification_text"],
+        "border": "notification_border_color",
+        "border_color": "notification_border_color",
+        "notification_border_color": "notification_border_color",
+    },
+    "profile": {
+        "background": "profile_dropdown_bg",
+        "bg": "profile_dropdown_bg",
+        "background_color": "profile_dropdown_bg",
+        "dropdown_bg": "profile_dropdown_bg",
+        "menu_bg": "profile_dropdown_bg",
+        "profile_dropdown_bg": "profile_dropdown_bg",
+        "text": "profile_dropdown_text",
+        "text_color": "profile_dropdown_text",
+        "font_color": "profile_dropdown_text",
+        "profile_dropdown_text": "profile_dropdown_text",
+        "border": "profile_dropdown_border",
+        "border_color": "profile_dropdown_border",
+        "profile_dropdown_border": "profile_dropdown_border",
+    },
+    "filter": {
+        "background": "filter_bg",
+        "bg": "filter_bg",
+        "background_color": "filter_bg",
+        "filter_bg": "filter_bg",
+        "card_bg": ["filter_card_bg", "filter_btn_bg"],
+        "button_bg": ["filter_btn_bg", "filter_card_bg"],
+        "btn_bg": ["filter_btn_bg", "filter_card_bg"],
+        "filter_card_bg": ["filter_card_bg", "filter_btn_bg"],
+        "filter_btn_bg": ["filter_btn_bg", "filter_card_bg"],
+        "text": ["filter_text_color", "filter_btn_text"],
+        "text_color": ["filter_text_color", "filter_btn_text"],
+        "font_color": ["filter_text_color", "filter_btn_text"],
+        "filter_text_color": ["filter_text_color", "filter_btn_text"],
+        "button_text": "filter_btn_text",
+        "btn_text": "filter_btn_text",
+        "filter_btn_text": "filter_btn_text",
+        "border": "filter_border_color",
+        "border_color": "filter_border_color",
+        "filter_border_color": "filter_border_color",
+        "accent": "filter_accent_color",
+        "accent_color": "filter_accent_color",
+        "filter_accent_color": "filter_accent_color",
+        "radius": "filter_radius",
+        "border_radius": "filter_radius",
+        "filter_radius": "filter_radius",
+    },
+    "navbar": {
+        "background": ["navbar_bg", "navbar_outer_bg"],
+        "bg": ["navbar_bg", "navbar_outer_bg"],
+        "background_color": ["navbar_bg", "navbar_outer_bg"],
+        "navbar_bg": ["navbar_bg", "navbar_outer_bg"],
+        "outer_bg": "navbar_outer_bg",
+        "navbar_outer_bg": "navbar_outer_bg",
+        "outer_border": ["navbar_border_color", "navbar_outer_bg"],
+        "navbar_outer_border": ["navbar_border_color", "navbar_outer_bg"],
+        "text": "navbar_text_color",
+        "text_color": "navbar_text_color",
+        "font_color": "navbar_text_color",
+        "navbar_text_color": "navbar_text_color",
+        "border": "navbar_border_color",
+        "border_color": "navbar_border_color",
+        "navbar_border_color": "navbar_border_color",
+        "cart_badge_bg": "cart_badge_bg",
+        "badge_bg": "cart_badge_bg",
+        "cart_badge_text": "cart_badge_text",
+        "badge_text": "cart_badge_text",
+        "height": "navbar_height",
+        "navbar_height": "navbar_height",
+        "padding": "navbar_padding_x",
+        "padding_x": "navbar_padding_x",
+        "navbar_padding_x": "navbar_padding_x",
+        "variant": "navbar_variant",
+        "navbar_variant": "navbar_variant",
+    },
+    "footer": {
+        "background": "footer_bg",
+        "bg": "footer_bg",
+        "background_color": "footer_bg",
+        "footer_bg": "footer_bg",
+        "text": "footer_text_color",
+        "text_color": "footer_text_color",
+        "font_color": "footer_text_color",
+        "footer_text_color": "footer_text_color",
+        "muted": "footer_muted_color",
+        "muted_text": "footer_muted_color",
+        "muted_color": "footer_muted_color",
+        "footer_muted_color": "footer_muted_color",
+        "border": "footer_border_color",
+        "border_color": "footer_border_color",
+        "footer_border_color": "footer_border_color",
+        "padding": "footer_padding_y",
+        "padding_y": "footer_padding_y",
+        "footer_padding_y": "footer_padding_y",
+        "max_width": "footer_max_width",
+        "footer_max_width": "footer_max_width",
+    },
+    "hero": {
+        "background": "hero_bg",
+        "bg": "hero_bg",
+        "background_color": "hero_bg",
+        "hero_bg": "hero_bg",
+        "text": "hero_text_color",
+        "text_color": "hero_text_color",
+        "font_color": "hero_text_color",
+        "hero_text_color": "hero_text_color",
+        "button_bg": ["hero_accent", "accent_color", "button_bg_color"],
+        "btn_bg": ["hero_accent", "accent_color", "button_bg_color"],
+        "button_color": ["hero_accent", "accent_color", "button_bg_color"],
+        "btn_color": ["hero_accent", "accent_color", "button_bg_color"],
+        "cta_bg": ["hero_accent", "accent_color", "button_bg_color"],
+        "hero_accent": ["hero_accent", "accent_color", "button_bg_color"],
+        "accent": ["hero_accent", "accent_color", "button_bg_color"],
+        "accent_color": ["hero_accent", "accent_color", "button_bg_color"],
+        "height": "banner_height",
+        "banner_height": "banner_height",
+        "radius": "border_radius",
+        "border_radius": "border_radius",
+    },
+    "cart": {
+        "background": ["cart_bg", "cart_panel_bg"],
+        "bg": ["cart_bg", "cart_panel_bg"],
+        "panel_bg": ["cart_bg", "cart_panel_bg"],
+        "cart_bg": ["cart_bg", "cart_panel_bg"],
+        "cart_panel_bg": ["cart_bg", "cart_panel_bg"],
+        "card_bg": "cart_card_bg",
+        "cart_card_bg": "cart_card_bg",
+        "text": "cart_text_color",
+        "text_color": "cart_text_color",
+        "font_color": "cart_text_color",
+        "cart_text_color": "cart_text_color",
+        "accent": "cart_accent_color",
+        "accent_color": "cart_accent_color",
+        "button_bg": "cart_accent_color",
+        "btn_bg": "cart_accent_color",
+        "cart_accent_color": "cart_accent_color",
+        "border": "cart_border_color",
+        "border_color": "cart_border_color",
+        "cart_border_color": "cart_border_color",
+        "radius": "cart_radius",
+        "border_radius": "cart_radius",
+        "cart_radius": "cart_radius",
+    },
+    "order_summary": {
+        "background": "summary_bg",
+        "bg": "summary_bg",
+        "summary_bg": "summary_bg",
+        "card_bg": "summary_card_bg",
+        "summary_card_bg": "summary_card_bg",
+        "text": "summary_text_color",
+        "text_color": "summary_text_color",
+        "summary_text_color": "summary_text_color",
+        "accent": "summary_accent_color",
+        "accent_color": "summary_accent_color",
+        "summary_accent_color": "summary_accent_color",
+        "border": "summary_border_color",
+        "border_color": "summary_border_color",
+        "summary_border_color": "summary_border_color",
+        "radius": "summary_radius",
+        "border_radius": "summary_radius",
+        "summary_radius": "summary_radius",
+    },
+    "delivery_form": {
+        "background": "delivery_form_bg",
+        "bg": "delivery_form_bg",
+        "delivery_form_bg": "delivery_form_bg",
+        "input_bg": "delivery_form_input_bg",
+        "delivery_form_input_bg": "delivery_form_input_bg",
+        "input_text": "delivery_form_input_text",
+        "delivery_form_input_text": "delivery_form_input_text",
+        "text": "delivery_form_text",
+        "text_color": "delivery_form_text",
+        "delivery_form_text": "delivery_form_text",
+        "button_bg": "delivery_form_btn_bg",
+        "btn_bg": "delivery_form_btn_bg",
+        "button_color": "delivery_form_btn_bg",
+        "delivery_form_btn_bg": "delivery_form_btn_bg",
+        "button_text": "delivery_form_btn_text",
+        "btn_text": "delivery_form_btn_text",
+        "delivery_form_btn_text": "delivery_form_btn_text",
+        "border": "delivery_form_border",
+        "border_color": "delivery_form_border",
+        "delivery_form_border": "delivery_form_border",
+        "radius": "delivery_form_radius",
+        "border_radius": "delivery_form_radius",
+        "delivery_form_radius": "delivery_form_radius",
+    },
+    "payment": {
+        "background": "payment_bg",
+        "bg": "payment_bg",
+        "payment_bg": "payment_bg",
+        "card_bg": "payment_card_bg",
+        "payment_card_bg": "payment_card_bg",
+        "text": "payment_text_color",
+        "text_color": "payment_text_color",
+        "payment_text_color": "payment_text_color",
+        "accent": "payment_accent_color",
+        "accent_color": "payment_accent_color",
+        "payment_accent_color": "payment_accent_color",
+        "border": "payment_border_color",
+        "border_color": "payment_border_color",
+        "payment_border_color": "payment_border_color",
+        "radius": "payment_radius",
+        "border_radius": "payment_radius",
+        "payment_radius": "payment_radius",
+    },
+    "place_order": {
+        "background": "place_order_bg",
+        "bg": "place_order_bg",
+        "place_order_bg": "place_order_bg",
+        "button_bg": "place_order_btn_bg",
+        "btn_bg": "place_order_btn_bg",
+        "button_color": "place_order_btn_bg",
+        "accent": "place_order_btn_bg",
+        "place_order_btn_bg": "place_order_btn_bg",
+        "button_text": "place_order_btn_text",
+        "btn_text": "place_order_btn_text",
+        "place_order_btn_text": "place_order_btn_text",
+        "text": "place_order_text",
+        "text_color": "place_order_text",
+        "place_order_text": "place_order_text",
+        "radius": "place_order_radius",
+        "border_radius": "place_order_radius",
+        "place_order_radius": "place_order_radius",
+    },
+    "pagination": {
+        "background": "pagination_bg",
+        "bg": "pagination_bg",
+        "pagination_bg": "pagination_bg",
+        "active_bg": "pagination_active_bg",
+        "button_bg": "pagination_active_bg",
+        "btn_bg": "pagination_active_bg",
+        "accent": "pagination_active_bg",
+        "pagination_active_bg": "pagination_active_bg",
+        "text": "pagination_text_color",
+        "text_color": "pagination_text_color",
+        "pagination_text_color": "pagination_text_color",
+        "border": "pagination_border_color",
+        "border_color": "pagination_border_color",
+        "pagination_border_color": "pagination_border_color",
+        "radius": "pagination_radius",
+        "border_radius": "pagination_radius",
+        "pagination_radius": "pagination_radius",
+    },
+    "review": {
+        "background": "review_card_bg",
+        "bg": "review_card_bg",
+        "card_bg": "review_card_bg",
+        "card_background": "review_card_bg",
+        "review_card_bg": "review_card_bg",
+        "text": "review_text_color",
+        "text_color": "review_text_color",
+        "review_text_color": "review_text_color",
+        "border": "review_border_color",
+        "border_color": "review_border_color",
+        "review_border_color": "review_border_color",
+        "radius": "review_card_radius",
+        "border_radius": "review_card_radius",
+        "review_card_radius": "review_card_radius",
+        "star_color": "rating_star_color",
+        "rating_color": "rating_star_color",
+        "rating_star_color": "rating_star_color",
+    },
+    "support": {
+        "background": "support_bg",
+        "bg": "support_bg",
+        "support_bg": "support_bg",
+        "card_bg": "support_card_bg",
+        "support_card_bg": "support_card_bg",
+        "chat_bg": "support_chat_bg",
+        "support_chat_bg": "support_chat_bg",
+        "text": "support_text_color",
+        "text_color": "support_text_color",
+        "support_text_color": "support_text_color",
+        "muted": "support_muted_text",
+        "muted_text": "support_muted_text",
+        "support_muted_text": "support_muted_text",
+        "accent": "support_accent_color",
+        "accent_color": "support_accent_color",
+        "support_accent_color": "support_accent_color",
+        "border": "support_border_color",
+        "border_color": "support_border_color",
+        "support_border_color": "support_border_color",
+    },
+    "order_history": {
+        "background": "order_history_bg",
+        "bg": "order_history_bg",
+        "order_history_bg": "order_history_bg",
+        "card_bg": "order_history_card_bg",
+        "order_history_card_bg": "order_history_card_bg",
+        "text": "order_history_text",
+        "text_color": "order_history_text",
+        "order_history_text": "order_history_text",
+        "muted": "order_history_muted_text",
+        "muted_text": "order_history_muted_text",
+        "order_history_muted_text": "order_history_muted_text",
+        "border": "order_history_border",
+        "border_color": "order_history_border",
+        "order_history_border": "order_history_border",
+        "radius": "order_history_radius",
+        "border_radius": "order_history_radius",
+        "order_history_radius": "order_history_radius",
+    },
+    "product_detail": {
+        "background": "product_detail_bg",
+        "bg": "product_detail_bg",
+        "product_detail_bg": "product_detail_bg",
+        "text": "product_detail_text",
+        "text_color": "product_detail_text",
+        "product_detail_text": "product_detail_text",
+        "button_bg": "product_detail_btn_bg",
+        "btn_bg": "product_detail_btn_bg",
+        "product_detail_btn_bg": "product_detail_btn_bg",
+        "button_text": "product_detail_btn_text",
+        "btn_text": "product_detail_btn_text",
+        "product_detail_btn_text": "product_detail_btn_text",
+        "radius": "product_detail_radius",
+        "border_radius": "product_detail_radius",
+        "product_detail_radius": "product_detail_radius",
+    },
+    "card": {
+        "background": ["card_bg_color", "card_bg"],
+        "bg": ["card_bg_color", "card_bg"],
+        "card_bg": ["card_bg_color", "card_bg"],
+        "card_bg_color": ["card_bg_color", "card_bg"],
+        "text": ["card_text_color", "product_name_color"],
+        "text_color": ["card_text_color", "product_name_color"],
+        "card_text_color": ["card_text_color", "product_name_color"],
+        "title_color": ["card_text_color", "product_name_color"],
+        "price_color": "price_color",
+        "radius": ["card_radius", "border_radius"],
+        "card_radius": ["card_radius", "border_radius"],
+        "border_radius": ["card_radius", "border_radius"],
+        "border": "card_border_color",
+        "border_color": "card_border_color",
+        "card_border_color": "card_border_color",
+        "shadow": "card_shadow",
+        "star_color": "rating_star_color",
+        "rating_color": "rating_star_color",
+        "rating_star_color": "rating_star_color",
+    },
+    "product_carousel": {
+        "background": ["outer_bg_color", "grid_bg"],
+        "bg": ["outer_bg_color", "grid_bg"],
+        "section_bg": ["outer_bg_color", "grid_bg"],
+        "outer_bg_color": ["outer_bg_color", "grid_bg"],
+        "grid_bg": ["outer_bg_color", "grid_bg"],
+        "card_bg": ["card_bg_color", "card_bg"],
+        "card_background": ["card_bg_color", "card_bg"],
+        "card_bg_color": ["card_bg_color", "card_bg"],
+        "text": ["title_color", "grid_text_color"],
+        "title": ["title_color", "grid_text_color"],
+        "title_color": ["title_color", "grid_text_color"],
+        "grid_text_color": ["title_color", "grid_text_color"],
+        "card_text": ["card_text_color", "product_name_color"],
+        "card_text_color": ["card_text_color", "product_name_color"],
+        "product_name_color": ["card_text_color", "product_name_color"],
+        "price_color": "price_color",
+        "radius": ["card_radius", "border_radius"],
+        "card_radius": ["card_radius", "border_radius"],
+        "border_radius": ["card_radius", "border_radius"],
+        "border": "card_border_color",
+        "card_border_color": "card_border_color",
+    },
+    "section_group_carousel": {
+        "background": ["outer_bg_color", "grid_bg"],
+        "bg": ["outer_bg_color", "grid_bg"],
+        "section_bg": ["outer_bg_color", "grid_bg"],
+        "outer_bg_color": ["outer_bg_color", "grid_bg"],
+        "grid_bg": ["outer_bg_color", "grid_bg"],
+        "card_bg": ["card_bg_color", "card_bg"],
+        "card_background": ["card_bg_color", "card_bg"],
+        "card_bg_color": ["card_bg_color", "card_bg"],
+        "text": ["title_color", "grid_text_color"],
+        "title": ["title_color", "grid_text_color"],
+        "title_color": ["title_color", "grid_text_color"],
+        "grid_text_color": ["title_color", "grid_text_color"],
+        "card_text": ["card_text_color", "product_name_color"],
+        "card_text_color": ["card_text_color", "product_name_color"],
+        "product_name_color": ["card_text_color", "product_name_color"],
+        "price_color": "price_color",
+        "radius": ["card_radius", "border_radius"],
+        "card_radius": ["card_radius", "border_radius"],
+        "border_radius": ["card_radius", "border_radius"],
+        "border": "card_border_color",
+        "card_border_color": "card_border_color",
+    },
+    "product_grid": {
+        "background": ["outer_bg_color", "grid_bg"],
+        "bg": ["outer_bg_color", "grid_bg"],
+        "outer_bg_color": ["outer_bg_color", "grid_bg"],
+        "grid_bg": ["outer_bg_color", "grid_bg"],
+        "card_bg": ["card_bg_color", "card_bg"],
+        "card_bg_color": ["card_bg_color", "card_bg"],
+        "text": ["title_color", "grid_text_color"],
+        "title": ["title_color", "grid_text_color"],
+        "title_color": ["title_color", "grid_text_color"],
+        "grid_text_color": ["title_color", "grid_text_color"],
+        "card_text": ["card_text_color", "product_name_color"],
+        "card_text_color": ["card_text_color", "product_name_color"],
+        "product_name_color": ["card_text_color", "product_name_color"],
+        "price_color": "price_color",
+        "radius": ["card_radius", "border_radius"],
+        "card_radius": ["card_radius", "border_radius"],
+        "border_radius": ["card_radius", "border_radius"],
+        "gap": "grid_gap",
+        "grid_gap": "grid_gap",
+    },
+    "category_grid": {
+        "background": ["outer_bg_color", "grid_bg"],
+        "bg": ["outer_bg_color", "grid_bg"],
+        "outer_bg_color": ["outer_bg_color", "grid_bg"],
+        "grid_bg": ["outer_bg_color", "grid_bg"],
+        "card_bg": ["card_bg_color", "card_bg"],
+        "card_bg_color": ["card_bg_color", "card_bg"],
+        "text": ["title_color", "grid_text_color"],
+        "title": ["title_color", "grid_text_color"],
+        "title_color": ["title_color", "grid_text_color"],
+        "grid_text_color": ["title_color", "grid_text_color"],
+        "radius": ["card_radius", "border_radius"],
+        "card_radius": ["card_radius", "border_radius"],
+        "border_radius": ["card_radius", "border_radius"],
+        "gap": "grid_gap",
+        "grid_gap": "grid_gap",
+    },
+    "background": {
+        "background": ["primary_bg", "secondary_bg"],
+        "bg": ["primary_bg", "secondary_bg"],
+        "primary_bg": ["primary_bg", "secondary_bg"],
+        "secondary_bg": "secondary_bg",
+        "text": "text_color",
+        "text_color": "text_color",
+        "muted": "muted_text",
+        "muted_text": "muted_text",
+        "border": "border_color",
+        "border_color": "border_color",
+        "accent": "accent_color",
+        "accent_color": "accent_color",
+    },
+    "global": {
+        "background": ["primary_bg", "secondary_bg"],
+        "bg": ["primary_bg", "secondary_bg"],
+        "primary_bg": ["primary_bg", "secondary_bg"],
+        "secondary_bg": "secondary_bg",
+        "text": "text_color",
+        "text_color": "text_color",
+        "muted": "muted_text",
+        "muted_text": "muted_text",
+        "border": "border_color",
+        "border_color": "border_color",
+        "accent": "accent_color",
+        "accent_color": "accent_color",
+    },
 }
 
 
@@ -1215,32 +1808,14 @@ def execute_design_actions(
         prop = action.property_name.strip()
         val = action.value
 
-        # Update theme for global targets or theme-level component properties
-        is_global_target = comp in ("global", "overall", "background")
-        is_theme_level_prop = (
-            prop in THEME_COMPONENT_OVERRIDE_KEYS
-            or prop.startswith(("navbar_", "footer_", "hero_", "cart_", "delivery_form_", "payment_", "place_order_", "pagination_", "filter_", "review_", "support_", "notification_", "profile_"))
-            or comp in ("navbar", "footer", "hero", "cart", "order_summary", "delivery_form", "payment", "place_order", "filter", "pagination", "review", "support", "notification", "profile")
-        )
-
-        if is_global_target or is_theme_level_prop:
-            if theme.get(prop) != val:
-                theme[prop] = val
-                theme_keys_changed.append(prop)
-            applied_patch[prop] = val
-            if prop == "navbar_bg" and not has_explicit_outer_bg_action:
-                if theme.get("navbar_outer_bg") != val:
-                    theme["navbar_outer_bg"] = val
-                    theme_keys_changed.append("navbar_outer_bg")
-                applied_patch["navbar_outer_bg"] = val
-            elif prop in ("outer_border", "navbar_outer_border"):
-                theme["navbar_border_color"] = val
-                theme["navbar_outer_bg"] = val
-                applied_patch["navbar_border_color"] = val
-                applied_patch["navbar_outer_bg"] = val
-                theme_keys_changed.extend(["navbar_border_color", "navbar_outer_bg"])
+        # Resolve canonical property if still generic
+        target_props = [prop]
+        if comp in CANONICAL_COMPONENT_PROPERTY_MAP and prop in CANONICAL_COMPONENT_PROPERTY_MAP[comp]:
+            mapped = CANONICAL_COMPONENT_PROPERTY_MAP[comp][prop]
+            target_props = mapped if isinstance(mapped, list) else [mapped]
 
         # Resolve block targets
+        is_global_target = comp in ("global", "overall", "background")
         if is_global_target:
             target_norm_types = None
         elif comp in COMPONENT_BLOCK_TARGETS:
@@ -1248,70 +1823,96 @@ def execute_design_actions(
         else:
             target_norm_types = {_norm_block_type(comp)}
 
-        for page in pages:
-            for block in page.get("blocks", []):
-                btype = str(block.get("type", "")).lower()
-                norm_btype = _norm_block_type(btype)
-                bprops = block.setdefault("props", {})
+        for p in target_props:
+            # Update theme for global targets or theme-level component properties
+            is_theme_level_prop = (
+                p in THEME_COMPONENT_OVERRIDE_KEYS
+                or p.startswith(("navbar_", "footer_", "hero_", "cart_", "delivery_form_", "payment_", "place_order_", "pagination_", "filter_", "review_", "support_", "notification_", "profile_"))
+                or comp in ("navbar", "footer", "hero", "cart", "order_summary", "delivery_form", "payment", "place_order", "filter", "pagination", "review", "support", "notification", "profile")
+            )
 
-                # Check block match
-                matches = is_global_target or (target_norm_types and any(t in norm_btype for t in target_norm_types))
-                if not matches:
-                    continue
+            if is_global_target or is_theme_level_prop:
+                if theme.get(p) != val:
+                    theme[p] = val
+                    theme_keys_changed.append(p)
+                applied_patch[p] = val
+                if p == "navbar_bg" and not has_explicit_outer_bg_action:
+                    if theme.get("navbar_outer_bg") != val:
+                        theme["navbar_outer_bg"] = val
+                        theme_keys_changed.append("navbar_outer_bg")
+                    applied_patch["navbar_outer_bg"] = val
+                elif p in ("outer_border", "navbar_outer_border"):
+                    theme["navbar_border_color"] = val
+                    theme["navbar_outer_bg"] = val
+                    applied_patch["navbar_border_color"] = val
+                    applied_patch["navbar_outer_bg"] = val
+                    theme_keys_changed.extend(["navbar_border_color", "navbar_outer_bg"])
 
-                # Apply property
-                if prop == "card_bg":
-                    bprops["card_bg_color"] = val
-                    bprops["card_bg"] = val
-                elif prop in ("outer_bg_color", "grid_bg"):
-                    bprops["outer_bg_color"] = val
-                    bprops["grid_bg"] = val
-                elif prop in ("card_radius", "border_radius"):
-                    bprops["card_radius"] = val
-                    bprops["border_radius"] = val
-                elif prop in ("card_text_color", "product_name_color"):
-                    bprops["card_text_color"] = val
-                    bprops["product_name_color"] = val
-                elif prop in ("title_color", "grid_text_color"):
-                    bprops["title_color"] = val
-                    bprops["grid_text_color"] = val
-                elif prop == "navbar_bg":
-                    bprops["navbar_bg"] = val
-                    if not has_explicit_outer_bg_action:
+            # Apply to page blocks
+            for page in pages:
+                for block in page.get("blocks", []):
+                    btype = str(block.get("type", "")).lower()
+                    norm_btype = _norm_block_type(btype)
+                    bprops = block.setdefault("props", {})
+
+                    # Check block match
+                    matches = is_global_target or (target_norm_types and any(t in norm_btype for t in target_norm_types))
+                    if not matches:
+                        continue
+
+                    # Apply property
+                    if p in ("card_bg", "card_bg_color"):
+                        bprops["card_bg_color"] = val
+                        bprops["card_bg"] = val
+                    elif p in ("outer_bg_color", "grid_bg"):
+                        bprops["outer_bg_color"] = val
+                        bprops["grid_bg"] = val
+                    elif p in ("card_radius", "border_radius"):
+                        bprops["card_radius"] = val
+                        bprops["border_radius"] = val
+                    elif p in ("card_text_color", "product_name_color"):
+                        bprops["card_text_color"] = val
+                        bprops["product_name_color"] = val
+                    elif p in ("title_color", "grid_text_color"):
+                        bprops["title_color"] = val
+                        bprops["grid_text_color"] = val
+                    elif p == "navbar_bg":
+                        bprops["navbar_bg"] = val
+                        if not has_explicit_outer_bg_action:
+                            bprops["navbar_outer_bg"] = val
+                    elif p == "navbar_outer_bg":
                         bprops["navbar_outer_bg"] = val
-                elif prop == "navbar_outer_bg":
-                    bprops["navbar_outer_bg"] = val
-                elif prop in ("navbar_border_color", "border_color") and ("nav" in norm_btype or comp == "navbar"):
-                    bprops["navbar_border_color"] = val
-                elif prop in ("outer_border", "navbar_outer_border"):
-                    bprops["navbar_border_color"] = val
-                    bprops["navbar_outer_bg"] = val
-                else:
-                    bprops[prop] = val
+                    elif p in ("navbar_border_color", "border_color") and ("nav" in norm_btype or comp == "navbar"):
+                        bprops["navbar_border_color"] = val
+                    elif p in ("outer_border", "navbar_outer_border"):
+                        bprops["navbar_border_color"] = val
+                        bprops["navbar_outer_bg"] = val
+                    else:
+                        bprops[p] = val
 
-                # Synchronize Hero Slides & CTAs
-                if "hero" in norm_btype or "banner" in norm_btype:
-                    if prop in ("hero_accent", "accent_color", "button_bg_color"):
-                        bprops["hero_accent"] = val
-                        bprops["accent_color"] = val
-                        bprops["button_bg_color"] = val
-                        for slide in bprops.get("slides", []):
-                            if isinstance(slide, dict):
-                                slide["accent_color"] = val
-                                if "primary_cta" in slide and isinstance(slide["primary_cta"], dict):
-                                    slide["primary_cta"]["bg_color"] = val
-                    elif prop in ("hero_bg", "background_color"):
-                        for slide in bprops.get("slides", []):
-                            if isinstance(slide, dict):
-                                slide["background_color"] = val
-                    elif prop in ("hero_text_color", "text_color"):
-                        for slide in bprops.get("slides", []):
-                            if isinstance(slide, dict):
-                                slide["text_color"] = val
+                    # Synchronize Hero Slides & CTAs
+                    if "hero" in norm_btype or "banner" in norm_btype:
+                        if p in ("hero_accent", "accent_color", "button_bg_color"):
+                            bprops["hero_accent"] = val
+                            bprops["accent_color"] = val
+                            bprops["button_bg_color"] = val
+                            for slide in bprops.get("slides", []):
+                                if isinstance(slide, dict):
+                                    slide["accent_color"] = val
+                                    if "primary_cta" in slide and isinstance(slide["primary_cta"], dict):
+                                        slide["primary_cta"]["bg_color"] = val
+                        elif p in ("hero_bg", "background_color"):
+                            for slide in bprops.get("slides", []):
+                                if isinstance(slide, dict):
+                                    slide["background_color"] = val
+                        elif p in ("hero_text_color", "text_color"):
+                            for slide in bprops.get("slides", []):
+                                if isinstance(slide, dict):
+                                    slide["text_color"] = val
 
-                applied_patch[prop] = val
-                if btype not in modified_blocks:
-                    modified_blocks.append(btype)
+                    applied_patch[p] = val
+                    if btype not in modified_blocks:
+                        modified_blocks.append(btype)
 
     return bool(applied_patch or modified_blocks), modified_blocks, applied_patch, theme_keys_changed
 
@@ -1419,9 +2020,10 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
                 found_components.add(mapped_val)
             consumed_text = re.sub(pattern, " " * len(phrase), consumed_text, count=1)
 
-    # Reference Component Filter: If navbar is mentioned only as a color reference (e.g. "the navbar has yellow and red theme, please use these colors on carousel")
-    if "navbar" in found_components and any("carousel" in c or "grid" in c for c in found_components):
-        if re.search(r'\bnavbar has\b|\buse (?:the )?navbar\b|\bfrom (?:the )?navbar\b|\bnavbar colors?\b|\bmatch (?:the )?navbar\b|\blike (?:the )?navbar\b', msg_lower):
+    # Reference Component Filter: If navbar is mentioned only as a color reference (e.g. "the navbar has yellow and red theme, please use these colors on carousel" or "make the theme same as webpage theme, for notification, the yellow webpage or navbar theme")
+    is_navbar_explicit_target = bool(re.search(r'\b(?:change|make|set|turn|update|style)\s+(?:the\s+)?(?:navbar|header)\b|\b(?:navbar|header)\s+(?:to|in)\s+#[0-9a-fA-F]{3,6}\b', msg_lower))
+    if "navbar" in found_components and len(found_components) > 1 and not is_navbar_explicit_target:
+        if re.search(r'\bnavbar has\b|\buse (?:the )?navbar\b|\bfrom (?:the )?navbar\b|\bnavbar colors?\b|\bmatch (?:the )?navbar\b|\blike (?:the )?navbar\b|\bsame as (?:the )?(?:webpage|navbar)\b|\bor (?:the )?navbar\b|\bfor (?:notification|filter|cart|profile|support|carousel|review|pagination)\b', msg_lower):
             found_components.remove("navbar")
 
     if len(found_components) > 1:
@@ -1582,7 +2184,41 @@ async def handle_color_and_design_request(
 
     actions = list(design_plan.actions)
 
-    # 5A. Multi-Carousel Synchronization Guarantee:
+    # 5A. Canonical Property Normalization:
+    # Ensure every DesignAction targets the exact canonical property for its component,
+    # converting generic terms like "background", "text", "border", "card_bg" to the exact keys
+    # consumed by the React storefront components and registered in THEME_COMPONENT_OVERRIDE_KEYS.
+    normalized_actions: List[DesignAction] = []
+    for a in actions:
+        comp_target = a.target_component.lower().strip()
+        if comp_target not in CANONICAL_COMPONENT_PROPERTY_MAP and target_comp in CANONICAL_COMPONENT_PROPERTY_MAP:
+            comp_target = target_comp
+
+        prop_clean = a.property_name.strip()
+        if comp_target in CANONICAL_COMPONENT_PROPERTY_MAP and prop_clean in CANONICAL_COMPONENT_PROPERTY_MAP[comp_target]:
+            mapped_props = CANONICAL_COMPONENT_PROPERTY_MAP[comp_target][prop_clean]
+            if isinstance(mapped_props, list):
+                for mp in mapped_props:
+                    normalized_actions.append(DesignAction(
+                        target_component=comp_target,
+                        target_element=a.target_element,
+                        property_name=mp,
+                        value=a.value,
+                        reasoning=a.reasoning,
+                    ))
+            else:
+                normalized_actions.append(DesignAction(
+                    target_component=comp_target,
+                    target_element=a.target_element,
+                    property_name=mapped_props,
+                    value=a.value,
+                    reasoning=a.reasoning,
+                ))
+        else:
+            normalized_actions.append(a)
+    actions = normalized_actions
+
+    # 5B. Multi-Carousel Synchronization Guarantee:
     # If carousels are targeted (multi:product_carousel,section_group_carousel or generic carousel),
     # ensure that styling actions for carousel background or cards are applied to BOTH product_carousel AND section_group_carousel!
     is_multi_carousel_target = "section_group_carousel" in str(target_comp) or "carousel" in str(target_comp)
@@ -1610,7 +2246,7 @@ async def handle_color_and_design_request(
                         reasoning="Mirroring carousel styling to product_carousel for cohesive store theme"
                     ))
 
-    # 5B. Contrast & Accessibility Safety Harmonizer
+    # 5C. Contrast & Accessibility Safety Harmonizer
     # If an action sets a background, verify that a readable text color exists or synthesize one
     for a in list(actions):
         if a.property_name in BG_TO_TEXT_MAP and isinstance(a.value, str):
@@ -1629,7 +2265,7 @@ async def handle_color_and_design_request(
                     reasoning=f"Automatic WCAG AA contrast for {a.property_name}"
                 ))
 
-    # 5C. Execute Actions onto Draft Definition
+    # 5D. Execute Actions onto Draft Definition
     design_modified, modified_blocks, applied_patch, theme_keys_changed = execute_design_actions(
         next_draft,
         actions,
