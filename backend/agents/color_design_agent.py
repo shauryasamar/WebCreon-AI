@@ -623,11 +623,37 @@ COMPONENT_ALIASES = {
     "carousel": "multi:product_carousel,section_group_carousel",
     "carousels": "multi:product_carousel,section_group_carousel",
     "crowsel": "multi:product_carousel,section_group_carousel",
+    "crowsels": "multi:product_carousel,section_group_carousel",
     "crowser": "multi:product_carousel,section_group_carousel",
+    "crowsers": "multi:product_carousel,section_group_carousel",
+    "carowsel": "multi:product_carousel,section_group_carousel",
+    "carowsels": "multi:product_carousel,section_group_carousel",
     "carosel": "multi:product_carousel,section_group_carousel",
+    "carosels": "multi:product_carousel,section_group_carousel",
     "carousal": "multi:product_carousel,section_group_carousel",
+    "carousals": "multi:product_carousel,section_group_carousel",
     "caoursel": "multi:product_carousel,section_group_carousel",
     "coursel": "multi:product_carousel,section_group_carousel",
+    "all carousel": "multi:product_carousel,section_group_carousel",
+    "all carousels": "multi:product_carousel,section_group_carousel",
+    "all crowsel": "multi:product_carousel,section_group_carousel",
+    "all crowsels": "multi:product_carousel,section_group_carousel",
+    "all carowsel": "multi:product_carousel,section_group_carousel",
+    "all carowsels": "multi:product_carousel,section_group_carousel",
+    "other carousel": "multi:product_carousel,section_group_carousel",
+    "other carousels": "multi:product_carousel,section_group_carousel",
+    "other crowsel": "multi:product_carousel,section_group_carousel",
+    "other crowsels": "multi:product_carousel,section_group_carousel",
+    "carousel background": "multi:product_carousel,section_group_carousel",
+    "carousels background": "multi:product_carousel,section_group_carousel",
+    "crowsel background": "multi:product_carousel,section_group_carousel",
+    "crowsels background": "multi:product_carousel,section_group_carousel",
+    "carowsel background": "multi:product_carousel,section_group_carousel",
+    "carowsels background": "multi:product_carousel,section_group_carousel",
+    "carousel theme": "multi:product_carousel,section_group_carousel",
+    "crowsel theme": "multi:product_carousel,section_group_carousel",
+    "crowsels theme": "multi:product_carousel,section_group_carousel",
+    "carowsel theme": "multi:product_carousel,section_group_carousel",
 
     # Section Group Carousel
     "section_group_carousel": "section_group_carousel", "section group carousel": "section_group_carousel",
@@ -928,6 +954,7 @@ async def generate_agentic_design_plan(
     user_message: str,
     target_component: str = "overall",
     session_id: Optional[str] = None,
+    history_str: Optional[str] = None,
 ) -> DesignPlanOutput:
     """Agentic design reasoner: decomposes user visual instructions into precise atomic DesignActions."""
     from agents.token_tracker import TokenCostCallback
@@ -1001,11 +1028,23 @@ RULES:
    - When user says "outer border of navbar is yellow color, please keep that as well blue color please":
      The user is stating that the outer border is CURRENTLY yellow (unwanted) and wants it changed to BLUE!
      Target: BLUE (#0000FF) for navbar_outer_bg and navbar_border_color. NEVER set it to yellow!
-3. Only emit actions for properties explicitly mentioned or directly implied by the request. Never modify unrequested attributes.
-4. If user specifies a relative change (e.g. "make navbar taller"), compute the new value from Current Theme (e.g. current 64 -> 80).
-5. If glassmorphism/frosted glass requested, set visual_style='glassmorphic' and surface_materiality='glass_navbar' (or 'full_glass').
+3. REFERENCE COMPONENT VS TARGET COMPONENT:
+   - When user says "The navbar has yellow and red theme, why did you make the carousel theme all white, please use these colors":
+     The navbar is cited ONLY as a color reference! DO NOT modify the navbar!
+     The component to style is the CAROUSEL (both product_carousel and section_group_carousel).
+     Extract the colors mentioned (yellow and red) and apply them to the carousel: yellow (#FFFF00) for outer_bg_color/grid_bg, red (#FF0000) for card_bg or title_color/accent_color.
+4. CAROUSEL THEME & ALL CAROUSELS:
+   - When user says "crowsels", "all carousels", "crowsel theme", or "other carousel as well":
+     Emit actions for BOTH 'product_carousel' AND 'section_group_carousel'. Never leave one carousel white while styling the other.
+5. CONVERSATIONAL FOLLOW-UP & MEMORY:
+   - When user says "not just product carousel other all carousel as well" or "make other carousel as well":
+     Inspect Recent Chat History to identify the active theme colors (e.g. yellow #FFFF00).
+     Apply that SAME color to section_group_carousel. NEVER default to white (#FFFFFF)!
+6. Only emit actions for properties explicitly mentioned or directly implied by the request. Never modify unrequested attributes.
+7. If user specifies a relative change (e.g. "make navbar taller"), compute the new value from Current Theme (e.g. current 64 -> 80).
+8. If glassmorphism/frosted glass requested, set visual_style='glassmorphic' and surface_materiality='glass_navbar' (or 'full_glass').
 """),
-        ("user", "Target Component Hint: {target_hint}\nCurrent Theme: {current_theme}\nUser Request: {user_message}"),
+        ("user", "Target Component Hint: {target_hint}\nCurrent Theme: {current_theme}\nRecent Chat History: {history_str}\nUser Request: {user_message}"),
     ])
 
     try:
@@ -1014,6 +1053,7 @@ RULES:
             {
                 "target_hint": target_component,
                 "current_theme": json.dumps(filtered_theme),
+                "history_str": history_str or "No previous context",
                 "user_message": user_message,
             },
             config={"callbacks": [TokenCostCallback("ColorAgent.DesignPlan", session_id=session_id)]}
@@ -1112,7 +1152,9 @@ COMPONENT_BLOCK_TARGETS: Dict[str, List[str]] = {
     "hero": ["hero", "herobanner", "banner", "slider"],
     "hero_banner": ["hero", "herobanner", "banner", "slider"],
     "product_carousel": ["productcarousel", "productslider", "productsrow"],
-    "section_group_carousel": ["sectiongroupcarousel", "categorycarousel", "categoryslider"],
+    "section_group_carousel": ["sectiongroupcarousel", "categorycarousel", "categoryslider", "categorystorycarousel"],
+    "carousel": ["productcarousel", "sectiongroupcarousel", "categorycarousel", "categorystorycarousel"],
+    "carousels": ["productcarousel", "sectiongroupcarousel", "categorycarousel", "categorystorycarousel"],
     "product_grid": ["productgrid", "productsgrid", "cataloggrid"],
     "category_grid": ["categorygrid", "categoryshowcase", "categories"],
     "card": ["productgrid", "productcarousel"],
@@ -1368,8 +1410,19 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
     for phrase in sorted_phrases:
         pattern = r'(?:\b|^)' + re.escape(phrase) + r'(?:\b|$)'
         if re.search(pattern, consumed_text):
-            found_components.add(COMPONENT_ALIASES[phrase])
+            mapped_val = COMPONENT_ALIASES[phrase]
+            if mapped_val.startswith("multi:"):
+                for sub in mapped_val[6:].split(","):
+                    if sub.strip():
+                        found_components.add(sub.strip())
+            else:
+                found_components.add(mapped_val)
             consumed_text = re.sub(pattern, " " * len(phrase), consumed_text, count=1)
+
+    # Reference Component Filter: If navbar is mentioned only as a color reference (e.g. "the navbar has yellow and red theme, please use these colors on carousel")
+    if "navbar" in found_components and any("carousel" in c or "grid" in c for c in found_components):
+        if re.search(r'\bnavbar has\b|\buse (?:the )?navbar\b|\bfrom (?:the )?navbar\b|\bnavbar colors?\b|\bmatch (?:the )?navbar\b|\blike (?:the )?navbar\b', msg_lower):
+            found_components.remove("navbar")
 
     if len(found_components) > 1:
         # Only collapse 'card' if it was used as a qualifier (e.g. "category cards"), not when user explicitly targets product cards
@@ -1389,7 +1442,8 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
     if any(p in msg_lower for p in PAGE_BACKGROUND_PHRASES):
         return "background"
     if "background" in msg_lower and not any(w in msg_lower for w in [
-        "carousel", "card", "cards", "grid", "navbar", "footer", "hero", "header", "banner",
+        "carousel", "carousels", "crowsel", "crowsels", "carowsel", "carowsels", "crowser", "crowsers",
+        "card", "cards", "grid", "navbar", "footer", "hero", "header", "banner",
         "cart", "modal", "dialog", "drawer", "slider", "section", "box", "boxes", "tile", "tiles",
         "button", "input", "form", "item", "product", "category"
     ]):
@@ -1404,6 +1458,7 @@ async def handle_color_and_design_request(
     target_component: Optional[str] = None,
     wants_palette_suggestions: bool = False,
     session_id: Optional[str] = None,
+    history_str: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Master LangGraph sub-agent handler for color, palette, banners, image settings, and component patching."""
     next_draft = copy.deepcopy(site_definition)
@@ -1522,9 +1577,38 @@ async def handle_color_and_design_request(
         user_message=user_message,
         target_component=target_comp,
         session_id=session_id,
+        history_str=history_str,
     )
 
     actions = list(design_plan.actions)
+
+    # 5A. Multi-Carousel Synchronization Guarantee:
+    # If carousels are targeted (multi:product_carousel,section_group_carousel or generic carousel),
+    # ensure that styling actions for carousel background or cards are applied to BOTH product_carousel AND section_group_carousel!
+    is_multi_carousel_target = "section_group_carousel" in str(target_comp) or "carousel" in str(target_comp)
+    if is_multi_carousel_target:
+        has_pc_bg = any(a.target_component in ("product_carousel", "carousel") and a.property_name in ("outer_bg_color", "grid_bg", "card_bg", "card_bg_color") for a in actions)
+        has_sgc_bg = any(a.target_component in ("section_group_carousel", "carousel") and a.property_name in ("outer_bg_color", "grid_bg", "card_bg", "card_bg_color") for a in actions)
+        if has_pc_bg and not has_sgc_bg:
+            for a in list(actions):
+                if a.target_component in ("product_carousel", "carousel") and a.property_name in ("outer_bg_color", "grid_bg", "card_bg", "card_bg_color", "card_radius", "title_color"):
+                    actions.append(DesignAction(
+                        target_component="section_group_carousel",
+                        target_element=a.target_element,
+                        property_name=a.property_name,
+                        value=a.value,
+                        reasoning="Mirroring carousel styling to section_group_carousel for cohesive store theme"
+                    ))
+        elif has_sgc_bg and not has_pc_bg:
+            for a in list(actions):
+                if a.target_component in ("section_group_carousel", "carousel") and a.property_name in ("outer_bg_color", "grid_bg", "card_bg", "card_bg_color", "card_radius", "title_color"):
+                    actions.append(DesignAction(
+                        target_component="product_carousel",
+                        target_element=a.target_element,
+                        property_name=a.property_name,
+                        value=a.value,
+                        reasoning="Mirroring carousel styling to product_carousel for cohesive store theme"
+                    ))
 
     # 5B. Contrast & Accessibility Safety Harmonizer
     # If an action sets a background, verify that a readable text color exists or synthesize one

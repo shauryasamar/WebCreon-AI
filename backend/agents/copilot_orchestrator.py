@@ -300,6 +300,7 @@ async def color_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
         target_component=state.get("target_component"),
         wants_palette_suggestions=state.get("wants_palette_suggestions", False),
         session_id=state.get("site_id"),
+        history_str=state.get("history_str"),
     )
     return {"agent_payload": res, "active_agent": "Color & Design Agent"}
 
@@ -646,6 +647,7 @@ async def compound_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
                 target_component=t_comp,
                 wants_palette_suggestions=task.get("wants_palette_suggestions", False),
                 session_id=state.get("site_id"),
+                history_str=state.get("history_str"),
             )
             if res.get("design_modified") and res.get("next_draft_definition"):
                 has_subsequent_design = True
