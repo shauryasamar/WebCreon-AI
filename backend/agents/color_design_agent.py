@@ -993,9 +993,17 @@ RULES:
    - When user says "card background", target card_background (card_bg).
    - When user says "boxy card" or "sharp corners", target card_radius with value 0.
    - When user says "banner button color to red" or "change button color on banner", target 'hero' button with hero_accent.
-2. Only emit actions for properties explicitly mentioned or directly implied by the request. Never modify unrequested attributes.
-3. If user specifies a relative change (e.g. "make navbar taller"), compute the new value from Current Theme (e.g. current 64 -> 80).
-4. If glassmorphism/frosted glass requested, set visual_style='glassmorphic' and surface_materiality='glass_navbar' (or 'full_glass').
+   - When user says "navbar background", "change navbar color", or "navbar theme":
+     Set BOTH navbar_bg and navbar_outer_bg to ensure the inner shell and outer wrapper never clash or retain stale colors.
+   - When user says "outer border of navbar", "outer border", or "outer background":
+     Target BOTH navbar_outer_bg and navbar_border_color with the user's requested color.
+2. DISAMBIGUATE CURRENT STATE VS DESIRED TARGET STATE:
+   - When user says "outer border of navbar is yellow color, please keep that as well blue color please":
+     The user is stating that the outer border is CURRENTLY yellow (unwanted) and wants it changed to BLUE!
+     Target: BLUE (#0000FF) for navbar_outer_bg and navbar_border_color. NEVER set it to yellow!
+3. Only emit actions for properties explicitly mentioned or directly implied by the request. Never modify unrequested attributes.
+4. If user specifies a relative change (e.g. "make navbar taller"), compute the new value from Current Theme (e.g. current 64 -> 80).
+5. If glassmorphism/frosted glass requested, set visual_style='glassmorphic' and surface_materiality='glass_navbar' (or 'full_glass').
 """),
         ("user", "Target Component Hint: {target_hint}\nCurrent Theme: {current_theme}\nUser Request: {user_message}"),
     ])
@@ -1155,6 +1163,11 @@ def execute_design_actions(
     applied_patch: Dict[str, Any] = {}
     theme_keys_changed: List[str] = []
 
+    has_explicit_outer_bg_action = any(
+        a.property_name in ("navbar_outer_bg", "outer_bg_color") or a.property_name.endswith("navbar_outer_bg")
+        for a in actions
+    )
+
     for action in actions:
         comp = action.target_component.lower().strip()
         prop = action.property_name.strip()
@@ -1173,6 +1186,17 @@ def execute_design_actions(
                 theme[prop] = val
                 theme_keys_changed.append(prop)
             applied_patch[prop] = val
+            if prop == "navbar_bg" and not has_explicit_outer_bg_action:
+                if theme.get("navbar_outer_bg") != val:
+                    theme["navbar_outer_bg"] = val
+                    theme_keys_changed.append("navbar_outer_bg")
+                applied_patch["navbar_outer_bg"] = val
+            elif prop in ("outer_border", "navbar_outer_border"):
+                theme["navbar_border_color"] = val
+                theme["navbar_outer_bg"] = val
+                applied_patch["navbar_border_color"] = val
+                applied_patch["navbar_outer_bg"] = val
+                theme_keys_changed.extend(["navbar_border_color", "navbar_outer_bg"])
 
         # Resolve block targets
         if is_global_target:
@@ -1209,6 +1233,17 @@ def execute_design_actions(
                 elif prop in ("title_color", "grid_text_color"):
                     bprops["title_color"] = val
                     bprops["grid_text_color"] = val
+                elif prop == "navbar_bg":
+                    bprops["navbar_bg"] = val
+                    if not has_explicit_outer_bg_action:
+                        bprops["navbar_outer_bg"] = val
+                elif prop == "navbar_outer_bg":
+                    bprops["navbar_outer_bg"] = val
+                elif prop in ("navbar_border_color", "border_color") and ("nav" in norm_btype or comp == "navbar"):
+                    bprops["navbar_border_color"] = val
+                elif prop in ("outer_border", "navbar_outer_border"):
+                    bprops["navbar_border_color"] = val
+                    bprops["navbar_outer_bg"] = val
                 else:
                     bprops[prop] = val
 
@@ -1248,6 +1283,9 @@ def apply_theme_to_blocks(pages: List[Dict[str, Any]], patch_dict: Dict[str, Any
         targets = [t.strip() for t in target_clean[6:].split(",") if t.strip()]
     else:
         targets = [target_clean]
+
+    if "navbar_bg" in patch_dict and "navbar_outer_bg" not in patch_dict:
+        patch_dict["navbar_outer_bg"] = patch_dict["navbar_bg"]
 
     for comp in targets:
         for prop, val in patch_dict.items():
