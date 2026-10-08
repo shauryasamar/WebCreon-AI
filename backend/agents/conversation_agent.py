@@ -159,7 +159,7 @@ analyzer_prompt = ChatPromptTemplate.from_messages([
     ("user", "Conversation History:\n{history}\n\nCurrently Collected Data:\n{collected}"),
 ])
 
-analyzer_chain = analyzer_prompt | llm.with_structured_output(AgentAnalysis)
+analyzer_chain = analyzer_prompt | llm.with_structured_output(AgentAnalysis, method="function_calling")
 
 
 async def rehydrate_session(

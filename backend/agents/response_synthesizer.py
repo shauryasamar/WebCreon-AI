@@ -66,6 +66,9 @@ def _build_focused_payload_summary(user_message: str, payload: Dict[str, Any]) -
         summary["compound_action_summaries"] = payload.get("compound_action_summaries", [])
     if payload.get("design_modified"):
         summary["design_modified"] = True
+        summary["target_component"] = payload.get("target_component")
+        summary["modified_blocks"] = payload.get("modified_blocks", [])
+        summary["theme_keys_changed"] = payload.get("theme_keys_changed", [])
         summary["updated_colors"] = payload.get("applied_patch") or payload.get("patch_applied") or payload.get("color_patch") or {}
     elif payload.get("unmatched_component") or payload.get("unsupported_scope") or payload.get("target_component") in ["unsupported", "unknown"]:
         summary["design_modified"] = False
@@ -171,7 +174,10 @@ FORMATTING & EXECUTIVE POLISH RULES:
      * NEVER output raw ASCII Markdown table syntax (NEVER use `| Col 1 | Col 2 |` or `|---|---|`).
      * Your text response MUST ONLY be 1 to 2 crisp, executive, informative sentences providing the high-level answer or overarching takeaway, letting the UI card display the details.
      * If you mention the count of records found, use `matching_records_count` from `table_card_data` (e.g. "Found 50 active products...") so the number in your text matches the Table Card header badge (50 rows) with 100% consistency.
-   - When NO visual Data Card is attached, answer factually, cleanly, and concisely without building squished ASCII tables.
+   - When NO visual Data Card is attached (`has_data_cards` is False):
+     * Answer factually, cleanly, and concisely without building squished ASCII tables.
+     * NEVER say "refer to the detailed data card", "see the card below", or "as shown in the card".
+     * If a query returned 0 rows, state directly that no matching records or orders were found in the database.
 
 2. NO ASCII MARKDOWN TABLES:
    - NEVER use pipe characters `|` to draw tables in the text output. In the compact chat drawer, ASCII tables get broken, squished, and unreadable. Tabular data belongs strictly in the interactive Table Card.
@@ -193,20 +199,26 @@ FORMATTING & EXECUTIVE POLISH RULES:
      * Never give vague non-answers like "information is available in the dashboard" or "check your dashboard for details".
      * Answer directly with the key figures and facts.
 
-5. CLEAN CONVERSATIONAL TONE (NO BOILERPLATE):
-   - Do NOT append repetitive boilerplate like "For further details, please refer to your Admin Dashboard." at the end of informational or analytical replies. Keep it crisp, natural, and executive.
+5. NATURAL DYNAMIC CONVERSATIONAL TONE (NO CANNED CLOSINGS):
+   - NEVER end messages with repetitive robotic sign-offs (e.g. NEVER write "If you need further modifications, just let me know", "feel free to share", "just let me know", "if you have any more design requests").
+   - Confirm actions directly, uniquely, and naturally in 1 crisp sentence without filler.
 
 6. COMPOUND ACTION & RESTRICTIONS:
    - When multiple actions were requested:
-     * Confirm applied visual/design changes clearly in a concise bullet point.
+     * Confirm applied visual/design changes clearly in concise bullet points.
      * If database write/update actions were requested (e.g. accepting orders, updating stock, creating coupons), politely state in 1 sentence that direct database modifications are restricted in chat for safety and should be managed in the Admin Dashboard.
 
-7. DESIGN & STYLING OUTCOMES:
-   - When `design_modified` is True, describe the applied color and styling updates clearly and concisely.
+7. DESIGN & STYLING OUTCOMES (STRICT GROUND TRUTH):
+   - Ground your confirmation STRICTLY on `modified_blocks`, `theme_keys_changed`, and `updated_colors` from the Payload Summary.
+   - When `design_modified` is True:
+     * Only confirm changes to the specific components in `modified_blocks` or `theme_keys_changed`.
+     * Describe the exact colors and tokens applied (e.g. "Updated the product carousel and section group carousel background to light cream (#f5f5dc) with violet borders (#8a2be2).").
+     * NEVER claim you updated elements that are NOT in `modified_blocks` or `theme_keys_changed`!
+   - CRITICAL ANTI-HALLUCINATION RULE: If `design_modified` is NOT True in Payload Summary (or if Active Agent is 'General Chat Agent'), you MUST NEVER claim, pretend, or state that you updated colors, modified themes, or changed styles. If the user asked for design changes that were not executed, clarify what they want to customize or state how you can help.
    - When `styling_outcome` is 'unmatched_or_unsupported', naturally and politely inform the user in 1-2 concise sentences that you couldn't identify or modify that specific element, and ask them to clarify which section or page they would like to customize.
 
 8. CONCISENESS:
-   - Total text response length should be 1 to 3 concise, high-impact sentences or clean bullet points."""),
+   - Total text response length should be 1 to 2 crisp, high-impact sentences or clean bullet points without unnecessary pleasantries."""),
     ("user", """User Message: {user_message}
 Active Agent: {active_agent}
 
@@ -277,6 +289,15 @@ def sanitize_synthesizer_output(text: str, has_data_cards: bool = False) -> str:
     ]
     for pattern in boilerplate_patterns:
         cleaned_text = re.sub(pattern, "", cleaned_text, flags=re.IGNORECASE)
+
+    if not has_data_cards:
+        phantom_card_patterns = [
+            r"(?:Please\s+)?refer to the (?:detailed\s+)?data card(?: for (?:specifics|the results|more details|details))?[\.\n]?",
+            r"(?:Please\s+)?check the (?:detailed\s+)?data card(?: for (?:specifics|the results|more details|details))?[\.\n]?",
+            r"(?:Please\s+)?see the (?:detailed\s+)?data card(?: for (?:specifics|the results|more details|details))?[\.\n]?",
+        ]
+        for pattern in phantom_card_patterns:
+            cleaned_text = re.sub(pattern, "", cleaned_text, flags=re.IGNORECASE)
 
     cleaned_text = re.sub(r"\n{3,}", "\n\n", cleaned_text).strip()
     return cleaned_text

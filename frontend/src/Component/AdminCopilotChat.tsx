@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
-import { saveThemeSnapshot, updateThemeValues, applyThemeToPages } from "../customizations/editorUtils";
+import { saveThemeSnapshot, updateThemeValues } from "../customizations/editorUtils";
 import { AiAvatar } from "./AiAvatar";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
@@ -1035,15 +1035,15 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
             } catch {}
           }
         }
-        const nextTheme = updatedDraft.theme || {};
-        const syncedPages = applyThemeToPages(
-          updatedDraft.pages || [],
-          nextTheme
-        );
-        onSiteDefinitionChange({
-          ...updatedDraft,
-          pages: syncedPages,
-        });
+        onSiteDefinitionChange(updatedDraft);
+        if (typeof window !== "undefined" && requestSiteId) {
+          fetch(`${API_BASE_URL}/sites/${requestSiteId}/draft`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ draft_definition: updatedDraft }),
+          }).catch((err) => console.error("Failed to persist copilot draft:", err));
+        }
       }
 
       setMessages((prev) =>
@@ -2071,9 +2071,22 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       )}
 
       {/* Input Form */}
+      <style>{`
+        .copilot-chat-input::placeholder {
+          color: ${isDark ? "rgba(148, 163, 184, 0.45)" : "rgba(100, 116, 139, 0.5)"} !important;
+          font-size: 12px !important;
+          font-weight: 400 !important;
+          letter-spacing: normal !important;
+        }
+        .copilot-chat-input:focus {
+          border-color: ${isDark ? "rgba(99, 102, 241, 0.6)" : "rgba(79, 70, 229, 0.5)"} !important;
+          box-shadow: 0 0 0 2px ${isDark ? "rgba(99, 102, 241, 0.15)" : "rgba(79, 70, 229, 0.1)"} !important;
+        }
+      `}</style>
       <div style={{ display: "flex", gap: "6px", marginTop: "4px", paddingTop: "8px", borderTop: `1px solid ${inputBorderColor}` }}>
         <input
           type="text"
+          className="copilot-chat-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
@@ -2082,7 +2095,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
               ? "Permission required to chat with Co-Pilot"
               : isPaywallLocked
               ? `Monthly limit reached. ${paywallResetDate ? `Resets on ${new Date(paywallResetDate).toLocaleDateString("en-IN", { month: "short", day: "numeric" })} or upgrade plan.` : "Upgrade plan to continue."}`
-              : "Ask Co-Pilot (e.g. fix footer text, show sales...)"
+              : "Ask Co-Pilot anything..."
           }
           disabled={loading || !canSendCopilot || isPaywallLocked}
           style={{
@@ -2094,6 +2107,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
             color: chatText,
             fontSize: "12px",
             outline: "none",
+            transition: "all 0.15s ease",
             opacity: canSendCopilot && !isPaywallLocked ? 1 : 0.6,
             cursor: canSendCopilot && !isPaywallLocked ? "text" : "not-allowed",
           }}

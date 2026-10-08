@@ -13,6 +13,8 @@ export interface OverviewMetrics {
   revenue_change: number;
   conversion_rate: number;
   conversion_rate_change: number;
+  abandoned_checkouts_count?: number;
+  abandoned_checkouts_revenue?: number;
   comparison_text: string;
 }
 

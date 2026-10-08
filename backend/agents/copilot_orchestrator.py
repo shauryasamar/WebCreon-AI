@@ -25,66 +25,34 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0, request_timeout=20, max_r
 
 class SubTask(BaseModel):
     intent: str = Field(description="Sub-intent: 'DESIGN', 'DB_QUERY', 'MUTATION', 'SEO_HEALTH', 'KNOWLEDGE', 'CHAT'")
-    target_component: Optional[str] = Field(default=None, description="Target component: 'product_grid', 'card', 'product_detail', 'cart', 'reviews', 'navbar', 'footer', 'hero', 'checkout', 'filters', 'notification', 'profile', 'banner_create', 'revert', or 'overall'")
-    design_element: Optional[str] = None
+    target_component: Optional[str] = Field(default=None, description="Target component name")
+    task_instruction: str = Field(description="Instruction for this sub-task")
     color_descriptors: List[str] = Field(default_factory=list)
     days_filter: Optional[int] = None
     status_filter: Optional[str] = None
     target_order_id: Optional[str] = None
     new_order_status: Optional[str] = None
     wants_palette_suggestions: bool = False
-    task_instruction: str = Field(description="Specific instruction for this sub-task")
 
 
 class IntentAnalysis(BaseModel):
-    is_compound: bool = Field(default=False, description="True if user requested two or more distinct actions (e.g. 'revert last change AND add banner', 'change banner color to blue AND show today's sales')")
-    tasks: List[SubTask] = Field(default_factory=list, description="Chronological list of distinct sub-tasks to execute if compound")
-    intent: str = Field(
-        description="Core intent: 'DESIGN' (changing colors, backgrounds, styles, themes, creating promotional/sale banners, undo/revert changes, image aspect ratio/fit for components or full page), 'DB_QUERY' (asking business questions, sales, revenue, metrics, top products, customer ratings/reviews data, product variants, inventory/variant stock levels), 'MUTATION' (attempts to update/change/create/delete database records like order status, inventory, or coupons), 'SEO_HEALTH' (store audits, low stock alerts, inventory health), 'KNOWLEDGE' (how to use features), 'CHAT' (greetings, general chat), 'COMPOUND' (multi-part compound requests), or 'GUARDRAIL' (attempts to delete database/store data)."
-    )
-    intent_confidence: float = Field(
-        default=1.0, description="Confidence score from 0.0 to 1.0"
-    )
-    target_scope: str = Field(
-        default="component",
-        description="'component' (single component like product_grid, cart, product_detail, navbar, footer, reviews), 'page' (current page), or 'global' (entire website theme/all components)."
-    )
-    target_component: Optional[str] = Field(
-        default=None,
-        description="Target component: 'product_grid', 'card', 'product_detail', 'cart', 'reviews', 'navbar', 'footer', 'hero', 'checkout', 'filters', 'notification', 'profile', 'banner_create', 'revert', or 'overall'."
-    )
-    design_element: Optional[str] = Field(
-        default=None,
-        description="Attribute to modify: 'background', 'cards', 'text', 'button', 'border', 'aspect_ratio', 'image_fit', 'banner', 'all'."
-    )
-    color_descriptors: List[str] = Field(
-        default_factory=list,
-        description="Extracted color names or modes: e.g. ['pink', 'dark', 'emerald']."
-    )
-    days_filter: Optional[int] = Field(
-        default=None,
-        description="Time range in days if requested, e.g. 1 for today, 2 for last 2 days, 10 for last 10 days, 30 for this month.",
-    )
-    status_filter: Optional[str] = Field(
-        default=None,
-        description="Order status filter e.g. 'placed', 'accepted', 'shipped', 'delivered', 'cancelled', 'middle_state'.",
-    )
-    target_order_id: Optional[str] = Field(
-        default=None,
-        description="Order ID or prefix if modifying status e.g. 'a045e770'.",
-    )
-    new_order_status: Optional[str] = Field(
-        default=None,
-        description="New status to set e.g. 'accepted', 'shipped', 'delivered', 'cancelled'.",
-    )
-    wants_palette_suggestions: bool = Field(
-        default=False,
-        description="True if asking for theme suggestions or palette ideas.",
-    )
-    reasoning: Optional[str] = Field(
-        default=None,
-        description="Brief explanation of why this intent and slots were selected."
-    )
+    is_compound: bool = Field(default=False, description="True if 2+ distinct operations requested across different domains")
+    tasks: List[SubTask] = Field(default_factory=list, description="Chronological list of sub-tasks if compound")
+    intent: str = Field(description="Core intent: 'DESIGN', 'DB_QUERY', 'MUTATION', 'SEO_HEALTH', 'KNOWLEDGE', 'CHAT', 'COMPOUND'")
+    is_visual_change_requested: bool = Field(default=False, description="True if modifying visual styling, colors, or themes")
+    sentiment_tone: Optional[str] = Field(default=None, description="Inferred sentiment or tone")
+    user_intent_summary: Optional[str] = Field(default=None, description="1-sentence semantic summary of request")
+    intent_confidence: float = Field(default=1.0, description="Confidence score 0.0-1.0")
+    target_scope: str = Field(default="component", description="'component', 'page', or 'global'")
+    target_component: Optional[str] = Field(default=None, description="Target component: 'navbar', 'footer', 'hero', 'product_grid', 'product_carousel', 'section_group_carousel', 'category_grid', 'card', 'product_detail', 'cart', 'order_summary', 'delivery_form', 'payment', 'place_order', 'filter', 'sort', 'pagination', 'order_history', 'support', 'notification', 'profile', 'background', 'banner_create', 'revert', 'overall', or 'unsupported'")
+    design_element: Optional[str] = Field(default=None, description="Attribute to modify: 'background', 'cards', 'text', 'button', 'border', 'banner', 'all'")
+    color_descriptors: List[str] = Field(default_factory=list, description="Extracted color names")
+    days_filter: Optional[int] = Field(default=None, description="Days filter (1=today, 7=week, 30=month)")
+    status_filter: Optional[str] = Field(default=None, description="Order status filter e.g. 'placed', 'accepted', 'shipped', 'delivered'")
+    target_order_id: Optional[str] = Field(default=None, description="Order ID or prefix if updating")
+    new_order_status: Optional[str] = Field(default=None, description="New status to set")
+    wants_palette_suggestions: bool = Field(default=False, description="True if requesting theme/palette suggestions")
+    reasoning: Optional[str] = Field(default=None, description="Brief explanation")
 
 
 class CoPilotGraphState(TypedDict):
@@ -110,6 +78,7 @@ class CoPilotGraphState(TypedDict):
     target_order_id: Optional[str]
     new_order_status: Optional[str]
     wants_palette_suggestions: bool
+    user_intent_summary: Optional[str]
     active_agent: str
     agent_payload: Dict[str, Any]
     final_output: Dict[str, Any]
@@ -199,116 +168,34 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
             "active_agent": "Color & Design Agent (Palettes)",
         }
 
-    # 2. Semantic Intent Router with Few-Shot Disambiguation & Multi-Task Decomposition
+    # 2. Semantic Intent Router with Deep Sentiment, Context, & 100% Storefront Component Coverage
     router_prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are WebCreon AI's Master Store Co-Pilot Intent Router & Semantic Task Planner.
-Analyze the user's grammatical intent, context, and typos intelligently to classify intents and extract target components accurately.
+        ("system", """You are WebCreon AI's Store Co-Pilot Master Intent Router & Task Planner.
+Classify the user's semantic intent, conversational context, and target component with high accuracy.
 
-COMPOUND REQUEST HANDLING:
-- If the user asks to perform two or more distinct actions across different domains (e.g. "revert the last change, and add new banner", "make hero dark green and show today's sales", "revert changes and change navbar to black"):
-  * Set `is_compound: true`
-  * Set `intent: 'COMPOUND'`
-  * Decompose into chronological sub-tasks in `tasks: [...]`
-  * Each sub-task must contain its specific `intent` ('DESIGN', 'DB_QUERY', 'MUTATION', 'SEO_HEALTH', etc.) and extracted `task_instruction`.
-- DO NOT treat single analytical / database questions asking for multiple related attributes (e.g. "what products are in new orders and what is their stock", "show orders and customer names", "list top products and sales revenue") as compound tasks! A question about related store data must remain a SINGLE `DB_QUERY` task so it executes as one cohesive SQL query.
+CORE INTENTS:
+- 'DESIGN': Modifying visual appearance, styling, colors, backgrounds, borders, shadows, themes, banners, or revert/undo.
+- 'DB_QUERY': Business questions, sales, revenue, orders, top products, customers, stock/inventory metrics.
+- 'MUTATION': Explicit updates to database records (e.g. set order status to shipped/accepted). Never classify styling as MUTATION.
+- 'SEO_HEALTH': Store health audits, inventory checks, catalog completeness.
+- 'KNOWLEDGE': Questions on platform usage and documentation.
+- 'CHAT': Greetings and general chit-chat.
+- 'COMPOUND': User asks for 2+ distinct operations across different domains (e.g. "revert last change and show today's sales"). Break into sub-tasks in `tasks`.
 
-SEMANTIC TARGET COMPONENT RECOGNITION (DESIGN):
-Analyze natural language descriptions, functional phrases, and contextual intent even if the user does NOT use the technical component name:
-- 'navbar': Header, navigation bar, top bar, top menu, logo area, header search bar, cart icon/badge (e.g. "change top bar to black", "make header yellow", "the top menu with search and logo").
-- 'notification': Notification bell, notification dropdown, notification drawer, alert popup, updates popup, inbox popup, bell icon (e.g. "the little bell popup to glassmorphic", "the alerts dropdown", "make notification drawer transparent", "the updates menu at top right").
-- 'profile': Profile menu, account dropdown, customer avatar menu, user menu, account drawer (e.g. "the user menu background white", "my account dropdown", "profile popup menu", "the avatar menu").
-- 'hero': Main promotional hero banner section, top slideshow, homepage slider, main banner image/promo at the top of the store (e.g. "the big top banner", "make the main slider emerald", "homepage promo slide").
-- 'card': Product cards, item cards, catalog cards, card corner radius, shadows, card borders, item boxes (e.g. "make product boxes dark", "round the corners of the items", "item cards background").
-- 'product_grid': Product catalog section backdrop, collection grid area, category showcase grids, product listings area (e.g. "the products section background", "catalog grid area").
-- 'product_detail': Product details page, single item page, image gallery, purchase panel, or add-to-cart area (e.g. "the product view page", "item details panel").
-- 'cart': Shopping cart drawer, slideout cart panel, cart sidebar, bag drawer (e.g. "the slideout bag", "cart drawer background", "slideout shopping cart").
-- 'delivery_form': Shipping address form, checkout address inputs, delivery details form (e.g. "where people type address at checkout", "shipping details form", "delivery address inputs").
-- 'payment': Payment methods, payment options selector, UPI/Card pills, payment section (e.g. "the payment method cards", "where customers choose UPI or card").
-- 'place_order': Place order CTA button, final checkout button, complete purchase bar (e.g. "the final place order button at checkout", "checkout submit button").
-- 'order_summary': Order summary box, checkout price breakdown, bill details card (e.g. "the price breakdown box", "order summary card").
-- 'filter': Filter toolbar, sort dropdown, filter drawer, category selector bar, sort-by menu (e.g. "the sidebar where customers filter price", "sort by dropdown", "category filter drawer").
-- 'pagination': Page numbers, pagination bar, bottom page selector (e.g. "the bottom page numbers 1 2 3", "pagination buttons", "next page bar").
-- 'order_history': Customer orders page, my orders list, past purchases page, order tracking cards (e.g. "the page where customers see past orders", "order history list").
-- 'support': Help & support page, customer support desk, inquiry ticket sidebar, support chat bubbles (e.g. "the help desk", "customer support chat theme", "support ticket bubbles").
-- 'footer': Store footer, bottom section, bottom links, copyright bar (e.g. "the bottom of the website", "links at the end of the page", "copyright footer").
-- 'background': The page/canvas backdrop surface (`primary_bg`), body background, canvas color (e.g. "page backdrop", "overall canvas color", "screen background", "backdrop of website").
-- 'banner_create': Explicit request to add, create, or insert a NEW promotional banner/slide.
-- 'revert': Reverting / undoing changes or rolling back previous snapshots.
-- 'overall': Full store redesign / global website theme change across all components (e.g. "redesign the entire store to luxury dark theme", "make the whole website minimalist").
-- 'unsupported': Out-of-scope backend admin items not part of the storefront (e.g. admin server logs, rider delivery app, tax config). Whenever the user asks to style these out-of-scope elements, classify `target_component: 'unsupported'`.
+TARGET COMPONENTS (100% COVERAGE):
+navbar (top bar/header), footer (bottom bar/copyright), hero (top banner/slides styling, button colors, backgrounds, text), product_grid (catalog grid), product_carousel (product slider), section_group_carousel (category story carousel), category_grid (category boxes/tiles), card (product boxes/cards/item titles/prices), product_detail (item page), cart (cart drawer/bag), order_summary, delivery_form, payment, place_order, filter, sort, pagination, order_history, support, notification, profile, background (page canvas), banner_create (ONLY when adding/creating a NEW promotional banner slide), revert, overall (store-wide).
 
-OTHER CORE INTENTS:
-- 'DESIGN' (THEMES & PALETTES): When the user asks for themes, color suggestions, theme recommendations, palettes, OR asks to APPLY/USE a specific theme or palette (e.g. "Apply the 'Coral Blush Delight' color theme", "apply Sunset Rose Harmony theme", "apply that theme", "use the second theme", "give me some color theme", "give me few thmese which i can use"): ALWAYS classify intent as 'DESIGN' and target_component as 'overall'. Applying styling/themes is NEVER a database MUTATION!
-- 'DB_QUERY': Business analytics, customer queries, customer lifetime spending, customer analytics, customer contact/order lists, sales queries, revenue calculations, top products, best sellers, promo codes, coupon codes, discount tracking, product variants, variant stock/counts, variant pricing, customer review analysis, order tracking, restock urgency, or product catalog queries (e.g. asking for product description, price, stock, details).
-- 'MUTATION': Explicit requests to update, accept, cancel, modify, or create database business records (such as orders, inventory, stock, coupons, returns). These will be declined by the safety guardrail as Co-Pilot is strictly read-only for store records.
-- 'SEO_HEALTH': Store health audits, inventory restock checks, checking for missing product descriptions, or catalog completeness.
-- 'KNOWLEDGE': Documentation questions on how the platform works (e.g. "how do I add a custom domain", "how do I invite users"). DO NOT use KNOWLEDGE when the user asks to see/get/suggest/apply themes or palettes!
-- 'CHAT': Greetings ("hi", "hello"), pleasantries, or general conversations.
-
-FEW-SHOT EXAMPLES:
-- User: "List customers who have spent more than ₹1,000 in total and currently have at least one placed order."
-  -> is_compound: false, intent: "DB_QUERY"
-- User: "Show me our top 5 revenue-generating products of all time along with their current available stock and total units sold."
-  -> is_compound: false, intent: "DB_QUERY"
-- User: "Which active products have more than 20 units in stock but have generated zero orders and zero revenue so far?"
-  -> is_compound: false, intent: "DB_QUERY"
-- User: "Which ordered items currently have less available inventory than what is required to fulfill all placed orders?"
-  -> is_compound: false, intent: "DB_QUERY"
-- User: "Apply the 'Coral Blush Delight' color theme"
-  -> is_compound: false, intent: "DESIGN", target_component: "overall", color_descriptors: ["coral", "blush"]
-- User: "apply the Sunset Rose Harmony theme"
-  -> is_compound: false, intent: "DESIGN", target_component: "overall", color_descriptors: ["sunset", "rose"]
-- User: "apply theme 1"
-  -> is_compound: false, intent: "DESIGN", target_component: "overall"
-- User: "notification dropdown to transpaernt and glassmorphic design please, upate it"
-  -> is_compound: false, intent: "DESIGN", target_component: "notification"
-- User: "change notification drawer to dark slate"
-  -> is_compound: false, intent: "DESIGN", target_component: "notification"
-- User: "profile dropdown background to white"
-  -> is_compound: false, intent: "DESIGN", target_component: "profile"
-- User: "give me some color theme"
-  -> is_compound: false, intent: "DESIGN", target_component: "overall", wants_palette_suggestions: true
-- User: "give me few thmese which i can use"
-  -> is_compound: false, intent: "DESIGN", target_component: "overall", wants_palette_suggestions: true
-- User: "suggest some themes for my store"
-  -> is_compound: false, intent: "DESIGN", target_component: "overall", wants_palette_suggestions: true
-- User: "how many promo codes are active on our page, and what the revenue details got from those"
-  -> is_compound: false, intent: "DB_QUERY"
-- User: "revert the last change, and add new banner for black friday"
-  -> is_compound: true, intent: "COMPOUND", tasks: [
-       {{"intent": "DESIGN", "target_component": "revert", "task_instruction": "revert the last change"}},
-       {{"intent": "DESIGN", "target_component": "banner_create", "task_instruction": "add new banner for black friday"}}
-     ]
-- User: "can you revert the last snaphot, ad change the bacground color of page blood red"
-  -> is_compound: true, intent: "COMPOUND", tasks: [
-       {{"intent": "DESIGN", "target_component": "revert", "task_instruction": "revert the last snapshot"}},
-       {{"intent": "DESIGN", "target_component": "background", "color_descriptors": ["blood red"], "task_instruction": "change the background color of page blood red"}}
-     ]
-- User: "change background color of page to dark charcoal"
-  -> is_compound: false, intent: "DESIGN", target_component: "background", color_descriptors: ["dark charcoal"]
-- User: "i prefer reverting the last changes and then making the navbar color to yellow"
-  -> is_compound: true, intent: "COMPOUND", tasks: [
-       {{"intent": "DESIGN", "target_component": "revert", "task_instruction": "reverting the last changes"}},
-       {{"intent": "DESIGN", "target_component": "navbar", "task_instruction": "making the navbar color to yellow"}}
-     ]
-- User: "make hero dark emerald and show today's sales"
-  -> is_compound: true, intent: "COMPOUND", tasks: [
-       {{"intent": "DESIGN", "target_component": "hero", "color_descriptors": ["dark emerald"], "task_instruction": "make hero dark emerald"}},
-       {{"intent": "DB_QUERY", "days_filter": 1, "task_instruction": "show today's sales"}}
-     ]
-- User: "what the list of product which are there in the new order, and what the stocks for those products do we ave?"
-  -> is_compound: false, intent: "DB_QUERY"
-- User: "undo that change"
-  -> is_compound: false, intent: "DESIGN", target_component: "revert"
-- User: "add a banner for diwali sale which saves 20% with coupon code diwali20"
-  -> is_compound: false, intent: "DESIGN", target_component: "banner_create"
-"""),
+RULES:
+1. 'hero' vs 'banner_create': If user asks to change, recolor, style, or adjust banner buttons/background/text, use 'hero'. ONLY use 'banner_create' when the user explicitly asks to add/create a NEW banner slide!
+2. Multi-target carousel/section styling: use 'multi:comp1,comp2' (e.g. 'multi:product_carousel,section_group_carousel').
+3. Pronoun & follow-up resolution: If user says "make it black" or "change it", check Conversation History for the previously discussed component.
+4. Single analytical questions asking for multiple metrics (e.g. "what are new orders and their stock") are a single 'DB_QUERY', NOT compound."""),
         ("user", "User Message: {user_message}\nConversation History: {history_str}"),
     ])
 
     try:
         from agents.token_tracker import TokenCostCallback
-        structured_llm = router_prompt | llm.with_structured_output(IntentAnalysis)
+        structured_llm = router_prompt | llm.with_structured_output(IntentAnalysis, method="function_calling")
         res: IntentAnalysis = await structured_llm.ainvoke(
             {
                 "user_message": user_msg,
@@ -320,21 +207,60 @@ FEW-SHOT EXAMPLES:
         raw_intent = (res.intent or "CHAT").upper().strip()
         target_comp = res.target_component.lower().strip() if res.target_component else None
 
-        # Hard guardrail against unmapped backend/admin dashboard elements
-        msg_raw_lower = user_msg.lower()
-        if any(u in msg_raw_lower for u in ["admin bar", "audit logs", "audit", "settings", "rider app", "rider tracking"]):
-            if not any(s in msg_raw_lower for s in ["navbar", "nav bar", "header", "footer", "hero", "banner", "card", "product", "cart", "review", "checkout", "payment", "support", "background", "grid", "notification", "notifications", "profile"]):
-                target_comp = "unsupported"
-
         # Format compound tasks list if compound
         compound_tasks = [t.model_dump() for t in res.tasks] if res.is_compound and res.tasks else []
 
-        if res.is_compound and compound_tasks:
+        # Check for conversational pronoun follow-ups
+        history_str = state.get("history_str", "")
+        words = user_msg_clean.split()
+        is_pronoun_followup = any(w in words for w in ["it", "them", "that", "this", "those"]) or user_msg_clean.startswith("make it") or user_msg_clean.startswith("turn it")
+        
+        # If target was unresolved or generic 'overall', but history has a clear previous design component
+        if (not target_comp or target_comp == "overall") and is_pronoun_followup and history_str:
+            hist_lower = history_str.lower()
+            for comp_candidate in ["section_group_carousel", "product_carousel", "category_grid", "product_grid", "navbar", "footer", "hero", "cart", "card", "filter"]:
+                if comp_candidate in hist_lower or comp_candidate.replace("_", " ") in hist_lower:
+                    if "carousel" in hist_lower and ("section" in hist_lower or "group" in hist_lower) and "product" in hist_lower:
+                        target_comp = "multi:product_carousel,section_group_carousel"
+                    else:
+                        target_comp = comp_candidate
+                    break
+
+        # Disambiguate MUTATION misclassifications:
+        # If router flagged MUTATION but the prompt is actually styling a storefront component and has no DB write signals
+        storefront_styling_signals = [
+            "color", "colour", "background", "border", "borders", "radius", "padding", "shadow", "frosted", "glass",
+            "carousel", "grid", "card", "cards", "navbar", "footer", "hero", "cream", "violet", "peach"
+        ]
+        has_styling_signal = any(w in user_msg_clean for w in storefront_styling_signals)
+        db_write_signals = [
+            "accept order", "cancel order", "delete order", "create coupon", "delete coupon", "update stock", "set stock",
+            "out of stock", "set price to", "change price to", "refund", "return status", "deactivate coupon", "activate coupon"
+        ]
+        has_db_write = any(w in user_msg_clean for w in db_write_signals)
+
+        if raw_intent in ("MUTATION", "GUARDRAIL", "CHAT") and (res.is_visual_change_requested or has_styling_signal) and not has_db_write:
+            raw_intent = "DESIGN"
+            if not target_comp:
+                target_comp = "overall"
+
+        # Correct sub-tasks inside compound requests as well
+        if compound_tasks:
+            for t in compound_tasks:
+                t_instr = str(t.get("task_instruction", "")).lower()
+                if any(w in t_instr for w in storefront_styling_signals) and not any(w in t_instr for w in db_write_signals):
+                    if t.get("intent") in ("MUTATION", "GUARDRAIL", "CHAT", "KNOWLEDGE", "DB_QUERY"):
+                        t["intent"] = "DESIGN"
+
             if all(t.get("intent") in ("MUTATION", "GUARDRAIL") for t in compound_tasks):
                 raw_intent = "MUTATION"
                 compound_tasks = []
-            else:
+            elif any(t.get("intent") == "DESIGN" for t in compound_tasks) and len(compound_tasks) > 1:
                 raw_intent = "COMPOUND"
+            elif len(compound_tasks) == 1 and compound_tasks[0].get("intent") == "DESIGN":
+                raw_intent = "DESIGN"
+                target_comp = compound_tasks[0].get("target_component") or target_comp
+                compound_tasks = []
 
         return {
             "intent": raw_intent,
@@ -349,6 +275,7 @@ FEW-SHOT EXAMPLES:
             "target_order_id": res.target_order_id,
             "new_order_status": res.new_order_status,
             "wants_palette_suggestions": res.wants_palette_suggestions,
+            "user_intent_summary": res.user_intent_summary,
             "active_agent": f"{raw_intent} Agent",
         }
     except Exception as e:
@@ -359,8 +286,16 @@ FEW-SHOT EXAMPLES:
 
 # Node 2: Color & Design Agent Node
 async def color_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
+    user_msg = state["user_message"]
+    intent_summary = state.get("user_intent_summary")
+    words = user_msg.lower().split()
+    if intent_summary and any(w in words for w in ["it", "them", "that", "this", "those"]):
+        effective_msg = f"{user_msg}. ({intent_summary})"
+    else:
+        effective_msg = user_msg
+
     res = await handle_color_and_design_request(
-        user_message=state["user_message"],
+        user_message=effective_msg,
         site_definition=state["site_definition"],
         target_component=state.get("target_component"),
         wants_palette_suggestions=state.get("wants_palette_suggestions", False),
@@ -764,6 +699,17 @@ async def compound_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
                         "rows": rows,
                         "row_count": len(rows),
                     })
+            elif any(w in inst_lower for w in ["sales", "revenue", "performance", "analytics"]) and metrics:
+                all_data_cards.append({
+                    "type": "analytics_card",
+                    "title": f"Store Sales Analytics ({metrics.get('time_label', 'Period')})",
+                    "metrics": {
+                        "total_sales": f"₹{metrics.get('period_sales', 0.0):,.2f}",
+                        "orders_count": metrics.get("period_orders_count", 0),
+                        "average_rating": metrics.get("avg_rating", "N/A"),
+                        "cancellation_rate": metrics.get("cancel_rate", "0%"),
+                    },
+                })
             compound_action_summaries.append("Queried store database records")
 
         elif t_intent == "SEO_HEALTH":

@@ -56,12 +56,14 @@ async def process_copilot_request(
             "pages": [],
         }
 
-    # Format history string
+    # Format history string with token bounding
     history_lines = []
     if effective_history:
-        for turn in effective_history[-6:]:
+        for turn in effective_history[-4:]:
             role = turn.get("role") or turn.get("sender") or "User"
-            content = turn.get("content") or turn.get("text") or ""
+            content = (turn.get("content") or turn.get("text") or "").strip()
+            if len(content) > 120:
+                content = content[:120] + "..."
             history_lines.append(f"{role}: {content}")
     history_str = "\n".join(history_lines) if history_lines else "No previous chat history."
 
@@ -152,9 +154,11 @@ async def process_copilot_request_stream(
 
     history_lines = []
     if effective_history:
-        for turn in effective_history[-6:]:
+        for turn in effective_history[-4:]:
             role = turn.get("role") or turn.get("sender") or "User"
-            content = turn.get("content") or turn.get("text") or ""
+            content = (turn.get("content") or turn.get("text") or "").strip()
+            if len(content) > 120:
+                content = content[:120] + "..."
             history_lines.append(f"{role}: {content}")
     history_str = "\n".join(history_lines) if history_lines else "No previous chat history."
 

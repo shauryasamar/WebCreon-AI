@@ -177,7 +177,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
 
   const mobileTheme = resolveMobileDrawerTheme(theme);
 
-  const rawBg = (theme as any)?.dialog_bg || (theme as any)?.surface_bg || theme?.primary_bg;
+  const rawBg = (theme as any)?.filter_modal_bg || (theme as any)?.dialog_bg || (theme as any)?.surface_bg || theme?.primary_bg;
   const desktopBg = rawBg || (isDark ? "#0f172a" : "#ffffff");
   const bg = isMobile ? mobileTheme.drawerBg : desktopBg;
   const isModalDark = isColorDarkHex(bg);
@@ -190,9 +190,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
 
   const textPrimary = isMobile
     ? mobileTheme.textPrimary
-    : ((theme?.text_color && (isColorDarkHex(theme.text_color) !== isModalDark))
-        ? theme.text_color
-        : (isModalDark ? "#f8fafc" : "#0f172a"));
+    : ((theme as any)?.filter_modal_text
+        ? (theme as any).filter_modal_text
+        : ((theme?.text_color && (isColorDarkHex(theme.text_color) !== isModalDark))
+            ? theme.text_color
+            : (isModalDark ? "#f8fafc" : "#0f172a")));
 
   const textSecondary = isMobile
     ? mobileTheme.textSecondary

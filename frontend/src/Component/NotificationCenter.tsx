@@ -502,27 +502,41 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     theme || { isDark, accentColor, dialogBg, borderColor }
   );
 
-  const resolvedBg = isMobileEffective
-    ? mobileDrawerTheme.drawerBg
-    : (dialogBg || (isDark ? "#0f172a" : "#ffffff"));
-  const isPanelDark = isMobileEffective
-    ? mobileDrawerTheme.isDark
-    : (isDark !== undefined ? isDark : isColorDarkHex(resolvedBg));
-  const resolvedBorder = isMobileEffective
-    ? mobileDrawerTheme.drawerBorder
-    : (borderColor || (isPanelDark ? "#1e293b" : "#e2e8f0"));
-  const textColor = isMobileEffective
-    ? mobileDrawerTheme.textPrimary
-    : (isPanelDark ? "#f8fafc" : "#0f172a");
-  const mutedTextColor = isMobileEffective
-    ? mobileDrawerTheme.textSecondary
-    : (isPanelDark ? "#94a3b8" : "#64748b");
-  const cardBorder = isMobileEffective
-    ? mobileDrawerTheme.cardBorder
-    : (isPanelDark ? "rgba(255,255,255,0.06)" : "#f1f5f9");
-  const effectiveAccent = isMobileEffective
-    ? mobileDrawerTheme.accentColor
-    : (accentColor || "#2563eb");
+  const customDrawerBg = (theme as any)?.notification_drawer_bg;
+  const customDrawerText = (theme as any)?.notification_drawer_text;
+
+  const resolvedBg =
+    customDrawerBg ||
+    (isMobileEffective
+      ? mobileDrawerTheme.drawerBg
+      : (dialogBg || (isDark ? "#0f172a" : "#ffffff")));
+  const isPanelDark = isColorDarkHex(resolvedBg);
+  const resolvedBorder =
+    (theme as any)?.border_color ||
+    (isMobileEffective
+      ? mobileDrawerTheme.drawerBorder
+      : (borderColor || (isPanelDark ? "#1e293b" : "#e2e8f0")));
+  const textColor =
+    customDrawerText ||
+    (isMobileEffective
+      ? mobileDrawerTheme.textPrimary
+      : (isPanelDark ? "#f8fafc" : "#0f172a"));
+  const isCustomTextDark = customDrawerText ? isColorDarkHex(customDrawerText) : !isPanelDark;
+  const mutedTextColor = customDrawerText
+    ? (isCustomTextDark ? "rgba(15, 23, 42, 0.65)" : "rgba(248, 250, 252, 0.70)")
+    : (isMobileEffective
+      ? mobileDrawerTheme.textSecondary
+      : (isPanelDark ? "#94a3b8" : "#64748b"));
+  const cardBorder =
+    (theme as any)?.soft_border ||
+    (isMobileEffective
+      ? mobileDrawerTheme.cardBorder
+      : (isPanelDark ? "rgba(255,255,255,0.06)" : "#f1f5f9"));
+  const effectiveAccent =
+    (theme as any)?.accent_color ||
+    (isMobileEffective
+      ? mobileDrawerTheme.accentColor
+      : (accentColor || "#2563eb"));
 
   const getCategoryIcon = (category: string) => {
     switch (category) {

@@ -343,14 +343,21 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
   const cardBg = card_bg_color || defaultCardBg;
   const isCardDark = isColorDarkHex(cardBg);
 
-  const preferredTextColor = title_color || (theme as any)?.card_text_color || defaultTextColor;
-  const isPreferredDark = isColorDarkHex(preferredTextColor);
-  const pageText =
-    preferredTextColor && isPreferredDark !== isCardDark
-      ? preferredTextColor
-      : isCardDark
-        ? "#ffffff"
-        : "#0f172a";
+  const sectionTitleColor =
+    title_color ||
+    (theme as any)?.grid_text_color ||
+    theme?.text_color ||
+    defaultTextColor ||
+    (isLight ? "#0f172a" : "#ffffff");
+
+  const productCardTitleColor =
+    product_name_color ||
+    product_title_color ||
+    (theme as any)?.product_name_color ||
+    (theme as any)?.card_text_color ||
+    (isCardDark ? "#ffffff" : "#0f172a");
+
+  const pageText = productCardTitleColor;
 
   const mutedText =
     original_price_color ||
@@ -378,7 +385,11 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
       ? typeof card_radius === "number"
         ? card_radius
         : parseInt(String(card_radius), 10)
-      : NaN;
+      : (theme as any)?.card_radius !== undefined && (theme as any)?.card_radius !== null && String((theme as any).card_radius).trim() !== ""
+        ? typeof (theme as any).card_radius === "number"
+          ? (theme as any).card_radius
+          : parseInt(String((theme as any).card_radius), 10)
+        : NaN;
 
   let computedRadius = !isNaN(parsedCardRadiusNum) && parsedCardRadiusNum >= 0
     ? `${parsedCardRadiusNum}px`
@@ -390,25 +401,34 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
     ? "20px"
     : "20px";
 
-  let computedCardBg = cardBg;
-  let computedBorder = card_border_color ? `1px solid ${card_border_color}` : subtleBorder;
-  let computedShadow = softShadow;
+  const rawBorderColor = card_border_color || (theme as any)?.card_border_color;
+  let computedCardBg = card_bg_color || (theme as any)?.card_bg || defaultCardBg;
+  let computedBorder = rawBorderColor
+    ? (String(rawBorderColor).startsWith("1px") || String(rawBorderColor).includes("solid") ? String(rawBorderColor) : `1px solid ${rawBorderColor}`)
+    : subtleBorder;
+  let computedShadow = card_shadow || (theme as any)?.card_shadow || softShadow;
 
-  if (card_shadow === "none") computedShadow = "none";
-  else if (card_shadow === "subtle") computedShadow = isLight ? "0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03)" : "0 2px 6px rgba(0,0,0,0.35)";
-  else if (card_shadow === "soft") computedShadow = isLight ? "0 4px 12px -2px rgba(0,0,0,0.07), 0 2px 6px -1px rgba(0,0,0,0.03)" : "0 6px 18px -2px rgba(0,0,0,0.5)";
-  else if (card_shadow === "elevated") computedShadow = isLight ? "0 10px 24px -4px rgba(0,0,0,0.09), 0 4px 8px -2px rgba(0,0,0,0.04)" : "0 12px 28px -4px rgba(0,0,0,0.65)";
+  if (card_shadow === "none" || (theme as any)?.card_shadow === "none") computedShadow = "none";
+  else if (card_shadow === "subtle" || (theme as any)?.card_shadow === "subtle") computedShadow = isLight ? "0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03)" : "0 2px 6px rgba(0,0,0,0.35)";
+  else if (card_shadow === "soft" || (theme as any)?.card_shadow === "soft") computedShadow = isLight ? "0 4px 12px -2px rgba(0,0,0,0.07), 0 2px 6px -1px rgba(0,0,0,0.03)" : "0 6px 18px -2px rgba(0,0,0,0.5)";
+  else if (card_shadow === "elevated" || (theme as any)?.card_shadow === "elevated") computedShadow = isLight ? "0 10px 24px -4px rgba(0,0,0,0.09), 0 4px 8px -2px rgba(0,0,0,0.04)" : "0 12px 28px -4px rgba(0,0,0,0.65)";
 
+  const isCardBgRgba = typeof computedCardBg === "string" && computedCardBg.startsWith("rgba");
+  const isExplicitCardBg = Boolean(card_bg_color || (theme as any)?.card_bg);
   const isGlass =
-    (theme as any)?.surface_materiality === "full_glass" ||
-    (theme as any)?.surface_materiality === "glassmorphism" ||
-    (theme as any)?.visual_style === "glassmorphic" ||
-    (theme as any)?.name?.toLowerCase()?.includes("glass") ||
-    (typeof cardBg === "string" && cardBg.startsWith("rgba"));
+    isCardBgRgba ||
+    (!isExplicitCardBg && (
+      (theme as any)?.surface_materiality === "full_glass" ||
+      (theme as any)?.surface_materiality === "glassmorphism" ||
+      (theme as any)?.visual_style === "glassmorphic" ||
+      (theme as any)?.name?.toLowerCase()?.includes("glass")
+    ));
 
-  if (isGlass) {
-    computedCardBg = card_bg_color || (isLight ? "rgba(255, 255, 255, 0.70)" : "rgba(15, 23, 42, 0.70)");
-    computedBorder = card_border_color ? `1px solid ${card_border_color}` : (isLight ? "1px solid rgba(255, 255, 255, 0.55)" : "1px solid rgba(255, 255, 255, 0.14)");
+  if (isGlass && !isExplicitCardBg) {
+    computedCardBg = isLight ? "rgba(255, 255, 255, 0.70)" : "rgba(15, 23, 42, 0.70)";
+    computedBorder = rawBorderColor
+      ? (String(rawBorderColor).startsWith("1px") || String(rawBorderColor).includes("solid") ? String(rawBorderColor) : `1px solid ${rawBorderColor}`)
+      : (isLight ? "1px solid rgba(255, 255, 255, 0.55)" : "1px solid rgba(255, 255, 255, 0.14)");
     computedShadow = isLight
       ? "0 8px 32px rgba(31, 38, 135, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.75)"
       : "0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.16)";
@@ -908,7 +928,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
       return isMobile ? "10px" : "12px";
     })();
 
-    const resolvedImageBg = image_bg || (isLight ? "#f8fafc" : "rgba(255,255,255,0.04)");
+    const resolvedImageBg = image_bg || (isCardDark ? "rgba(255,255,255,0.04)" : "#f8fafc");
 
     const getImgContainerStyle = (defaultAspect: string): React.CSSProperties => {
       const chosenAspect = image_aspect_ratio && image_aspect_ratio !== "auto" && image_aspect_ratio !== "natural"
@@ -974,15 +994,18 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                   left: "50%",
                   transform: "translate(-50%, -50%)",
                   zIndex: 4,
-                  background: "#ff0000",
+                  background: "rgba(220, 38, 38, 0.92)",
+                  backdropFilter: "blur(4px)",
+                  WebkitBackdropFilter: "blur(4px)",
                   color: "#ffffff",
-                  fontSize: scalePx(13.5, 11),
+                  fontSize: scalePx(12.5, 10.5),
                   fontWeight: 800,
-                  padding: `${scalePx(6, 4.5)} ${scalePx(22, 14)}`,
-                  borderRadius: "2px",
-                  boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                  padding: `${scalePx(5, 4)} ${scalePx(16, 12)}`,
+                  borderRadius: "6px",
+                  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                  border: "1px solid rgba(255, 255, 255, 0.25)",
                   whiteSpace: "nowrap",
-                  letterSpacing: "0.02em",
+                  letterSpacing: "0.03em",
                   textAlign: "center",
                   userSelect: "none",
                 }}
@@ -1018,7 +1041,6 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               gap: scalePx(2, 1.5),
               padding: `${scalePx(8, 6)} ${scalePx(10, 7)} ${scalePx(8, 6)}`,
               flex: 1,
-              opacity: isOutOfStock ? 0.65 : 1,
             }}
           >
             {show_brand_name && (
@@ -1113,15 +1135,18 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                   left: "50%",
                   transform: "translate(-50%, -50%)",
                   zIndex: 4,
-                  background: "#ff0000",
+                  background: "rgba(220, 38, 38, 0.92)",
+                  backdropFilter: "blur(4px)",
+                  WebkitBackdropFilter: "blur(4px)",
                   color: "#ffffff",
-                  fontSize: scalePx(13.5, 11),
+                  fontSize: scalePx(12.5, 10.5),
                   fontWeight: 800,
-                  padding: `${scalePx(6, 4.5)} ${scalePx(22, 14)}`,
-                  borderRadius: "2px",
-                  boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                  padding: `${scalePx(5, 4)} ${scalePx(16, 12)}`,
+                  borderRadius: "6px",
+                  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                  border: "1px solid rgba(255, 255, 255, 0.25)",
                   whiteSpace: "nowrap",
-                  letterSpacing: "0.02em",
+                  letterSpacing: "0.03em",
                   textAlign: "center",
                   userSelect: "none",
                 }}
@@ -1154,7 +1179,6 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               gap: scalePx(2, 1.5),
               padding: `${scalePx(6, 4)} ${scalePx(4, 2)} ${scalePx(2, 1)}`,
               flex: 1,
-              opacity: isOutOfStock ? 0.65 : 1,
             }}
           >
             {show_brand_name && (
@@ -1253,15 +1277,18 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                   left: "50%",
                   transform: "translate(-50%, -50%)",
                   zIndex: 4,
-                  background: "#ff0000",
+                  background: "rgba(220, 38, 38, 0.92)",
+                  backdropFilter: "blur(4px)",
+                  WebkitBackdropFilter: "blur(4px)",
                   color: "#ffffff",
-                  fontSize: scalePx(13.5, 11),
+                  fontSize: scalePx(12.5, 10.5),
                   fontWeight: 800,
-                  padding: `${scalePx(6, 4.5)} ${scalePx(22, 14)}`,
-                  borderRadius: "2px",
-                  boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                  padding: `${scalePx(5, 4)} ${scalePx(16, 12)}`,
+                  borderRadius: "6px",
+                  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                  border: "1px solid rgba(255, 255, 255, 0.25)",
                   whiteSpace: "nowrap",
-                  letterSpacing: "0.02em",
+                  letterSpacing: "0.03em",
                   textAlign: "center",
                   userSelect: "none",
                 }}
@@ -1324,7 +1351,6 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               gap: scalePx(1.5, 1),
               padding: `${scalePx(4, 2)} ${scalePx(4, 2)} ${scalePx(2, 1)}`,
               flex: 1,
-              opacity: isOutOfStock ? 0.65 : 1,
             }}
           >
             {show_brand_name && (
@@ -1430,13 +1456,16 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                   left: "50%",
                   transform: "translate(-50%, -50%)",
                   zIndex: 4,
-                  background: "#ff0000",
+                  background: "rgba(220, 38, 38, 0.92)",
+                  backdropFilter: "blur(4px)",
+                  WebkitBackdropFilter: "blur(4px)",
                   color: "#ffffff",
                   fontSize: scalePx(10.5, 8.5),
                   fontWeight: 800,
                   padding: `${scalePx(3.5, 2.5)} ${scalePx(10, 7)}`,
-                  borderRadius: "2px",
-                  boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                  borderRadius: "5px",
+                  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                  border: "1px solid rgba(255, 255, 255, 0.25)",
                   whiteSpace: "nowrap",
                   letterSpacing: "0.02em",
                   textAlign: "center",
@@ -1475,7 +1504,6 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               flex: "1 1 0",
               minWidth: 0,
               overflow: "hidden",
-              opacity: isOutOfStock ? 0.65 : 1,
             }}
           >
             {/* Top Row: Brand (Left) + Badges & % OFF (Right) */}
@@ -1636,15 +1664,18 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 left: "50%",
                 transform: "translate(-50%, -50%)",
                 zIndex: 4,
-                background: "#ff0000",
+                background: "rgba(220, 38, 38, 0.92)",
+                backdropFilter: "blur(4px)",
+                WebkitBackdropFilter: "blur(4px)",
                 color: "#ffffff",
-                fontSize: scalePx(13.5, 11),
+                fontSize: scalePx(12.5, 10.5),
                 fontWeight: 800,
-                padding: `${scalePx(6, 4.5)} ${scalePx(22, 14)}`,
-                borderRadius: "2px",
-                boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                padding: `${scalePx(5, 4)} ${scalePx(16, 12)}`,
+                borderRadius: "6px",
+                boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                border: "1px solid rgba(255, 255, 255, 0.25)",
                 whiteSpace: "nowrap",
-                letterSpacing: "0.02em",
+                letterSpacing: "0.03em",
                 textAlign: "center",
                 userSelect: "none",
               }}
@@ -1670,7 +1701,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
             <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
           )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: scalePx(2, 1.5), padding: `${scalePx(4, 2)} ${scalePx(4, 2)} ${scalePx(2, 1)}`, flex: 1, opacity: isOutOfStock ? 0.65 : 1 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: scalePx(2, 1.5), padding: `${scalePx(4, 2)} ${scalePx(4, 2)} ${scalePx(2, 1)}`, flex: 1 }}>
           {show_brand_name && (
             <span style={{ fontSize: scalePx(9.5, 8), fontWeight: 600, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em", lineHeight: 1.2 }}>
               {brandText}
@@ -1795,7 +1826,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
         padding: `${resolvedPaddingY} ${resolvedPaddingX}`,
         boxSizing: "border-box",
         position: "relative",
-        background: outer_bg_color || "transparent",
+        background: outer_bg_color || (theme as any)?.grid_bg || (theme as any)?.outer_bg_color || (theme as any)?.product_carousel_bg || "transparent",
       }}
     >
       <style>{`
@@ -1847,7 +1878,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                   fontSize: resolvedTitleSize,
                   fontWeight: (title_font_weight as any) || 800,
                   textTransform: title_text_transform || "none",
-                  color: pageText,
+                  color: sectionTitleColor,
                   letterSpacing: "-0.02em",
                   lineHeight: 1.25,
                 }}

@@ -454,7 +454,7 @@ async def run_dynamic_store_query(
             SystemMessage(content=system_content),
             HumanMessage(content=user_content),
         ]
-        structured_chain = llm.with_structured_output(GeneratedSQL)
+        structured_chain = llm.with_structured_output(GeneratedSQL, method="function_calling")
         gen_res: GeneratedSQL = await structured_chain.ainvoke(
             messages,
             config={"callbacks": [TokenCostCallback("Copilot.SQLAgent", session_id=session_id or site_id)]}

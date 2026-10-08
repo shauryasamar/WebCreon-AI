@@ -240,7 +240,7 @@ prompt_tmpl = ChatPromptTemplate.from_messages(
     ]
 )
 
-structured_llm = llm.with_structured_output(SitePlan)
+structured_llm = llm.with_structured_output(SitePlan, method="function_calling")
 planning_chain = prompt_tmpl | structured_llm
 
 

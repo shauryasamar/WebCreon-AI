@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Link, useLocation, useParams, useNavigate } from "react-router-dom";
-import { resolveThemeTokens } from "../context/ThemeContext";
+import { resolveThemeTokens, isColorDarkHex } from "../context/ThemeContext";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
 import { generateSectionFilterUrl } from "./ProductCarousel";
 import { useDeviceMode } from "../context/DeviceModeContext";
@@ -57,6 +57,7 @@ export interface SectionGroupCarouselProps {
   card_border_color?: string;
   card_shadow?: string;
   title_color?: string;
+  card_title_color?: string;
   subtitle_color?: string;
   accent_color?: string;
   image_fit?: "cover" | "contain";
@@ -115,6 +116,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
   card_border_color,
   card_shadow,
   title_color,
+  card_title_color,
   subtitle_color,
   accent_color,
   image_fit = "cover",
@@ -160,8 +162,8 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
   const isDark = tokens.isDark;
   const isLight = !isDark;
 
-  const resolvedOuterBg = outer_bg_color || "transparent";
-  const resolvedCardBg = card_bg_color || theme?.card_bg || tokens.cardBg;
+  const resolvedOuterBg = outer_bg_color || (theme as any)?.grid_bg || (theme as any)?.outer_bg_color || (theme as any)?.section_group_carousel_bg || "transparent";
+  const resolvedCardBg = card_bg_color || (theme as any)?.card_bg_color || theme?.card_bg || tokens.cardBg;
   
   const rawRadius =
     card_radius !== undefined && card_radius !== null
@@ -179,10 +181,11 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
       ? `${Number(rawRadius)}px`
       : String(rawRadius);
 
+  const rawBorder = card_border_color || (theme as any)?.card_border_color || theme?.card_border_color;
   const resolvedCardBorder =
-    card_border_color ||
-    theme?.card_border_color ||
-    (isLight ? "1px solid rgba(226, 232, 240, 0.8)" : "1px solid rgba(255, 255, 255, 0.08)");
+    rawBorder
+      ? (String(rawBorder).startsWith("1px") || String(rawBorder).includes("solid") ? String(rawBorder) : `1px solid ${rawBorder}`)
+      : (isLight ? "1px solid rgba(226, 232, 240, 0.8)" : "1px solid rgba(255, 255, 255, 0.08)");
 
   const resolvedCardShadow =
     card_shadow === "none"
@@ -201,11 +204,13 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
         : "0 12px 28px -4px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06)"
       : theme?.card_shadow || (isLight ? "0 2px 8px -1px rgba(0, 0, 0, 0.05)" : "0 4px 12px rgba(0, 0, 0, 0.4)");
 
-  const resolvedTitleColor = title_color || theme?.card_text_color || theme?.text_color || tokens.textColor;
+  const resolvedTitleColor = title_color || (theme as any)?.grid_text_color || theme?.text_color || tokens.textColor;
+  const resolvedCardTitleColor = card_title_color || (theme as any)?.card_text_color || (theme as any)?.product_name_color || resolvedTitleColor;
   const resolvedSubtitleColor =
     subtitle_color || theme?.muted_text_color || (isLight ? "rgba(15, 23, 42, 0.65)" : "rgba(241, 245, 249, 0.65)");
   const resolvedAccentColor = accent_color || theme?.accent_color || tokens.accentColor;
-  const resolvedImageBg = image_bg || (isLight ? "#f1f5f9" : "rgba(255, 255, 255, 0.05)");
+  const isCardDark = isColorDarkHex(resolvedCardBg);
+  const resolvedImageBg = image_bg || (isCardDark ? "rgba(255, 255, 255, 0.05)" : "#f1f5f9");
   const resolvedImageFit = image_fit || "cover";
   const resolvedMaxWidth =
     max_width === "full" || !max_width
@@ -622,7 +627,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                     style={{
                       fontSize: parsedCardTitleSize,
                       fontWeight: (card_title_weight as any) || 700,
-                      color: resolvedTitleColor,
+                      color: resolvedCardTitleColor,
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",

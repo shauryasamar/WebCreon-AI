@@ -367,12 +367,13 @@ const ProductGrid: React.FC<ProductGridProps> = ({
     product_name_color ||
     product_title_color ||
     title_color ||
-    (theme as any)?.card_text_color ||
-    defaultTextColor;
-  const isPreferredDark = isColorDarkHex(preferredTextColor);
-  const pageText = preferredTextColor && (isPreferredDark !== isCardDark)
-    ? preferredTextColor
-    : (isCardDark ? "#ffffff" : "#0f172a");
+    (theme as any)?.product_name_color ||
+    (theme as any)?.card_text_color;
+
+  const pageText =
+    preferredTextColor ||
+    defaultTextColor ||
+    (isCardDark ? "#ffffff" : "#0f172a");
 
   const mutedText =
     original_price_color ||
@@ -423,15 +424,19 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   else if (card_shadow === "soft") computedShadow = softShadow;
   else if (card_shadow === "elevated") computedShadow = isLight ? "0 20px 40px rgba(0,0,0,0.12)" : "0 20px 40px rgba(0,0,0,0.36)";
 
+  const isCardBgRgba = typeof cardBg === "string" && cardBg.startsWith("rgba");
+  const isExplicitCardBg = Boolean(card_bg_color || (theme as any)?.card_bg);
   const isGlass =
-    (theme as any)?.surface_materiality === "full_glass" ||
-    (theme as any)?.surface_materiality === "glassmorphism" ||
-    (theme as any)?.visual_style === "glassmorphic" ||
-    (theme as any)?.name?.toLowerCase()?.includes("glass") ||
-    (typeof cardBg === "string" && cardBg.startsWith("rgba"));
+    isCardBgRgba ||
+    (!isExplicitCardBg && (
+      (theme as any)?.surface_materiality === "full_glass" ||
+      (theme as any)?.surface_materiality === "glassmorphism" ||
+      (theme as any)?.visual_style === "glassmorphic" ||
+      (theme as any)?.name?.toLowerCase()?.includes("glass")
+    ));
 
-  if (isGlass) {
-    computedCardBg = card_bg_color || (isLight ? "rgba(255, 255, 255, 0.70)" : "rgba(15, 23, 42, 0.70)");
+  if (isGlass && !isExplicitCardBg) {
+    computedCardBg = isLight ? "rgba(255, 255, 255, 0.70)" : "rgba(15, 23, 42, 0.70)";
     computedBorder = card_border_color ? `1px solid ${card_border_color}` : (isLight ? "1px solid rgba(255, 255, 255, 0.55)" : "1px solid rgba(255, 255, 255, 0.14)");
     computedShadow = isLight
       ? "0 8px 32px rgba(31, 38, 135, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.75)"
@@ -593,7 +598,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
           : "repeat(auto-fill, minmax(230px, 1fr))";
 
   const resolvedImageFit = image_fit || "cover";
-  const resolvedImageBg = image_bg || (isLight ? "#f8fafc" : "rgba(255,255,255,0.04)");
+  const resolvedImageBg = image_bg || (isCardDark ? "rgba(255,255,255,0.04)" : "#f8fafc");
 
   return (
     <section
@@ -941,11 +946,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                 ? `${Math.min(parsedCardRadiusNum, isMobile ? 24 : 48)}px`
                 : isMobile ? "14px" : computedRadius,
               padding: isMobile ? "6px" : "8px",
-              background: isDisabled
-                ? isLight
-                  ? "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(241,245,249,0.96) 100%)"
-                  : "linear-gradient(180deg, rgba(30,41,59,0.82) 0%, rgba(15,23,42,0.78) 100%)"
-                : computedCardBg,
+              background: computedCardBg,
               backdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
               WebkitBackdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
               boxShadow: isMobile
@@ -957,7 +958,6 @@ const ProductGrid: React.FC<ProductGridProps> = ({
               minHeight: "100%",
               boxSizing: "border-box",
               overflow: "hidden",
-              opacity: isDisabled ? 0.72 : 1,
               transition: "border-color 150ms ease, box-shadow 150ms ease",
             };
 
@@ -1028,15 +1028,18 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                           left: "50%",
                           transform: "translate(-50%, -50%)",
                           zIndex: 4,
-                          background: "#ff0000",
+                          background: "rgba(220, 38, 38, 0.92)",
+                          backdropFilter: "blur(4px)",
+                          WebkitBackdropFilter: "blur(4px)",
                           color: "#ffffff",
                           fontSize: isMobile ? "11px" : "13.5px",
                           fontWeight: 800,
-                          padding: isMobile ? "4px 14px" : "6px 22px",
-                          borderRadius: "2px",
-                          boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                          padding: isMobile ? "4px 14px" : "6px 20px",
+                          borderRadius: "6px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                          border: "1px solid rgba(255, 255, 255, 0.25)",
                           whiteSpace: "nowrap",
-                          letterSpacing: "0.02em",
+                          letterSpacing: "0.03em",
                           textAlign: "center",
                           userSelect: "none",
                         }}
@@ -1072,7 +1075,6 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                       gap: "2px",
                       padding: isMobile ? "6px 7px 7px" : "8px 10px 9px",
                       flex: 1,
-                      opacity: !product.normalizedInStock ? 0.65 : 1,
                     }}
                   >
                     {show_brand_name && (
@@ -1160,15 +1162,18 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                           left: "50%",
                           transform: "translate(-50%, -50%)",
                           zIndex: 4,
-                          background: "#ff0000",
+                          background: "rgba(220, 38, 38, 0.92)",
+                          backdropFilter: "blur(4px)",
+                          WebkitBackdropFilter: "blur(4px)",
                           color: "#ffffff",
                           fontSize: isMobile ? "11px" : "13.5px",
                           fontWeight: 800,
-                          padding: isMobile ? "4px 14px" : "6px 22px",
-                          borderRadius: "2px",
-                          boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                          padding: isMobile ? "4px 14px" : "6px 20px",
+                          borderRadius: "6px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                          border: "1px solid rgba(255, 255, 255, 0.25)",
                           whiteSpace: "nowrap",
-                          letterSpacing: "0.02em",
+                          letterSpacing: "0.03em",
                           textAlign: "center",
                           userSelect: "none",
                         }}
@@ -1201,7 +1206,6 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                       gap: "2px",
                       padding: isMobile ? "5px 3px 2px" : "6px 4px 2px",
                       flex: 1,
-                      opacity: !product.normalizedInStock ? 0.65 : 1,
                     }}
                   >
                     {show_brand_name && (
@@ -1293,15 +1297,18 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                           left: "50%",
                           transform: "translate(-50%, -50%)",
                           zIndex: 4,
-                          background: "#ff0000",
+                          background: "rgba(220, 38, 38, 0.92)",
+                          backdropFilter: "blur(4px)",
+                          WebkitBackdropFilter: "blur(4px)",
                           color: "#ffffff",
                           fontSize: isMobile ? "11px" : "13.5px",
                           fontWeight: 800,
-                          padding: isMobile ? "4px 14px" : "6px 22px",
-                          borderRadius: "2px",
-                          boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                          padding: isMobile ? "4px 14px" : "6px 20px",
+                          borderRadius: "6px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                          border: "1px solid rgba(255, 255, 255, 0.25)",
                           whiteSpace: "nowrap",
-                          letterSpacing: "0.02em",
+                          letterSpacing: "0.03em",
                           textAlign: "center",
                           userSelect: "none",
                         }}
@@ -1364,7 +1371,6 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                       gap: "2px",
                       padding: isMobile ? "4px 2px 2px" : "6px 4px 2px",
                       flex: 1,
-                      opacity: !product.normalizedInStock ? 0.65 : 1,
                     }}
                   >
                     {show_brand_name && (
@@ -1460,13 +1466,16 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                           left: "50%",
                           transform: "translate(-50%, -50%)",
                           zIndex: 4,
-                          background: "#ff0000",
+                          background: "rgba(220, 38, 38, 0.92)",
+                          backdropFilter: "blur(4px)",
+                          WebkitBackdropFilter: "blur(4px)",
                           color: "#ffffff",
-                          fontSize: isMobile ? "10px" : "11.5px",
+                          fontSize: isMobile ? "9.5px" : "11px",
                           fontWeight: 800,
-                          padding: isMobile ? "3px 8px" : "4px 12px",
-                          borderRadius: "2px",
-                          boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                          padding: isMobile ? "3px 8px" : "4px 11px",
+                          borderRadius: "5px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                          border: "1px solid rgba(255, 255, 255, 0.25)",
                           whiteSpace: "nowrap",
                           letterSpacing: "0.02em",
                           textAlign: "center",
@@ -1505,7 +1514,6 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                       flex: "1 1 0",
                       minWidth: 0,
                       overflow: "hidden",
-                      opacity: !product.normalizedInStock ? 0.65 : 1,
                     }}
                   >
                     {/* Top Row: Brand on left + Badges & % OFF on right */}
@@ -1659,15 +1667,18 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                         left: "50%",
                         transform: "translate(-50%, -50%)",
                         zIndex: 4,
-                        background: "#ff0000",
+                        background: "rgba(220, 38, 38, 0.92)",
+                        backdropFilter: "blur(4px)",
+                        WebkitBackdropFilter: "blur(4px)",
                         color: "#ffffff",
                         fontSize: isMobile ? "11px" : "13.5px",
                         fontWeight: 800,
-                        padding: isMobile ? "4px 14px" : "6px 22px",
-                        borderRadius: "2px",
-                        boxShadow: "0 4px 14px rgba(255, 0, 0, 0.4)",
+                        padding: isMobile ? "4px 14px" : "6px 20px",
+                        borderRadius: "6px",
+                        boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                        border: "1px solid rgba(255, 255, 255, 0.25)",
                         whiteSpace: "nowrap",
-                        letterSpacing: "0.02em",
+                        letterSpacing: "0.03em",
                         textAlign: "center",
                         userSelect: "none",
                       }}
@@ -1693,7 +1704,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
                   )}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1, opacity: !product.normalizedInStock ? 0.65 : 1 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
                   {show_brand_name && (
                     <span style={{ fontSize: isMobile ? "8.5px" : "9.5px", fontWeight: 600, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em", lineHeight: 1.2 }}>
                       {brandText}

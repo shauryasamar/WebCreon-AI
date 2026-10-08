@@ -326,44 +326,76 @@ const FreeShippingProgress: React.FC<{
   if (!threshold || threshold <= 0) return null;
   const isUnlocked = shippingWaived || remaining <= 0;
   const progressPercent = Math.min(100, Math.max(0, Math.round((subtotal / threshold) * 100)));
+  const isDark = isColorDarkHex(palette.cardBg || palette.panelBg || palette.pageBg || "#ffffff");
+
+  const resolvedAccent = accentColor || "#3b82f6";
+  const successColor = isDark ? "#4ade80" : "#166534";
+  const successBg = isDark ? "rgba(34, 197, 94, 0.14)" : "rgba(34, 197, 94, 0.08)";
+  const successBorder = isDark ? "rgba(34, 197, 94, 0.35)" : "rgba(34, 197, 94, 0.25)";
 
   return (
     <div
       style={{
         padding: "12px 14px",
-        borderRadius: "12px",
-        background: isUnlocked ? palette.successBg : palette.softBg,
-        border: `1px solid ${isUnlocked ? "rgba(34, 197, 94, 0.25)" : palette.cardBorder}`,
+        borderRadius: "14px",
+        background: isUnlocked
+          ? successBg
+          : (isDark ? "rgba(255, 255, 255, 0.05)" : "#f8fafc"),
+        border: `1px solid ${
+          isUnlocked
+            ? successBorder
+            : (palette.cardBorder || (isDark ? "rgba(255, 255, 255, 0.12)" : "#e2e8f0"))
+        }`,
         marginBottom: "14px",
         display: "flex",
         flexDirection: "column",
-        gap: "8px",
+        gap: "10px",
+        boxShadow: isDark ? "none" : "0 1px 3px rgba(0,0,0,0.03)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 600 }}>
-          <span style={{ color: isUnlocked ? palette.successText : palette.text }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, lineHeight: 1.4 }}>
+          <span style={{ color: isUnlocked ? successColor : palette.text }}>
             {isUnlocked ? (
-              "You have unlocked Free Delivery!"
+              <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span>🎉</span>
+                <strong>You have unlocked Free Delivery!</strong>
+              </span>
             ) : (
               <>
-                Add <strong style={{ color: accentColor }}>₹{remaining}</strong> more for <strong>Free Delivery</strong>
+                Add <strong style={{ color: resolvedAccent, fontWeight: 800 }}>₹{remaining}</strong> more for <strong style={{ fontWeight: 700 }}>Free Delivery</strong>
               </>
             )}
           </span>
         </div>
-        <span style={{ fontSize: "11.5px", fontWeight: 700, color: isUnlocked ? palette.successText : palette.textMuted }}>
+        <span
+          style={{
+            fontSize: "12px",
+            fontWeight: 800,
+            color: isUnlocked ? successColor : palette.text,
+            background: isUnlocked
+              ? (isDark ? "rgba(34, 197, 94, 0.25)" : "rgba(34, 197, 94, 0.15)")
+              : (isDark ? "rgba(255, 255, 255, 0.10)" : "rgba(15, 23, 42, 0.06)"),
+            padding: "2px 8px",
+            borderRadius: "6px",
+            letterSpacing: "-0.01em",
+            flexShrink: 0,
+          }}
+        >
           {progressPercent}%
         </span>
       </div>
 
-      {/* Progress Track */}
+      {/* High-Contrast Progress Track */}
       <div
         style={{
           width: "100%",
-          height: "6px",
+          height: "8px",
           borderRadius: "999px",
-          background: isUnlocked ? "rgba(34, 197, 94, 0.2)" : "rgba(0, 0, 0, 0.08)",
+          background: isUnlocked
+            ? (isDark ? "rgba(34, 197, 94, 0.25)" : "rgba(34, 197, 94, 0.15)")
+            : (isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(15, 23, 42, 0.09)"),
+          border: isDark ? "1px solid rgba(255, 255, 255, 0.06)" : "1px solid rgba(0, 0, 0, 0.04)",
           overflow: "hidden",
           position: "relative",
         }}
@@ -375,7 +407,10 @@ const FreeShippingProgress: React.FC<{
             borderRadius: "999px",
             background: isUnlocked
               ? "linear-gradient(90deg, #22c55e, #16a34a)"
-              : `linear-gradient(90deg, ${accentColor}, ${accentColor})`,
+              : `linear-gradient(90deg, ${resolvedAccent}, ${resolvedAccent})`,
+            boxShadow: isUnlocked
+              ? "0 0 10px rgba(34, 197, 94, 0.45)"
+              : `0 0 8px ${resolvedAccent}44`,
             transition: "width 0.35s ease",
           }}
         />
@@ -654,9 +689,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         "#ffffff";
       const panelBg =
         panel_color ||
-        background_color ||
-        (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_panel_bg || (theme as any)?.cart_bg) ||
-        mixHex(pageBg, "#ffffff", 0.7);
+        (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_panel_bg) ||
+        mixHex(shellBg, "#000000", 0.03);
       const cardBg =
         card_color ||
         (isCheckoutSummary ? (theme as any)?.summary_card_bg : (theme as any)?.cart_card_bg) ||
@@ -670,6 +704,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
           "#0f172a"
       );
 
+      const isCardDark = isColorDarkHex(cardBg);
+
       return {
         pageBg,
         shellBg,
@@ -678,8 +714,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         panelBg,
         cardBg,
         cardBorder: dynamicCardBorder,
-        mutedBg: mixHex(pageBg, "#000000", 0.03),
-        softBg: alpha(cardText, 0.04),
+        mutedBg: mixHex(cardBg, "#000000", 0.04),
+        softBg: alpha(cardText, 0.05),
         text: cardText,
         textMuted: muted_text_color || mixHex(cardText, cardBg, 0.4),
         textSoft: muted_text_color || mixHex(cardText, cardBg, 0.25),
@@ -687,7 +723,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         successBg: alpha("#22c55e", 0.10),
         successText: "#166534",
         inputBg: cardBg,
-        quantityBg: isDark ? "rgba(255, 255, 255, 0.07)" : "#f1f5f9",
+        quantityBg: isCardDark ? "rgba(255, 255, 255, 0.08)" : mixHex(cardBg, "#000000", 0.05),
         shadow: alpha(cardText, 0.06) ? `0 8px 20px ${alpha("#0f172a", 0.06)}` : "none",
         cardShadow: `0 4px 14px ${alpha("#0f172a", 0.04)}`,
         disabledBg: mixHex(cardText, cardBg, 0.5),
@@ -699,28 +735,20 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       background_color ||
       (theme as any)?.cart_panel_bg ||
       (theme as any)?.cart_bg ||
-      (hasFestiveTint
-        ? mixHex(pageBg, "#ffffff", 0.09)
-        : mixHex(pageBg, "#ffffff", 0.07));
+      "#0f172a";
     const panelBg =
       panel_color ||
-      background_color ||
       (theme as any)?.cart_panel_bg ||
-      (theme as any)?.cart_bg ||
-      (hasFestiveTint
-        ? mixHex(pageBg, "#ffffff", 0.13)
-        : mixHex(pageBg, "#ffffff", 0.10));
+      mixHex(shellBg, "#ffffff", 0.05);
     const cardBg =
       card_color ||
       (theme as any)?.cart_card_bg ||
-      (hasFestiveTint
-        ? mixHex(mixHex(pageBg, "#ffffff", 0.16), resolvedAccentColor, 0.08)
-        : mixHex(pageBg, "#ffffff", 0.14));
-    const mutedBg = mixHex(pageBg, "#000000", 0.12);
-    const inputBg = card_color || mixHex(pageBg, "#000000", 0.15);
-    const quantityBg = mixHex(pageBg, "#000000", 0.12);
+      mixHex(shellBg, "#ffffff", 0.07);
+    const mutedBg = mixHex(cardBg, "#000000", 0.15);
+    const inputBg = card_color || mixHex(cardBg, "#000000", 0.12);
+    const quantityBg = mixHex(cardBg, "#ffffff", 0.07);
 
-    const cardText = getContrastingText(cardBg, text_color || (theme as any)?.cart_text_color || (theme as any)?.card_text_color || theme?.text_color || "#e5e7eb");
+    const cardText = getContrastingText(cardBg, (theme as any)?.cart_text_color || text_color || theme?.text_color || "#ffffff");
 
     return {
       pageBg,
@@ -731,7 +759,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       cardBg,
       cardBorder: dynamicCardBorder,
       mutedBg,
-      softBg: alpha("#ffffff", 0.05),
+      softBg: alpha("#ffffff", 0.06),
       text: cardText,
       textMuted:
         muted_text_color || mixHex(cardText, cardBg, 0.45),
@@ -744,7 +772,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       quantityBg,
       shadow: "0 10px 24px rgba(0,0,0,0.18)",
       cardShadow: "0 2px 10px rgba(0,0,0,0.10)",
-      disabledBg: mixHex(resolvedTextColor, pageBg, 0.5),
+      disabledBg: mixHex(resolvedTextColor, cardBg, 0.5),
     };
   }, [
     isDark,
@@ -2125,11 +2153,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                             display: "inline-flex",
                             alignItems: "center",
                             borderRadius: "999px",
-                            border: `1px solid ${palette.cardBorder}`,
-                            background: palette.quantityBg,
+                            border: `1px solid ${palette.cardBorder || (isDark ? "rgba(255,255,255,0.18)" : "#cbd5e1")}`,
+                            background: palette.quantityBg || (isDark ? "rgba(255,255,255,0.06)" : "#f8fafc"),
                             overflow: "hidden",
-                            minHeight: isMobile ? "34px" : "42px",
-                            height: isMobile ? "34px" : "42px",
+                            minHeight: isMobile ? "34px" : "40px",
+                            height: isMobile ? "34px" : "40px",
+                            boxShadow: isDark ? "none" : "0 1px 2px rgba(0,0,0,0.03)",
                           }}
                         >
                           <button
@@ -2149,7 +2178,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               background: "transparent",
                               color: palette.text,
                               fontSize: isMobile ? "16px" : "18px",
-                              fontWeight: 600,
+                              fontWeight: 700,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -2158,7 +2187,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               transition: "background 150ms ease, color 150ms ease",
                             }}
                           >
-                            -
+                            −
                           </button>
 
                           <div
@@ -2166,7 +2195,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               minWidth: isMobile ? "28px" : "36px",
                               textAlign: "center",
                               fontSize: isMobile ? "13px" : "14px",
-                              fontWeight: 700,
+                              fontWeight: 800,
                               color: palette.text,
                               userSelect: "none",
                             }}
@@ -2191,7 +2220,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                               background: "transparent",
                               color: palette.text,
                               fontSize: isMobile ? "16px" : "18px",
-                              fontWeight: 600,
+                              fontWeight: 700,
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",

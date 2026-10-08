@@ -1614,21 +1614,32 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     theme?.mode === "dark" ||
     Boolean(theme?.primary_bg && isColorDarkHex(theme.primary_bg));
 
-  const resolvedDialogBg =
+  const resolvedProfileDropdownBg =
+    (theme as any)?.profile_dropdown_bg ||
     theme?.dialog_bg ||
     theme?.surface_bg ||
     (isSiteThemeDark ? (theme?.card_bg || "#0f172a") : "#ffffff");
+
+  const resolvedNotificationBg =
+    (theme as any)?.notification_drawer_bg ||
+    theme?.dialog_bg ||
+    theme?.surface_bg ||
+    (isSiteThemeDark ? (theme?.card_bg || "#0f172a") : "#ffffff");
+
+  const resolvedDialogBg = resolvedProfileDropdownBg;
 
   const resolvedDialogBorder =
     (theme as any)?.border_color ||
     (isSiteThemeDark ? "rgba(255,255,255,0.12)" : "#e2e8f0");
 
-  const isDialogDark = isColorDarkHex(resolvedDialogBg);
-  const dropdownBg = resolvedDialogBg;
+  const isDialogDark = isColorDarkHex(resolvedProfileDropdownBg);
+  const dropdownBg = resolvedProfileDropdownBg;
   const dropdownBorderColor = resolvedDialogBorder;
 
   const isDropdownLight = !isDialogDark;
-  const dropdownTextColor = isDropdownLight ? "#0f172a" : "#ffffff";
+  const dropdownTextColor =
+    (theme as any)?.profile_dropdown_text ||
+    (isDropdownLight ? "#0f172a" : "#ffffff");
   const dropdownMutedText = isDropdownLight ? "#64748b" : "rgba(255,255,255,0.7)";
   const dropdownIconBg = isDropdownLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)";
   const dropdownIconBorder = isDropdownLight ? "1px solid rgba(15,23,42,0.08)" : "1px solid rgba(255,255,255,0.12)";
@@ -2540,9 +2551,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     isOpen={notificationsOpen}
                     onClose={handleCloseNotifications}
                     anchorRef={mobileMenuButtonRef}
-                    isDark={isDialogDark}
+                    isDark={isColorDarkHex(resolvedNotificationBg)}
                     accentColor={accentColor || "#2563eb"}
-                    dialogBg={resolvedDialogBg}
+                    dialogBg={resolvedNotificationBg}
                     borderColor={resolvedDialogBorder}
                     onUnreadCountChange={handleUnreadCountChange}
                     isMobile={isMobile}
@@ -2578,9 +2589,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     isOpen={notificationsOpen}
                     onClose={handleCloseNotifications}
                     anchorRef={notificationButtonRef}
-                    isDark={isDialogDark}
+                    isDark={isColorDarkHex(resolvedNotificationBg)}
                     accentColor={accentColor || "#2563eb"}
-                    dialogBg={resolvedDialogBg}
+                    dialogBg={resolvedNotificationBg}
                     borderColor={resolvedDialogBorder}
                     onUnreadCountChange={handleUnreadCountChange}
                     isMobile={isMobile}
@@ -2860,10 +2871,12 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                 minHeight: `${Math.max(48, navbarHeightNum - 20)}px`,
                 gap: isMobile ? "8px" : "16px",
                 padding: "8px 16px",
-                background: light ? "rgba(255, 255, 255, 0.65)" : "rgba(15, 23, 42, 0.65)",
+                background: (props as any).navbar_bg || theme?.navbar_bg || (light ? "rgba(255, 255, 255, 0.65)" : "rgba(15, 23, 42, 0.65)"),
                 backdropFilter: "blur(20px)",
-                borderRadius: "20px",
-                border: light ? "1px solid rgba(255, 255, 255, 0.4)" : "1px solid rgba(255, 255, 255, 0.12)",
+                borderRadius: shellRadius || "20px",
+                border: customBorderColor
+                  ? (String(customBorderColor).startsWith("1px") || String(customBorderColor).includes("solid") ? String(customBorderColor) : `1px solid ${customBorderColor}`)
+                  : (light ? "1px solid rgba(255, 255, 255, 0.4)" : "1px solid rgba(255, 255, 255, 0.12)"),
                 boxShadow: light ? "0 8px 32px rgba(31, 38, 135, 0.08)" : "0 8px 32px rgba(0, 0, 0, 0.4)",
                 boxSizing: "border-box",
               };

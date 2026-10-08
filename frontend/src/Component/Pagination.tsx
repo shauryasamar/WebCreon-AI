@@ -103,13 +103,20 @@ export const Pagination: React.FC<PaginationProps> = ({
     : isDarkAdmin;
 
   // Resolved dynamic theme tokens with guaranteed contrast
+  const rawProps = { ...(theme || {}), ...((style as any) || {}), ...({
+    pagination_bg: (theme as any)?.pagination_bg,
+    pagination_text_color: (theme as any)?.pagination_text_color,
+    pagination_active_bg: (theme as any)?.pagination_active_bg,
+    pagination_border_color: (theme as any)?.pagination_border_color,
+  }) };
+
   const resolvedAccent = isStorefront
-    ? ((theme as any)?.pagination_active_bg || customAccent || theme?.accent_color || "#2563eb")
+    ? (customAccent || (theme as any)?.pagination_active_bg || theme?.accent_color || "#2563eb")
     : (customAccent || adminTokens?.accent || "#2563eb");
 
   const activeBtnTextColor = isColorDarkHex(resolvedAccent) ? "#ffffff" : "#0f172a";
 
-  const btnBg = (theme as any)?.pagination_bg || (isStorefront
+  const btnBg = (theme as any)?.pagination_bg || (theme as any)?.background_color || (isStorefront
     ? (isDarkCanvas ? (theme?.secondary_bg || "#1e293b") : (theme?.secondary_bg || "#ffffff"))
     : (isDarkCanvas ? (adminTokens?.elevatedSurfaceBg || "#242429") : "#ffffff"));
 
@@ -117,11 +124,11 @@ export const Pagination: React.FC<PaginationProps> = ({
     ? (isDarkCanvas ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9")
     : (isDarkCanvas ? (adminTokens?.hoverBg || "rgba(255, 255, 255, 0.08)") : "#f1f5f9");
 
-  const borderColor = (theme as any)?.pagination_border_color || (isStorefront
+  const borderColor = (theme as any)?.pagination_border_color || (theme as any)?.border_color || (isStorefront
     ? (theme?.border_color || (isDarkCanvas ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.14)"))
     : (isDarkCanvas ? (adminTokens?.border || "rgba(255, 255, 255, 0.08)") : (adminTokens?.border || "rgba(15, 23, 42, 0.14)")));
 
-  const btnTextColor = (theme as any)?.pagination_text_color || (isStorefront
+  const btnTextColor = (theme as any)?.pagination_text_color || (theme as any)?.text_color || (isStorefront
     ? (theme?.text_color || (isDarkCanvas ? "#f4f4f5" : "#0f172a"))
     : (isDarkCanvas ? (adminTokens?.textPrimary || "#f4f4f5") : (adminTokens?.textPrimary || "#0f172a")));
 

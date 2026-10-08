@@ -216,7 +216,7 @@ const Footer: React.FC<FooterProps> = (props) => {
   const isFooterDark = isColorDarkHex(footerBg);
   const isLight = !isFooterDark;
 
-  const directTextColor = footer_text_color || text_color || props.text_color || theme?.footer_text_color;
+  const directTextColor = footer_text_color || theme?.footer_text_color || text_color || props.text_color;
   const textColor =
     directTextColor ||
     (isFooterDark ? "#ffffff" : "#0f172a");

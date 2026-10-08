@@ -126,7 +126,12 @@ export const FilterSidebar = ({
     ? "rgba(255, 255, 255, 0.08)"
     : (resolvedPrimaryBg === "#ffffff" ? "rgba(0, 0, 0, 0.04)" : "rgba(255, 255, 255, 0.65)"));
 
-  const dropdownBg = (theme as any)?.filter_card_bg || (theme as any)?.dialog_bg || (theme as any)?.surface_bg || (theme as any)?.card_bg || (isSectionDark ? "#1e293b" : "#ffffff");
+  const filterBtnBg = (theme as any)?.filter_btn_bg || btnBg;
+  const filterBtnText = (theme as any)?.filter_btn_text || textPrimary;
+  const sortBtnBg = (theme as any)?.sort_btn_bg || btnBg;
+  const sortBtnText = (theme as any)?.sort_btn_text || textPrimary;
+
+  const dropdownBg = (theme as any)?.sort_dropdown_bg || (theme as any)?.filter_card_bg || (theme as any)?.dialog_bg || (theme as any)?.surface_bg || (theme as any)?.card_bg || (isSectionDark ? "#1e293b" : "#ffffff");
   const isDropdownDark = isColorDarkHex(dropdownBg);
   const dropdownTextColor = isDropdownDark ? "#f1f5f9" : "#0f172a";
   const dropdownMutedText = isDropdownDark ? "rgba(241, 245, 249, 0.65)" : "rgba(15, 23, 42, 0.65)";
@@ -208,6 +213,11 @@ export const FilterSidebar = ({
                 type="button"
                 onClick={onFilterClick}
                 className="product-toolbar-btn product-toolbar-filter-btn"
+                style={{
+                  background: filterBtnBg,
+                  color: filterBtnText,
+                  borderColor: borderColor,
+                }}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <line x1="4" y1="21" x2="4" y2="14" />
@@ -241,8 +251,8 @@ export const FilterSidebar = ({
                 title={`Sort by: ${currentSort.label}`}
                 style={{
                   borderColor: sortBy !== "newest" ? accentColor : borderColor,
-                  background: sortBy !== "newest" ? `${accentColor}16` : btnBg,
-                  color: sortBy !== "newest" ? accentColor : textPrimary,
+                  background: sortBy !== "newest" ? `${accentColor}16` : sortBtnBg,
+                  color: sortBy !== "newest" ? accentColor : sortBtnText,
                 }}
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -269,6 +279,11 @@ export const FilterSidebar = ({
                 type="button"
                 onClick={() => setSortOpen(!sortOpen)}
                 className="product-toolbar-btn product-toolbar-sort-btn"
+                style={{
+                  background: sortBtnBg,
+                  color: sortBtnText,
+                  borderColor: borderColor,
+                }}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <path d="M11 5h10M11 9h7M11 13h4" />

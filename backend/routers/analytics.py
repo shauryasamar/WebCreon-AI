@@ -189,6 +189,34 @@ def _compute_growth_pct(current: float, previous: float) -> float:
     return round(((current - previous) / previous) * 100.0, 1)
 
 
+def _is_valid_order_for_analytics(o: Order) -> bool:
+    """
+    Returns True if an order represents verified/realized sales:
+    - Excludes cancelled/returned orders.
+    - Excludes draft/pending checkouts that never received payment.
+    - For COD orders: True if confirmed, processing, shipped, delivered, or active COD.
+    - For Online/Prepaid orders: True ONLY if payment was captured (paid, completed, settled) or has razorpay_payment_id.
+    """
+    st = str(o.status or "").lower()
+    if "cancel" in st:
+        return False
+    
+    pm = str(o.payment_method or "").strip().lower()
+    is_cod = (
+        pm in ("cod", "cash on delivery", "cash_on_delivery", "cash", "offline", "cash_delivery", "cash on collection")
+        or "cod" in pm
+        or "cash" in pm
+        or (not getattr(o, "razorpay_payment_id", None) and not getattr(o, "razorpay_order_id", None) and pm not in ("online", "razorpay", "upi", "card", "credit_card", "debit_card", "netbanking", "wallet", "prepaid"))
+    )
+    if is_cod:
+        return st not in ("pending_checkout", "draft")
+    
+    # Online order must have captured payment or paid payment_status
+    pst = str(getattr(o, "payment_status", "") or "").lower()
+    has_captured = pst in ("paid", "completed", "settled") or bool(getattr(o, "razorpay_payment_id", None))
+    return has_captured
+
+
 def _get_store_analytics_data(
     site_id: UUID,
     range_key: str,
@@ -235,8 +263,13 @@ def _get_store_analytics_data(
         if o_dt and prev_start_time <= o_dt < start_time:
             previous_period_orders.append(o)
 
-    curr_valid_orders = [o for o in current_period_orders if "cancel" not in str(o.status or "").lower()]
-    prev_valid_orders = [o for o in previous_period_orders if "cancel" not in str(o.status or "").lower()]
+    curr_valid_orders = [o for o in current_period_orders if _is_valid_order_for_analytics(o)]
+    prev_valid_orders = [o for o in previous_period_orders if _is_valid_order_for_analytics(o)]
+
+    # Abandoned / Unpaid checkouts during current period
+    abandoned_orders = [o for o in current_period_orders if "cancel" not in str(o.status or "").lower() and not _is_valid_order_for_analytics(o)]
+    abandoned_checkouts_count = len(abandoned_orders)
+    abandoned_checkouts_revenue = round(sum(float(o.total or 0) for o in abandoned_orders), 2)
 
     curr_revenue = sum(float(o.total or 0) for o in curr_valid_orders)
     prev_revenue = sum(float(o.total or 0) for o in prev_valid_orders)
@@ -530,6 +563,8 @@ def _get_store_analytics_data(
             "revenue_change": _compute_growth_pct(curr_revenue, prev_revenue) if has_prev_data else 0.0,
             "conversion_rate": conversion_rate,
             "conversion_rate_change": round(conversion_rate - prev_conv_rate, 2) if has_prev_data else 0.0,
+            "abandoned_checkouts_count": abandoned_checkouts_count,
+            "abandoned_checkouts_revenue": abandoned_checkouts_revenue,
             "comparison_text": comparison_text,
         },
         "chart_points": chart_points,

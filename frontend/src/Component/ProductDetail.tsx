@@ -1483,12 +1483,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const surfaceDefaultText = isPanelDark ? "#f8fafc" : "#0f172a";
   const rawRequestedText = text_color || (theme as any)?.product_detail_text;
 
-  // If text color is provided and has good contrast, keep it; otherwise compute contrast against panel
   const pageText =
-    rawRequestedText && (isColorDarkHex(rawRequestedText) !== isPanelDark)
+    rawRequestedText
       ? rawRequestedText
-      : (theme as any)?.card_text_color && (isColorDarkHex((theme as any).card_text_color) !== isPanelDark)
-      ? (theme as any).card_text_color
       : (defaultTextColor && isColorDarkHex(defaultTextColor) !== isPanelDark)
       ? defaultTextColor
       : surfaceDefaultText;
@@ -2289,13 +2286,16 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     left: "50%",
                     transform: "translate(-50%, -50%)",
                     zIndex: 5,
-                    background: "#ff0000",
+                    background: "rgba(220, 38, 38, 0.92)",
+                    backdropFilter: "blur(4px)",
+                    WebkitBackdropFilter: "blur(4px)",
                     color: "#ffffff",
                     fontSize: isMobile ? "12px" : "14.5px",
                     fontWeight: 800,
-                    padding: isMobile ? "5px 18px" : "7px 26px",
-                    borderRadius: "3px",
-                    boxShadow: "0 4px 16px rgba(255, 0, 0, 0.45)",
+                    padding: isMobile ? "5px 18px" : "7px 24px",
+                    borderRadius: "6px",
+                    boxShadow: "0 4px 16px rgba(0, 0, 0, 0.35)",
+                    border: "1px solid rgba(255, 255, 255, 0.25)",
                     whiteSpace: "nowrap",
                     letterSpacing: "0.03em",
                     textAlign: "center",
@@ -3314,31 +3314,38 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     gridTemplateColumns: "40px 1fr 40px",
                     alignItems: "center",
                     minHeight: "46px",
-                    borderRadius: "15px",
-                    border: strongerBorder,
-                    background: elevatedBg,
+                    borderRadius: "14px",
+                    border: isLight ? "1px solid #cbd5e1" : "1px solid rgba(255, 255, 255, 0.18)",
+                    background: isLight ? "#f8fafc" : "rgba(255, 255, 255, 0.06)",
                     overflow: "hidden",
+                    boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.04)" : "none",
                   }}
                 >
                   <button
                     type="button"
                     aria-label="Decrease quantity"
                     onClick={() => setQuantity((current) => Math.max(1, current - 1))}
+                    disabled={quantity <= 1}
                     style={{
                       height: "46px",
                       border: "none",
-                      borderRight: subtleBorder,
+                      borderRight: isLight ? "1px solid #e2e8f0" : "1px solid rgba(255, 255, 255, 0.12)",
                       background: "transparent",
-                      color: mutedText,
+                      color: pageText,
                       fontSize: "18px",
                       fontWeight: 700,
-                      cursor: "pointer",
+                      cursor: quantity <= 1 ? "not-allowed" : "pointer",
+                      opacity: quantity <= 1 ? 0.35 : 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "opacity 0.15s ease",
                     }}
                   >
                     −
                   </button>
 
-                  <div style={{ textAlign: "center", fontSize: "14px", fontWeight: 700, color: pageText }}>
+                  <div style={{ textAlign: "center", fontSize: "15px", fontWeight: 800, color: pageText }}>
                     {quantity}
                   </div>
 
@@ -3362,15 +3369,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     style={{
                       height: "46px",
                       border: "none",
-                      borderLeft: subtleBorder,
+                      borderLeft: isLight ? "1px solid #e2e8f0" : "1px solid rgba(255, 255, 255, 0.12)",
                       background: "transparent",
-                      color:
-                        selectedVariantOutOfStock ||
-                        isEntireProductOutOfStock ||
-                        isCartLimitReached ||
-                        isAtMaxQty
-                          ? subtleText
-                          : mutedText,
+                      color: pageText,
                       fontSize: "18px",
                       fontWeight: 700,
                       cursor:
@@ -3385,8 +3386,12 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                         isEntireProductOutOfStock ||
                         isCartLimitReached ||
                         isAtMaxQty
-                          ? 0.5
+                          ? 0.35
                           : 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "opacity 0.15s ease",
                     }}
                   >
                     +
@@ -4643,34 +4648,38 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               gridTemplateColumns: "40px 1fr 40px",
               alignItems: "center",
               minHeight: "46px",
-              borderRadius: "15px",
-              border: strongerBorder,
-              background: elevatedBg,
+              borderRadius: "14px",
+              border: isLight ? "1px solid #cbd5e1" : "1px solid rgba(255, 255, 255, 0.18)",
+              background: isLight ? "#f8fafc" : "rgba(255, 255, 255, 0.06)",
               overflow: "hidden",
+              boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.04)" : "none",
             }}
           >
             <button
               type="button"
               aria-label="Decrease quantity"
               onClick={() => setQuantity((current) => Math.max(1, current - 1))}
+              disabled={quantity <= 1}
               style={{
                 height: "46px",
                 border: "none",
-                borderRight: subtleBorder,
+                borderRight: isLight ? "1px solid #e2e8f0" : "1px solid rgba(255, 255, 255, 0.12)",
                 background: "transparent",
-                color: mutedText,
+                color: pageText,
                 fontSize: "18px",
                 fontWeight: 700,
-                cursor: "pointer",
+                cursor: quantity <= 1 ? "not-allowed" : "pointer",
+                opacity: quantity <= 1 ? 0.35 : 1,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                transition: "opacity 0.15s ease",
               }}
             >
               −
             </button>
 
-            <div style={{ textAlign: "center", fontSize: "14px", fontWeight: 700, color: pageText }}>
+            <div style={{ textAlign: "center", fontSize: "15px", fontWeight: 800, color: pageText }}>
               {quantity}
             </div>
 
@@ -4694,15 +4703,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
               style={{
                 height: "46px",
                 border: "none",
-                borderLeft: subtleBorder,
+                borderLeft: isLight ? "1px solid #e2e8f0" : "1px solid rgba(255, 255, 255, 0.12)",
                 background: "transparent",
-                color:
-                  selectedVariantOutOfStock ||
-                  isEntireProductOutOfStock ||
-                  isCartLimitReached ||
-                  isAtMaxQty
-                    ? subtleText
-                    : mutedText,
+                color: pageText,
                 fontSize: "18px",
                 fontWeight: 700,
                 cursor:
@@ -4717,11 +4720,12 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   isEntireProductOutOfStock ||
                   isCartLimitReached ||
                   isAtMaxQty
-                    ? 0.5
+                    ? 0.35
                     : 1,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                transition: "opacity 0.15s ease",
               }}
             >
               +
