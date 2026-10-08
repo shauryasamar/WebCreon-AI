@@ -521,10 +521,20 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
         if (targetTheme.product_detail_bg) {
           updatedProps.panel_color = targetTheme.product_detail_bg;
           updatedProps.background_color = targetTheme.product_detail_bg;
+          updatedProps.product_detail_bg = targetTheme.product_detail_bg;
         }
-        if (targetTheme.product_detail_text) updatedProps.text_color = targetTheme.product_detail_text;
-        if (targetTheme.product_detail_btn_bg) updatedProps.button_bg_color = targetTheme.product_detail_btn_bg;
-        if (targetTheme.product_detail_btn_text) updatedProps.button_text_color = targetTheme.product_detail_btn_text;
+        if (targetTheme.product_detail_text) {
+          updatedProps.text_color = targetTheme.product_detail_text;
+          updatedProps.product_detail_text = targetTheme.product_detail_text;
+        }
+        if (targetTheme.product_detail_btn_bg) {
+          updatedProps.button_bg_color = targetTheme.product_detail_btn_bg;
+          updatedProps.product_detail_btn_bg = targetTheme.product_detail_btn_bg;
+        }
+        if (targetTheme.product_detail_btn_text) {
+          updatedProps.button_text_color = targetTheme.product_detail_btn_text;
+          updatedProps.product_detail_btn_text = targetTheme.product_detail_btn_text;
+        }
       }
 
       return {

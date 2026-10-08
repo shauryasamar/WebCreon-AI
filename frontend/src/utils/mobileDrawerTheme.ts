@@ -27,6 +27,8 @@ export function resolveMobileDrawerTheme(theme?: any): MobileDrawerThemeTokens {
 
   // Derive drawer background directly from the site's card/surface theme
   const drawerBg =
+    theme?.filter_modal_bg ||
+    theme?.filter_bg ||
     theme?.drawer_bg ||
     theme?.dialog_bg ||
     theme?.surface_bg ||
@@ -48,9 +50,11 @@ export function resolveMobileDrawerTheme(theme?: any): MobileDrawerThemeTokens {
 
   // Primary & secondary text safely adapting to the drawer background
   const textPrimary =
-    (tokens.textColor && (isColorDarkHex(tokens.textColor) !== isDrawerDark))
+    theme?.filter_modal_text ||
+    theme?.filter_text_color ||
+    ((tokens.textColor && (isColorDarkHex(tokens.textColor) !== isDrawerDark))
       ? tokens.textColor
-      : (isDrawerDark ? "#f8fafc" : "#0f172a");
+      : (isDrawerDark ? "#f8fafc" : "#0f172a"));
 
   const textSecondary =
     (tokens.mutedTextColor && (isColorDarkHex(tokens.mutedTextColor) !== isDrawerDark))
@@ -59,6 +63,7 @@ export function resolveMobileDrawerTheme(theme?: any): MobileDrawerThemeTokens {
 
   // Accent color directly from the site's AI palette
   const accentColor =
+    theme?.filter_btn_bg ||
     theme?.filter_accent_color ||
     theme?.accent_color ||
     tokens.accentColor ||

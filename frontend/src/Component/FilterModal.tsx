@@ -177,38 +177,49 @@ const FilterModal: React.FC<FilterModalProps> = ({
 
   const mobileTheme = resolveMobileDrawerTheme(theme);
 
-  const rawBg = (theme as any)?.filter_modal_bg || (theme as any)?.dialog_bg || (theme as any)?.surface_bg || theme?.primary_bg;
+  const rawBg =
+    (theme as any)?.filter_modal_bg ||
+    (theme as any)?.filter_bg ||
+    (theme as any)?.dialog_bg ||
+    (theme as any)?.surface_bg ||
+    theme?.primary_bg;
   const desktopBg = rawBg || (isDark ? "#0f172a" : "#ffffff");
-  const bg = isMobile ? mobileTheme.drawerBg : desktopBg;
+  const bg = (theme as any)?.filter_modal_bg || (theme as any)?.filter_bg || (isMobile ? mobileTheme.drawerBg : desktopBg);
   const isModalDark = isColorDarkHex(bg);
 
   const navBg = isMobile
-    ? (isModalDark ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)")
-    : ((theme as any)?.nav_bg || (theme as any)?.secondary_bg || (isModalDark ? "rgba(0, 0, 0, 0.35)" : "rgba(0, 0, 0, 0.025)"));
+    ? (isModalDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.03)")
+    : ((theme as any)?.filter_card_bg || (theme as any)?.nav_bg || (theme as any)?.secondary_bg || (isModalDark ? "rgba(0, 0, 0, 0.35)" : "rgba(0, 0, 0, 0.025)"));
   const panelBg = bg;
-  const cardBg = isModalDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.035)";
+  const cardBg = (theme as any)?.filter_card_bg || (isModalDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.035)");
 
-  const textPrimary = isMobile
-    ? mobileTheme.textPrimary
-    : ((theme as any)?.filter_modal_text
-        ? (theme as any).filter_modal_text
-        : ((theme?.text_color && (isColorDarkHex(theme.text_color) !== isModalDark))
-            ? theme.text_color
-            : (isModalDark ? "#f8fafc" : "#0f172a")));
+  const textPrimary =
+    (theme as any)?.filter_modal_text ||
+    (theme as any)?.filter_text_color ||
+    (isMobile ? mobileTheme.textPrimary : null) ||
+    ((theme?.text_color && (isColorDarkHex(theme.text_color) !== isModalDark))
+      ? theme.text_color
+      : (isModalDark ? "#f8fafc" : "#0f172a"));
 
-  const textSecondary = isMobile
-    ? mobileTheme.textSecondary
-    : ((theme as any)?.muted_text_color && (isColorDarkHex((theme as any).muted_text_color) !== isModalDark)
-        ? (theme as any).muted_text_color
-        : (isModalDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)"));
+  const textSecondary =
+    (theme as any)?.muted_text_color && (isColorDarkHex((theme as any).muted_text_color) !== isModalDark)
+      ? (theme as any).muted_text_color
+      : (isModalDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)");
 
-  const borderColor = isMobile
-    ? mobileTheme.cardBorder
-    : ((theme as any)?.border_color || (isModalDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)"));
+  const borderColor =
+    (theme as any)?.filter_border_color ||
+    (isMobile ? mobileTheme.cardBorder : null) ||
+    ((theme as any)?.border_color || (isModalDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)"));
 
-  const accentColor = isMobile ? mobileTheme.accentColor : (theme?.accent_color || "#3b82f6");
+  const accentColor =
+    (theme as any)?.filter_btn_bg ||
+    (theme as any)?.filter_accent_color ||
+    (isMobile ? mobileTheme.accentColor : null) ||
+    (theme?.accent_color || "#3b82f6");
   const activeBg = `${accentColor}1c`;
-  const applyTextColor = isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a";
+  const applyTextColor =
+    (theme as any)?.filter_btn_text ||
+    (isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a");
 
   const { dragHandleProps, drawerStyle, isDragging } = useDrawerDragToClose({
     onClose,
@@ -1759,7 +1770,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
             height: 75vh !important;
             min-height: 75vh !important;
             max-height: 85vh !important;
-            background: ${mobileTheme.drawerBg} !important;
+            background: ${bg} !important;
             border-top-left-radius: 22px !important;
             border-top-right-radius: 22px !important;
             border-bottom-left-radius: 0 !important;
@@ -1772,7 +1783,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
           .filter-modal-header {
             padding: 14px 18px 12px !important;
             border-bottom: 1px solid ${mobileTheme.cardBorder} !important;
-            background: ${mobileTheme.drawerBg} !important;
+            background: ${bg} !important;
           }
           .filter-modal-body {
             flex-direction: row !important;
@@ -1797,14 +1808,14 @@ const FilterModal: React.FC<FilterModalProps> = ({
           .filter-modal-right-content {
             flex: 1 !important;
             padding: 12px 12px !important;
-            background: ${mobileTheme.drawerBg} !important;
+            background: ${bg} !important;
             overflow-y: auto !important;
             height: 100% !important;
           }
           .filter-modal-footer {
             padding: 10px 14px !important;
             padding-bottom: max(12px, env(safe-area-inset-bottom, 12px)) !important;
-            background: ${mobileTheme.drawerBg} !important;
+            background: ${bg} !important;
             border-top: 1px solid ${mobileTheme.cardBorder} !important;
           }
         }
@@ -1827,7 +1838,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
           height: 75vh !important;
           min-height: 75vh !important;
           max-height: 85vh !important;
-          background: ${mobileTheme.drawerBg} !important;
+          background: ${bg} !important;
           border-top-left-radius: 22px !important;
           border-top-right-radius: 22px !important;
           border-bottom-left-radius: 0 !important;
@@ -1841,7 +1852,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
         .is-mobile-preview .filter-modal-header {
           padding: 14px 18px 12px !important;
           border-bottom: 1px solid ${mobileTheme.cardBorder} !important;
-          background: ${mobileTheme.drawerBg} !important;
+          background: ${bg} !important;
         }
         .filter-modal-overlay.is-mobile .filter-modal-body,
         .is-mobile-preview .filter-modal-body {
@@ -1869,7 +1880,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
         .is-mobile-preview .filter-modal-right-content {
           flex: 1 !important;
           padding: 12px 12px !important;
-          background: ${mobileTheme.drawerBg} !important;
+          background: ${bg} !important;
           overflow-y: auto !important;
           height: 100% !important;
         }
@@ -1877,7 +1888,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
         .is-mobile-preview .filter-modal-footer {
           padding: 10px 14px !important;
           padding-bottom: max(12px, env(safe-area-inset-bottom, 12px)) !important;
-          background: ${mobileTheme.drawerBg} !important;
+          background: ${bg} !important;
           border-top: 1px solid ${mobileTheme.cardBorder} !important;
         }
       `}</style>

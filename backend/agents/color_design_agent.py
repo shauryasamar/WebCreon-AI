@@ -700,6 +700,9 @@ COMPONENT_ALIASES = {
     "filter": "filter", "filters": "filter", "filter bar": "filter", "filter toolbar": "filter",
     "filter modal": "filter", "filter sidebar": "filter", "filter drawer": "filter", "filter theme": "filter",
     "filters theme": "filter", "filter section": "filter", "filter options": "filter", "filter dropdown": "filter",
+    "filter drop down": "filter", "filter drop down page": "filter", "filter dropdown page": "filter",
+    "filter popup": "filter", "filter pop up": "filter", "filter pop-up": "filter",
+    "filter popup theme": "filter", "filter pop up theme": "filter", "filter modal theme": "filter",
 
     # Sort
     "sort": "sort", "sort by": "sort", "sorting": "sort", "sort dropdown": "sort",
@@ -1108,8 +1111,10 @@ RULES:
 1. STRICT ELEMENT FIDELITY:
    - When user says "notification dropdown", "notification drawer", "notification drow down", or "notification":
      Target 'notification'. Set notification_drawer_bg (and notification_bg) for background, and notification_drawer_text (and notification_text) for text.
-   - When user says "filter theme", "filter background", or "filters":
-     Target 'filter'. Set filter_bg for background, filter_text_color for text, filter_card_bg/filter_btn_bg for buttons, and filter_border_color for borders.
+   - When user says "filter theme", "filter background", "filter popup", "filter pop up", "filter modal", or "filter dropdown":
+     Target 'filter'. Set BOTH filter_bg AND filter_modal_bg for background, filter_text_color (and filter_modal_text) for text, and filter_btn_bg/filter_card_bg/filter_accent_color for buttons. If user asks for red background and green buttons (red and green theme), set filter_bg='#FF0000', filter_modal_bg='#FF0000', filter_btn_bg='#00FF00', filter_accent_color='#00FF00'.
+   - When user says "product detail text", "text of product detail page", or "product detail page text":
+     Target 'product_detail'. Set product_detail_text with the requested color.
    - When user says "carousel background", target section_background (outer_bg_color and grid_bg).
    - When user says "card background", target card_background (card_bg).
    - When user says "boxy card" or "sharp corners", target card_radius with value 0.
@@ -1141,6 +1146,10 @@ RULES:
    - When user says "crowsels", "all carousels", "crowsel theme", or "other carousel as well":
      Emit actions for BOTH 'product_carousel' AND 'section_group_carousel'. Never leave one carousel white while styling the other.
 6. CONVERSATIONAL FOLLOW-UP & MEMORY:
+   - When user says "no it didn't change, make it red for product detail and for cards as well" or "make it red for X and for cards as well":
+     Identify what "it" refers to! If recent discussion or request was about text color, "it" refers to TEXT COLOR!
+     Emit actions for BOTH product_detail (product_detail_text) AND card (card_text_color, product_name_color).
+     NEVER emit card_bg or background when user asks for text color!
    - When user says "not just product carousel other all carousel as well" or "make other carousel as well":
      Inspect Recent Chat History to identify the active theme colors (e.g. yellow #FFFF00).
      Apply that SAME color to section_group_carousel. NEVER default to white (#FFFFFF)!
@@ -1352,28 +1361,39 @@ CANONICAL_COMPONENT_PROPERTY_MAP: Dict[str, Dict[str, Union[str, List[str]]]] = 
         "profile_dropdown_border": "profile_dropdown_border",
     },
     "filter": {
-        "background": "filter_bg",
-        "bg": "filter_bg",
-        "background_color": "filter_bg",
-        "filter_bg": "filter_bg",
+        "background": ["filter_bg", "filter_modal_bg"],
+        "bg": ["filter_bg", "filter_modal_bg"],
+        "background_color": ["filter_bg", "filter_modal_bg"],
+        "filter_bg": ["filter_bg", "filter_modal_bg"],
+        "filter_modal_bg": ["filter_modal_bg", "filter_bg"],
+        "modal_bg": ["filter_modal_bg", "filter_bg"],
+        "modal_background": ["filter_modal_bg", "filter_bg"],
+        "popup_bg": ["filter_modal_bg", "filter_bg"],
+        "popup_background": ["filter_modal_bg", "filter_bg"],
+        "dropdown_bg": ["filter_modal_bg", "filter_bg"],
         "card_bg": ["filter_card_bg", "filter_btn_bg"],
-        "button_bg": ["filter_btn_bg", "filter_card_bg"],
-        "btn_bg": ["filter_btn_bg", "filter_card_bg"],
+        "button_bg": ["filter_btn_bg", "filter_card_bg", "filter_accent_color"],
+        "btn_bg": ["filter_btn_bg", "filter_card_bg", "filter_accent_color"],
+        "button_color": ["filter_btn_bg", "filter_card_bg", "filter_accent_color"],
+        "buttons": ["filter_btn_bg", "filter_card_bg", "filter_accent_color"],
         "filter_card_bg": ["filter_card_bg", "filter_btn_bg"],
-        "filter_btn_bg": ["filter_btn_bg", "filter_card_bg"],
-        "text": ["filter_text_color", "filter_btn_text"],
-        "text_color": ["filter_text_color", "filter_btn_text"],
-        "font_color": ["filter_text_color", "filter_btn_text"],
-        "filter_text_color": ["filter_text_color", "filter_btn_text"],
+        "filter_btn_bg": ["filter_btn_bg", "filter_card_bg", "filter_accent_color"],
+        "text": ["filter_text_color", "filter_modal_text", "filter_btn_text"],
+        "text_color": ["filter_text_color", "filter_modal_text", "filter_btn_text"],
+        "modal_text": ["filter_modal_text", "filter_text_color"],
+        "popup_text": ["filter_modal_text", "filter_text_color"],
+        "filter_modal_text": ["filter_modal_text", "filter_text_color"],
+        "font_color": ["filter_text_color", "filter_modal_text", "filter_btn_text"],
+        "filter_text_color": ["filter_text_color", "filter_modal_text"],
         "button_text": "filter_btn_text",
         "btn_text": "filter_btn_text",
         "filter_btn_text": "filter_btn_text",
         "border": "filter_border_color",
         "border_color": "filter_border_color",
         "filter_border_color": "filter_border_color",
-        "accent": "filter_accent_color",
-        "accent_color": "filter_accent_color",
-        "filter_accent_color": "filter_accent_color",
+        "accent": ["filter_accent_color", "filter_btn_bg"],
+        "accent_color": ["filter_accent_color", "filter_btn_bg"],
+        "filter_accent_color": ["filter_accent_color", "filter_btn_bg"],
         "radius": "filter_radius",
         "border_radius": "filter_radius",
         "filter_radius": "filter_radius",
@@ -1637,15 +1657,19 @@ CANONICAL_COMPONENT_PROPERTY_MAP: Dict[str, Dict[str, Union[str, List[str]]]] = 
     "product_detail": {
         "background": "product_detail_bg",
         "bg": "product_detail_bg",
+        "panel_color": "product_detail_bg",
+        "background_color": "product_detail_bg",
         "product_detail_bg": "product_detail_bg",
         "text": "product_detail_text",
         "text_color": "product_detail_text",
         "product_detail_text": "product_detail_text",
         "button_bg": "product_detail_btn_bg",
         "btn_bg": "product_detail_btn_bg",
+        "button_bg_color": "product_detail_btn_bg",
         "product_detail_btn_bg": "product_detail_btn_bg",
         "button_text": "product_detail_btn_text",
         "btn_text": "product_detail_btn_text",
+        "button_text_color": "product_detail_btn_text",
         "product_detail_btn_text": "product_detail_btn_text",
         "radius": "product_detail_radius",
         "border_radius": "product_detail_radius",
@@ -1656,10 +1680,13 @@ CANONICAL_COMPONENT_PROPERTY_MAP: Dict[str, Dict[str, Union[str, List[str]]]] = 
         "bg": ["card_bg_color", "card_bg"],
         "card_bg": ["card_bg_color", "card_bg"],
         "card_bg_color": ["card_bg_color", "card_bg"],
-        "text": ["card_text_color", "product_name_color"],
-        "text_color": ["card_text_color", "product_name_color"],
-        "card_text_color": ["card_text_color", "product_name_color"],
-        "title_color": ["card_text_color", "product_name_color"],
+        "text": ["card_text_color", "product_name_color", "product_title_color"],
+        "text_color": ["card_text_color", "product_name_color", "product_title_color"],
+        "card_text": ["card_text_color", "product_name_color", "product_title_color"],
+        "card_text_color": ["card_text_color", "product_name_color", "product_title_color"],
+        "product_name_color": ["card_text_color", "product_name_color", "product_title_color"],
+        "product_title_color": ["card_text_color", "product_name_color", "product_title_color"],
+        "title_color": ["card_text_color", "product_name_color", "product_title_color"],
         "price_color": "price_color",
         "radius": ["card_radius", "border_radius"],
         "card_radius": ["card_radius", "border_radius"],
@@ -1847,6 +1874,24 @@ def execute_design_actions(
                     applied_patch["navbar_border_color"] = val
                     applied_patch["navbar_outer_bg"] = val
                     theme_keys_changed.extend(["navbar_border_color", "navbar_outer_bg"])
+                elif p in ("filter_bg", "filter_modal_bg"):
+                    theme["filter_bg"] = val
+                    theme["filter_modal_bg"] = val
+                    applied_patch["filter_bg"] = val
+                    applied_patch["filter_modal_bg"] = val
+                    theme_keys_changed.extend(["filter_bg", "filter_modal_bg"])
+                elif p in ("filter_text_color", "filter_modal_text"):
+                    theme["filter_text_color"] = val
+                    theme["filter_modal_text"] = val
+                    applied_patch["filter_text_color"] = val
+                    applied_patch["filter_modal_text"] = val
+                    theme_keys_changed.extend(["filter_text_color", "filter_modal_text"])
+                elif p in ("card_text_color", "product_name_color", "product_title_color"):
+                    theme["card_text_color"] = val
+                    theme["product_name_color"] = val
+                    applied_patch["card_text_color"] = val
+                    applied_patch["product_name_color"] = val
+                    theme_keys_changed.extend(["card_text_color", "product_name_color"])
 
             # Apply to page blocks
             for page in pages:
@@ -1870,9 +1915,32 @@ def execute_design_actions(
                     elif p in ("card_radius", "border_radius"):
                         bprops["card_radius"] = val
                         bprops["border_radius"] = val
-                    elif p in ("card_text_color", "product_name_color"):
+                    elif p in ("card_text_color", "product_name_color", "product_title_color"):
                         bprops["card_text_color"] = val
                         bprops["product_name_color"] = val
+                        bprops["product_title_color"] = val
+                    elif p in ("product_detail_text", "text_color") and ("product_detail" in norm_btype or comp == "product_detail"):
+                        bprops["product_detail_text"] = val
+                        bprops["text_color"] = val
+                    elif p in ("product_detail_bg", "panel_color", "background_color") and ("product_detail" in norm_btype or comp == "product_detail"):
+                        bprops["product_detail_bg"] = val
+                        bprops["panel_color"] = val
+                        bprops["background_color"] = val
+                    elif p in ("product_detail_btn_bg", "button_bg_color") and ("product_detail" in norm_btype or comp == "product_detail"):
+                        bprops["product_detail_btn_bg"] = val
+                        bprops["button_bg_color"] = val
+                    elif p in ("product_detail_btn_text", "button_text_color") and ("product_detail" in norm_btype or comp == "product_detail"):
+                        bprops["product_detail_btn_text"] = val
+                        bprops["button_text_color"] = val
+                    elif p in ("filter_bg", "filter_modal_bg"):
+                        bprops["filter_bg"] = val
+                        bprops["filter_modal_bg"] = val
+                    elif p in ("filter_text_color", "filter_modal_text"):
+                        bprops["filter_text_color"] = val
+                        bprops["filter_modal_text"] = val
+                    elif p in ("filter_btn_bg", "filter_card_bg"):
+                        bprops["filter_btn_bg"] = val
+                        bprops["filter_card_bg"] = val
                     elif p in ("title_color", "grid_text_color"):
                         bprops["title_color"] = val
                         bprops["grid_text_color"] = val

@@ -1469,10 +1469,10 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
     accentText: defaultAccentText,
   } = resolveThemeTokens(theme);
   const panelBg =
-    panel_color ||
-    background_color ||
     (theme as any)?.product_detail_bg ||
     (theme as any)?.detail_bg ||
+    panel_color ||
+    background_color ||
     defaultCardBg;
 
   // Determine dark vs light directly from the panel's own surface background!
@@ -1481,7 +1481,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
 
   // Derive high-contrast typography and subtle elements relative to the panel surface!
   const surfaceDefaultText = isPanelDark ? "#f8fafc" : "#0f172a";
-  const rawRequestedText = text_color || (theme as any)?.product_detail_text;
+  const rawRequestedText = (theme as any)?.product_detail_text || text_color;
 
   const pageText =
     rawRequestedText
@@ -1490,17 +1490,21 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
       ? defaultTextColor
       : surfaceDefaultText;
 
-  const mutedText = isPanelDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.68)";
-  const subtleText = isPanelDark ? "rgba(248, 250, 252, 0.50)" : "rgba(15, 23, 42, 0.50)";
+  const mutedText = rawRequestedText
+    ? (rawRequestedText.startsWith("#") && rawRequestedText.length === 7 ? `${rawRequestedText}cc` : rawRequestedText)
+    : isPanelDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.68)";
+  const subtleText = rawRequestedText
+    ? (rawRequestedText.startsWith("#") && rawRequestedText.length === 7 ? `${rawRequestedText}99` : rawRequestedText)
+    : isPanelDark ? "rgba(248, 250, 252, 0.50)" : "rgba(15, 23, 42, 0.50)";
 
   const activeBtnBg =
-    button_bg_color ||
     (theme as any)?.product_detail_btn_bg ||
+    button_bg_color ||
     defaultAccent;
 
   const activeBtnTextColor =
-    button_text_color ||
     (theme as any)?.product_detail_btn_text ||
+    button_text_color ||
     (isColorDarkHex(activeBtnBg) ? "#ffffff" : "#0f172a");
 
   const accentColor = activeBtnBg;
