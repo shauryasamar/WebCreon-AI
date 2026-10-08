@@ -398,7 +398,7 @@ export const ALL_COMPONENT_OVERRIDE_KEYS = [
   "checkout_steps_bg", "checkout_steps_border", "checkout_steps_text",
   "notification_drawer_bg", "notification_drawer_text", "notification_bg", "notification_text", "notification_border_color",
   "profile_dropdown_bg", "profile_dropdown_text", "profile_dropdown_border",
-  "support_bg", "support_card_bg", "support_text_color", "support_accent_color", "support_border_color", "customer_bubble_bg", "customer_bubble_text", "agent_bubble_bg", "agent_bubble_text",
+  "support_bg", "support_card_bg", "support_chat_bg", "support_surface_bg", "support_text_color", "support_muted_text", "support_accent_color", "support_border_color", "customer_bubble_bg", "customer_bubble_text", "agent_bubble_bg", "agent_bubble_text",
   "grid_bg", "grid_text_color", "outer_bg_color"
 ];
 
@@ -573,6 +573,44 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
         if (targetTheme.order_history_radius !== undefined) {
           updatedProps.card_radius = targetTheme.order_history_radius;
           updatedProps.order_history_radius = targetTheme.order_history_radius;
+        }
+      } else if (
+        btype === "customer_support" ||
+        btype === "customersupport" ||
+        btype === "support_desk" ||
+        btype === "support" ||
+        block.id === "customer_support" ||
+        block.id === "support"
+      ) {
+        if (targetTheme.support_bg) {
+          updatedProps.primary_bg = targetTheme.support_bg;
+          updatedProps.page_bg = targetTheme.support_bg;
+          updatedProps.support_bg = targetTheme.support_bg;
+        }
+        if (targetTheme.support_card_bg) {
+          updatedProps.card_bg = targetTheme.support_card_bg;
+          updatedProps.support_card_bg = targetTheme.support_card_bg;
+        }
+        if (targetTheme.support_chat_bg) {
+          updatedProps.chat_bg = targetTheme.support_chat_bg;
+          updatedProps.support_chat_bg = targetTheme.support_chat_bg;
+        }
+        if (targetTheme.support_text_color) {
+          updatedProps.text_color = targetTheme.support_text_color;
+          updatedProps.title_color = targetTheme.support_text_color;
+          updatedProps.support_text_color = targetTheme.support_text_color;
+        }
+        if (targetTheme.support_muted_text) {
+          updatedProps.subtext_color = targetTheme.support_muted_text;
+          updatedProps.support_muted_text = targetTheme.support_muted_text;
+        }
+        if (targetTheme.support_border_color) {
+          updatedProps.border_color = targetTheme.support_border_color;
+          updatedProps.support_border_color = targetTheme.support_border_color;
+        }
+        if (targetTheme.support_accent_color) {
+          updatedProps.accent_color = targetTheme.support_accent_color;
+          updatedProps.support_accent_color = targetTheme.support_accent_color;
         }
       }
 

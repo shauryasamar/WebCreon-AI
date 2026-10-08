@@ -729,6 +729,14 @@ COMPONENT_ALIASES = {
     # Support
     "support": "support", "help and support": "support", "customer support": "support",
     "help desk": "support", "support desk": "support", "support chat": "support", "ticket": "support",
+    "help and support page": "support", "help and support page theme": "support",
+    "help and support theme": "support", "help and support background": "support",
+    "help and support page background": "support",
+    "support page": "support", "support page theme": "support", "support page background": "support",
+    "customer support page": "support", "customer support page theme": "support",
+    "customer support desk": "support", "support desk page": "support",
+    "help page": "support", "help page theme": "support", "help desk page": "support",
+    "support cards": "support", "support card": "support", "support chat theme": "support",
 
     # Notification
     "notification": "notification", "notifications": "notification", "notification drawer": "notification",
@@ -1177,6 +1185,11 @@ RULES:
      Target 'order_history': set order_history_card_bg='#FFFF00' (yellow card), order_history_text='#0000FF' (blue text), and order_history_border='#0000FF' (blue border).
    - When user says "make the card of order history as red please":
      Target 'order_history': set order_history_card_bg='#FF0000' and ensure text is contrasting (#FFFFFF). NEVER make text red.
+   - When user says "change the theme of help and support page to red please" or "help and support page theme to red":
+     The user wants the full Help & Support page styled in red!
+     Target 'support': set support_bg='#FF0000', support_card_bg='#FF0000', support_chat_bg='#FF0000', support_text_color='#FFFFFF', and support_border_color='#FFFFFF'. NEVER update only chat and leave the outer page or header unsynchronized!
+   - When user says "change the background color to pink for help and support page" or "background color to pink for support page":
+     Target 'support': set support_bg='#FFC0CB' (or '#FF69B4') with contrasting text. NEVER confuse with chat-only or global store background!
 7. Only emit actions for properties explicitly mentioned or directly implied by the request. Never modify unrequested attributes.
 8. If user specifies a relative change (e.g. "make navbar taller"), compute the new value from Current Theme (e.g. current 64 -> 80).
 9. If glassmorphism/frosted glass requested, set visual_style='glassmorphic' and surface_materiality='glass_navbar' (or 'full_glass').
@@ -1307,7 +1320,7 @@ COMPONENT_BLOCK_TARGETS: Dict[str, List[str]] = {
     "filter": ["filter", "filtertoolbar"],
     "pagination": ["pagination", "pager"],
     "review": ["review", "reviews", "ratings"],
-    "support": ["support", "customersupport", "helpdesk"],
+    "support": ["support", "customersupport", "helpdesk", "supportdesk"],
     "order_history": ["orderhistory", "customerorders"],
 }
 
@@ -1341,6 +1354,7 @@ BG_TO_TEXT_MAP: Dict[str, Tuple[str, str]] = {
     "review_card_bg": ("review", "review_text_color"),
     "support_bg": ("support", "support_text_color"),
     "support_card_bg": ("support", "support_text_color"),
+    "support_chat_bg": ("support", "support_text_color"),
     "order_history_bg": ("order_history", "order_history_text"),
     "order_history_card_bg": ("order_history", "order_history_text"),
     "notification_drawer_bg": ("notification", "notification_drawer_text"),
@@ -1641,16 +1655,26 @@ CANONICAL_COMPONENT_PROPERTY_MAP: Dict[str, Dict[str, Union[str, List[str]]]] = 
     "support": {
         "background": "support_bg",
         "bg": "support_bg",
+        "page_bg": "support_bg",
+        "primary_bg": "support_bg",
         "support_bg": "support_bg",
         "card_bg": "support_card_bg",
+        "card_background": "support_card_bg",
+        "card": "support_card_bg",
+        "cards": "support_card_bg",
         "support_card_bg": "support_card_bg",
         "chat_bg": "support_chat_bg",
+        "chat_background": "support_chat_bg",
+        "chat": "support_chat_bg",
         "support_chat_bg": "support_chat_bg",
         "text": "support_text_color",
         "text_color": "support_text_color",
+        "title_color": "support_text_color",
+        "card_text": "support_text_color",
         "support_text_color": "support_text_color",
         "muted": "support_muted_text",
         "muted_text": "support_muted_text",
+        "subtext_color": "support_muted_text",
         "support_muted_text": "support_muted_text",
         "accent": "support_accent_color",
         "accent_color": "support_accent_color",
@@ -1658,6 +1682,10 @@ CANONICAL_COMPONENT_PROPERTY_MAP: Dict[str, Dict[str, Union[str, List[str]]]] = 
         "border": "support_border_color",
         "border_color": "support_border_color",
         "support_border_color": "support_border_color",
+        "customer_bubble_bg": "support_customer_bubble_bg",
+        "customer_bubble": "support_customer_bubble_bg",
+        "agent_bubble_bg": "support_agent_bubble_bg",
+        "agent_bubble": "support_agent_bubble_bg",
     },
     "order_history": {
         "background": "order_history_bg",
@@ -1952,6 +1980,42 @@ def execute_design_actions(
                         applied_patch["order_history_border"] = val
                         if "order_history_border" not in theme_keys_changed:
                             theme_keys_changed.append("order_history_border")
+                elif comp == "support":
+                    if p in ("support_bg", "page_bg", "primary_bg", "background", "bg"):
+                        theme["support_bg"] = val
+                        applied_patch["support_bg"] = val
+                        if "support_bg" not in theme_keys_changed:
+                            theme_keys_changed.append("support_bg")
+                    elif p in ("support_card_bg", "card_bg", "card_bg_color", "card"):
+                        theme["support_card_bg"] = val
+                        applied_patch["support_card_bg"] = val
+                        if "support_card_bg" not in theme_keys_changed:
+                            theme_keys_changed.append("support_card_bg")
+                    elif p in ("support_chat_bg", "chat_bg", "chat"):
+                        theme["support_chat_bg"] = val
+                        applied_patch["support_chat_bg"] = val
+                        if "support_chat_bg" not in theme_keys_changed:
+                            theme_keys_changed.append("support_chat_bg")
+                    elif p in ("support_text_color", "title_color", "text_color", "text"):
+                        theme["support_text_color"] = val
+                        applied_patch["support_text_color"] = val
+                        if "support_text_color" not in theme_keys_changed:
+                            theme_keys_changed.append("support_text_color")
+                    elif p in ("support_muted_text", "muted_text", "subtext_color"):
+                        theme["support_muted_text"] = val
+                        applied_patch["support_muted_text"] = val
+                        if "support_muted_text" not in theme_keys_changed:
+                            theme_keys_changed.append("support_muted_text")
+                    elif p in ("support_border_color", "border_color", "border"):
+                        theme["support_border_color"] = val
+                        applied_patch["support_border_color"] = val
+                        if "support_border_color" not in theme_keys_changed:
+                            theme_keys_changed.append("support_border_color")
+                    elif p in ("support_accent_color", "accent_color", "accent"):
+                        theme["support_accent_color"] = val
+                        applied_patch["support_accent_color"] = val
+                        if "support_accent_color" not in theme_keys_changed:
+                            theme_keys_changed.append("support_accent_color")
 
             # Apply to page blocks
             for page in pages:
@@ -2025,6 +2089,30 @@ def execute_design_actions(
                         bprops["order_history_radius"] = val
                         bprops["card_radius"] = val
                         bprops["border_radius"] = val
+                    elif p in ("support_bg", "page_bg", "primary_bg", "background") and ("support" in norm_btype or comp == "support"):
+                        bprops["support_bg"] = val
+                        bprops["primary_bg"] = val
+                        bprops["page_bg"] = val
+                    elif p in ("support_card_bg", "card_bg", "card_bg_color") and ("support" in norm_btype or comp == "support"):
+                        bprops["support_card_bg"] = val
+                        bprops["card_bg"] = val
+                        bprops["card_bg_color"] = val
+                    elif p in ("support_chat_bg", "chat_bg") and ("support" in norm_btype or comp == "support"):
+                        bprops["support_chat_bg"] = val
+                        bprops["chat_bg"] = val
+                    elif p in ("support_text_color", "text_color", "title_color") and ("support" in norm_btype or comp == "support"):
+                        bprops["support_text_color"] = val
+                        bprops["title_color"] = val
+                        bprops["text_color"] = val
+                    elif p in ("support_muted_text", "muted_text", "subtext_color") and ("support" in norm_btype or comp == "support"):
+                        bprops["support_muted_text"] = val
+                        bprops["subtext_color"] = val
+                    elif p in ("support_border_color", "border_color") and ("support" in norm_btype or comp == "support"):
+                        bprops["support_border_color"] = val
+                        bprops["border_color"] = val
+                    elif p in ("support_accent_color", "accent_color") and ("support" in norm_btype or comp == "support"):
+                        bprops["support_accent_color"] = val
+                        bprops["accent_color"] = val
                     elif p in ("title_color", "grid_text_color"):
                         bprops["title_color"] = val
                         bprops["grid_text_color"] = val

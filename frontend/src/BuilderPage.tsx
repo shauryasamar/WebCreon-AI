@@ -431,6 +431,19 @@ function StorefrontShell({
       (typeof window !== "undefined" &&
         (window.location.pathname.endsWith("/support") || window.location.pathname.includes("/support")))
     );
+  const isOrdersPath =
+    Boolean(
+      page?.route === "/orders" ||
+      page?.role === "orders" ||
+      page?.id === "orders" ||
+      (typeof window !== "undefined" &&
+        (window.location.pathname.endsWith("/orders") || window.location.pathname.includes("/orders")))
+    );
+  const resolvedShellBg = isSupportPath
+    ? (siteDefinition.theme?.support_bg || siteDefinition.theme?.primary_bg)
+    : isOrdersPath
+      ? (siteDefinition.theme?.order_history_bg || siteDefinition.theme?.primary_bg)
+      : siteDefinition.theme?.primary_bg;
 
   const navbarBlockRef = useRef<HTMLDivElement | null>(null);
   const footerBlockRef = useRef<HTMLDivElement | null>(null);
@@ -521,15 +534,15 @@ function StorefrontShell({
         flexDirection: "column",
         zIndex: 1,
         isolation: "isolate",
-        background: siteDefinition.theme?.primary_bg || "#ffffff",
+        background: resolvedShellBg || "#ffffff",
       }}
     >
       <FestiveBackgroundOverlay
         festivalTheme={siteDefinition.theme?.festival_theme}
-        backgroundColor={siteDefinition.theme?.primary_bg}
+        backgroundColor={resolvedShellBg}
         isDark={
           siteDefinition.theme?.mode === "dark" ||
-          isColorDarkHex(siteDefinition.theme?.primary_bg)
+          isColorDarkHex(resolvedShellBg)
         }
       />
 

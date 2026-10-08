@@ -528,18 +528,22 @@ export default function CustomerSupportPage({
   const badgeRadius = parseDimension(blockProps?.badge_radius, "4px");
 
   // Consistent theme colors inheriting dynamically from active store theme
-  const accentColor = blockProps?.accent_color || activeTheme.support_accent_color || activeTheme.accent_color || themeTokens.accentColor;
-  const primaryBg = blockProps?.primary_bg || activeTheme.support_bg || activeTheme.primary_bg || themeTokens.primaryBg;
-  const cardBg = blockProps?.card_bg || activeTheme.support_card_bg || activeTheme.card_bg || themeTokens.cardBg;
-  const surfaceBg = blockProps?.surface_bg || activeTheme.support_surface_bg || activeTheme.secondary_bg || themeTokens.secondaryBg;
-  const chatBg = blockProps?.chat_bg || activeTheme.support_chat_bg || cardBg;
+  const accentColor = (activeTheme as any)?.support_accent_color || blockProps?.support_accent_color || blockProps?.accent_color || (activeTheme as any)?.accent_color || themeTokens.accentColor || "#2563eb";
+  const primaryBg = (activeTheme as any)?.support_bg || blockProps?.support_bg || blockProps?.page_bg || blockProps?.primary_bg || (activeTheme as any)?.primary_bg || themeTokens.primaryBg;
+  const cardBg = (activeTheme as any)?.support_card_bg || blockProps?.support_card_bg || blockProps?.card_bg || (activeTheme as any)?.card_bg || themeTokens.cardBg;
+  const chatBg = (activeTheme as any)?.support_chat_bg || blockProps?.support_chat_bg || blockProps?.chat_bg || cardBg;
 
   const isPrimaryDark = isColorDarkHex(primaryBg);
   const isCardDark = isColorDarkHex(cardBg);
-  const isSurfaceDark = isColorDarkHex(surfaceBg);
   const isChatDark = isColorDarkHex(chatBg);
 
-  const rawTextColor = blockProps?.text_color || activeTheme.support_text_color || activeTheme.text_color || themeTokens.textColor;
+  // Self-contained surfaceBg that matches cardBg/chatBg and never leaks external store secondary_bg (e.g. yellow/mismatched)
+  const surfaceBg = (activeTheme as any)?.support_surface_bg || blockProps?.support_surface_bg || (
+    isChatDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.035)"
+  );
+  const isSurfaceDark = isColorDarkHex(surfaceBg) || isChatDark;
+
+  const rawTextColor = (activeTheme as any)?.support_text_color || blockProps?.support_text_color || blockProps?.text_color || (activeTheme as any)?.text_color || themeTokens.textColor;
   const textColor = (rawTextColor && (isColorDarkHex(rawTextColor) !== isCardDark))
     ? rawTextColor
     : (isCardDark ? "#f8fafc" : "#0f172a");
@@ -550,24 +554,26 @@ export default function CustomerSupportPage({
 
   const titleColor = blockProps?.title_color || textColor;
 
-  const rawTextMuted = blockProps?.subtext_color || activeTheme.support_muted_text || activeTheme.muted_text || activeTheme.muted_text_color || themeTokens.mutedTextColor;
+  const rawTextMuted = (activeTheme as any)?.support_muted_text || blockProps?.support_muted_text || blockProps?.subtext_color || (activeTheme as any)?.muted_text || themeTokens.mutedTextColor;
   const textMuted = (rawTextMuted && (isColorDarkHex(rawTextMuted) !== isCardDark))
     ? rawTextMuted
-    : (isCardDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)");
+    : (isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
 
   const pageHeaderMuted = (rawTextMuted && (isColorDarkHex(rawTextMuted) !== isPrimaryDark))
     ? rawTextMuted
-    : (isPrimaryDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)");
+    : (isPrimaryDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
 
-  const borderColor = blockProps?.border_color || activeTheme.support_border_color || activeTheme.border_color || (isCardDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
-  const buttonTextColor = blockProps?.button_text_color || activeTheme.accent_text || themeTokens.accentText || "#ffffff";
+  const borderColor = (activeTheme as any)?.support_border_color || blockProps?.support_border_color || blockProps?.border_color || (activeTheme as any)?.border_color || (isCardDark ? "rgba(255, 255, 255, 0.14)" : "rgba(15, 23, 42, 0.12)");
+  const buttonTextColor = blockProps?.button_text_color || (activeTheme as any)?.accent_text || themeTokens.accentText || "#ffffff";
 
-  const isLightInput = isLight && !isCardDark;
-  const inputBg = blockProps?.input_bg || (isLightInput ? "#ffffff" : (activeTheme.secondary_bg || (isCardDark ? "rgba(255, 255, 255, 0.06)" : "#ffffff")));
+  // Self-contained inputBg that never leaks store-wide secondary_bg (yellow/orange/etc.)
+  const inputBg = blockProps?.input_bg || (activeTheme as any)?.support_input_bg || (
+    isCardDark ? "rgba(255, 255, 255, 0.08)" : "#ffffff"
+  );
   const isInputDark = isColorDarkHex(inputBg);
-  const inputBorder = blockProps?.input_border || (isInputDark ? "rgba(255, 255, 255, 0.16)" : "rgba(15, 23, 42, 0.16)");
+  const inputBorder = blockProps?.input_border || (isCardDark ? "rgba(255, 255, 255, 0.18)" : "rgba(15, 23, 42, 0.14)");
 
-  const rawInputTextColor = blockProps?.input_text_color || textColor;
+  const rawInputTextColor = blockProps?.input_text_color || (activeTheme as any)?.support_input_text_color;
   const inputTextColor = (rawInputTextColor && (isColorDarkHex(rawInputTextColor) !== isInputDark))
     ? rawInputTextColor
     : (isInputDark ? "#f8fafc" : "#0f172a");
@@ -1969,8 +1975,10 @@ export default function CustomerSupportPage({
                         padding: "7px 14px",
                         borderRadius: buttonRadius,
                         border: activeTab === "inquiries" ? `1.5px solid ${accentColor}` : `1px solid ${borderColor}`,
-                        background: activeTab === "inquiries" ? `${accentColor}14` : cardBg,
-                        color: activeTab === "inquiries" ? accentColor : textMuted,
+                        background: activeTab === "inquiries"
+                          ? (isPrimaryDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)")
+                          : cardBg,
+                        color: activeTab === "inquiries" ? pageHeaderTextColor : pageHeaderMuted,
                         fontSize: "12.5px",
                         fontWeight: activeTab === "inquiries" ? 700 : 600,
                         cursor: "pointer",
@@ -2288,12 +2296,12 @@ export default function CustomerSupportPage({
                                   borderRadius: innerRadius,
                                   cursor: "pointer",
                                   background: isSelected
-                                    ? (isLight
-                                      ? `${accentColor}12`
-                                      : `${accentColor}22`)
-                                    : (isLight
-                                      ? (cardBg === "#ffffff" ? "#f8fafc" : cardBg)
-                                      : "rgba(255,255,255,0.04)"),
+                                    ? (isCardDark
+                                      ? "rgba(255, 255, 255, 0.14)"
+                                      : `${accentColor}15`)
+                                    : (isCardDark
+                                      ? "rgba(255, 255, 255, 0.04)"
+                                      : (cardBg === "#ffffff" ? "#f8fafc" : cardBg)),
                                   border: isSelected
                                     ? `1.5px solid ${accentColor}`
                                     : `1px solid ${borderColor}`,
@@ -2308,13 +2316,13 @@ export default function CustomerSupportPage({
                                 onMouseEnter={(e) => {
                                   if (!isSelected) {
                                     e.currentTarget.style.borderColor = `${accentColor}70`;
-                                    e.currentTarget.style.background = isLight ? "rgba(15,23,42,0.03)" : "rgba(255,255,255,0.06)";
+                                    e.currentTarget.style.background = isCardDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.03)";
                                   }
                                 }}
                                 onMouseLeave={(e) => {
                                   if (!isSelected) {
                                     e.currentTarget.style.borderColor = borderColor;
-                                    e.currentTarget.style.background = isLight ? (cardBg === "#ffffff" ? "#f8fafc" : cardBg) : "rgba(255,255,255,0.03)";
+                                    e.currentTarget.style.background = isCardDark ? "rgba(255,255,255,0.04)" : (cardBg === "#ffffff" ? "#f8fafc" : cardBg);
                                   }
                                 }}
                               >
@@ -3149,7 +3157,7 @@ export default function CustomerSupportPage({
                                     height: "32px",
                                     borderRadius: "50%",
                                     border: `1px solid ${borderColor}`,
-                                    background: chatImage ? `${accentColor}18` : isLight ? (cardBg === "#ffffff" ? "#f8fafc" : "rgba(0,0,0,0.04)") : "rgba(255,255,255,0.06)",
+                                    background: chatImage ? `${accentColor}18` : (isCardDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)"),
                                     color: chatImage ? accentColor : textMuted,
                                     display: "grid",
                                     placeItems: "center",
