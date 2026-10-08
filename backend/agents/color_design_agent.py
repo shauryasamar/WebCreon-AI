@@ -715,7 +715,16 @@ COMPONENT_ALIASES = {
 
     # Order History
     "order_history": "order_history", "order history": "order_history", "orders page": "order_history",
-    "my orders": "order_history", "orders list": "order_history", "order card": "order_history",
+    "order page": "order_history", "order history page": "order_history", "orders history page": "order_history",
+    "orders history": "order_history", "customer orders": "order_history", "customer orders page": "order_history",
+    "my orders": "order_history", "orders list": "order_history", "order list": "order_history",
+    "order card": "order_history", "order cards": "order_history",
+    "order history cards": "order_history", "order history card": "order_history",
+    "order history card theme": "order_history", "order history cards theme": "order_history",
+    "cards of order history": "order_history", "card of order history": "order_history",
+    "cards of order history theme": "order_history", "card of order history theme": "order_history",
+    "cards on order history": "order_history", "card on order history": "order_history",
+    "cards in order history": "order_history", "card in order history": "order_history",
 
     # Support
     "support": "support", "help and support": "support", "customer support": "support",
@@ -1123,6 +1132,16 @@ RULES:
      Set BOTH navbar_bg and navbar_outer_bg to ensure the inner shell and outer wrapper never clash or retain stale colors.
    - When user says "outer border of navbar", "outer border", or "outer background":
      Target BOTH navbar_outer_bg and navbar_border_color with the user's requested color.
+   - When user says "order page", "order history page", "orders page", "order history", "orders", or "my orders":
+     Target 'order_history'.
+     - If user asks for a theme color (e.g. "make the order page theme as well to blue color" or "the order history page make it blue theme"):
+       Target 'order_history'. Set BOTH order_history_bg (page background) AND order_history_card_bg (card background) to the requested color (or harmonize page bg and cards), and set contrasting readable text (e.g. white #FFFFFF for dark blue #0000FF).
+     - When user says "cards of order history", "order history cards", or "card of order history":
+       Target 'order_history' with order_history_card_bg!
+       - If user specifies multiple colors (e.g. "cards of order history make it yellow and blue theme"):
+         Set order_history_card_bg='#FFFF00' (yellow cards), order_history_text='#0000FF' (blue text), and order_history_border='#0000FF' (blue border).
+       - If user specifies a single card color (e.g. "make the card of order history as red please"):
+         Set order_history_card_bg='#FF0000' (red card). Do NOT set text to red! Keep or set text to high-contrast white (#FFFFFF) for dark red backgrounds.
 2. MATCHING / SYNCING THEME TO WEBPAGE OR NAVBAR:
    - When user says "make the theme same as webpage theme, for notification, the yellow webpage or navbar theme", "make notification same as navbar", or "match filter to navbar theme":
      Target that specific component ('notification', 'filter', etc.).
@@ -1153,6 +1172,11 @@ RULES:
    - When user says "not just product carousel other all carousel as well" or "make other carousel as well":
      Inspect Recent Chat History to identify the active theme colors (e.g. yellow #FFFF00).
      Apply that SAME color to section_group_carousel. NEVER default to white (#FFFFFF)!
+   - When user says "not just ther background the cards of order history make it yellow and blue theme please,":
+     The user is saying that the page background was updated previously, but the CARDS of order history also need styling!
+     Target 'order_history': set order_history_card_bg='#FFFF00' (yellow card), order_history_text='#0000FF' (blue text), and order_history_border='#0000FF' (blue border).
+   - When user says "make the card of order history as red please":
+     Target 'order_history': set order_history_card_bg='#FF0000' and ensure text is contrasting (#FFFFFF). NEVER make text red.
 7. Only emit actions for properties explicitly mentioned or directly implied by the request. Never modify unrequested attributes.
 8. If user specifies a relative change (e.g. "make navbar taller"), compute the new value from Current Theme (e.g. current 64 -> 80).
 9. If glassmorphism/frosted glass requested, set visual_style='glassmorphic' and surface_materiality='glass_navbar' (or 'full_glass').
@@ -1638,19 +1662,34 @@ CANONICAL_COMPONENT_PROPERTY_MAP: Dict[str, Dict[str, Union[str, List[str]]]] = 
     "order_history": {
         "background": "order_history_bg",
         "bg": "order_history_bg",
+        "page_bg": "order_history_bg",
         "order_history_bg": "order_history_bg",
         "card_bg": "order_history_card_bg",
+        "card_background": "order_history_card_bg",
         "order_history_card_bg": "order_history_card_bg",
+        "order_card_bg": "order_history_card_bg",
+        "order_card_background": "order_history_card_bg",
+        "cards": "order_history_card_bg",
+        "card": "order_history_card_bg",
         "text": "order_history_text",
         "text_color": "order_history_text",
+        "title_color": "order_history_text",
+        "card_text": "order_history_text",
+        "card_text_color": "order_history_text",
         "order_history_text": "order_history_text",
         "muted": "order_history_muted_text",
         "muted_text": "order_history_muted_text",
+        "subtext_color": "order_history_muted_text",
         "order_history_muted_text": "order_history_muted_text",
         "border": "order_history_border",
         "border_color": "order_history_border",
+        "card_border": "order_history_border",
         "order_history_border": "order_history_border",
+        "accent": "order_history_accent_color",
+        "accent_color": "order_history_accent_color",
+        "order_history_accent_color": "order_history_accent_color",
         "radius": "order_history_radius",
+        "card_radius": "order_history_radius",
         "border_radius": "order_history_radius",
         "order_history_radius": "order_history_radius",
     },
@@ -1854,8 +1893,8 @@ def execute_design_actions(
             # Update theme for global targets or theme-level component properties
             is_theme_level_prop = (
                 p in THEME_COMPONENT_OVERRIDE_KEYS
-                or p.startswith(("navbar_", "footer_", "hero_", "cart_", "delivery_form_", "payment_", "place_order_", "pagination_", "filter_", "review_", "support_", "notification_", "profile_"))
-                or comp in ("navbar", "footer", "hero", "cart", "order_summary", "delivery_form", "payment", "place_order", "filter", "pagination", "review", "support", "notification", "profile")
+                or p.startswith(("navbar_", "footer_", "hero_", "cart_", "delivery_form_", "payment_", "place_order_", "pagination_", "filter_", "review_", "support_", "notification_", "profile_", "order_history_", "product_detail_"))
+                or comp in ("navbar", "footer", "hero", "cart", "order_summary", "delivery_form", "payment", "place_order", "filter", "pagination", "review", "support", "notification", "profile", "order_history", "product_detail")
             )
 
             if is_global_target or is_theme_level_prop:
@@ -1892,6 +1931,27 @@ def execute_design_actions(
                     applied_patch["card_text_color"] = val
                     applied_patch["product_name_color"] = val
                     theme_keys_changed.extend(["card_text_color", "product_name_color"])
+                elif comp == "order_history":
+                    if p in ("order_history_card_bg", "card_bg", "card_bg_color"):
+                        theme["order_history_card_bg"] = val
+                        applied_patch["order_history_card_bg"] = val
+                        if "order_history_card_bg" not in theme_keys_changed:
+                            theme_keys_changed.append("order_history_card_bg")
+                    elif p in ("order_history_bg", "page_bg", "background"):
+                        theme["order_history_bg"] = val
+                        applied_patch["order_history_bg"] = val
+                        if "order_history_bg" not in theme_keys_changed:
+                            theme_keys_changed.append("order_history_bg")
+                    elif p in ("order_history_text", "title_color", "text_color"):
+                        theme["order_history_text"] = val
+                        applied_patch["order_history_text"] = val
+                        if "order_history_text" not in theme_keys_changed:
+                            theme_keys_changed.append("order_history_text")
+                    elif p in ("order_history_border", "border_color"):
+                        theme["order_history_border"] = val
+                        applied_patch["order_history_border"] = val
+                        if "order_history_border" not in theme_keys_changed:
+                            theme_keys_changed.append("order_history_border")
 
             # Apply to page blocks
             for page in pages:
@@ -1941,6 +2001,30 @@ def execute_design_actions(
                     elif p in ("filter_btn_bg", "filter_card_bg"):
                         bprops["filter_btn_bg"] = val
                         bprops["filter_card_bg"] = val
+                    elif p in ("order_history_card_bg", "card_bg", "card_bg_color") and ("orderhistory" in norm_btype or "customerorders" in norm_btype or comp == "order_history"):
+                        bprops["order_history_card_bg"] = val
+                        bprops["card_bg"] = val
+                        bprops["card_bg_color"] = val
+                    elif p in ("order_history_bg", "page_bg", "background") and ("orderhistory" in norm_btype or "customerorders" in norm_btype or comp == "order_history"):
+                        bprops["order_history_bg"] = val
+                        bprops["page_bg"] = val
+                    elif p in ("order_history_text", "text_color", "title_color") and ("orderhistory" in norm_btype or "customerorders" in norm_btype or comp == "order_history"):
+                        bprops["order_history_text"] = val
+                        bprops["title_color"] = val
+                        bprops["text_color"] = val
+                    elif p in ("order_history_muted_text", "muted_text", "subtext_color") and ("orderhistory" in norm_btype or "customerorders" in norm_btype or comp == "order_history"):
+                        bprops["order_history_muted_text"] = val
+                        bprops["subtext_color"] = val
+                    elif p in ("order_history_border", "border_color") and ("orderhistory" in norm_btype or "customerorders" in norm_btype or comp == "order_history"):
+                        bprops["order_history_border"] = val
+                        bprops["border_color"] = val
+                    elif p in ("order_history_accent_color", "accent_color") and ("orderhistory" in norm_btype or "customerorders" in norm_btype or comp == "order_history"):
+                        bprops["order_history_accent_color"] = val
+                        bprops["accent_color"] = val
+                    elif p in ("order_history_radius", "card_radius", "border_radius") and ("orderhistory" in norm_btype or "customerorders" in norm_btype or comp == "order_history"):
+                        bprops["order_history_radius"] = val
+                        bprops["card_radius"] = val
+                        bprops["border_radius"] = val
                     elif p in ("title_color", "grid_text_color"):
                         bprops["title_color"] = val
                         bprops["grid_text_color"] = val
@@ -2319,11 +2403,11 @@ async def handle_color_and_design_request(
     for a in list(actions):
         if a.property_name in BG_TO_TEXT_MAP and isinstance(a.value, str):
             comp_name, text_prop = BG_TO_TEXT_MAP[a.property_name]
-            has_user_text_action = any(
-                other.property_name == text_prop or "text" in other.property_name
-                for other in actions
-            )
-            if not has_user_text_action:
+            user_text_action = next((
+                other for other in actions
+                if other.target_component == comp_name and (other.property_name == text_prop or "text" in other.property_name)
+            ), None)
+            if not user_text_action:
                 safe_text = ensure_accessible_contrast(None, a.value)
                 actions.append(DesignAction(
                     target_component=comp_name,
@@ -2332,6 +2416,8 @@ async def handle_color_and_design_request(
                     value=safe_text,
                     reasoning=f"Automatic WCAG AA contrast for {a.property_name}"
                 ))
+            else:
+                user_text_action.value = ensure_accessible_contrast(str(user_text_action.value), a.value)
 
     # 5D. Execute Actions onto Draft Definition
     design_modified, modified_blocks, applied_patch, theme_keys_changed = execute_design_actions(

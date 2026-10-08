@@ -535,6 +535,45 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
           updatedProps.button_text_color = targetTheme.product_detail_btn_text;
           updatedProps.product_detail_btn_text = targetTheme.product_detail_btn_text;
         }
+      } else if (
+        btype === "order_history" ||
+        btype === "orderhistory" ||
+        btype === "order_history_list" ||
+        btype === "customer_orders" ||
+        btype === "customerorders" ||
+        btype === "orders" ||
+        block.id === "order_history" ||
+        block.id === "customer_orders"
+      ) {
+        if (targetTheme.order_history_bg) {
+          updatedProps.page_bg = targetTheme.order_history_bg;
+          updatedProps.order_history_bg = targetTheme.order_history_bg;
+        }
+        if (targetTheme.order_history_card_bg) {
+          updatedProps.card_bg = targetTheme.order_history_card_bg;
+          updatedProps.order_history_card_bg = targetTheme.order_history_card_bg;
+        }
+        if (targetTheme.order_history_text) {
+          updatedProps.title_color = targetTheme.order_history_text;
+          updatedProps.text_color = targetTheme.order_history_text;
+          updatedProps.order_history_text = targetTheme.order_history_text;
+        }
+        if (targetTheme.order_history_muted_text) {
+          updatedProps.subtext_color = targetTheme.order_history_muted_text;
+          updatedProps.order_history_muted_text = targetTheme.order_history_muted_text;
+        }
+        if (targetTheme.order_history_border) {
+          updatedProps.border_color = targetTheme.order_history_border;
+          updatedProps.order_history_border = targetTheme.order_history_border;
+        }
+        if (targetTheme.order_history_accent_color) {
+          updatedProps.accent_color = targetTheme.order_history_accent_color;
+          updatedProps.order_history_accent_color = targetTheme.order_history_accent_color;
+        }
+        if (targetTheme.order_history_radius !== undefined) {
+          updatedProps.card_radius = targetTheme.order_history_radius;
+          updatedProps.order_history_radius = targetTheme.order_history_radius;
+        }
       }
 
       return {

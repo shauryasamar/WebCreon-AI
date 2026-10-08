@@ -917,42 +917,37 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
           ? (typeof customProps.card_radius === "number" ? `${Math.max(0, customProps.card_radius - 2)}px` : String(customProps.card_radius))
           : "12px");
 
-  const pageBg = (theme as any)?.order_history_bg || defaultPageBg;
-  const customCardBg = customProps.card_bg || (theme as any)?.order_history_card_bg;
+  const pageBg = (theme as any)?.order_history_bg || customProps.order_history_bg || customProps.page_bg || defaultPageBg;
+  const customCardBg = (theme as any)?.order_history_card_bg || customProps.order_history_card_bg || customProps.card_bg;
   const cardBg = customCardBg || defaultCardBg;
   const isCardDark = isColorDarkHex(cardBg);
   const isLight = !isCardDark;
 
-  const accentColor = customProps.accent_color || defaultAccentColor || "#2563eb";
-
-  const rawTextPrimary = (theme as any)?.order_history_text;
-  const customTitleColor = customProps.title_color;
-  const textPrimary =
-    customTitleColor ||
-    (rawTextPrimary && (isColorDarkHex(rawTextPrimary) !== isCardDark)
-      ? rawTextPrimary
-      : (isCardDark ? "#f8fafc" : "#0f172a"));
-  const titleColor = textPrimary;
-
-  const rawTextMuted = (theme as any)?.order_history_muted_text;
-  const customSubtextColor = customProps.subtext_color;
-  const textMuted =
-    customSubtextColor ||
-    (rawTextMuted && (isColorDarkHex(rawTextMuted) !== isCardDark)
-      ? rawTextMuted
-      : (isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)"));
+  const accentColor = (theme as any)?.order_history_accent_color || customProps.order_history_accent_color || customProps.accent_color || defaultAccentColor || "#2563eb";
 
   const isPageDark = isColorDarkHex(pageBg);
-  const pageHeaderTextColor = (rawTextPrimary && (isColorDarkHex(rawTextPrimary) !== isPageDark))
-    ? rawTextPrimary
-    : (isPageDark ? "#f8fafc" : "#0f172a");
+  const pageHeaderTextColor = (theme as any)?.order_history_text || (isPageDark ? "#f8fafc" : "#0f172a");
+  const pageHeaderMuted = (theme as any)?.order_history_muted_text || (isPageDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
 
-  const pageHeaderMuted = (rawTextMuted && (isColorDarkHex(rawTextMuted) !== isPageDark))
-    ? rawTextMuted
-    : (isPageDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
+  const rawTextPrimary = (theme as any)?.order_history_text || customProps.order_history_text;
+  const customTitleColor = customProps.title_color;
+  const textPrimary =
+    rawTextPrimary ||
+    (customTitleColor && isColorDarkHex(customTitleColor) !== isCardDark ? customTitleColor : null) ||
+    (isCardDark ? "#f8fafc" : "#0f172a");
+  const titleColor = textPrimary;
 
-  const customBorderColor = customProps.border_color || (theme as any)?.order_history_border;
-  const cardBorder = `1px solid ${customBorderColor || (isCardDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)")}`;
+  const rawTextMuted = (theme as any)?.order_history_muted_text || customProps.order_history_muted_text;
+  const customSubtextColor = customProps.subtext_color;
+  const textMuted =
+    rawTextMuted ||
+    (customSubtextColor && isColorDarkHex(customSubtextColor) !== isCardDark ? customSubtextColor : null) ||
+    (textPrimary && textPrimary.startsWith("#") && textPrimary.length === 7
+      ? `${textPrimary}b3`
+      : (isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)"));
+
+  const customBorderColor = (theme as any)?.order_history_border || customProps.order_history_border || customProps.border_color;
+  const cardBorder = `1px solid ${customBorderColor || (isCardDark ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.10)")}`;
   const divider = cardBorder;
   const timelineRail = isCardDark ? "rgba(255,255,255,0.25)" : "rgba(15,23,42,0.18)";
   const pendingDot = isCardDark ? "rgba(255,255,255,0.35)" : "rgba(15,23,42,0.25)";
@@ -965,12 +960,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   const startShoppingLabel = customProps.start_shopping_label || "Explore Store";
 
   const customExpandedBg = customProps.expanded_bg;
-  const expandedBg = customExpandedBg || (isLight ? "#f8fafc" : "rgba(255,255,255,0.02)");
+  const expandedBg = customExpandedBg || (isLight ? "rgba(0, 0, 0, 0.025)" : "rgba(255, 255, 255, 0.03)");
 
   const customInnerBoxBg = customProps.inner_box_bg;
-  const effectiveInnerBoxBg = customInnerBoxBg || panelBg;
+  const effectiveInnerBoxBg = customInnerBoxBg || (isLight ? "rgba(0, 0, 0, 0.03)" : "rgba(255, 255, 255, 0.05)");
 
-  const customInnerBorderColor = customProps.inner_border_color || customProps.border_color;
+  const customInnerBorderColor = customProps.inner_border_color || customBorderColor || customProps.border_color;
   const innerBoxBorder = `1px solid ${customInnerBorderColor || (isCardDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.10)")}`;
 
   const customItemCardBg = customProps.item_card_bg;
@@ -4144,7 +4139,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                   key={order.id}
                   style={{
                     background: cardBg,
-                    border: isExpanded ? `1px solid ${accentColor}55` : cardBorder,
+                    border: isExpanded ? (customBorderColor ? `1.5px solid ${customBorderColor}` : `1px solid ${accentColor}55`) : cardBorder,
                     borderRadius: effectiveCardRadius,
                     overflow: "hidden",
                     contentVisibility: "auto",
