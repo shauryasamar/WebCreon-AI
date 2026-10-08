@@ -516,88 +516,25 @@ CREATIVE DESIGN & SHADE HARMONY GUIDELINES:
         return []
 
 
-class CustomToken(BaseModel):
-    key: str = Field(description="Token key name e.g. 'cart_card_bg'")
-    value: str = Field(description="Token value hex or string e.g. '#1e293b'")
+class DesignAction(BaseModel):
+    target_component: str = Field(
+        description="The component being modified: 'hero', 'product_carousel', 'section_group_carousel', 'category_grid', 'product_grid', 'card', 'navbar', 'footer', 'cart', 'order_summary', 'delivery_form', 'payment', 'place_order', 'filter', 'pagination', 'review', 'support', 'notification', 'profile', 'background', 'global'"
+    )
+    target_element: str = Field(
+        description="Sub-element: 'section_background', 'card_background', 'card_radius', 'card_text', 'card_border', 'button', 'text', 'border', 'padding', 'height', 'shadow', 'icon'"
+    )
+    property_name: str = Field(
+        description="The exact theme/block prop key: 'outer_bg_color', 'grid_bg', 'card_bg', 'card_radius', 'accent_color', 'hero_accent', 'navbar_bg', 'footer_bg', 'title_color', 'card_text_color', 'border_radius', 'banner_height', 'navbar_height', etc."
+    )
+    value: Any = Field(
+        description="The target value (hex code e.g. '#0000ff', integer e.g. 0 or 24, or style keyword)"
+    )
+    reasoning: Optional[str] = Field(default=None, description="Short design rationale")
 
 
-class ColorPatchOutput(BaseModel):
-    """Structured high-efficiency output for universal component styling and design patches."""
-    # Global
-    primary_bg: Optional[str] = Field(default=None, description="Primary store background hex")
-    secondary_bg: Optional[str] = Field(default=None, description="Secondary container background hex")
-    text_color: Optional[str] = Field(default=None, description="Primary text hex")
-    muted_text: Optional[str] = Field(default=None, description="Muted or secondary text hex")
-    border_color: Optional[str] = Field(default=None, description="Border divider hex or rgba")
-    accent_color: Optional[str] = Field(default=None, description="CTA or active button accent hex")
-
-    # Navbar
-    navbar_bg: Optional[str] = Field(default=None, description="Navbar background hex")
-    navbar_text_color: Optional[str] = Field(default=None, description="Navbar text hex")
-    navbar_border_color: Optional[str] = Field(default=None, description="Navbar border hex")
-
-    # Footer
-    footer_bg: Optional[str] = Field(default=None, description="Footer background hex")
-    footer_text_color: Optional[str] = Field(default=None, description="Footer text hex")
-    footer_muted_color: Optional[str] = Field(default=None, description="Footer muted text hex")
-    footer_border_color: Optional[str] = Field(default=None, description="Footer border hex")
-
-    # Hero / Banner
-    hero_bg: Optional[str] = Field(default=None, description="Hero background hex")
-    hero_text_color: Optional[str] = Field(default=None, description="Hero text hex")
-    hero_accent: Optional[str] = Field(default=None, description="Hero button accent hex")
-
-    # Sections / Carousels / Product Grid
-    outer_bg_color: Optional[str] = Field(default=None, description="Section backdrop background hex")
-    grid_bg: Optional[str] = Field(default=None, description="Grid / Carousel container background hex")
-    title_color: Optional[str] = Field(default=None, description="Section header / title text hex")
-    subtitle_color: Optional[str] = Field(default=None, description="Section subtitle text hex")
-    grid_text_color: Optional[str] = Field(default=None, description="Grid section title / header text hex")
-
-    # Cards / Tiles / Product Boxes
-    card_bg: Optional[str] = Field(default=None, description="Inner card, box, or tile background hex")
-    card_bg_color: Optional[str] = Field(default=None, description="Inner card or tile background hex")
-    card_text_color: Optional[str] = Field(default=None, description="Inner card or item title text hex")
-    card_border_color: Optional[str] = Field(default=None, description="Inner card, box, or tile border hex")
-    product_name_color: Optional[str] = Field(default=None, description="Product title text hex")
-    price_color: Optional[str] = Field(default=None, description="Product price text hex")
-    rating_star_color: Optional[str] = Field(default=None, description="Rating star icon hex")
-    badge_bg_color: Optional[str] = Field(default=None, description="Tile badge background hex")
-    badge_text_color: Optional[str] = Field(default=None, description="Tile badge text hex")
-
-    # Cart / Checkout / Forms
-    cart_bg: Optional[str] = Field(default=None, description="Cart sidebar background hex")
-    cart_card_bg: Optional[str] = Field(default=None, description="Cart item card background hex")
-    cart_text_color: Optional[str] = Field(default=None, description="Cart text hex")
-    cart_accent_color: Optional[str] = Field(default=None, description="Cart checkout button hex")
-    cart_border_color: Optional[str] = Field(default=None, description="Cart border hex")
-    summary_bg: Optional[str] = Field(default=None, description="Order summary card background hex")
-    summary_card_bg: Optional[str] = Field(default=None, description="Order summary item card background hex")
-    delivery_form_bg: Optional[str] = Field(default=None, description="Delivery form background hex")
-    delivery_form_input_bg: Optional[str] = Field(default=None, description="Delivery form input field background hex")
-    payment_bg: Optional[str] = Field(default=None, description="Payment options card background hex")
-    payment_card_bg: Optional[str] = Field(default=None, description="Payment option pill background hex")
-    filter_bg: Optional[str] = Field(default=None, description="Filter toolbar background hex")
-    filter_card_bg: Optional[str] = Field(default=None, description="Filter modal/drawer background hex")
-    pagination_bg: Optional[str] = Field(default=None, description="Pagination container background hex")
-    pagination_active_bg: Optional[str] = Field(default=None, description="Active page pill accent hex")
-    pagination_text_color: Optional[str] = Field(default=None, description="Pagination text hex")
-    pagination_border_color: Optional[str] = Field(default=None, description="Pagination border hex")
-
-    # Materiality & Styling
-    surface_materiality: Optional[str] = Field(default=None, description="'full_glass', 'glass_navbar', or 'solid'")
-    visual_style: Optional[str] = Field(default=None, description="'glassmorphic', 'solid_clean', etc.")
-
-    # Dimensions (Populate ONLY if user explicitly asked for radius/padding/spacing changes)
-    border_radius: Optional[int] = Field(default=None, description="Corner radius in px")
-    card_radius: Optional[int] = Field(default=None, description="Card corner radius in px (0 for boxy/sharp)")
-    card_padding: Optional[int] = Field(default=None, description="Card padding in px")
-    card_shadow: Optional[str] = Field(default=None, description="Card elevation shadow ('none' for flat)")
-    grid_gap: Optional[int] = Field(default=None, description="Grid gap spacing in px")
-
-    # Generic fallbacks
-    bg_color: Optional[str] = Field(default=None, description="General background hex")
-    custom_tokens: Optional[List[CustomToken]] = Field(default=None, description="Any specific component tokens")
+class DesignPlanOutput(BaseModel):
+    actions: List[DesignAction] = Field(description="Ordered list of atomic design mutations")
+    summary: str = Field(description="Crisp 1-2 sentence human-friendly summary of the design changes made")
 
 
 class HeroSlideGeneratorOutput(BaseModel):
@@ -986,16 +923,16 @@ Style Guidelines: Keep copy clean, polished, and professional without emoji spam
         }
 
 
-async def generate_component_color_patch(
+async def generate_agentic_design_plan(
     current_theme: Dict[str, Any],
-    color_request: str,
+    user_message: str,
     target_component: str = "overall",
     session_id: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Generates a component color patch matching user color requests using structured output."""
+) -> DesignPlanOutput:
+    """Agentic design reasoner: decomposes user visual instructions into precise atomic DesignActions."""
     from agents.token_tracker import TokenCostCallback
-    
-    # Filter current_theme to only relevant keys to minimize token footprint
+
+    # Filter theme to keep tokens ultra-compact (<600 tokens)
     target_lower = (target_component or "overall").lower().strip()
     allowed_keys_for_target = set(COMPONENT_ALLOWED_KEYS.get(target_lower, set()))
     if target_lower.startswith("multi:"):
@@ -1004,336 +941,79 @@ async def generate_component_color_patch(
             allowed_keys_for_target.update(COMPONENT_ALLOWED_KEYS.get(st, set()))
 
     filtered_theme: Dict[str, Any] = {}
-    for k in ["primary_bg", "text_color", "accent_color", "border_color", "mode", "visual_style", "surface_materiality"]:
+    for k in ["primary_bg", "text_color", "accent_color", "border_color", "mode", "visual_style", "surface_materiality", "card_radius", "navbar_height", "hero_bg", "hero_accent"]:
         if k in current_theme:
             filtered_theme[k] = current_theme[k]
     for k in allowed_keys_for_target:
         if k in current_theme:
             filtered_theme[k] = current_theme[k]
 
-    patch_prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are an expert design systems engineer and color theory specialist for modern e-commerce.
-Generate a WCAG AA compliant design patch for the target component based strictly on the user's request.
+    agent_prompt = ChatPromptTemplate.from_messages([
+        ("system", """You are WebCreon AI's Expert Design Systems & Color Theory Agent.
+Your job is to translate the user's design instructions into a clean, precise list of atomic DesignActions.
+
+COMPONENT PROPERTY REFERENCE:
+- Carousels & Grids ('product_carousel', 'section_group_carousel', 'product_grid', 'category_grid'):
+  - Section backdrop / container background: outer_bg_color, grid_bg
+  - Inner card background: card_bg, card_bg_color
+  - Inner card geometry: card_radius (0 for boxy/sharp, 8-16 for rounded, 24 for pill), card_padding, card_border_color
+  - Section header text: title_color, grid_text_color, subtitle_color
+  - Card text & price: card_text_color, product_name_color, price_color
+- Hero Banner ('hero'):
+  - Banner background: hero_bg
+  - Banner headline / text: hero_text_color
+  - Banner CTA button: hero_accent (and accent_color)
+  - Dimensions: banner_height (240-800), border_radius
+- Navbar ('navbar'):
+  - Background: navbar_bg, navbar_outer_bg
+  - Text: navbar_text_color
+  - Border: navbar_border_color
+  - Dimensions: navbar_height (44-120), navbar_padding_x (8-48)
+  - Variants: navbar_variant ('floating', 'soft', 'solid')
+- Footer ('footer'):
+  - Background: footer_bg
+  - Text: footer_text_color, footer_muted_color
+  - Border: footer_border_color
+  - Dimensions: footer_padding_y (16-96)
+- Global Canvas ('background' or 'global'):
+  - primary_bg, secondary_bg, text_color, muted_text, accent_color, border_color
+- Other Components:
+  - cart: cart_bg, cart_card_bg, cart_text_color, cart_accent_color, cart_radius
+  - delivery_form: delivery_form_bg, delivery_form_text, delivery_form_btn_bg, delivery_form_radius
+  - payment: payment_bg, payment_card_bg, payment_text_color, payment_radius
+  - place_order: place_order_bg, place_order_btn_bg, place_order_btn_text, place_order_radius
+  - pagination: pagination_bg, pagination_text_color, pagination_active_bg, pagination_radius
+  - review: review_card_bg, review_text_color, review_border_color, review_card_radius
+  - filter: filter_bg, filter_card_bg, filter_text_color, filter_radius
+  - support: support_bg, support_card_bg, support_text_color, support_accent_color
 
 RULES:
-1. REQUEST FIDELITY: Populate ONLY the attributes the user explicitly asked for.
-   - For carousels/grids/sections: "background" means the section background (outer_bg_color / grid_bg). "card/box/tile background" means card_bg / card_bg_color.
-   - For cards: "background" means card_bg.
-2. DIMENSION SAFETY: NEVER modify card_radius, border_radius, padding, or gap unless the user explicitly requested size/radius/padding changes.
-3. THEME HARMONY: If a full theme is requested (e.g. "dark charcoal theme"), ensure all elements belong to the same requested color family.
-4. CONTRAST: Always pair dark backgrounds with light text (#ffffff) and light backgrounds with dark text (#0f172a).
-5. GLASSMORPHISM: If user asks for glass, frosted glass, or glassmorphism, set visual_style='glassmorphic' and surface_materiality='full_glass'."""),
-        ("user", "Target Component: {target_component}\nCurrent Theme: {current_theme}\nRequest: {color_request}"),
+1. STRICT ELEMENT FIDELITY:
+   - When user says "carousel background", target section_background (outer_bg_color and grid_bg).
+   - When user says "card background", target card_background (card_bg).
+   - When user says "boxy card" or "sharp corners", target card_radius with value 0.
+   - When user says "banner button color to red" or "change button color on banner", target 'hero' button with hero_accent.
+2. Only emit actions for properties explicitly mentioned or directly implied by the request. Never modify unrequested attributes.
+3. If user specifies a relative change (e.g. "make navbar taller"), compute the new value from Current Theme (e.g. current 64 -> 80).
+4. If glassmorphism/frosted glass requested, set visual_style='glassmorphic' and surface_materiality='glass_navbar' (or 'full_glass').
+"""),
+        ("user", "Target Component Hint: {target_hint}\nCurrent Theme: {current_theme}\nUser Request: {user_message}"),
     ])
 
     try:
-        structured_chain = patch_prompt | llm.with_structured_output(ColorPatchOutput, method="function_calling")
-        result: ColorPatchOutput = await structured_chain.ainvoke(
+        chain = agent_prompt | llm.with_structured_output(DesignPlanOutput, method="function_calling")
+        res: DesignPlanOutput = await chain.ainvoke(
             {
+                "target_hint": target_component,
                 "current_theme": json.dumps(filtered_theme),
-                "target_component": target_component,
-                "color_request": color_request,
+                "user_message": user_message,
             },
-            config={"callbacks": [TokenCostCallback("ColorAgent.ComponentPatch", session_id=session_id)]}
+            config={"callbacks": [TokenCostCallback("ColorAgent.DesignPlan", session_id=session_id)]}
         )
-        raw_patch = {k: v for k, v in result.model_dump().items() if v is not None}
-        if "custom_tokens" in raw_patch and isinstance(raw_patch["custom_tokens"], list):
-            for item in raw_patch["custom_tokens"]:
-                if isinstance(item, dict) and item.get("key") and item.get("value"):
-                    raw_patch.setdefault(item["key"], item["value"])
-                elif hasattr(item, "key") and hasattr(item, "value"):
-                    raw_patch.setdefault(item.key, item.value)
-            del raw_patch["custom_tokens"]
-        target_lower = target_component.lower().strip()
-
-        # Intelligent remapping for specific components if LLM emitted generalized keys
-        has_text_color = raw_patch.get("text_color")
-        if has_text_color:
-            if "product_carousel" in target_lower or "carousel" in target_lower:
-                raw_patch.setdefault("grid_text_color", has_text_color)
-                raw_patch.setdefault("title_color", has_text_color)
-                raw_patch.setdefault("product_name_color", has_text_color)
-                raw_patch.setdefault("card_text_color", has_text_color)
-            if "section_group_carousel" in target_lower:
-                raw_patch.setdefault("title_color", has_text_color)
-                raw_patch.setdefault("grid_text_color", has_text_color)
-                raw_patch.setdefault("card_text_color", has_text_color)
-                raw_patch.setdefault("card_title_color", has_text_color)
-            if "category_grid" in target_lower or "category" in target_lower:
-                raw_patch.setdefault("title_color", has_text_color)
-                raw_patch.setdefault("card_text_color", has_text_color)
-            if "card" in target_lower:
-                raw_patch.setdefault("card_text_color", has_text_color)
-                raw_patch.setdefault("product_name_color", has_text_color)
-            if "product_grid" in target_lower:
-                raw_patch.setdefault("grid_text_color", has_text_color)
-                raw_patch.setdefault("title_color", has_text_color)
-                raw_patch.setdefault("card_text_color", has_text_color)
-                raw_patch.setdefault("product_name_color", has_text_color)
-            if target_lower in ["navbar", "nav"]:
-                raw_patch.setdefault("navbar_text_color", has_text_color)
-            if target_lower in ["footer", "foot"]:
-                raw_patch.setdefault("footer_text_color", has_text_color)
-
-        has_border_color = raw_patch.get("border_color")
-        if has_border_color:
-            if "navbar" in target_lower or "nav" in target_lower:
-                raw_patch.setdefault("navbar_border_color", has_border_color)
-            if "footer" in target_lower or "foot" in target_lower:
-                raw_patch.setdefault("footer_border_color", has_border_color)
-            if any(t in target_lower for t in ["product_carousel", "section_group_carousel", "category_grid", "card", "product_card", "product_grid", "carousel"]):
-                raw_patch.setdefault("card_border_color", has_border_color)
-            if "cart" in target_lower:
-                raw_patch.setdefault("cart_border_color", has_border_color)
-            if "filter" in target_lower:
-                raw_patch.setdefault("filter_border_color", has_border_color)
-            if "pagination" in target_lower:
-                raw_patch.setdefault("pagination_border_color", has_border_color)
-            if "order_summary" in target_lower or "summary" in target_lower:
-                raw_patch.setdefault("summary_border_color", has_border_color)
-            if "payment" in target_lower:
-                raw_patch.setdefault("payment_border_color", has_border_color)
-            if "review" in target_lower:
-                raw_patch.setdefault("review_border_color", has_border_color)
-            if "support" in target_lower:
-                raw_patch.setdefault("support_border_color", has_border_color)
-
-        has_bg_color = raw_patch.get("bg_color") or raw_patch.get("background_color") or raw_patch.get("bg")
-        if has_bg_color:
-            if "navbar" in target_lower or "nav" in target_lower:
-                raw_patch.setdefault("navbar_bg", has_bg_color)
-            if "footer" in target_lower or "foot" in target_lower:
-                raw_patch.setdefault("footer_bg", has_bg_color)
-            if "hero" in target_lower or "banner" in target_lower:
-                raw_patch.setdefault("hero_bg", has_bg_color)
-            if any(t in target_lower for t in ["product_carousel", "section_group_carousel", "category_grid", "product_grid", "carousel", "category"]):
-                raw_patch.setdefault("outer_bg_color", has_bg_color)
-                raw_patch.setdefault("grid_bg", has_bg_color)
-            if "card" in target_lower or "product_card" in target_lower:
-                raw_patch.setdefault("card_bg", has_bg_color)
-                raw_patch.setdefault("card_bg_color", has_bg_color)
-            if "cart" in target_lower:
-                raw_patch.setdefault("cart_bg", has_bg_color)
-            if "filter" in target_lower:
-                raw_patch.setdefault("filter_bg", has_bg_color)
-            if "pagination" in target_lower:
-                raw_patch.setdefault("pagination_bg", has_bg_color)
-            if "order_summary" in target_lower or "summary" in target_lower:
-                raw_patch.setdefault("summary_bg", has_bg_color)
-            if "payment" in target_lower:
-                raw_patch.setdefault("payment_bg", has_bg_color)
-
-        has_muted_text = raw_patch.get("muted_text") or raw_patch.get("secondary_text") or raw_patch.get("footer_muted_color") or raw_patch.get("order_history_muted_text") or raw_patch.get("support_muted_text")
-        if has_muted_text:
-            if "footer" in target_lower or "foot" in target_lower:
-                raw_patch.setdefault("footer_muted_color", has_muted_text)
-            if "support" in target_lower:
-                raw_patch.setdefault("support_muted_text", has_muted_text)
-            if "order_history" in target_lower:
-                raw_patch.setdefault("order_history_muted_text", has_muted_text)
-            if any(t in target_lower for t in ["category", "category_grid", "section_group_carousel"]):
-                raw_patch.setdefault("subtitle_color", has_muted_text)
-            if target_lower in ["overall", "webpage", "website", "site", "background"]:
-                raw_patch.setdefault("muted_text", has_muted_text)
-
-        has_card_bg = raw_patch.get("card_bg") or raw_patch.get("card_bg_color")
-        if has_card_bg:
-            if any(t in target_lower for t in ["product_carousel", "section_group_carousel", "category_grid", "card", "product_card", "product_grid", "carousel", "category"]):
-                raw_patch.setdefault("card_bg", has_card_bg)
-                raw_patch.setdefault("card_bg_color", has_card_bg)
-            if "cart" in target_lower:
-                raw_patch.setdefault("cart_card_bg", has_card_bg)
-            if "order_summary" in target_lower or "summary" in target_lower:
-                raw_patch.setdefault("summary_card_bg", has_card_bg)
-            if "payment" in target_lower:
-                raw_patch.setdefault("payment_card_bg", has_card_bg)
-            if "review" in target_lower:
-                raw_patch.setdefault("review_card_bg", has_card_bg)
-            if "support" in target_lower:
-                raw_patch.setdefault("support_card_bg", has_card_bg)
-            if "order_history" in target_lower:
-                raw_patch.setdefault("order_history_card_bg", has_card_bg)
-
-        has_accent = raw_patch.get("accent_color") or raw_patch.get("btn_bg") or raw_patch.get("button_bg")
-        if has_accent:
-            if "hero" in target_lower or "banner" in target_lower:
-                raw_patch.setdefault("hero_accent", has_accent)
-            if "cart" in target_lower:
-                raw_patch.setdefault("cart_accent_color", has_accent)
-            if "order_summary" in target_lower or "summary" in target_lower:
-                raw_patch.setdefault("summary_accent_color", has_accent)
-            if "payment" in target_lower:
-                raw_patch.setdefault("payment_accent_color", has_accent)
-            if "place_order" in target_lower:
-                raw_patch.setdefault("place_order_btn_bg", has_accent)
-            if "filter" in target_lower:
-                raw_patch.setdefault("filter_accent_color", has_accent)
-                raw_patch.setdefault("filter_btn_bg", has_accent)
-            if "product_detail" in target_lower:
-                raw_patch.setdefault("product_detail_btn_bg", has_accent)
-            if "support" in target_lower:
-                raw_patch.setdefault("support_accent_color", has_accent)
-            if "pagination" in target_lower:
-                raw_patch.setdefault("pagination_active_bg", has_accent)
-
-        if "section_group_carousel" in target_lower:
-            if raw_patch.get("title_color"):
-                raw_patch.setdefault("card_text_color", raw_patch["title_color"])
-                raw_patch.setdefault("card_title_color", raw_patch["title_color"])
-            elif raw_patch.get("card_text_color"):
-                raw_patch.setdefault("title_color", raw_patch["card_text_color"])
-                raw_patch.setdefault("card_title_color", raw_patch["card_text_color"])
-            elif raw_patch.get("grid_text_color"):
-                raw_patch.setdefault("title_color", raw_patch["grid_text_color"])
-                raw_patch.setdefault("card_text_color", raw_patch["grid_text_color"])
-
-        if "product_carousel" in target_lower or "carousel" in target_lower:
-            if raw_patch.get("grid_text_color"):
-                raw_patch.setdefault("title_color", raw_patch["grid_text_color"])
-                raw_patch.setdefault("product_name_color", raw_patch["grid_text_color"])
-                raw_patch.setdefault("card_text_color", raw_patch["grid_text_color"])
-            elif raw_patch.get("title_color"):
-                raw_patch.setdefault("grid_text_color", raw_patch["title_color"])
-                raw_patch.setdefault("product_name_color", raw_patch["title_color"])
-                raw_patch.setdefault("card_text_color", raw_patch["title_color"])
-            elif raw_patch.get("product_name_color"):
-                raw_patch.setdefault("grid_text_color", raw_patch["product_name_color"])
-                raw_patch.setdefault("title_color", raw_patch["product_name_color"])
-                raw_patch.setdefault("card_text_color", raw_patch["product_name_color"])
-            elif raw_patch.get("card_text_color"):
-                raw_patch.setdefault("grid_text_color", raw_patch["card_text_color"])
-                raw_patch.setdefault("title_color", raw_patch["card_text_color"])
-                raw_patch.setdefault("product_name_color", raw_patch["card_text_color"])
-
-        if target_lower in ["profile", "account"]:
-            if not raw_patch.get("profile_dropdown_bg"):
-                for k in ["dialog_bg", "card_bg", "secondary_bg", "primary_bg", "navbar_bg"]:
-                    if raw_patch.get(k):
-                        raw_patch["profile_dropdown_bg"] = raw_patch[k]
-                        break
-            if not raw_patch.get("profile_dropdown_text"):
-                for k in ["text_color", "card_text_color", "accent_text", "navbar_text_color", "accent_color"]:
-                    if raw_patch.get(k):
-                        raw_patch["profile_dropdown_text"] = raw_patch[k]
-                        break
-
-        elif target_lower in ["notification", "notifications"]:
-            if not raw_patch.get("notification_drawer_bg"):
-                for k in ["dialog_bg", "card_bg", "secondary_bg", "primary_bg", "navbar_bg"]:
-                    if raw_patch.get(k):
-                        raw_patch["notification_drawer_bg"] = raw_patch[k]
-                        break
-            if not raw_patch.get("notification_drawer_text"):
-                for k in ["text_color", "card_text_color", "accent_text", "navbar_text_color", "accent_color"]:
-                    if raw_patch.get(k):
-                        raw_patch["notification_drawer_text"] = raw_patch[k]
-                        break
-
-        elif target_lower in ["filter", "filters"]:
-            if not raw_patch.get("filter_modal_bg"):
-                for k in ["filter_bg", "dialog_bg", "secondary_bg", "card_bg"]:
-                    if raw_patch.get(k):
-                        raw_patch["filter_modal_bg"] = raw_patch[k]
-                        break
-            if not raw_patch.get("filter_modal_text"):
-                for k in ["filter_text_color", "text_color", "card_text_color"]:
-                    if raw_patch.get(k):
-                        raw_patch["filter_modal_text"] = raw_patch[k]
-                        break
-
-        elif target_lower in ["sort", "sort_by"]:
-            if not raw_patch.get("sort_btn_bg"):
-                for k in ["filter_btn_bg", "accent_color", "secondary_bg", "card_bg"]:
-                    if raw_patch.get(k):
-                        raw_patch["sort_btn_bg"] = raw_patch[k]
-                        break
-            if not raw_patch.get("sort_btn_text"):
-                for k in ["filter_btn_text", "accent_text", "text_color"]:
-                    if raw_patch.get(k):
-                        raw_patch["sort_btn_text"] = raw_patch[k]
-                        break
-
-        elif target_lower in ["card", "product_card"]:
-            if not raw_patch.get("card_text_color"):
-                for k in ["product_name_color", "text_color", "accent_text"]:
-                    if raw_patch.get(k):
-                        raw_patch["card_text_color"] = raw_patch[k]
-                        break
-            if not raw_patch.get("card_bg"):
-                for k in ["secondary_bg", "primary_bg"]:
-                    if raw_patch.get(k):
-                        raw_patch["card_bg"] = raw_patch[k]
-                        break
-
-        elif target_lower in ["product_detail"]:
-            if not raw_patch.get("product_detail_bg"):
-                for k in ["secondary_bg", "card_bg", "primary_bg"]:
-                    if raw_patch.get(k):
-                        raw_patch["product_detail_bg"] = raw_patch[k]
-                        break
-            if not raw_patch.get("product_detail_text"):
-                for k in ["text_color", "card_text_color"]:
-                    if raw_patch.get(k):
-                        raw_patch["product_detail_text"] = raw_patch[k]
-                        break
-
-        elif target_lower in ["cart"]:
-            if not raw_patch.get("cart_bg"):
-                for k in ["secondary_bg", "dialog_bg", "primary_bg"]:
-                    if raw_patch.get(k):
-                        raw_patch["cart_bg"] = raw_patch[k]
-                        break
-            if not raw_patch.get("cart_text_color"):
-                for k in ["text_color", "card_text_color"]:
-                    if raw_patch.get(k):
-                        raw_patch["cart_text_color"] = raw_patch[k]
-                        break
-
-        elif target_lower in ["pagination", "pager", "paging"]:
-            if not raw_patch.get("pagination_bg"):
-                for k in ["primary_bg", "secondary_bg", "card_bg", "background_color"]:
-                    if raw_patch.get(k):
-                        raw_patch["pagination_bg"] = raw_patch[k]
-                        break
-            if not raw_patch.get("pagination_active_bg"):
-                for k in ["accent_color", "primary_bg", "secondary_bg"]:
-                    if raw_patch.get(k):
-                        raw_patch["pagination_active_bg"] = raw_patch[k]
-                        break
-            if not raw_patch.get("pagination_text_color"):
-                for k in ["text_color", "card_text_color", "accent_text"]:
-                    if raw_patch.get(k):
-                        raw_patch["pagination_text_color"] = raw_patch[k]
-                        break
-            if not raw_patch.get("pagination_border_color"):
-                for k in ["border_color", "card_border_color"]:
-                    if raw_patch.get(k):
-                        raw_patch["pagination_border_color"] = raw_patch[k]
-                        break
-            if raw_patch.get("pagination_bg") and not raw_patch.get("background_color"):
-                raw_patch["background_color"] = raw_patch["pagination_bg"]
-            if raw_patch.get("pagination_text_color") and not raw_patch.get("text_color"):
-                raw_patch["text_color"] = raw_patch["pagination_text_color"]
-
-        if target_lower.startswith("multi:"):
-            comps = target_lower.replace("multi:", "").split(",")
-            allowed = set()
-            for c in comps:
-                allowed.update(COMPONENT_ALLOWED_KEYS.get(c, set()))
-        elif target_lower in ["overall", "webpage", "website", "site", "all", "entire", "full"]:
-            allowed = GLOBAL_THEME_ALLOWED_KEYS
-        else:
-            allowed = COMPONENT_ALLOWED_KEYS.get(target_lower)
-
-        if allowed is not None:
-            filtered_patch = {k: v for k, v in raw_patch.items() if k in allowed}
-        else:
-            filtered_patch = raw_patch
-
-        return {"color_patch": filtered_patch, "raw_patch": raw_patch}
+        return res
     except Exception as e:
-        print("Error generating color patch:", e)
-        return {"color_patch": {}, "raw_patch": {}}
+        print("Error generating agentic design plan:", e)
+        return DesignPlanOutput(actions=[], summary="Unable to generate design updates.")
 
 
 async def generate_component_palette_suggestions(
@@ -1417,852 +1097,170 @@ THEME_COMPONENT_OVERRIDE_KEYS = {
 
 
 # ==========================================
-# 4. STORE BLOCK STYLING UTILITIES
+# 4. STORE BLOCK STYLING UTILITIES & EXECUTOR
 # ==========================================
 
+COMPONENT_BLOCK_TARGETS: Dict[str, List[str]] = {
+    "hero": ["hero", "herobanner", "banner", "slider"],
+    "hero_banner": ["hero", "herobanner", "banner", "slider"],
+    "product_carousel": ["productcarousel", "productslider", "productsrow"],
+    "section_group_carousel": ["sectiongroupcarousel", "categorycarousel", "categoryslider"],
+    "product_grid": ["productgrid", "productsgrid", "cataloggrid"],
+    "category_grid": ["categorygrid", "categoryshowcase", "categories"],
+    "card": ["productgrid", "productcarousel"],
+    "product_card": ["productgrid", "productcarousel"],
+    "navbar": ["navbar", "header"],
+    "footer": ["footer"],
+    "cart": ["cart", "cartdrawer"],
+    "order_summary": ["ordersummary", "checkoutsummary"],
+    "delivery_form": ["deliveryform", "checkoutform", "addressform"],
+    "payment": ["payment", "paymentmethods"],
+    "place_order": ["placeorder"],
+    "filter": ["filter", "filtertoolbar"],
+    "pagination": ["pagination", "pager"],
+    "review": ["review", "reviews", "ratings"],
+    "support": ["support", "customersupport", "helpdesk"],
+    "order_history": ["orderhistory", "customerorders"],
+}
+
+BG_TO_TEXT_MAP: Dict[str, Tuple[str, str]] = {
+    "navbar_bg": ("navbar", "navbar_text_color"),
+    "navbar_outer_bg": ("navbar", "navbar_text_color"),
+    "footer_bg": ("footer", "footer_text_color"),
+    "hero_bg": ("hero", "hero_text_color"),
+    "card_bg": ("card", "card_text_color"),
+    "card_bg_color": ("card", "card_text_color"),
+    "outer_bg_color": ("section", "title_color"),
+    "grid_bg": ("section", "title_color"),
+    "primary_bg": ("global", "text_color"),
+    "secondary_bg": ("global", "text_color"),
+    "cart_bg": ("cart", "cart_text_color"),
+    "delivery_form_bg": ("delivery_form", "delivery_form_text"),
+    "payment_bg": ("payment", "payment_text_color"),
+    "filter_bg": ("filter", "filter_text_color"),
+    "pagination_bg": ("pagination", "pagination_text_color"),
+    "review_card_bg": ("review", "review_text_color"),
+    "support_bg": ("support", "support_text_color"),
+}
+
+
+def execute_design_actions(
+    site_definition: Dict[str, Any],
+    actions: List[DesignAction],
+) -> Tuple[bool, List[str], Dict[str, Any], List[str]]:
+    """Deterministically applies DesignActions to theme and block trees with zero bleed across components."""
+    theme = site_definition.setdefault("theme", {})
+    pages = site_definition.get("pages") or []
+    modified_blocks: List[str] = []
+    applied_patch: Dict[str, Any] = {}
+    theme_keys_changed: List[str] = []
+
+    for action in actions:
+        comp = action.target_component.lower().strip()
+        prop = action.property_name.strip()
+        val = action.value
+
+        # Update theme for global targets or theme-level component properties
+        is_global_target = comp in ("global", "overall", "background")
+        is_theme_level_prop = (
+            prop in THEME_COMPONENT_OVERRIDE_KEYS
+            or prop.startswith(("navbar_", "footer_", "hero_", "cart_", "delivery_form_", "payment_", "place_order_", "pagination_", "filter_", "review_", "support_", "notification_", "profile_"))
+            or comp in ("navbar", "footer", "hero", "cart", "order_summary", "delivery_form", "payment", "place_order", "filter", "pagination", "review", "support", "notification", "profile")
+        )
+
+        if is_global_target or is_theme_level_prop:
+            if theme.get(prop) != val:
+                theme[prop] = val
+                theme_keys_changed.append(prop)
+            applied_patch[prop] = val
+
+        # Resolve block targets
+        if is_global_target:
+            target_norm_types = None
+        elif comp in COMPONENT_BLOCK_TARGETS:
+            target_norm_types = set(COMPONENT_BLOCK_TARGETS[comp])
+        else:
+            target_norm_types = {_norm_block_type(comp)}
+
+        for page in pages:
+            for block in page.get("blocks", []):
+                btype = str(block.get("type", "")).lower()
+                norm_btype = _norm_block_type(btype)
+                bprops = block.setdefault("props", {})
+
+                # Check block match
+                matches = is_global_target or (target_norm_types and any(t in norm_btype for t in target_norm_types))
+                if not matches:
+                    continue
+
+                # Apply property
+                if prop == "card_bg":
+                    bprops["card_bg_color"] = val
+                    bprops["card_bg"] = val
+                elif prop in ("outer_bg_color", "grid_bg"):
+                    bprops["outer_bg_color"] = val
+                    bprops["grid_bg"] = val
+                elif prop in ("card_radius", "border_radius"):
+                    bprops["card_radius"] = val
+                    bprops["border_radius"] = val
+                elif prop in ("card_text_color", "product_name_color"):
+                    bprops["card_text_color"] = val
+                    bprops["product_name_color"] = val
+                elif prop in ("title_color", "grid_text_color"):
+                    bprops["title_color"] = val
+                    bprops["grid_text_color"] = val
+                else:
+                    bprops[prop] = val
+
+                # Synchronize Hero Slides & CTAs
+                if "hero" in norm_btype or "banner" in norm_btype:
+                    if prop in ("hero_accent", "accent_color", "button_bg_color"):
+                        bprops["hero_accent"] = val
+                        bprops["accent_color"] = val
+                        bprops["button_bg_color"] = val
+                        for slide in bprops.get("slides", []):
+                            if isinstance(slide, dict):
+                                slide["accent_color"] = val
+                                if "primary_cta" in slide and isinstance(slide["primary_cta"], dict):
+                                    slide["primary_cta"]["bg_color"] = val
+                    elif prop in ("hero_bg", "background_color"):
+                        for slide in bprops.get("slides", []):
+                            if isinstance(slide, dict):
+                                slide["background_color"] = val
+                    elif prop in ("hero_text_color", "text_color"):
+                        for slide in bprops.get("slides", []):
+                            if isinstance(slide, dict):
+                                slide["text_color"] = val
+
+                applied_patch[prop] = val
+                if btype not in modified_blocks:
+                    modified_blocks.append(btype)
+
+    return bool(applied_patch or modified_blocks), modified_blocks, applied_patch, theme_keys_changed
+
+
 def apply_theme_to_blocks(pages: List[Dict[str, Any]], patch_dict: Dict[str, Any], target_type: Optional[str] = None) -> List[str]:
-    """Updates block props across all page definitions in-place with isolated component scoping.
-    Returns a list of block types that were modified."""
-    is_overall = not target_type or target_type.lower() in ["overall", "webpage", "website", "site", "all", "entire"]
-    target_clean = (target_type or "").lower().strip()
+    """Compatibility wrapper that translates patch_dict into DesignActions and applies them cleanly."""
+    target_clean = (target_type or "overall").lower().strip()
+    actions = []
 
     if target_clean.startswith("multi:"):
-        active_targets = {t.strip() for t in target_clean[6:].split(",") if t.strip()}
+        targets = [t.strip() for t in target_clean[6:].split(",") if t.strip()]
     else:
-        active_targets = {target_clean} if target_clean else set()
+        targets = [target_clean]
 
-    modified_blocks: List[str] = []
+    for comp in targets:
+        for prop, val in patch_dict.items():
+            actions.append(DesignAction(
+                target_component=comp,
+                target_element="property",
+                property_name=prop,
+                value=val,
+                reasoning=f"Applying {prop} to {comp}"
+            ))
 
-    for page in pages:
-        blocks = page.get("blocks") or []
-        for block in blocks:
-            btype = str(block.get("type") or "").lower()
-            norm_btype = _norm_block_type(btype)
-            bprops = block.setdefault("props", {})
-            props_changed = False
-
-            if is_overall:
-                # Purge hardcoded block-level color overrides so components inherit cleanly from siteDefinition.theme
-                for key in [
-                    "card_bg_color", "outer_bg_color", "background_color", "card_bg",
-                    "secondary_bg", "primary_bg", "title_color", "brand_color",
-                    "price_color", "original_price_color", "rating_star_color",
-                    "text_color", "accent_color", "panel_color", "input_color",
-                    "border_color", "soft_border_color", "navbar_bg", "navbar_outer_bg",
-                    "navbar_text_color", "navbar_border_color", "footer_bg",
-                    "footer_text_color", "footer_muted_color", "footer_border_color",
-                    "hero_bg", "hero_text_color", "hero_accent",
-                    "button_bg_color", "button_text_color", "card_color", "active_bg_color"
-                ] + list(ALL_COMPONENT_OVERRIDE_KEYS):
-                    if key in bprops:
-                        bprops.pop(key, None)
-                        props_changed = True
-            else:
-                # 1. Navbar, Notification, & Profile Dropdown Block Prop Sync
-                if any(t in active_targets for t in ["navbar", "header", "notification", "profile"]) and ("navbar" in norm_btype or "header" in norm_btype):
-                    if "navbar_bg" in patch_dict:
-                        bprops["navbar_bg"] = patch_dict["navbar_bg"]
-                        bprops["background_color"] = patch_dict["navbar_bg"]
-                        props_changed = True
-                    if "navbar_text_color" in patch_dict:
-                        bprops["navbar_text_color"] = patch_dict["navbar_text_color"]
-                        bprops["text_color"] = patch_dict["navbar_text_color"]
-                        props_changed = True
-                    if "navbar_border_color" in patch_dict:
-                        bprops["navbar_border_color"] = patch_dict["navbar_border_color"]
-                        props_changed = True
-                    elif "border_color" in patch_dict:
-                        bprops["navbar_border_color"] = patch_dict["border_color"]
-                        props_changed = True
-                    if "navbar_height" in patch_dict:
-                        bprops["navbar_height"] = patch_dict["navbar_height"]
-                        props_changed = True
-                    if "navbar_padding_x" in patch_dict:
-                        bprops["navbar_padding_x"] = patch_dict["navbar_padding_x"]
-                        props_changed = True
-                    if "navbar_variant" in patch_dict:
-                        bprops["variant"] = patch_dict["navbar_variant"]
-                        bprops["navbar_variant"] = patch_dict["navbar_variant"]
-                        props_changed = True
-                    if "cart_badge_bg" in patch_dict:
-                        bprops["cart_badge_bg"] = patch_dict["cart_badge_bg"]
-                        props_changed = True
-                    if "cart_badge_text" in patch_dict:
-                        bprops["cart_badge_text"] = patch_dict["cart_badge_text"]
-                        props_changed = True
-                    if "dialog_bg" in patch_dict:
-                        bprops["dialog_bg"] = patch_dict["dialog_bg"]
-                        props_changed = True
-                    if "navbar_notification_icon_variant" in patch_dict:
-                        bprops["navbar_notification_icon_variant"] = patch_dict["navbar_notification_icon_variant"]
-                        props_changed = True
-                    if "navbar_account_icon_variant" in patch_dict:
-                        bprops["navbar_account_icon_variant"] = patch_dict["navbar_account_icon_variant"]
-                        props_changed = True
-
-                # 2. Footer Block Prop Sync
-                elif "footer" in active_targets and "footer" in norm_btype:
-                    if "footer_bg" in patch_dict:
-                        bprops["footer_bg"] = patch_dict["footer_bg"]
-                        bprops["background_color"] = patch_dict["footer_bg"]
-                        props_changed = True
-                    if "footer_text_color" in patch_dict:
-                        bprops["footer_text_color"] = patch_dict["footer_text_color"]
-                        bprops["text_color"] = patch_dict["footer_text_color"]
-                        props_changed = True
-                    if "footer_border_color" in patch_dict:
-                        bprops["border_color"] = patch_dict["footer_border_color"]
-                        props_changed = True
-                    elif "border_color" in patch_dict:
-                        bprops["border_color"] = patch_dict["border_color"]
-                        props_changed = True
-                    if "footer_muted_color" in patch_dict:
-                        bprops["footer_muted_color"] = patch_dict["footer_muted_color"]
-                        props_changed = True
-                    elif "muted_text" in patch_dict:
-                        bprops["footer_muted_color"] = patch_dict["muted_text"]
-                        props_changed = True
-                    if "footer_padding_y" in patch_dict:
-                        bprops["padding_y"] = patch_dict["footer_padding_y"]
-                        bprops["footer_padding_y"] = patch_dict["footer_padding_y"]
-                        props_changed = True
-                    if "footer_max_width" in patch_dict:
-                        bprops["max_width"] = patch_dict["footer_max_width"]
-                        bprops["footer_max_width"] = patch_dict["footer_max_width"]
-                        props_changed = True
-                    if "footer_layout" in patch_dict:
-                        bprops["footer_layout"] = patch_dict["footer_layout"]
-                        props_changed = True
-
-                # 2B. Hero Banner Block Prop Sync (updates existing banner slides and CTA button colors)
-                elif any(t in active_targets for t in ["hero", "banner", "hero_banner"]) and ("hero" in norm_btype or "banner" in norm_btype):
-                    if "hero_accent" in patch_dict or "accent_color" in patch_dict:
-                        btn_color = patch_dict.get("hero_accent") or patch_dict.get("accent_color")
-                        bprops["hero_accent"] = btn_color
-                        bprops["accent_color"] = btn_color
-                        bprops["button_bg_color"] = btn_color
-                        for slide in bprops.get("slides", []):
-                            if isinstance(slide, dict):
-                                slide["accent_color"] = btn_color
-                                if "primary_cta" in slide and isinstance(slide["primary_cta"], dict):
-                                    slide["primary_cta"]["bg_color"] = btn_color
-                        props_changed = True
-                    if "hero_bg" in patch_dict or "background_color" in patch_dict or "bg_color" in patch_dict:
-                        bg_val = patch_dict.get("hero_bg") or patch_dict.get("background_color") or patch_dict.get("bg_color")
-                        bprops["hero_bg"] = bg_val
-                        bprops["background_color"] = bg_val
-                        for slide in bprops.get("slides", []):
-                            if isinstance(slide, dict):
-                                slide["background_color"] = bg_val
-                        props_changed = True
-                    if "hero_text_color" in patch_dict or "text_color" in patch_dict:
-                        txt_val = patch_dict.get("hero_text_color") or patch_dict.get("text_color")
-                        bprops["hero_text_color"] = txt_val
-                        bprops["text_color"] = txt_val
-                        for slide in bprops.get("slides", []):
-                            if isinstance(slide, dict):
-                                slide["text_color"] = txt_val
-                        props_changed = True
-                    if "banner_height" in patch_dict:
-                        bprops["banner_height"] = patch_dict["banner_height"]
-                        bprops["height"] = patch_dict["banner_height"]
-                        props_changed = True
-                    if "border_radius" in patch_dict:
-                        bprops["border_radius"] = patch_dict["border_radius"]
-                        props_changed = True
-
-                # 3. Product Detail Page Block Prop Sync
-                elif "product_detail" in active_targets and any(d in norm_btype for d in ["productdetail", "productinfo", "productgallery", "purchasepanel"]):
-                    if "product_detail_bg" in patch_dict:
-                        bprops["background_color"] = patch_dict["product_detail_bg"]
-                        bprops["panel_color"] = patch_dict["product_detail_bg"]
-                        props_changed = True
-                    if "product_detail_text" in patch_dict:
-                        bprops["text_color"] = patch_dict["product_detail_text"]
-                        props_changed = True
-                    if "product_detail_btn_bg" in patch_dict:
-                        bprops["button_bg_color"] = patch_dict["product_detail_btn_bg"]
-                        props_changed = True
-                    if "product_detail_btn_text" in patch_dict:
-                        bprops["button_text_color"] = patch_dict["product_detail_btn_text"]
-                        props_changed = True
-                    if "product_detail_padding" in patch_dict:
-                        bprops["padding_y"] = patch_dict["product_detail_padding"]
-                        bprops["padding_x"] = patch_dict["product_detail_padding"]
-                        bprops["product_detail_padding"] = patch_dict["product_detail_padding"]
-                        props_changed = True
-                    if "product_detail_radius" in patch_dict:
-                        bprops["card_border_radius"] = patch_dict["product_detail_radius"]
-                        bprops["image_border_radius"] = patch_dict["product_detail_radius"]
-                        bprops["product_detail_radius"] = patch_dict["product_detail_radius"]
-                        props_changed = True
-                    if "image_aspect_ratio" in patch_dict:
-                        bprops["image_aspect_ratio"] = patch_dict["image_aspect_ratio"]
-                        props_changed = True
-                    if "image_fit" in patch_dict:
-                        bprops["image_fit"] = patch_dict["image_fit"]
-                        props_changed = True
-
-                # 4. Product Carousel Block Prop Sync (strictly scoped to productcarousel)
-                elif norm_btype == "productcarousel" and any(t in active_targets for t in ["product_carousel", "carousel", "card", "product_card"]):
-                    is_carousel_target = any(t in active_targets for t in ["product_carousel", "carousel"])
-                    if is_carousel_target:
-                        if "outer_bg_color" in patch_dict:
-                            bprops["outer_bg_color"] = patch_dict["outer_bg_color"]
-                            bprops["background_color"] = patch_dict["outer_bg_color"]
-                            props_changed = True
-                        elif "grid_bg" in patch_dict:
-                            bprops["outer_bg_color"] = patch_dict["grid_bg"]
-                            bprops["background_color"] = patch_dict["grid_bg"]
-                            props_changed = True
-                        if "title_color" in patch_dict:
-                            bprops["title_color"] = patch_dict["title_color"]
-                            props_changed = True
-                        elif "grid_text_color" in patch_dict:
-                            bprops["title_color"] = patch_dict["grid_text_color"]
-                            props_changed = True
-                        elif "text_color" in patch_dict:
-                            bprops["title_color"] = patch_dict["text_color"]
-                            props_changed = True
-                        if "subtitle_color" in patch_dict:
-                            bprops["subtitle_color"] = patch_dict["subtitle_color"]
-                            props_changed = True
-                        if "grid_gap" in patch_dict:
-                            bprops["grid_gap"] = patch_dict["grid_gap"]
-                            bprops["gap"] = patch_dict["grid_gap"]
-                            props_changed = True
-
-                    # Card tokens on product carousel
-                    if "card_bg_color" in patch_dict:
-                        bprops["card_bg_color"] = patch_dict["card_bg_color"]
-                        props_changed = True
-                    elif "card_bg" in patch_dict:
-                        bprops["card_bg_color"] = patch_dict["card_bg"]
-                        props_changed = True
-                    if "card_border_color" in patch_dict:
-                        bprops["card_border_color"] = patch_dict["card_border_color"]
-                        props_changed = True
-                    if "card_radius" in patch_dict:
-                        bprops["card_radius"] = patch_dict["card_radius"]
-                        props_changed = True
-                    if "card_padding" in patch_dict:
-                        bprops["card_padding"] = patch_dict["card_padding"]
-                        bprops["padding_y"] = patch_dict["card_padding"]
-                        bprops["padding_x"] = patch_dict["card_padding"]
-                        props_changed = True
-                    if "card_shadow" in patch_dict:
-                        bprops["card_shadow"] = patch_dict["card_shadow"]
-                        props_changed = True
-                    if "product_name_color" in patch_dict:
-                        bprops["product_name_color"] = patch_dict["product_name_color"]
-                        bprops["product_title_color"] = patch_dict["product_name_color"]
-                        props_changed = True
-                    elif "card_text_color" in patch_dict:
-                        bprops["card_text_color"] = patch_dict["card_text_color"]
-                        bprops["product_name_color"] = patch_dict["card_text_color"]
-                        bprops["product_title_color"] = patch_dict["card_text_color"]
-                        props_changed = True
-                    elif "text_color" in patch_dict:
-                        bprops["card_text_color"] = patch_dict["text_color"]
-                        bprops["product_name_color"] = patch_dict["text_color"]
-                        bprops["product_title_color"] = patch_dict["text_color"]
-                        props_changed = True
-                    if "price_color" in patch_dict:
-                        bprops["price_color"] = patch_dict["price_color"]
-                        props_changed = True
-                    if "original_price_color" in patch_dict:
-                        bprops["original_price_color"] = patch_dict["original_price_color"]
-                        props_changed = True
-                    if "rating_star_color" in patch_dict:
-                        bprops["rating_star_color"] = patch_dict["rating_star_color"]
-                        props_changed = True
-                    if "image_aspect_ratio" in patch_dict:
-                        bprops["image_aspect_ratio"] = patch_dict["image_aspect_ratio"]
-                        props_changed = True
-                    if "image_fit" in patch_dict:
-                        bprops["image_fit"] = patch_dict["image_fit"]
-                        props_changed = True
-                    if "image_bg" in patch_dict:
-                        bprops["image_bg"] = patch_dict["image_bg"]
-                        props_changed = True
-                    if "image_radius" in patch_dict:
-                        bprops["image_radius"] = patch_dict["image_radius"]
-                        bprops["image_corner_radius"] = patch_dict["image_radius"]
-                        props_changed = True
-
-                # 5. Product Grid Block Prop Sync (strictly scoped to productgrid)
-                elif norm_btype == "productgrid" and any(t in active_targets for t in ["product_grid", "card", "product_card"]):
-                    is_grid_target = "product_grid" in active_targets
-                    if is_grid_target:
-                        if "outer_bg_color" in patch_dict:
-                            bprops["outer_bg_color"] = patch_dict["outer_bg_color"]
-                            bprops["background_color"] = patch_dict["outer_bg_color"]
-                            props_changed = True
-                        elif "grid_bg" in patch_dict:
-                            bprops["outer_bg_color"] = patch_dict["grid_bg"]
-                            bprops["background_color"] = patch_dict["grid_bg"]
-                            props_changed = True
-                        if "title_color" in patch_dict:
-                            bprops["title_color"] = patch_dict["title_color"]
-                            props_changed = True
-                        elif "grid_text_color" in patch_dict:
-                            bprops["title_color"] = patch_dict["grid_text_color"]
-                            props_changed = True
-                        elif "text_color" in patch_dict:
-                            bprops["title_color"] = patch_dict["text_color"]
-                            props_changed = True
-                        if "subtitle_color" in patch_dict:
-                            bprops["subtitle_color"] = patch_dict["subtitle_color"]
-                            props_changed = True
-                        if "grid_gap" in patch_dict:
-                            bprops["grid_gap"] = patch_dict["grid_gap"]
-                            bprops["gap"] = patch_dict["grid_gap"]
-                            props_changed = True
-
-                    # Card tokens on product grid
-                    if "card_bg_color" in patch_dict:
-                        bprops["card_bg_color"] = patch_dict["card_bg_color"]
-                        props_changed = True
-                    elif "card_bg" in patch_dict:
-                        bprops["card_bg_color"] = patch_dict["card_bg"]
-                        props_changed = True
-                    if "card_border_color" in patch_dict:
-                        bprops["card_border_color"] = patch_dict["card_border_color"]
-                        props_changed = True
-                    if "card_radius" in patch_dict:
-                        bprops["card_radius"] = patch_dict["card_radius"]
-                        props_changed = True
-                    if "card_padding" in patch_dict:
-                        bprops["card_padding"] = patch_dict["card_padding"]
-                        bprops["padding_y"] = patch_dict["card_padding"]
-                        bprops["padding_x"] = patch_dict["card_padding"]
-                        props_changed = True
-                    if "card_shadow" in patch_dict:
-                        bprops["card_shadow"] = patch_dict["card_shadow"]
-                        props_changed = True
-                    if "product_name_color" in patch_dict:
-                        bprops["product_name_color"] = patch_dict["product_name_color"]
-                        bprops["product_title_color"] = patch_dict["product_name_color"]
-                        props_changed = True
-                    elif "card_text_color" in patch_dict:
-                        bprops["card_text_color"] = patch_dict["card_text_color"]
-                        bprops["product_name_color"] = patch_dict["card_text_color"]
-                        bprops["product_title_color"] = patch_dict["card_text_color"]
-                        props_changed = True
-                    elif "text_color" in patch_dict:
-                        bprops["card_text_color"] = patch_dict["text_color"]
-                        bprops["product_name_color"] = patch_dict["text_color"]
-                        bprops["product_title_color"] = patch_dict["text_color"]
-                        props_changed = True
-                    if "price_color" in patch_dict:
-                        bprops["price_color"] = patch_dict["price_color"]
-                        props_changed = True
-                    if "original_price_color" in patch_dict:
-                        bprops["original_price_color"] = patch_dict["original_price_color"]
-                        props_changed = True
-                    if "rating_star_color" in patch_dict:
-                        bprops["rating_star_color"] = patch_dict["rating_star_color"]
-                        props_changed = True
-                    if "image_aspect_ratio" in patch_dict:
-                        bprops["image_aspect_ratio"] = patch_dict["image_aspect_ratio"]
-                        props_changed = True
-                    if "image_fit" in patch_dict:
-                        bprops["image_fit"] = patch_dict["image_fit"]
-                        props_changed = True
-                    if "image_bg" in patch_dict:
-                        bprops["image_bg"] = patch_dict["image_bg"]
-                        props_changed = True
-                    if "image_radius" in patch_dict:
-                        bprops["image_radius"] = patch_dict["image_radius"]
-                        bprops["image_corner_radius"] = patch_dict["image_radius"]
-                        props_changed = True
-
-                # 6. Section Group Carousel Block Prop Sync (strictly scoped to sectiongroupcarousel)
-                elif norm_btype in {"sectiongroupcarousel", "categorystorycarousel"} and any(t in active_targets for t in ["section_group_carousel", "carousel"]):
-                    if "outer_bg_color" in patch_dict:
-                        bprops["outer_bg_color"] = patch_dict["outer_bg_color"]
-                        bprops["background_color"] = patch_dict["outer_bg_color"]
-                        props_changed = True
-                    elif "grid_bg" in patch_dict:
-                        bprops["outer_bg_color"] = patch_dict["grid_bg"]
-                        bprops["background_color"] = patch_dict["grid_bg"]
-                        props_changed = True
-                    if "card_bg_color" in patch_dict:
-                        bprops["card_bg_color"] = patch_dict["card_bg_color"]
-                        props_changed = True
-                    elif "card_bg" in patch_dict:
-                        bprops["card_bg_color"] = patch_dict["card_bg"]
-                        props_changed = True
-                    if "card_border_color" in patch_dict:
-                        bprops["card_border_color"] = patch_dict["card_border_color"]
-                        props_changed = True
-                    if "card_radius" in patch_dict:
-                        bprops["card_radius"] = patch_dict["card_radius"]
-                        props_changed = True
-                    if "card_shadow" in patch_dict:
-                        bprops["card_shadow"] = patch_dict["card_shadow"]
-                        props_changed = True
-                    if "card_padding" in patch_dict:
-                        bprops["card_padding"] = patch_dict["card_padding"]
-                        props_changed = True
-                    if "title_color" in patch_dict:
-                        bprops["title_color"] = patch_dict["title_color"]
-                        props_changed = True
-                    elif "grid_text_color" in patch_dict:
-                        bprops["title_color"] = patch_dict["grid_text_color"]
-                        props_changed = True
-                    elif "text_color" in patch_dict:
-                        bprops["title_color"] = patch_dict["text_color"]
-                        props_changed = True
-                    if "subtitle_color" in patch_dict:
-                        bprops["subtitle_color"] = patch_dict["subtitle_color"]
-                        props_changed = True
-                    if "card_title_color" in patch_dict:
-                        bprops["card_title_color"] = patch_dict["card_title_color"]
-                        props_changed = True
-                    elif "card_text_color" in patch_dict:
-                        bprops["card_title_color"] = patch_dict["card_text_color"]
-                        props_changed = True
-                    elif "text_color" in patch_dict:
-                        bprops["card_title_color"] = patch_dict["text_color"]
-                        props_changed = True
-                    if "accent_color" in patch_dict:
-                        bprops["accent_color"] = patch_dict["accent_color"]
-                        props_changed = True
-                    if "badge_bg_color" in patch_dict:
-                        bprops["badge_bg_color"] = patch_dict["badge_bg_color"]
-                        props_changed = True
-                    if "badge_text_color" in patch_dict:
-                        bprops["badge_text_color"] = patch_dict["badge_text_color"]
-                        props_changed = True
-                    if "grid_gap" in patch_dict:
-                        bprops["grid_gap"] = patch_dict["grid_gap"]
-                        bprops["gap"] = patch_dict["grid_gap"]
-                        props_changed = True
-                    if "image_fit" in patch_dict:
-                        bprops["image_fit"] = patch_dict["image_fit"]
-                        props_changed = True
-                    if "image_bg" in patch_dict:
-                        bprops["image_bg"] = patch_dict["image_bg"]
-                        props_changed = True
-
-                # 7. Category Grid Block Prop Sync (strictly scoped to categorygrid)
-                elif norm_btype == "categorygrid" and any(t in active_targets for t in ["category_grid", "category"]):
-                    if "outer_bg_color" in patch_dict:
-                        bprops["outer_bg_color"] = patch_dict["outer_bg_color"]
-                        bprops["background_color"] = patch_dict["outer_bg_color"]
-                        props_changed = True
-                    elif "grid_bg" in patch_dict:
-                        bprops["outer_bg_color"] = patch_dict["grid_bg"]
-                        bprops["background_color"] = patch_dict["grid_bg"]
-                        props_changed = True
-                    if "card_bg_color" in patch_dict:
-                        bprops["card_bg_color"] = patch_dict["card_bg_color"]
-                        props_changed = True
-                    elif "card_bg" in patch_dict:
-                        bprops["card_bg_color"] = patch_dict["card_bg"]
-                        props_changed = True
-                    if "card_border_color" in patch_dict:
-                        bprops["card_border_color"] = patch_dict["card_border_color"]
-                        props_changed = True
-                    if "card_radius" in patch_dict:
-                        bprops["card_radius"] = patch_dict["card_radius"]
-                        props_changed = True
-                    if "card_shadow" in patch_dict:
-                        bprops["card_shadow"] = patch_dict["card_shadow"]
-                        props_changed = True
-                    if "title_color" in patch_dict:
-                        bprops["title_color"] = patch_dict["title_color"]
-                        props_changed = True
-                    elif "grid_text_color" in patch_dict:
-                        bprops["title_color"] = patch_dict["grid_text_color"]
-                        props_changed = True
-                    elif "text_color" in patch_dict:
-                        bprops["title_color"] = patch_dict["text_color"]
-                        props_changed = True
-                    if "card_text_color" in patch_dict:
-                        bprops["card_text_color"] = patch_dict["card_text_color"]
-                        props_changed = True
-                    elif "text_color" in patch_dict:
-                        bprops["card_text_color"] = patch_dict["text_color"]
-                        props_changed = True
-                    if "subtitle_color" in patch_dict:
-                        bprops["subtitle_color"] = patch_dict["subtitle_color"]
-                        props_changed = True
-                    if "accent_color" in patch_dict:
-                        bprops["accent_color"] = patch_dict["accent_color"]
-                        props_changed = True
-                    if "border_color" in patch_dict:
-                        bprops["card_border_color"] = patch_dict["border_color"]
-                        props_changed = True
-                    if "grid_gap" in patch_dict:
-                        bprops["grid_gap"] = patch_dict["grid_gap"]
-                        props_changed = True
-                    if "badge_bg_color" in patch_dict:
-                        bprops["badge_bg_color"] = patch_dict["badge_bg_color"]
-                        props_changed = True
-                    if "badge_text_color" in patch_dict:
-                        bprops["badge_text_color"] = patch_dict["badge_text_color"]
-                        props_changed = True
-
-                # 8. Brand Store Grid Block Prop Sync
-                elif norm_btype == "brandstoregrid" and any(t in active_targets for t in ["brand_store", "brand_store_grid"]):
-                    if "outer_bg_color" in patch_dict:
-                        bprops["outer_bg_color"] = patch_dict["outer_bg_color"]
-                        props_changed = True
-                    if "card_bg_color" in patch_dict:
-                        bprops["card_bg_color"] = patch_dict["card_bg_color"]
-                        props_changed = True
-                    if "card_border_color" in patch_dict:
-                        bprops["card_border_color"] = patch_dict["card_border_color"]
-                        props_changed = True
-                    if "title_color" in patch_dict:
-                        bprops["title_color"] = patch_dict["title_color"]
-                        props_changed = True
-
-                # 9. Cart / Cart Drawer Block Prop Sync
-                elif "cart" in active_targets and any(k in norm_btype for k in ["cartsidebar", "cartitems", "cartview", "cart"]):
-                    if "cart_bg" in patch_dict:
-                        bprops["background_color"] = patch_dict["cart_bg"]
-                        bprops["panel_color"] = patch_dict["cart_bg"]
-                        props_changed = True
-                    if "cart_card_bg" in patch_dict:
-                        bprops["card_color"] = patch_dict["cart_card_bg"]
-                        props_changed = True
-                    if "cart_text_color" in patch_dict:
-                        bprops["text_color"] = patch_dict["cart_text_color"]
-                        props_changed = True
-                    if "cart_accent_color" in patch_dict:
-                        bprops["accent_color"] = patch_dict["cart_accent_color"]
-                        props_changed = True
-                    if "cart_border_color" in patch_dict:
-                        bprops["border_color"] = patch_dict["cart_border_color"]
-                        props_changed = True
-                    if "cart_radius" in patch_dict:
-                        bprops["cart_radius"] = patch_dict["cart_radius"]
-                        bprops["border_radius"] = patch_dict["cart_radius"]
-                        props_changed = True
-                    if "cart_padding" in patch_dict:
-                        bprops["cart_padding"] = patch_dict["cart_padding"]
-                        bprops["padding_y"] = patch_dict["cart_padding"]
-                        bprops["padding_x"] = patch_dict["cart_padding"]
-                        props_changed = True
-
-                # 10. Hero Banner / Slider Block Prop Sync
-                elif any(h in norm_btype for h in ["hero", "banner", "slider"]) and any(h in active_targets for h in ["hero", "banner", "slider", "hero_banner"]):
-                    if "hero_bg" in patch_dict:
-                        bprops["hero_bg"] = patch_dict["hero_bg"]
-                        bprops["background_color"] = patch_dict["hero_bg"]
-                        props_changed = True
-                    if "hero_text_color" in patch_dict:
-                        bprops["hero_text_color"] = patch_dict["hero_text_color"]
-                        bprops["text_color"] = patch_dict["hero_text_color"]
-                        props_changed = True
-                    if "hero_accent" in patch_dict:
-                        bprops["hero_accent"] = patch_dict["hero_accent"]
-                        bprops["accent_color"] = patch_dict["hero_accent"]
-                        props_changed = True
-                    if "hero_headline" in patch_dict:
-                        bprops["headline"] = patch_dict["hero_headline"]
-                        props_changed = True
-                    if "hero_subheadline" in patch_dict:
-                        bprops["subheadline"] = patch_dict["hero_subheadline"]
-                        props_changed = True
-                    if "hero_badge" in patch_dict:
-                        bprops["badge"] = patch_dict["hero_badge"]
-                        props_changed = True
-                    if "hero_image_fit" in patch_dict:
-                        bprops["image_fit"] = patch_dict["hero_image_fit"]
-                        props_changed = True
-                    if "banner_height" in patch_dict:
-                        bprops["banner_height"] = patch_dict["banner_height"]
-                        props_changed = True
-                    if "border_radius" in patch_dict:
-                        bprops["border_radius"] = patch_dict["border_radius"]
-                        props_changed = True
-                    if "size" in patch_dict:
-                        bprops["size"] = patch_dict["size"]
-                        props_changed = True
-
-                    if isinstance(bprops.get("slides"), list) and bprops["slides"]:
-                        for slide in bprops["slides"]:
-                            if isinstance(slide, dict):
-                                if "hero_bg" in patch_dict:
-                                    slide["background_color"] = patch_dict["hero_bg"]
-                                    slide["hero_bg"] = patch_dict["hero_bg"]
-                                    props_changed = True
-                                if "hero_text_color" in patch_dict:
-                                    slide["text_color"] = patch_dict["hero_text_color"]
-                                    slide["hero_text_color"] = patch_dict["hero_text_color"]
-                                    props_changed = True
-                                if "hero_accent" in patch_dict:
-                                    slide["accent_color"] = patch_dict["hero_accent"]
-                                    slide["hero_accent"] = patch_dict["hero_accent"]
-                                    props_changed = True
-                                if "banner_height" in patch_dict:
-                                    slide["banner_height"] = patch_dict["banner_height"]
-                                    props_changed = True
-                                if "border_radius" in patch_dict:
-                                    slide["border_radius"] = patch_dict["border_radius"]
-                                    props_changed = True
-                        first_slide = bprops["slides"][0]
-                        if isinstance(first_slide, dict):
-                            if "hero_headline" in patch_dict:
-                                first_slide["headline"] = patch_dict["hero_headline"]
-                                props_changed = True
-                            if "hero_subheadline" in patch_dict:
-                                first_slide["subheadline"] = patch_dict["hero_subheadline"]
-                                props_changed = True
-                            if "hero_badge" in patch_dict:
-                                first_slide["badge"] = patch_dict["hero_badge"]
-                                props_changed = True
-                            if "hero_cta_text" in patch_dict and "primary_cta" in first_slide:
-                                if isinstance(first_slide["primary_cta"], dict):
-                                    first_slide["primary_cta"]["label"] = patch_dict["hero_cta_text"]
-                                    props_changed = True
-                            if "hero_cta_href" in patch_dict and "primary_cta" in first_slide:
-                                if isinstance(first_slide["primary_cta"], dict):
-                                    first_slide["primary_cta"]["href"] = patch_dict["hero_cta_href"]
-                                    props_changed = True
-
-                # 11. Review Section Block Prop Sync
-                elif "review" in active_targets and any(r in norm_btype for r in ["review", "reviews", "ratings"]):
-                    if "review_card_bg" in patch_dict:
-                        bprops["card_bg_color"] = patch_dict["review_card_bg"]
-                        bprops["background_color"] = patch_dict["review_card_bg"]
-                        props_changed = True
-                    if "review_text_color" in patch_dict:
-                        bprops["text_color"] = patch_dict["review_text_color"]
-                        props_changed = True
-                    if "review_border_color" in patch_dict:
-                        bprops["border_color"] = patch_dict["review_border_color"]
-                        props_changed = True
-                    if "review_card_radius" in patch_dict:
-                        bprops["border_radius"] = patch_dict["review_card_radius"]
-                        bprops["review_card_radius"] = patch_dict["review_card_radius"]
-                        props_changed = True
-                    if "review_padding" in patch_dict:
-                        bprops["padding_y"] = patch_dict["review_padding"]
-                        bprops["padding_x"] = patch_dict["review_padding"]
-                        bprops["review_padding"] = patch_dict["review_padding"]
-                        props_changed = True
-
-                # 12. Delivery Form Block Prop Sync
-                elif any(d in active_targets for d in ["delivery", "delivery_form", "shipping", "address"]) and any(b in norm_btype for b in ["deliveryform", "checkoutform", "addressform"]):
-                    if "delivery_form_bg" in patch_dict:
-                        bprops["background_color"] = patch_dict["delivery_form_bg"]
-                        props_changed = True
-                    if "delivery_form_text" in patch_dict:
-                        bprops["text_color"] = patch_dict["delivery_form_text"]
-                        props_changed = True
-                    if "delivery_form_input_bg" in patch_dict:
-                        bprops["input_color"] = patch_dict["delivery_form_input_bg"]
-                        props_changed = True
-                    if "delivery_form_border" in patch_dict:
-                        bprops["border_color"] = patch_dict["delivery_form_border"]
-                        props_changed = True
-                    if "delivery_form_btn_bg" in patch_dict:
-                        bprops["accentColor"] = patch_dict["delivery_form_btn_bg"]
-                        props_changed = True
-                    if "delivery_form_btn_text" in patch_dict:
-                        bprops["button_text_color"] = patch_dict["delivery_form_btn_text"]
-                        props_changed = True
-                    if "delivery_form_radius" in patch_dict:
-                        bprops["border_radius"] = patch_dict["delivery_form_radius"]
-                        bprops["delivery_form_radius"] = patch_dict["delivery_form_radius"]
-                        props_changed = True
-                    if "delivery_form_padding" in patch_dict:
-                        bprops["padding_y"] = patch_dict["delivery_form_padding"]
-                        bprops["padding_x"] = patch_dict["delivery_form_padding"]
-                        bprops["delivery_form_padding"] = patch_dict["delivery_form_padding"]
-                        props_changed = True
-
-                # 13. Order History Block Prop Sync
-                elif any(o in active_targets for o in ["order_history", "orders", "my_orders", "order_card"]) and any(b in norm_btype for b in ["orderhistory", "orders", "customerorders", "orderslist"]):
-                    if "order_history_bg" in patch_dict:
-                        bprops["background_color"] = patch_dict["order_history_bg"]
-                        props_changed = True
-                    if "order_history_card_bg" in patch_dict:
-                        bprops["card_bg_color"] = patch_dict["order_history_card_bg"]
-                        props_changed = True
-                    if "order_history_text" in patch_dict:
-                        bprops["text_color"] = patch_dict["order_history_text"]
-                        props_changed = True
-                    if "order_history_border" in patch_dict:
-                        bprops["border_color"] = patch_dict["order_history_border"]
-                        props_changed = True
-                    if "order_history_radius" in patch_dict:
-                        bprops["border_radius"] = patch_dict["order_history_radius"]
-                        bprops["order_history_radius"] = patch_dict["order_history_radius"]
-                        props_changed = True
-
-                # 14. Order Summary Block Prop Sync
-                elif "order_summary" in active_targets and any(s in norm_btype for s in ["ordersummary", "checkoutsummary"]):
-                    if "summary_bg" in patch_dict:
-                        bprops["background_color"] = patch_dict["summary_bg"]
-                        bprops["panel_color"] = patch_dict["summary_bg"]
-                        props_changed = True
-                    if "summary_card_bg" in patch_dict:
-                        bprops["card_color"] = patch_dict["summary_card_bg"]
-                        props_changed = True
-                    if "summary_text_color" in patch_dict:
-                        bprops["text_color"] = patch_dict["summary_text_color"]
-                        props_changed = True
-                    if "summary_accent_color" in patch_dict:
-                        bprops["accent_color"] = patch_dict["summary_accent_color"]
-                        props_changed = True
-                    if "summary_border_color" in patch_dict:
-                        bprops["border_color"] = patch_dict["summary_border_color"]
-                        props_changed = True
-                    if "summary_radius" in patch_dict:
-                        bprops["border_radius"] = patch_dict["summary_radius"]
-                        bprops["summary_radius"] = patch_dict["summary_radius"]
-                        props_changed = True
-                    if "summary_padding" in patch_dict:
-                        bprops["padding_y"] = patch_dict["summary_padding"]
-                        bprops["padding_x"] = patch_dict["summary_padding"]
-                        bprops["summary_padding"] = patch_dict["summary_padding"]
-                        props_changed = True
-
-                # 15. Payment Methods Block Prop Sync
-                elif "payment" in active_targets and any(p in norm_btype for p in ["paymentmethods", "payment"]):
-                    if "payment_bg" in patch_dict:
-                        bprops["background_color"] = patch_dict["payment_bg"]
-                        props_changed = True
-                    if "payment_card_bg" in patch_dict:
-                        bprops["panel_color"] = patch_dict["payment_card_bg"]
-                        props_changed = True
-                    if "payment_text_color" in patch_dict:
-                        bprops["text_color"] = patch_dict["payment_text_color"]
-                        props_changed = True
-                    if "payment_accent_color" in patch_dict:
-                        bprops["accentColor"] = patch_dict["payment_accent_color"]
-                        props_changed = True
-                    if "payment_border_color" in patch_dict:
-                        bprops["border_color"] = patch_dict["payment_border_color"]
-                        props_changed = True
-                    if "payment_radius" in patch_dict:
-                        bprops["border_radius"] = patch_dict["payment_radius"]
-                        bprops["payment_radius"] = patch_dict["payment_radius"]
-                        props_changed = True
-                    if "payment_padding" in patch_dict:
-                        bprops["padding_y"] = patch_dict["payment_padding"]
-                        bprops["padding_x"] = patch_dict["payment_padding"]
-                        bprops["payment_padding"] = patch_dict["payment_padding"]
-                        props_changed = True
-
-                # 16. Place Order CTA Block Prop Sync
-                elif any(p in active_targets for p in ["place_order", "checkout_cta"]) and any(p in norm_btype for p in ["placeordercta", "checkoutcta"]):
-                    if "place_order_bg" in patch_dict:
-                        bprops["background_color"] = patch_dict["place_order_bg"]
-                        props_changed = True
-                    if "place_order_btn_bg" in patch_dict:
-                        bprops["accentColor"] = patch_dict["place_order_btn_bg"]
-                        bprops["button_bg_color"] = patch_dict["place_order_btn_bg"]
-                        props_changed = True
-                    if "place_order_btn_text" in patch_dict:
-                        bprops["button_text_color"] = patch_dict["place_order_btn_text"]
-                        props_changed = True
-                    if "place_order_text" in patch_dict:
-                        bprops["text_color"] = patch_dict["place_order_text"]
-                        props_changed = True
-                    if "place_order_radius" in patch_dict:
-                        bprops["border_radius"] = patch_dict["place_order_radius"]
-                        bprops["place_order_radius"] = patch_dict["place_order_radius"]
-                        props_changed = True
-                    if "place_order_btn_height" in patch_dict:
-                        bprops["button_height"] = patch_dict["place_order_btn_height"]
-                        bprops["place_order_btn_height"] = patch_dict["place_order_btn_height"]
-                        props_changed = True
-
-                # 17. Filter Toolbar Block Prop Sync
-                elif "filter" in active_targets and any(f in norm_btype for f in ["filtersidebar", "filter"]):
-                    if "filter_bg" in patch_dict:
-                        bprops["background_color"] = patch_dict["filter_bg"]
-                        props_changed = True
-                    if "filter_text_color" in patch_dict:
-                        bprops["text_color"] = patch_dict["filter_text_color"]
-                        props_changed = True
-                    if "filter_border_color" in patch_dict:
-                        bprops["border_color"] = patch_dict["filter_border_color"]
-                        props_changed = True
-                    if "filter_accent_color" in patch_dict:
-                        bprops["accent_color"] = patch_dict["filter_accent_color"]
-                        props_changed = True
-                    if "filter_radius" in patch_dict:
-                        bprops["border_radius"] = patch_dict["filter_radius"]
-                        bprops["filter_radius"] = patch_dict["filter_radius"]
-                        props_changed = True
-                    if "filter_padding" in patch_dict:
-                        bprops["padding_y"] = patch_dict["filter_padding"]
-                        bprops["padding_x"] = patch_dict["filter_padding"]
-                        bprops["filter_padding"] = patch_dict["filter_padding"]
-                        props_changed = True
-
-                # 18. Pagination Block Prop Sync
-                elif "pagination" in active_targets and "pagination" in norm_btype:
-                    if "pagination_bg" in patch_dict:
-                        bprops["background_color"] = patch_dict["pagination_bg"]
-                        props_changed = True
-                    if "pagination_text_color" in patch_dict:
-                        bprops["text_color"] = patch_dict["pagination_text_color"]
-                        props_changed = True
-                    if "pagination_active_bg" in patch_dict:
-                        bprops["active_bg_color"] = patch_dict["pagination_active_bg"]
-                        props_changed = True
-                    if "pagination_border_color" in patch_dict:
-                        bprops["border_color"] = patch_dict["pagination_border_color"]
-                        props_changed = True
-                    if "pagination_radius" in patch_dict:
-                        bprops["border_radius"] = patch_dict["pagination_radius"]
-                        bprops["pagination_radius"] = patch_dict["pagination_radius"]
-                        props_changed = True
-                    if "pagination_padding" in patch_dict:
-                        bprops["padding_y"] = patch_dict["pagination_padding"]
-                        bprops["padding_x"] = patch_dict["pagination_padding"]
-                        bprops["pagination_padding"] = patch_dict["pagination_padding"]
-                        props_changed = True
-
-                # 19. Customer Support / Help Desk Block Prop Sync
-                elif any(s in active_targets for s in ["support", "customer_support", "help", "helpdesk", "chat"]) and any(b in norm_btype for b in ["support", "customersupport", "supportpage", "supportdesk", "helpdesk"]):
-                    if "support_bg" in patch_dict:
-                        bprops["background_color"] = patch_dict["support_bg"]
-                        bprops["primary_bg"] = patch_dict["support_bg"]
-                        props_changed = True
-                    if "support_card_bg" in patch_dict:
-                        bprops["card_bg"] = patch_dict["support_card_bg"]
-                        props_changed = True
-                    if "support_chat_bg" in patch_dict:
-                        bprops["chat_bg"] = patch_dict["support_chat_bg"]
-                        props_changed = True
-                    if "support_accent_color" in patch_dict:
-                        bprops["accent_color"] = patch_dict["support_accent_color"]
-                        props_changed = True
-                    if "support_text_color" in patch_dict:
-                        bprops["text_color"] = patch_dict["support_text_color"]
-                        props_changed = True
-                    if "support_muted_text" in patch_dict:
-                        bprops["subtext_color"] = patch_dict["support_muted_text"]
-                        props_changed = True
-                    if "support_border_color" in patch_dict:
-                        bprops["border_color"] = patch_dict["support_border_color"]
-                        props_changed = True
-                    if "support_customer_bubble_bg" in patch_dict:
-                        bprops["customer_bubble_bg"] = patch_dict["support_customer_bubble_bg"]
-                        props_changed = True
-                    if "support_customer_bubble_text" in patch_dict:
-                        bprops["customer_bubble_text"] = patch_dict["support_customer_bubble_text"]
-                        props_changed = True
-                    if "support_agent_bubble_bg" in patch_dict:
-                        bprops["agent_bubble_bg"] = patch_dict["support_agent_bubble_bg"]
-                        props_changed = True
-                    if "support_agent_bubble_text" in patch_dict:
-                        bprops["agent_bubble_text"] = patch_dict["support_agent_bubble_text"]
-                        props_changed = True
-
-            if props_changed:
-                modified_blocks.append(btype)
-
+    dummy_site = {"theme": {}, "pages": pages}
+    _, modified_blocks, _, _ = execute_design_actions(dummy_site, actions)
     return modified_blocks
 
 
@@ -2375,8 +1373,6 @@ async def handle_color_and_design_request(
     pages = next_draft.get("pages") or []
     msg_lower = user_message.lower()
     data_cards: List[Dict[str, Any]] = []
-    design_modified = False
-    patch_applied: Dict[str, Any] = {}
 
     brand_name = next_draft.get("site", {}).get("brand_name") or "Store"
     domain = next_draft.get("site", {}).get("domain") or "E-Commerce"
@@ -2407,7 +1403,7 @@ async def handle_color_and_design_request(
             "unmatched_component": True,
         }
 
-    # 3. Banner & Slide Creation Handler
+    # 3. Banner & Slide Creation Handler (ONLY when user explicitly requests creating a new banner slide)
     if target_comp == "banner_create":
         new_slide = await generate_hero_banner_slide(
             user_message=user_message,
@@ -2434,10 +1430,7 @@ async def handle_color_and_design_request(
                 slides.insert(0, new_slide)
             
             next_draft["pages"] = pages
-            design_modified = True
-
             headline_text = new_slide.get('headline') or 'Promotional Offer'
-            badge_text = f" [{new_slide.get('badge')}]" if new_slide.get('badge') else ""
             coupon_text = f" Use coupon code **{new_slide.get('coupon_code')}**." if new_slide.get('coupon_code') else ""
 
             return {
@@ -2485,484 +1478,49 @@ async def handle_color_and_design_request(
             "target_component": target_comp,
         }
 
-    # 5. Glass Theme Direct Synthesis Handler
-    is_glass_query = any(w in msg_lower for w in [
-        "glass theme", "glass style", "glassmorphic", "frosted glass", "make it glass",
-        "glassmorphism", "glass effect", "translucent", "glass navbar", "navbar glass",
-        "glass look", "glassy", "frosted"
-    ])
-    
-    if is_glass_query:
-        is_overall = target_comp in ["overall", "webpage", "website", "site", "all", "entire", "full"] or any(w in msg_lower for w in ["whole", "all", "entire", "site", "website", "everywhere", "body", "cards", "full", "storefront"])
-        is_current_dark = (
-            theme.get("mode") == "dark"
-            or any(d in msg_lower for d in ["dark", "black", "luxury", "obsidian", "night", "cyber"])
-            or any(d in str(theme.get("primary_bg", "")).lower() for d in ["#0f172a", "#1e293b", "#000000", "#090d16"])
-        )
-
-        if target_comp == "notification":
-            glass_patch = {
-                "notification_drawer_bg": "rgba(15, 23, 42, 0.75)" if is_current_dark else "rgba(255, 255, 255, 0.75)",
-                "notification_drawer_text": "#f8fafc" if is_current_dark else "#0f172a",
-                "dialog_bg": "rgba(15, 23, 42, 0.75)" if is_current_dark else "rgba(255, 255, 255, 0.75)",
-                "border_color": "rgba(255, 255, 255, 0.18)" if is_current_dark else "rgba(255, 255, 255, 0.55)",
-            }
-            target_scope = "notification"
-        elif target_comp == "profile":
-            glass_patch = {
-                "profile_dropdown_bg": "rgba(15, 23, 42, 0.75)" if is_current_dark else "rgba(255, 255, 255, 0.75)",
-                "profile_dropdown_text": "#f8fafc" if is_current_dark else "#0f172a",
-                "dialog_bg": "rgba(15, 23, 42, 0.75)" if is_current_dark else "rgba(255, 255, 255, 0.75)",
-                "border_color": "rgba(255, 255, 255, 0.18)" if is_current_dark else "rgba(255, 255, 255, 0.55)",
-            }
-            target_scope = "profile"
-        elif "navbar" in target_comp:
-            glass_patch = {
-                "surface_materiality": "glass_navbar",
-                "navbar_layout": "glassmorphism_premium",
-                "navbar_variant": "floating",
-                "navbar_bg": "rgba(15, 23, 42, 0.72)" if is_current_dark else "rgba(255, 255, 255, 0.72)",
-                "navbar_text_color": "#f8fafc" if is_current_dark else "#0f172a",
-                "navbar_border_color": "rgba(255, 255, 255, 0.14)" if is_current_dark else "rgba(255, 255, 255, 0.45)",
-            }
-            target_scope = "navbar"
-        elif is_overall:
-            glass_patch = {
-                "surface_materiality": "full_glass",
-                "visual_style": "glassmorphic",
-                "navbar_layout": "glassmorphism_premium",
-                "navbar_variant": "floating",
-                "footer_layout": "glassmorphism_premium",
-                "navbar_bg": "rgba(15, 23, 42, 0.72)" if is_current_dark else "rgba(255, 255, 255, 0.72)",
-                "navbar_text_color": "#f8fafc" if is_current_dark else "#0f172a",
-                "navbar_border_color": "rgba(255, 255, 255, 0.14)" if is_current_dark else "rgba(255, 255, 255, 0.45)",
-                "primary_bg": (
-                    "radial-gradient(circle at 10% 15%, rgba(56, 189, 248, 0.18) 0%, transparent 45%), radial-gradient(circle at 90% 60%, rgba(139, 92, 246, 0.18) 0%, transparent 50%), radial-gradient(circle at 50% 90%, rgba(236, 72, 153, 0.12) 0%, transparent 45%), #090d16"
-                    if is_current_dark
-                    else "radial-gradient(circle at 10% 15%, rgba(56, 189, 248, 0.14) 0%, transparent 45%), radial-gradient(circle at 90% 60%, rgba(139, 92, 246, 0.12) 0%, transparent 50%), radial-gradient(circle at 50% 90%, rgba(236, 72, 153, 0.08) 0%, transparent 45%), #f8fafc"
-                ),
-                "text_color": "#f8fafc" if is_current_dark else "#0f172a",
-                "secondary_bg": "rgba(15, 23, 42, 0.65)" if is_current_dark else "rgba(255, 255, 255, 0.65)",
-                "card_bg": "rgba(15, 23, 42, 0.70)" if is_current_dark else "rgba(255, 255, 255, 0.70)",
-                "card_text_color": "#f8fafc" if is_current_dark else "#0f172a",
-                "card_border_color": "rgba(255, 255, 255, 0.14)" if is_current_dark else "rgba(255, 255, 255, 0.55)",
-                "card_shadow": "0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.16)" if is_current_dark else "0 8px 32px rgba(31, 38, 135, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.75)",
-                "border_color": "rgba(255, 255, 255, 0.14)" if is_current_dark else "rgba(255, 255, 255, 0.55)",
-                "footer_bg": "#090d16" if is_current_dark else "#0f172a",
-                "footer_text_color": "#ffffff",
-                "footer_muted_color": "#94a3b8",
-            }
-            target_scope = "overall"
-            for k in ALL_COMPONENT_OVERRIDE_KEYS:
-                theme.pop(k, None)
-        else:
-            glass_patch = None
-
-        if glass_patch:
-            theme.update(glass_patch)
-            apply_theme_to_blocks(pages, glass_patch, target_scope)
-            next_draft["theme"] = theme
-            next_draft["pages"] = pages
-            design_modified = True
-            patch_applied = glass_patch
-
-            target_name = "entire storefront" if target_scope == "overall" else target_scope.replace("_", " ").title()
-            return {
-                "design_modified": True,
-                "next_draft_definition": next_draft,
-                "data_cards": data_cards,
-                "applied_patch": patch_applied,
-                "target_component": target_scope,
-                "assistant_reply": f"Applied a premium glassmorphic visual style to your **{target_name}**.",
-            }
-
-    # 6. Dynamic Color & Theme Modification Handler via Color Theory Agent
-    color_res = await generate_component_color_patch(
+    # 5. Agentic Design Execution Pipeline
+    design_plan = await generate_agentic_design_plan(
         current_theme=theme,
-        color_request=user_message,
+        user_message=user_message,
         target_component=target_comp,
         session_id=session_id,
     )
-    ai_color_patch = color_res.get("color_patch") or {}
-    raw_keys = color_res.get("raw_patch") or {}
 
-    # Relative & Explicit Sizing / Dimension Heuristics across ALL Components
-    is_reduce = any(w in msg_lower for w in ["less", "small", "smaller", "compact", "short", "shorter", "reduce", "decrease", "thin", "thinner", "lower", "little less", "tiny", "tight", "tighter"])
-    is_increase = any(w in msg_lower for w in ["more", "big", "bigger", "large", "larger", "tall", "taller", "increase", "higher", "expand", "thick", "thicker", "wide", "wider", "spacious", "round", "rounded", "more rounded"])
-    px_match = re.search(r'(\d+)\s*(?:px|pixels)?', msg_lower)
-    explicit_num = int(px_match.group(1)) if px_match and 0 <= int(px_match.group(1)) <= 1200 else None
+    actions = list(design_plan.actions)
 
-    # 1. Navbar
-    if "navbar" in target_comp:
-        if is_glass_query:
-            ai_color_patch["surface_materiality"] = "glass_navbar"
-            ai_color_patch["navbar_layout"] = "glassmorphism_premium"
-            ai_color_patch["navbar_variant"] = "floating"
-            is_current_dark = theme.get("mode") == "dark" or any(d in str(theme.get("primary_bg", "")).lower() for d in ["#0f172a", "#1e293b", "#000000", "#090d16"])
-            if "navbar_bg" not in ai_color_patch:
-                ai_color_patch["navbar_bg"] = "rgba(15, 23, 42, 0.72)" if is_current_dark else "rgba(255, 255, 255, 0.72)"
-            if "navbar_border_color" not in ai_color_patch and not any(w in msg_lower for w in ["border", "stroke"]):
-                ai_color_patch["navbar_border_color"] = "rgba(255, 255, 255, 0.14)" if is_current_dark else "rgba(255, 255, 255, 0.45)"
-            if "navbar_text_color" not in ai_color_patch and not any(w in msg_lower for w in ["text", "color", "tex"]):
-                ai_color_patch["navbar_text_color"] = "#f8fafc" if is_current_dark else "#0f172a"
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["height", "size", "tall", "thick"]):
-            current_h = int(theme.get("navbar_height") or 64)
-            if explicit_num and 40 <= explicit_num <= 140:
-                ai_color_patch["navbar_height"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["navbar_height"] = max(44, current_h - 12)
-            elif is_increase:
-                ai_color_patch["navbar_height"] = min(110, current_h + 12)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["padding", "spacing", "pad"]):
-            current_p = int(theme.get("navbar_padding_x") or 16)
-            if explicit_num and 4 <= explicit_num <= 64:
-                ai_color_patch["navbar_padding_x"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["navbar_padding_x"] = max(8, current_p - 6)
-            elif is_increase:
-                ai_color_patch["navbar_padding_x"] = min(48, current_p + 6)
+    # 5B. Contrast & Accessibility Safety Harmonizer
+    # If an action sets a background, verify that a readable text color exists or synthesize one
+    for a in list(actions):
+        if a.property_name in BG_TO_TEXT_MAP and isinstance(a.value, str):
+            comp_name, text_prop = BG_TO_TEXT_MAP[a.property_name]
+            has_user_text_action = any(
+                other.property_name == text_prop or "text" in other.property_name
+                for other in actions
+            )
+            if not has_user_text_action:
+                safe_text = ensure_accessible_contrast(None, a.value)
+                actions.append(DesignAction(
+                    target_component=comp_name,
+                    target_element="text",
+                    property_name=text_prop,
+                    value=safe_text,
+                    reasoning=f"Automatic WCAG AA contrast for {a.property_name}"
+                ))
 
-    # 2. Hero Banner
-    if any(h in target_comp for h in ["hero", "banner"]):
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["height", "tall", "size", "thickness", "vertical"]):
-            current_h = int(theme.get("banner_height") or 400)
-            if explicit_num and 200 <= explicit_num <= 900:
-                ai_color_patch["banner_height"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["banner_height"] = max(240, current_h - 80)
-            elif is_increase:
-                ai_color_patch["banner_height"] = min(750, current_h + 80)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["radius", "corner", "round", "rounded", "curve", "curved"]):
-            current_r = int(theme.get("border_radius") or 16)
-            if explicit_num is not None and 0 <= explicit_num <= 48:
-                ai_color_patch["border_radius"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["border_radius"] = max(0, current_r - 8)
-            elif is_increase:
-                ai_color_patch["border_radius"] = min(36, current_r + 8)
-
-    # 3. Footer
-    if "footer" in target_comp:
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["padding", "pad", "height", "spacing", "tall", "compact"]):
-            current_p = int(theme.get("footer_padding_y") or 44)
-            if explicit_num and 8 <= explicit_num <= 120:
-                ai_color_patch["footer_padding_y"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["footer_padding_y"] = max(16, current_p - 14)
-            elif is_increase:
-                ai_color_patch["footer_padding_y"] = min(96, current_p + 14)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["width", "max width", "max_width"]):
-            if explicit_num and 600 <= explicit_num <= 1800:
-                ai_color_patch["footer_max_width"] = explicit_num
-
-    # 4. Product Card & Product Grid
-    if any(c in target_comp for c in ["card", "product_grid", "grid"]):
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["radius", "corner", "round", "rounded", "curve", "curved"]):
-            current_r = int(theme.get("card_radius") or 16)
-            if explicit_num is not None and 0 <= explicit_num <= 48:
-                ai_color_patch["card_radius"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["card_radius"] = max(0, current_r - 6)
-            elif is_increase:
-                ai_color_patch["card_radius"] = min(36, current_r + 6)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["gap", "spacing", "space between", "grid gap", "distance"]):
-            current_g = int(theme.get("grid_gap") or 20)
-            if explicit_num and 4 <= explicit_num <= 64:
-                ai_color_patch["grid_gap"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["grid_gap"] = max(8, current_g - 6)
-            elif is_increase:
-                ai_color_patch["grid_gap"] = min(48, current_g + 6)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["card padding", "padding in card", "padding inside", "card pad"]):
-            current_p = int(theme.get("card_padding") or 16)
-            if explicit_num and 4 <= explicit_num <= 40:
-                ai_color_patch["card_padding"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["card_padding"] = max(6, current_p - 4)
-            elif is_increase:
-                ai_color_patch["card_padding"] = min(32, current_p + 4)
-
-    # 5. Product Detail
-    if "product_detail" in target_comp:
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["padding", "pad", "spacing"]):
-            current_p = int(theme.get("product_detail_padding") or 24)
-            if explicit_num and 8 <= explicit_num <= 80:
-                ai_color_patch["product_detail_padding"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["product_detail_padding"] = max(10, current_p - 8)
-            elif is_increase:
-                ai_color_patch["product_detail_padding"] = min(56, current_p + 8)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["radius", "round", "corner", "curve"]):
-            current_r = int(theme.get("product_detail_radius") or 16)
-            if explicit_num is not None and 0 <= explicit_num <= 48:
-                ai_color_patch["product_detail_radius"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["product_detail_radius"] = max(0, current_r - 6)
-            elif is_increase:
-                ai_color_patch["product_detail_radius"] = min(36, current_r + 6)
-
-    # 6. Cart Drawer
-    if "cart" in target_comp:
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["padding", "pad", "spacing"]):
-            current_p = int(theme.get("cart_padding") or 20)
-            if explicit_num and 8 <= explicit_num <= 60:
-                ai_color_patch["cart_padding"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["cart_padding"] = max(8, current_p - 6)
-            elif is_increase:
-                ai_color_patch["cart_padding"] = min(40, current_p + 6)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["radius", "round", "corner", "curve"]):
-            current_r = int(theme.get("cart_radius") or 16)
-            if explicit_num is not None and 0 <= explicit_num <= 48:
-                ai_color_patch["cart_radius"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["cart_radius"] = max(0, current_r - 6)
-            elif is_increase:
-                ai_color_patch["cart_radius"] = min(36, current_r + 6)
-
-    # 7. Order Summary
-    if "order_summary" in target_comp:
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["padding", "pad", "spacing"]):
-            current_p = int(theme.get("summary_padding") or 20)
-            if explicit_num and 8 <= explicit_num <= 60:
-                ai_color_patch["summary_padding"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["summary_padding"] = max(8, current_p - 6)
-            elif is_increase:
-                ai_color_patch["summary_padding"] = min(40, current_p + 6)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["radius", "round", "corner", "curve"]):
-            current_r = int(theme.get("summary_radius") or 16)
-            if explicit_num is not None and 0 <= explicit_num <= 48:
-                ai_color_patch["summary_radius"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["summary_radius"] = max(0, current_r - 6)
-            elif is_increase:
-                ai_color_patch["summary_radius"] = min(36, current_r + 6)
-
-    # 8. Delivery Form
-    if "delivery_form" in target_comp:
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["padding", "pad", "spacing"]):
-            current_p = int(theme.get("delivery_form_padding") or 24)
-            if explicit_num and 8 <= explicit_num <= 60:
-                ai_color_patch["delivery_form_padding"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["delivery_form_padding"] = max(8, current_p - 6)
-            elif is_increase:
-                ai_color_patch["delivery_form_padding"] = min(44, current_p + 6)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["radius", "round", "corner", "curve"]):
-            current_r = int(theme.get("delivery_form_radius") or 16)
-            if explicit_num is not None and 0 <= explicit_num <= 48:
-                ai_color_patch["delivery_form_radius"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["delivery_form_radius"] = max(0, current_r - 6)
-            elif is_increase:
-                ai_color_patch["delivery_form_radius"] = min(36, current_r + 6)
-
-    # 9. Payment Methods
-    if "payment" in target_comp:
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["padding", "pad", "spacing"]):
-            current_p = int(theme.get("payment_padding") or 20)
-            if explicit_num and 8 <= explicit_num <= 60:
-                ai_color_patch["payment_padding"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["payment_padding"] = max(8, current_p - 6)
-            elif is_increase:
-                ai_color_patch["payment_padding"] = min(40, current_p + 6)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["radius", "round", "corner", "curve"]):
-            current_r = int(theme.get("payment_radius") or 16)
-            if explicit_num is not None and 0 <= explicit_num <= 48:
-                ai_color_patch["payment_radius"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["payment_radius"] = max(0, current_r - 6)
-            elif is_increase:
-                ai_color_patch["payment_radius"] = min(36, current_r + 6)
-
-    # 10. Place Order
-    if "place_order" in target_comp:
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["height", "tall", "button height", "size"]):
-            current_h = int(theme.get("place_order_btn_height") or 48)
-            if explicit_num and 32 <= explicit_num <= 80:
-                ai_color_patch["place_order_btn_height"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["place_order_btn_height"] = max(36, current_h - 8)
-            elif is_increase:
-                ai_color_patch["place_order_btn_height"] = min(72, current_h + 8)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["radius", "round", "corner", "curve"]):
-            current_r = int(theme.get("place_order_radius") or 12)
-            if explicit_num is not None and 0 <= explicit_num <= 48:
-                ai_color_patch["place_order_radius"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["place_order_radius"] = max(0, current_r - 4)
-            elif is_increase:
-                ai_color_patch["place_order_radius"] = min(32, current_r + 4)
-
-    # 11. Filter Toolbar
-    if "filter" in target_comp:
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["padding", "pad", "spacing"]):
-            current_p = int(theme.get("filter_padding") or 16)
-            if explicit_num and 4 <= explicit_num <= 50:
-                ai_color_patch["filter_padding"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["filter_padding"] = max(6, current_p - 4)
-            elif is_increase:
-                ai_color_patch["filter_padding"] = min(36, current_p + 4)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["radius", "round", "corner", "curve"]):
-            current_r = int(theme.get("filter_radius") or 12)
-            if explicit_num is not None and 0 <= explicit_num <= 48:
-                ai_color_patch["filter_radius"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["filter_radius"] = max(0, current_r - 4)
-            elif is_increase:
-                ai_color_patch["filter_radius"] = min(32, current_r + 4)
-
-    # 12. Pagination
-    if "pagination" in target_comp:
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["padding", "pad", "spacing"]):
-            current_p = int(theme.get("pagination_padding") or 16)
-            if explicit_num and 4 <= explicit_num <= 50:
-                ai_color_patch["pagination_padding"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["pagination_padding"] = max(6, current_p - 4)
-            elif is_increase:
-                ai_color_patch["pagination_padding"] = min(36, current_p + 4)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["radius", "round", "corner", "curve"]):
-            current_r = int(theme.get("pagination_radius") or 8)
-            if explicit_num is not None and 0 <= explicit_num <= 48:
-                ai_color_patch["pagination_radius"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["pagination_radius"] = max(0, current_r - 4)
-            elif is_increase:
-                ai_color_patch["pagination_radius"] = min(28, current_r + 4)
-
-    # 13. Reviews
-    if "review" in target_comp:
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["padding", "pad", "spacing"]):
-            current_p = int(theme.get("review_padding") or 20)
-            if explicit_num and 4 <= explicit_num <= 60:
-                ai_color_patch["review_padding"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["review_padding"] = max(8, current_p - 6)
-            elif is_increase:
-                ai_color_patch["review_padding"] = min(44, current_p + 6)
-        if (is_reduce or is_increase or explicit_num is not None) and any(w in msg_lower for w in ["radius", "round", "corner", "curve"]):
-            current_r = int(theme.get("review_card_radius") or 16)
-            if explicit_num is not None and 0 <= explicit_num <= 48:
-                ai_color_patch["review_card_radius"] = explicit_num
-            elif is_reduce:
-                ai_color_patch["review_card_radius"] = max(0, current_r - 6)
-            elif is_increase:
-                ai_color_patch["review_card_radius"] = min(36, current_r + 6)
-
-    if ai_color_patch:
-        # Guarantee High-Contrast Accessibility without camouflage!
-        if "navbar_bg" in ai_color_patch:
-            if "navbar_outer_bg" not in raw_keys:
-                ai_color_patch["navbar_outer_bg"] = ai_color_patch["navbar_bg"]
-            if "navbar_text_color" not in raw_keys:
-                ai_color_patch["navbar_text_color"] = ensure_accessible_contrast(ai_color_patch.get("navbar_text_color"), ai_color_patch["navbar_bg"])
-        elif "navbar_outer_bg" in ai_color_patch:
-            if "navbar_bg" not in raw_keys:
-                ai_color_patch["navbar_bg"] = ai_color_patch["navbar_outer_bg"]
-            if "navbar_text_color" not in raw_keys:
-                ai_color_patch["navbar_text_color"] = ensure_accessible_contrast(ai_color_patch.get("navbar_text_color"), ai_color_patch["navbar_outer_bg"])
-
-        if "footer_bg" in ai_color_patch and "footer_text_color" not in raw_keys:
-            ai_color_patch["footer_text_color"] = ensure_accessible_contrast(ai_color_patch.get("footer_text_color"), ai_color_patch["footer_bg"])
-        if "card_bg" in ai_color_patch and "card_text_color" not in raw_keys:
-            ai_color_patch["card_text_color"] = ensure_accessible_contrast(ai_color_patch.get("card_text_color"), ai_color_patch["card_bg"])
-        if "hero_bg" in ai_color_patch and "hero_text_color" not in raw_keys:
-            ai_color_patch["hero_text_color"] = ensure_accessible_contrast(ai_color_patch.get("hero_text_color"), ai_color_patch["hero_bg"])
-        if "primary_bg" in ai_color_patch and "text_color" not in raw_keys:
-            ai_color_patch["text_color"] = ensure_accessible_contrast(ai_color_patch.get("text_color"), ai_color_patch["primary_bg"])
-        if "grid_bg" in ai_color_patch and "grid_text_color" not in raw_keys:
-            ai_color_patch["grid_text_color"] = ensure_accessible_contrast(ai_color_patch.get("grid_text_color"), ai_color_patch["grid_bg"])
-        if "product_detail_bg" in ai_color_patch and "product_detail_text" not in raw_keys:
-            ai_color_patch["product_detail_text"] = ensure_accessible_contrast(ai_color_patch.get("product_detail_text"), ai_color_patch["product_detail_bg"])
-        if "cart_bg" in ai_color_patch and "cart_text_color" not in raw_keys:
-            ai_color_patch["cart_text_color"] = ensure_accessible_contrast(ai_color_patch.get("cart_text_color"), ai_color_patch["cart_bg"])
-        if "summary_bg" in ai_color_patch and "summary_text_color" not in raw_keys:
-            ai_color_patch["summary_text_color"] = ensure_accessible_contrast(ai_color_patch.get("summary_text_color"), ai_color_patch["summary_bg"])
-        if "delivery_form_bg" in ai_color_patch and "delivery_form_text" not in raw_keys:
-            ai_color_patch["delivery_form_text"] = ensure_accessible_contrast(ai_color_patch.get("delivery_form_text"), ai_color_patch["delivery_form_bg"])
-        if "payment_bg" in ai_color_patch and "payment_text_color" not in raw_keys:
-            ai_color_patch["payment_text_color"] = ensure_accessible_contrast(ai_color_patch.get("payment_text_color"), ai_color_patch["payment_bg"])
-        if "order_history_card_bg" in ai_color_patch and "order_history_text" not in raw_keys:
-            ai_color_patch["order_history_text"] = ensure_accessible_contrast(ai_color_patch.get("order_history_text"), ai_color_patch["order_history_card_bg"])
-        if "order_history_bg" in ai_color_patch and "order_history_text" not in raw_keys:
-            ai_color_patch["order_history_text"] = ensure_accessible_contrast(ai_color_patch.get("order_history_text"), ai_color_patch["order_history_bg"])
-        if "filter_bg" in ai_color_patch and "filter_text_color" not in raw_keys:
-            ai_color_patch["filter_text_color"] = ensure_accessible_contrast(ai_color_patch.get("filter_text_color"), ai_color_patch["filter_bg"])
-        if "pagination_bg" in ai_color_patch and "pagination_text_color" not in raw_keys:
-            ai_color_patch["pagination_text_color"] = ensure_accessible_contrast(ai_color_patch.get("pagination_text_color"), ai_color_patch["pagination_bg"])
-        if "review_card_bg" in ai_color_patch and "review_text_color" not in raw_keys:
-            ai_color_patch["review_text_color"] = ensure_accessible_contrast(ai_color_patch.get("review_text_color"), ai_color_patch["review_card_bg"])
-        if "support_card_bg" in ai_color_patch and "support_text_color" not in raw_keys:
-            ai_color_patch["support_text_color"] = ensure_accessible_contrast(ai_color_patch.get("support_text_color"), ai_color_patch["support_card_bg"])
-        if "support_bg" in ai_color_patch and "support_text_color" not in raw_keys:
-            ai_color_patch["support_text_color"] = ensure_accessible_contrast(ai_color_patch.get("support_text_color"), ai_color_patch["support_bg"])
-        if "support_customer_bubble_bg" in ai_color_patch and "support_customer_bubble_text" not in raw_keys:
-            ai_color_patch["support_customer_bubble_text"] = ensure_accessible_contrast(ai_color_patch.get("support_customer_bubble_text"), ai_color_patch["support_customer_bubble_bg"])
-        if "support_agent_bubble_bg" in ai_color_patch and "support_agent_bubble_text" not in raw_keys:
-            ai_color_patch["support_agent_bubble_text"] = ensure_accessible_contrast(ai_color_patch.get("support_agent_bubble_text"), ai_color_patch["support_agent_bubble_bg"])
-
-        is_overall_target = target_comp in ["overall", "webpage", "website", "site", "all", "entire", "full"]
-        theme_keys_changed = []
-        if is_overall_target:
-            for k in ALL_COMPONENT_OVERRIDE_KEYS:
-                theme.pop(k, None)
-            for k, v in ai_color_patch.items():
-                if theme.get(k) != v:
-                    theme[k] = v
-                    theme_keys_changed.append(k)
-        elif target_comp == "background":
-            for k in ["primary_bg", "secondary_bg", "text_color", "muted_text"]:
-                if k in ai_color_patch and theme.get(k) != ai_color_patch[k]:
-                    theme[k] = ai_color_patch[k]
-                    theme_keys_changed.append(k)
-        elif target_comp == "navbar":
-            if "border_color" in ai_color_patch:
-                ai_color_patch.setdefault("navbar_border_color", ai_color_patch["border_color"])
-            if "background_color" in ai_color_patch:
-                ai_color_patch.setdefault("navbar_bg", ai_color_patch["background_color"])
-            if "text_color" in ai_color_patch:
-                ai_color_patch.setdefault("navbar_text_color", ai_color_patch["text_color"])
-            for k, v in ai_color_patch.items():
-                if (k.startswith("navbar_") or k in {"cart_badge_bg", "cart_badge_text", "dialog_bg"}) and theme.get(k) != v:
-                    theme[k] = v
-                    theme_keys_changed.append(k)
-        elif target_comp == "footer":
-            if "border_color" in ai_color_patch:
-                ai_color_patch.setdefault("footer_border_color", ai_color_patch["border_color"])
-            if "background_color" in ai_color_patch:
-                ai_color_patch.setdefault("footer_bg", ai_color_patch["background_color"])
-            if "text_color" in ai_color_patch:
-                ai_color_patch.setdefault("footer_text_color", ai_color_patch["text_color"])
-            if "muted_text" in ai_color_patch:
-                ai_color_patch.setdefault("footer_muted_color", ai_color_patch["muted_text"])
-            for k, v in ai_color_patch.items():
-                if k.startswith("footer_") and theme.get(k) != v:
-                    theme[k] = v
-                    theme_keys_changed.append(k)
-        else:
-            # Sync theme-level component overrides (pagination, cart, filter, summary, delivery_form, payment, place_order, support, review, etc.) into theme
-            for k, v in ai_color_patch.items():
-                if k in THEME_COMPONENT_OVERRIDE_KEYS and theme.get(k) != v:
-                    theme[k] = v
-                    theme_keys_changed.append(k)
-
-        modified_blocks = apply_theme_to_blocks(pages, ai_color_patch, target_comp)
-        next_draft["theme"] = theme
-        next_draft["pages"] = pages
-        design_modified = bool(theme_keys_changed or modified_blocks)
-        patch_applied = ai_color_patch if design_modified else {}
+    # 5C. Execute Actions onto Draft Definition
+    design_modified, modified_blocks, applied_patch, theme_keys_changed = execute_design_actions(
+        next_draft,
+        actions,
+    )
 
     return {
         "design_modified": design_modified,
         "next_draft_definition": next_draft if design_modified else None,
         "data_cards": data_cards,
-        "applied_patch": patch_applied,
+        "applied_patch": applied_patch,
         "target_component": target_comp,
-        "modified_blocks": modified_blocks if 'modified_blocks' in locals() else [],
-        "theme_keys_changed": theme_keys_changed if 'theme_keys_changed' in locals() else [],
+        "modified_blocks": modified_blocks,
+        "theme_keys_changed": theme_keys_changed,
+        "assistant_reply": design_plan.summary if design_modified else "No visual design modifications were required.",
         "unmatched_component": not design_modified,
     }

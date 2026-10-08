@@ -70,6 +70,8 @@ def _build_focused_payload_summary(user_message: str, payload: Dict[str, Any]) -
         summary["modified_blocks"] = payload.get("modified_blocks", [])
         summary["theme_keys_changed"] = payload.get("theme_keys_changed", [])
         summary["updated_colors"] = payload.get("applied_patch") or payload.get("patch_applied") or payload.get("color_patch") or {}
+        if payload.get("assistant_reply"):
+            summary["agent_summary"] = payload["assistant_reply"]
     elif payload.get("unmatched_component") or payload.get("unsupported_scope") or payload.get("target_component") in ["unsupported", "unknown"]:
         summary["design_modified"] = False
         summary["styling_outcome"] = "unmatched_or_unsupported"
