@@ -55,8 +55,10 @@ def create_site_revision(
         )
 
     new_version = current_version + 1
-    revision_id = uuid4()
-    op_uuid = UUID(str(operation_id)) if operation_id else uuid4()
+    try:
+        op_uuid = UUID(str(operation_id)) if operation_id else uuid4()
+    except (ValueError, TypeError, AttributeError):
+        op_uuid = uuid4()
     a_uuid = UUID(str(actor_id))
 
     revision_record = {

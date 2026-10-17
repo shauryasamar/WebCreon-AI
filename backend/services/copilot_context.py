@@ -126,9 +126,16 @@ def authorize_site_action(
                 reason=f"Insufficient permissions for action '{action}'. Required one of: {required_keys}"
             )
 
-    # 6. Parse / assign thread_id and operation_id
-    t_uuid = UUID(str(thread_id)) if thread_id else uuid4()
-    op_uuid = UUID(str(operation_id)) if operation_id else uuid4()
+    # 6. Parse / assign thread_id and operation_id safely
+    try:
+        t_uuid = UUID(str(thread_id)) if thread_id else uuid4()
+    except (ValueError, TypeError, AttributeError):
+        t_uuid = uuid4()
+
+    try:
+        op_uuid = UUID(str(operation_id)) if operation_id else uuid4()
+    except (ValueError, TypeError, AttributeError):
+        op_uuid = uuid4()
     req_uuid = uuid4()
     run_uuid = uuid4()
 
