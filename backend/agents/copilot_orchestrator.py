@@ -153,27 +153,24 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
             "active_agent": "Color & Design Agent (Revert)",
         }
 
-    # 1C. Palette / Theme Suggestion fast-path check (ONLY for explicit suggestion requests, never for styling commands)
-    is_styling_command = any(
-        w in user_msg_clean for w in [
-            "change", "make", "set", "turn", "apply", "switch", "update", "style", "replace", "put", "use",
-            "filter", "navbar", "nav", "carousel", "crowsel", "crowsels", "card", "cards", "hero", "banner",
-            "footer", "notification", "dropdown", "button", "grid", "cart", "sidebar"
-        ]
-    )
-
-    palette_suggestion_triggers = [
-        "theme suggestion", "themes suggestion", "suggest theme", "suggest themes",
-        "give me theme", "give me themes", "give me some theme", "give me some themes",
-        "give me color theme", "give me color themes", "give me few theme", "give me few themes",
-        "give me few thmese", "give me some thmese", "few thmese", "some thmese", "give me thmese",
-        "recommend theme", "recommend themes", "palette suggestion", "palette suggestions",
-        "suggest palette", "suggest palettes", "give me palettes", "give me palette",
-        "show palettes", "show themes", "what themes", "color ideas", "theme ideas",
-        "color palette", "colour palette", "color palettes", "colour palettes",
-        "best theme for", "theme options", "palette options"
+    # 1C. Palette / Theme Suggestion fast-path check
+    suggestion_patterns = [
+        r"\b(suggest|recommend|ideas?|options?)\b.*\b(theme|themes|tmplete|template|palette|palettes|colors?|colours?)\b",
+        r"\b(theme|themes|tmplete|template|palette|palettes)\b.*\b(suggest|suggestion|suggestions|recommend|recommendation|recommendations|ideas?|options?)\b",
+        r"\b(give|show|generate|genrate|create|provide|share)\b.*\b(few|some|a\s+few|several|couple|multiple|different|various)\b.*\b(theme|themes|tmplete|template|palette|palettes|colors?|colours?)\b",
+        r"\b(give|show|generate|genrate|create|provide|share)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b",
+        r"\b(few|some|several|couple)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b",
+        r"\b(theme|themes|palette|palettes)\s+(suggestions?|options?|ideas?)\b",
+        r"\b(color|colour)\s+(palette|palettes)\b",
     ]
-    if not is_styling_command and any(t in user_msg_clean for t in palette_suggestion_triggers) and not any(a in user_msg_clean for a in ["how to", "where is", "help with", "explain how", "documentation"]):
+    is_direct_component_override = any(w in user_msg_clean for w in [
+        "change navbar", "change header", "change footer", "change hero", "change banner",
+        "change background", "change card", "make navbar", "make header", "make footer",
+        "make hero", "make button", "set navbar", "set footer", "set hero", "set background",
+        "turn navbar", "turn footer", "turn hero", "turn background", "turn card"
+    ])
+    is_palette_suggestion_request = not is_direct_component_override and any(bool(re.search(pat, user_msg_clean)) for pat in suggestion_patterns)
+    if is_palette_suggestion_request and not any(a in user_msg_clean for a in ["how to", "where is", "help with", "explain how", "documentation"]):
         return {
             "intent": "DESIGN",
             "is_compound": False,
@@ -204,7 +201,9 @@ RULES:
 1. 'banner_create' vs 'hero': Whenever the user asks to CREATE, ADD, GENERATE, or MAKE a promotional banner, slide, or hero banner (even if buttons, copy, discounts, or colors for that new banner are specified, e.g. "Create a promotional hero banner for 25% OFF with a Shop Now button"), ALWAYS classify as 'banner_create'! ONLY classify as 'hero' when the user asks to style, recolor, or adjust an ALREADY EXISTING banner without creating a new one (e.g. "make hero background darker", "change banner button to blue").
 2. Multi-target carousel/section styling: use 'multi:comp1,comp2' (e.g. 'multi:product_carousel,section_group_carousel').
 3. Pronoun & follow-up resolution: If user says "make it black" or "change it", check Conversation History for the previously discussed component.
-4. Single analytical questions asking for multiple metrics (e.g. "what are new orders and their stock") are a single 'DB_QUERY', NOT compound."""),
+4. Single analytical questions asking for multiple metrics (e.g. "what are new orders and their stock") are a single 'DB_QUERY', NOT compound.
+5. 'wants_palette_suggestions': Set to TRUE whenever the user asks for suggestions, recommendations, multiple options, templates, or ideas of themes or color palettes (e.g. "suggest me some theme template in yellow", "generate few yellow colored themes", "give me some theme options"). NEVER classify requests to suggest or generate theme options as 'KNOWLEDGE' or direct styling mutations!
+6. 'KNOWLEDGE': STRICTLY for conceptual "how-to" questions asking about platform features, documentation, or settings navigation (e.g. "how do I add a product", "where is the billing tab"). NEVER route requests asking to generate or suggest themes, templates, palettes, or banners to KNOWLEDGE."""),
         ("user", "User Message: {user_message}\nConversation History: {history_str}"),
     ])
 

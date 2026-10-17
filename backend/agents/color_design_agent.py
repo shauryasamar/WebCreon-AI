@@ -2387,7 +2387,14 @@ async def handle_color_and_design_request(
             }
 
     # 4. Palette Suggestions Handler
-    if wants_palette_suggestions:
+    msg_suggests_palettes = bool(
+        re.search(r"\b(suggest|recommend|ideas?|options?)\b.*\b(theme|themes|tmplete|template|palette|palettes|colors?|colours?)\b", msg_lower)
+        or re.search(r"\b(theme|themes|tmplete|template|palette|palettes)\b.*\b(suggest|suggestion|suggestions|recommend|recommendation|recommendations|ideas?|options?)\b", msg_lower)
+        or re.search(r"\b(generate|genrate|give|show|create|provide|share)\b.*\b(few|some|a\s+few|several|couple|multiple|different|various)\b.*\b(theme|themes|tmplete|template|palette|palettes|colors?|colours?)\b", msg_lower)
+        or re.search(r"\b(give|show|generate|genrate|create|provide|share)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b", msg_lower)
+        or re.search(r"\b(few|some|several|couple)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b", msg_lower)
+    )
+    if wants_palette_suggestions or msg_suggests_palettes:
         if target_comp and target_comp != "overall":
             comp_palettes = await generate_component_palette_suggestions(
                 brand_name=brand_name,
