@@ -409,9 +409,22 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
     ...page,
     blocks: (page.blocks || []).map((block) => {
       const btype = String(block.type || "").toLowerCase();
+      const bid = String(block.id || "").toLowerCase();
       const isNav = btype === "navbar" || btype === "header";
       const isFooter = btype === "footer";
-      const isHero = btype === "hero_banner" || btype === "hero" || btype === "banner";
+      const isHero =
+        btype === "hero_banner" ||
+        btype === "hero" ||
+        btype === "banner" ||
+        bid === "hero_banner" ||
+        bid === "herobanner";
+
+      // Hero banner edits are isolated from theme snapshots and global theme cascading.
+      // Always preserve all block props, slides, background, and colors exactly as edited/published.
+      if (isHero) {
+        return block;
+      }
+
       const isProductDetail =
         btype === "product_detail" ||
         btype === "productdetail" ||
@@ -487,41 +500,6 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
       } else if (isFooter) {
         if (targetTheme.footer_bg) updatedProps.footer_bg = targetTheme.footer_bg;
         if (targetTheme.footer_text_color) updatedProps.footer_text_color = targetTheme.footer_text_color;
-      } else if (isHero) {
-        const resolvedHeroBg = targetTheme.hero_bg || targetTheme.primary_bg || targetTheme.secondary_bg;
-        if (resolvedHeroBg) {
-          updatedProps.hero_bg = resolvedHeroBg;
-          updatedProps.background_color = resolvedHeroBg;
-        }
-        const resolvedHeroText = targetTheme.hero_text_color || targetTheme.text_color;
-        if (resolvedHeroText) {
-          updatedProps.hero_text_color = resolvedHeroText;
-          updatedProps.text_color = resolvedHeroText;
-        }
-        const resolvedHeroAccent = targetTheme.hero_accent || targetTheme.accent_color;
-        if (resolvedHeroAccent) {
-          updatedProps.accent_color = resolvedHeroAccent;
-        }
-
-        if (Array.isArray(updatedProps.slides)) {
-          updatedProps.slides = updatedProps.slides.map((slide: any) => {
-            const nextSlide = { ...slide };
-            if (!nextSlide.background_image) {
-              if (resolvedHeroBg) {
-                nextSlide.background_color = resolvedHeroBg;
-                nextSlide.hero_bg = resolvedHeroBg;
-              }
-              if (resolvedHeroText) {
-                nextSlide.hero_text_color = resolvedHeroText;
-                nextSlide.text_color = resolvedHeroText;
-              }
-              if (resolvedHeroAccent) {
-                nextSlide.accent_color = resolvedHeroAccent;
-              }
-            }
-            return nextSlide;
-          });
-        }
       } else if (isProductDetail) {
         if (targetTheme.badge_bg_color || targetTheme.product_detail_badge_bg) {
           updatedProps.badge_bg_color = targetTheme.badge_bg_color || targetTheme.product_detail_badge_bg;
@@ -2200,8 +2178,7 @@ export function updateBlockProps(
     })),
   };
 }
-
-export function updateThemeValues(
+export function updateThemeValues(
   siteDefinition: EditorSiteDefinition,
   themePatch: Record<string, any>,
   isGlobalPatch?: boolean
@@ -2209,15 +2186,6 @@ export function updateThemeValues(
   const nextPatch = { ...themePatch };
   if (nextPatch.navbar_bg && !nextPatch.navbar_outer_bg) {
     nextPatch.navbar_outer_bg = nextPatch.navbar_bg;
-  }
-  if (!nextPatch.hero_bg && (nextPatch.primary_bg || nextPatch.secondary_bg)) {
-    nextPatch.hero_bg = nextPatch.primary_bg || nextPatch.secondary_bg;
-  }
-  if (!nextPatch.hero_text_color && nextPatch.text_color) {
-    nextPatch.hero_text_color = nextPatch.text_color;
-  }
-  if (!nextPatch.hero_accent && nextPatch.accent_color) {
-    nextPatch.hero_accent = nextPatch.accent_color;
   }
   const updatedTheme = {
     ...siteDefinition.theme,
@@ -2251,7 +2219,7 @@ export function updateThemeValues(
 
   return nextDef;
 }
-export function applyThemeMode(
+export function applyThemeMode(
   siteDefinition: EditorSiteDefinition,
   mode: ThemeMode
 ): EditorSiteDefinition {
@@ -2270,7 +2238,15 @@ export function updateThemeValues(
     navbar_height: currentTheme.navbar_height,
     mode,
     festival_theme: currentTheme.festival_theme || "none",
+    // Hero banner styles are preserved as edited/published
+    hero_bg: currentTheme.hero_bg,
+    hero_text_color: currentTheme.hero_text_color,
+    hero_accent: currentTheme.hero_accent,
+    hero_festive_position: currentTheme.hero_festive_position,
+    hero_festive_opacity: currentTheme.hero_festive_opacity,
   };
+  // Explicitly clear any active snapshot reference so preset mode is purely active
+  delete updatedTheme.active_snapshot_id;
 
   const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
 
@@ -2411,6 +2387,64 @@ export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): an
   return result;
 }
 
+export function getPublishedHeroDefinition(
+  siteDefinition?: EditorSiteDefinition,
+  publishedSiteDefinition?: EditorSiteDefinition
+): { heroBlock?: any; heroTheme?: Record<string, any> } {
+  let pubDef = publishedSiteDefinition;
+
+  if (!pubDef && siteDefinition) {
+    pubDef = (siteDefinition as any)._published || (siteDefinition as any).published_definition;
+  }
+
+  if (!pubDef && typeof window !== "undefined") {
+    try {
+      const siteId = getSiteStorageId(siteDefinition);
+      const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
+
+      const storedPubDef =
+        (siteId && localStorage.getItem(`wc_published_site_def_${siteId}`)) ||
+        (slug && localStorage.getItem(`wc_published_site_def_${slug}`));
+      if (storedPubDef) {
+        pubDef = JSON.parse(storedPubDef);
+      } else {
+        const storedSnapshot =
+          (slug && localStorage.getItem(`wc_site_snapshot_${slug}`)) ||
+          (siteId && localStorage.getItem(`wc_site_snapshot_${siteId}`));
+        if (storedSnapshot) {
+          const parsed = JSON.parse(storedSnapshot);
+          if (parsed?.site_definition) pubDef = parsed.site_definition;
+        }
+      }
+    } catch { }
+  }
+
+  let heroBlock: any = null;
+  if (pubDef?.pages) {
+    for (const page of pubDef.pages) {
+      const found = (page.blocks || []).find((b: any) => {
+        const t = String(b.type || "").toLowerCase();
+        const id = String(b.id || "").toLowerCase();
+        return t === "hero_banner" || t === "hero" || t === "banner" || id === "hero_banner" || id === "herobanner";
+      });
+      if (found) {
+        heroBlock = JSON.parse(JSON.stringify(found));
+        break;
+      }
+    }
+  }
+
+  const sourceTheme = pubDef?.theme || siteDefinition?.theme || {};
+  const heroTheme: Record<string, any> = {};
+  if (sourceTheme.hero_bg) heroTheme.hero_bg = sourceTheme.hero_bg;
+  if (sourceTheme.hero_text_color) heroTheme.hero_text_color = sourceTheme.hero_text_color;
+  if (sourceTheme.hero_accent) heroTheme.hero_accent = sourceTheme.hero_accent;
+  if (sourceTheme.hero_festive_position) heroTheme.hero_festive_position = sourceTheme.hero_festive_position;
+  if (sourceTheme.hero_festive_opacity !== undefined) heroTheme.hero_festive_opacity = sourceTheme.hero_festive_opacity;
+
+  return { heroBlock, heroTheme };
+}
+
 export function saveThemeSnapshot(
   siteDefinition: EditorSiteDefinition,
   name: string,
@@ -2425,11 +2459,17 @@ export function saveThemeSnapshot(
     }
   });
 
-  // Capture hero, product detail, and card block overrides into theme object for snapshot
-  let heroBlockBg: string | undefined;
-  let heroBlockText: string | undefined;
-  let heroBlockAccent: string | undefined;
+  // Hero banner edits and styles are excluded from snapshots:
+  delete cleanBaseTheme.hero_bg;
+  delete cleanBaseTheme.hero_text_color;
+  delete cleanBaseTheme.hero_accent;
+  delete cleanBaseTheme.hero_festive_position;
+  delete cleanBaseTheme.hero_festive_opacity;
+  delete cleanBaseTheme.banner_height;
+  delete cleanBaseTheme.banner_width;
+  delete cleanBaseTheme.slides;
 
+  // Capture product detail and card block overrides into theme object for snapshot
   let pdBadgeBg: string | undefined;
   let pdBadgeBorder: string | undefined;
   let pdPanelBg: string | undefined;
@@ -2446,22 +2486,7 @@ export function saveThemeSnapshot(
   (siteDefinition.pages || []).forEach((page) => {
     (page.blocks || []).forEach((block) => {
       const btype = String(block.type || "").toLowerCase();
-      if (btype === "hero_banner" || btype === "hero" || btype === "banner") {
-        const props = block.props || {};
-        const activeSlide = Array.isArray(props.slides) ? props.slides[0] : null;
-        if (props.hero_bg) heroBlockBg = props.hero_bg;
-        else if (props.background_color) heroBlockBg = props.background_color;
-        else if (activeSlide?.background_color) heroBlockBg = activeSlide.background_color;
-        else if (activeSlide?.hero_bg) heroBlockBg = activeSlide.hero_bg;
-
-        if (props.hero_text_color) heroBlockText = props.hero_text_color;
-        else if (props.text_color) heroBlockText = props.text_color;
-        else if (activeSlide?.hero_text_color) heroBlockText = activeSlide.hero_text_color;
-        else if (activeSlide?.text_color) heroBlockText = activeSlide.text_color;
-
-        if (props.accent_color) heroBlockAccent = props.accent_color;
-        else if (activeSlide?.accent_color) heroBlockAccent = activeSlide.accent_color;
-      }
+      // Hero banner is intentionally excluded from theme snapshot
 
       if (
         btype === "product_detail" ||
@@ -2516,11 +2541,18 @@ export function saveThemeSnapshot(
       }
     });
   }
+  // Exclude hero properties from custom theme patch
+  delete cleanCustomPatch.hero_bg;
+  delete cleanCustomPatch.hero_text_color;
+  delete cleanCustomPatch.hero_accent;
+  delete cleanCustomPatch.hero_festive_position;
+  delete cleanCustomPatch.hero_festive_opacity;
+  delete cleanCustomPatch.banner_height;
+  delete cleanCustomPatch.banner_width;
+  delete cleanCustomPatch.slides;
+
   const themeToSave: Record<string, any> = {
     ...cleanBaseTheme,
-    ...(heroBlockBg ? { hero_bg: heroBlockBg } : {}),
-    ...(heroBlockText ? { hero_text_color: heroBlockText } : {}),
-    ...(heroBlockAccent ? { hero_accent: heroBlockAccent } : {}),
     ...(pdBadgeBg ? { badge_bg_color: pdBadgeBg, product_detail_badge_bg: pdBadgeBg } : {}),
     ...(pdBadgeBorder ? { badge_border_color: pdBadgeBorder, product_detail_badge_border: pdBadgeBorder } : {}),
     ...(pdPanelBg ? { product_detail_bg: pdPanelBg } : {}),
@@ -2535,15 +2567,15 @@ export function saveThemeSnapshot(
     ...cleanCustomPatch,
   };
 
-  if (!themeToSave.hero_bg && (themeToSave.primary_bg || themeToSave.secondary_bg)) {
-    themeToSave.hero_bg = themeToSave.primary_bg || themeToSave.secondary_bg;
-  }
-  if (!themeToSave.hero_text_color && themeToSave.text_color) {
-    themeToSave.hero_text_color = themeToSave.text_color;
-  }
-  if (!themeToSave.hero_accent && themeToSave.accent_color) {
-    themeToSave.hero_accent = themeToSave.accent_color;
-  }
+  // Strictly strip all hero banner properties so snapshot never touches the hero banner
+  delete themeToSave.hero_bg;
+  delete themeToSave.hero_text_color;
+  delete themeToSave.hero_accent;
+  delete themeToSave.hero_festive_position;
+  delete themeToSave.hero_festive_opacity;
+  delete themeToSave.banner_height;
+  delete themeToSave.banner_width;
+  delete themeToSave.slides;
 
   if (themeToSave.navbar_bg && !themeToSave.navbar_outer_bg) {
     themeToSave.navbar_outer_bg = themeToSave.navbar_bg;
@@ -2591,6 +2623,12 @@ export function saveThemeSnapshot(
     ...siteDefinition.theme,
     ...themeToSave,
     active_snapshot_id: snapshot.id,
+    // Preserve existing hero theme values on canvas definition
+    ...(siteDefinition.theme?.hero_bg ? { hero_bg: siteDefinition.theme.hero_bg } : {}),
+    ...(siteDefinition.theme?.hero_text_color ? { hero_text_color: siteDefinition.theme.hero_text_color } : {}),
+    ...(siteDefinition.theme?.hero_accent ? { hero_accent: siteDefinition.theme.hero_accent } : {}),
+    ...(siteDefinition.theme?.hero_festive_position ? { hero_festive_position: siteDefinition.theme.hero_festive_position } : {}),
+    ...(siteDefinition.theme?.hero_festive_opacity !== undefined ? { hero_festive_opacity: siteDefinition.theme.hero_festive_opacity } : {}),
   };
   if (finalTheme.navbar_bg && !finalTheme.navbar_outer_bg) {
     finalTheme.navbar_outer_bg = finalTheme.navbar_bg;
@@ -2608,7 +2646,8 @@ export function saveThemeSnapshot(
 
 export function applyThemeSnapshot(
   siteDefinition: EditorSiteDefinition,
-  snapshotId: string
+  snapshotId: string,
+  publishedSiteDefinition?: EditorSiteDefinition
 ): EditorSiteDefinition {
   const currentSaved = getSavedThemeSnapshots(siteDefinition);
   const found = currentSaved.find((s: any) => s.id === snapshotId);
@@ -2625,18 +2664,55 @@ export function applyThemeSnapshot(
     }
   });
 
+  // Strip hero banner styles from snapshot patch so snapshots never alter the hero banner
+  delete cleanPatchProps.hero_bg;
+  delete cleanPatchProps.hero_text_color;
+  delete cleanPatchProps.hero_accent;
+  delete cleanPatchProps.hero_festive_position;
+  delete cleanPatchProps.hero_festive_opacity;
+  delete cleanPatchProps.banner_height;
+  delete cleanPatchProps.banner_width;
+  delete cleanPatchProps.slides;
+
   if (cleanPatchProps.navbar_bg && !cleanPatchProps.navbar_outer_bg) {
     cleanPatchProps.navbar_outer_bg = cleanPatchProps.navbar_bg;
   }
+
+  // Retrieve published hero banner block and hero theme
+  const { heroBlock: pubHeroBlock, heroTheme: pubHeroTheme } = getPublishedHeroDefinition(
+    siteDefinition,
+    publishedSiteDefinition
+  );
 
   const updatedTheme: any = {
     ...baseDefaults,
     ...cleanPatchProps,
     mode,
     active_snapshot_id: snapshotId,
+    // Hero theme always preserves published theme and color
+    ...pubHeroTheme,
   };
 
-  const nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
+  let nextPages = applyThemeToPages(siteDefinition.pages || [], updatedTheme);
+
+  // If a published hero block exists, ensure all hero blocks across pages reflect the published banner!
+  if (pubHeroBlock) {
+    nextPages = nextPages.map((page) => ({
+      ...page,
+      blocks: (page.blocks || []).map((block) => {
+        const t = String(block.type || "").toLowerCase();
+        const id = String(block.id || "").toLowerCase();
+        const isHero = t === "hero_banner" || t === "hero" || t === "banner" || id === "hero_banner" || id === "herobanner";
+        if (isHero) {
+          return {
+            ...block,
+            props: JSON.parse(JSON.stringify(pubHeroBlock.props || {})),
+          };
+        }
+        return block;
+      }),
+    }));
+  }
 
   return {
     ...siteDefinition,

@@ -13,6 +13,7 @@ import {
   getSavedThemeSnapshots,
   getSiteStorageId,
   saveThemeSnapshot,
+  ThemeMode,
   updateBlockFieldValue,
   updateThemeValues,
 } from "./editorUtils";
@@ -39,146 +40,192 @@ function PageBlocksTreeView({
   const location = useLocation();
   const currentPath = location.pathname;
 
-  const homeBlocks = useMemo(() => {
-    const customHome = _siteDefinition?.pages?.find((p: any) => p.id === "home" || p.route === "/");
-    if (customHome && Array.isArray(customHome.blocks) && customHome.blocks.length > 0) {
-      return customHome.blocks.map((b: any) => {
-        const bType = String(b.type || "").toLowerCase();
-        const bId = String(b.id || "").toLowerCase();
-        let displayName = "Section";
+  const resolvePageBlocks = useCallback((pageBlocks: any[] = [], defaultBodyBlocks: any[] = []) => {
+    const rawBlocks = Array.isArray(pageBlocks) && pageBlocks.length > 0 ? pageBlocks : defaultBodyBlocks;
 
-        if (bType === "navbar" || bType === "header" || bId === "navbar") {
-          displayName = "Navbar";
-        } else if (
-          bType === "hero_banner" ||
-          bType === "herobanner" ||
-          bType === "hero" ||
-          bType === "banner" ||
-          bId.includes("hero")
-        ) {
-          displayName = "Hero Banner";
-        } else if (
-          bType === "product_grid" ||
-          bType === "productgrid" ||
-          bId === "product_grid" ||
-          bId.includes("product_grid")
-        ) {
-          displayName = "Product Grid";
-        } else if (bType === "footer" || bId === "footer") {
-          displayName = "Footer";
-        } else if (
-          bType === "product_carousel" ||
-          bType === "productcarousel" ||
-          bType === "products_carousel"
-        ) {
-          displayName = b.props?.title || b.name || "Product Carousel";
-        } else if (
-          bType === "section_group_carousel" ||
-          bType === "sectiongroupcarousel"
-        ) {
-          displayName = b.props?.title || b.name || "Category Carousel";
-        } else if (bType === "category_grid" || bType === "categorygrid") {
-          displayName = b.props?.title || b.name || "Category Grid";
-        } else if (bType === "category_strip") {
-          displayName = b.props?.title || b.name || "Category Strip";
-        } else if (bType === "trust_badges") {
-          displayName = "Trust Badges";
-        } else {
-          displayName = b.name || b.props?.title || b.type;
-        }
+    const mappedBlocks = rawBlocks.map((b: any) => {
+      const bType = String(b.type || "").toLowerCase();
+      const bId = String(b.id || "").toLowerCase();
+      let displayName = "Section";
 
-        return {
-          id: b.id || b.type,
-          type: b.type,
-          name: displayName,
-        };
-      });
+      if (bType === "navbar" || bType === "header" || bId === "navbar") {
+        displayName = "Navbar";
+      } else if (
+        bType === "hero_banner" ||
+        bType === "herobanner" ||
+        bType === "hero" ||
+        bType === "banner" ||
+        bId.includes("hero")
+      ) {
+        displayName = "Hero Banner";
+      } else if (
+        bType === "product_grid" ||
+        bType === "productgrid" ||
+        bId === "product_grid" ||
+        bId.includes("product_grid")
+      ) {
+        displayName = "Product Grid";
+      } else if (bType === "footer" || bId === "footer") {
+        displayName = "Footer";
+      } else if (
+        bType === "product_carousel" ||
+        bType === "productcarousel" ||
+        bType === "products_carousel"
+      ) {
+        displayName = b.props?.title || b.name || "Product Carousel";
+      } else if (
+        bType === "section_group_carousel" ||
+        bType === "sectiongroupcarousel"
+      ) {
+        displayName = b.props?.title || b.name || "Category Carousel";
+      } else if (bType === "category_grid" || bType === "categorygrid") {
+        displayName = b.props?.title || b.name || "Category Grid";
+      } else if (bType === "category_strip") {
+        displayName = b.props?.title || b.name || "Category Strip";
+      } else if (bType === "trust_badges") {
+        displayName = "Trust Badges";
+      } else if (bType === "product_detail" || bId === "product_detail") {
+        displayName = "Product Detail";
+      } else if (bType === "cart_view" || bType === "cart" || bId === "cart_view") {
+        displayName = "Cart View";
+      } else if (bType === "profile_details" || bType === "profile" || bId === "profile_details") {
+        displayName = "Profile Details";
+      } else if (bType === "customer_orders" || bId === "customer_orders") {
+        displayName = "Customer Orders & Tracking";
+      } else if (bType === "signin_form" || bId === "signin_form") {
+        displayName = "Sign In Form";
+      } else if (bType === "signup_form" || bId === "signup_form") {
+        displayName = "Sign Up Form";
+      } else if (bType === "customer_support" || bId === "customer_support") {
+        displayName = "Help & Support Desk";
+      } else {
+        displayName = b.name || b.props?.title || b.type;
+      }
+
+      return {
+        id: b.id || b.type,
+        type: b.type,
+        name: displayName,
+      };
+    });
+
+    const hasNavbar = mappedBlocks.some((b) => {
+      const t = String(b.type || "").toLowerCase();
+      const id = String(b.id || "").toLowerCase();
+      return t === "navbar" || t === "header" || id === "navbar";
+    });
+
+    const hasFooter = mappedBlocks.some((b) => {
+      const t = String(b.type || "").toLowerCase();
+      const id = String(b.id || "").toLowerCase();
+      return t === "footer" || id === "footer";
+    });
+
+    const result = [...mappedBlocks];
+    if (!hasNavbar) {
+      result.unshift({ id: "navbar", type: "navbar", name: "Navbar" });
     }
-    return [
-      { id: "navbar", type: "navbar", name: "Navbar" },
+    if (!hasFooter) {
+      result.push({ id: "footer", type: "footer", name: "Footer" });
+    }
+
+    return result;
+  }, []);
+
+  const storefrontPages = useMemo(() => {
+    const homePage = _siteDefinition?.pages?.find((p: any) => p.id === "home" || p.route === "/");
+    const prodPage = _siteDefinition?.pages?.find((p: any) => p.route?.includes("/products/") || p.id === "product_detail");
+    const cartPage = _siteDefinition?.pages?.find((p: any) => p.route === "/cart" || p.id === "cart");
+    const checkoutPage = _siteDefinition?.pages?.find((p: any) => p.route === "/checkout" || p.id === "checkout");
+    const profilePage = _siteDefinition?.pages?.find((p: any) => p.route === "/profile" || p.id === "profile");
+    const ordersPage = _siteDefinition?.pages?.find((p: any) => p.route === "/orders" || p.id === "orders");
+    const loginPage = _siteDefinition?.pages?.find((p: any) => p.route === "/login" || p.id === "login");
+    const signupPage = _siteDefinition?.pages?.find((p: any) => p.route === "/signup" || p.id === "signup");
+    const supportPage = _siteDefinition?.pages?.find((p: any) => p.route === "/support" || p.id === "support");
+
+    const defaultHomeBody = [
       { id: "hero_banner", type: "hero_banner", name: "Hero Banner" },
       { id: "product_carousel", type: "product_carousel", name: "Bestsellers Row" },
       { id: "product_grid", type: "product_grid", name: "Product Grid" },
-      { id: "footer", type: "footer", name: "Footer" },
     ];
-  }, [_siteDefinition]);
 
-  const storefrontPages = [
-    {
-      id: "home",
-      name: "Home",
-      route: "/",
-      blocks: homeBlocks,
-    },
-    {
-      id: "product_detail",
-      name: "Product Detail",
-      route: "/products/:slug",
-      blocks: [
-        { id: "product_detail", type: "product_detail", name: "Product Detail" },
-      ],
-    },
-    {
-      id: "cart",
-      name: "Cart",
-      route: "/cart",
-      blocks: [
-        { id: "cart_view", type: "cart_view", name: "Cart View" },
-      ],
-    },
-    {
-      id: "checkout",
-      name: "Checkout",
-      route: "/checkout",
-      blocks: [
-        { id: "checkout_steps", type: "checkout_steps", name: "Checkout Steps" },
-        { id: "delivery_form", type: "delivery_form", name: "Delivery Form" },
-        { id: "delivery_address_form", type: "delivery_address_form", name: "Add / Edit Address Form" },
-        { id: "payment_methods", type: "payment_methods", name: "Payment Methods" },
-        { id: "place_order_cta", type: "place_order_cta", name: "Review & Pay" },
-      ],
-    },
-    {
-      id: "profile",
-      name: "Customer Profile",
-      route: "/profile",
-      blocks: [
-        { id: "profile_details", type: "profile_details", name: "Profile Details" },
-      ],
-    },
-    {
-      id: "orders",
-      name: "Order History",
-      route: "/orders",
-      blocks: [
-        { id: "customer_orders", type: "customer_orders", name: "Customer Orders & Tracking" },
-      ],
-    },
-    {
-      id: "login",
-      name: "Customer Sign In",
-      route: "/login",
-      blocks: [
-        { id: "signin_form", type: "signin_form", name: "Sign In Form" },
-      ],
-    },
-    {
-      id: "signup",
-      name: "Customer Sign Up",
-      route: "/signup",
-      blocks: [
-        { id: "signup_form", type: "signup_form", name: "Sign Up Form" },
-      ],
-    },
-    {
-      id: "support",
-      name: "Help & Support",
-      route: "/support",
-      blocks: [
-        { id: "customer_support", type: "customer_support", name: "Help & Support Desk" },
-      ],
-    },
-  ];
+    return [
+      {
+        id: "home",
+        name: "Home",
+        route: "/",
+        blocks: resolvePageBlocks(homePage?.blocks, defaultHomeBody),
+      },
+      {
+        id: "product_detail",
+        name: "Product Detail",
+        route: "/products/:slug",
+        blocks: resolvePageBlocks(prodPage?.blocks, [
+          { id: "product_detail", type: "product_detail", name: "Product Detail" },
+        ]),
+      },
+      {
+        id: "cart",
+        name: "Cart",
+        route: "/cart",
+        blocks: resolvePageBlocks(cartPage?.blocks, [
+          { id: "cart_view", type: "cart_view", name: "Cart View" },
+        ]),
+      },
+      {
+        id: "checkout",
+        name: "Checkout",
+        route: "/checkout",
+        blocks: resolvePageBlocks(checkoutPage?.blocks, [
+          { id: "checkout_steps", type: "checkout_steps", name: "Checkout Steps" },
+          { id: "delivery_form", type: "delivery_form", name: "Delivery Form" },
+          { id: "delivery_address_form", type: "delivery_address_form", name: "Add / Edit Address Form" },
+          { id: "payment_methods", type: "payment_methods", name: "Payment Methods" },
+          { id: "place_order_cta", type: "place_order_cta", name: "Review & Pay" },
+        ]),
+      },
+      {
+        id: "profile",
+        name: "Customer Profile",
+        route: "/profile",
+        blocks: resolvePageBlocks(profilePage?.blocks, [
+          { id: "profile_details", type: "profile_details", name: "Profile Details" },
+        ]),
+      },
+      {
+        id: "orders",
+        name: "Order History",
+        route: "/orders",
+        blocks: resolvePageBlocks(ordersPage?.blocks, [
+          { id: "customer_orders", type: "customer_orders", name: "Customer Orders & Tracking" },
+        ]),
+      },
+      {
+        id: "login",
+        name: "Customer Sign In",
+        route: "/login",
+        blocks: resolvePageBlocks(loginPage?.blocks, [
+          { id: "signin_form", type: "signin_form", name: "Sign In Form" },
+        ]),
+      },
+      {
+        id: "signup",
+        name: "Customer Sign Up",
+        route: "/signup",
+        blocks: resolvePageBlocks(signupPage?.blocks, [
+          { id: "signup_form", type: "signup_form", name: "Sign Up Form" },
+        ]),
+      },
+      {
+        id: "support",
+        name: "Help & Support",
+        route: "/support",
+        blocks: resolvePageBlocks(supportPage?.blocks, [
+          { id: "customer_support", type: "customer_support", name: "Help & Support Desk" },
+        ]),
+      },
+    ];
+  }, [_siteDefinition, resolvePageBlocks]);
 
   const isRouteActive = (route: string) => {
     if (route === "/") {
@@ -339,6 +386,7 @@ export type EditorTab = "theme" | "block";
 
 type EditorSidebarProps = {
   siteDefinition: EditorSiteDefinition;
+  publishedSiteDefinition?: EditorSiteDefinition;
   selectedBlockId: string | null;
   selectedTab: EditorTab;
   onTabChange: (tab: EditorTab) => void;
@@ -630,6 +678,7 @@ function sectionCardStyle(isLightMode?: boolean): React.CSSProperties {
   const isDark = !isLight;
   return {
     display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr)",
     gap: "10px",
     padding: "10px 12px",
     borderRadius: "8px",
@@ -638,8 +687,8 @@ function sectionCardStyle(isLightMode?: boolean): React.CSSProperties {
     boxShadow: isDark ? "none" : "0 1px 2px rgba(0, 0, 0, 0.02)",
     boxSizing: "border-box",
     maxWidth: "100%",
+    width: "100%",
     minWidth: 0,
-    overflow: "visible",
   };
 }
 
@@ -1242,10 +1291,21 @@ function CompactColorRow({
         border: `1px solid ${tokens.border}`,
         boxSizing: "border-box",
         width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
         gap: "6px",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "7px", minWidth: 0, flex: 1 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "7px",
+          minWidth: 0,
+          flex: "1 1 0%",
+          overflow: "hidden",
+        }}
+      >
         <label
           style={{
             position: "relative",
@@ -1283,7 +1343,21 @@ function CompactColorRow({
             }}
           />
         </label>
-        <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={label}>
+        <span
+          style={{
+            display: "block",
+            minWidth: 0,
+            flex: "1 1 0%",
+            fontSize: "11px",
+            fontWeight: 600,
+            color: tokens.textPrimary,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            cursor: "default",
+          }}
+          title={label}
+        >
           {label}
         </span>
       </div>
@@ -1292,12 +1366,14 @@ function CompactColorRow({
         type="text"
         value={displayVal}
         placeholder={placeholder || (pickerHexVal ? pickerHexVal.toUpperCase() : "#000000")}
+        title={displayVal || (pickerHexVal ? pickerHexVal.toUpperCase() : "#000000")}
         onChange={(e) => {
           const raw = e.target.value.trim();
           onChange(raw);
         }}
         style={{
           width: "74px",
+          minWidth: "74px",
           height: "22px",
           textAlign: "center",
           fontFamily: "'Inter', monospace",
@@ -1308,7 +1384,7 @@ function CompactColorRow({
           border: `1px solid ${tokens.border}`,
           background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
           outline: "none",
-          padding: "0 2px",
+          padding: "0 4px",
           boxSizing: "border-box",
           flexShrink: 0,
         }}
@@ -2445,7 +2521,7 @@ function HeroSlidesEditor({
                               border: "none",
                               borderRadius: "4px",
                               background: active ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                              color: active ? ADMIN_BLUE : "#64748b",
+                              color: active ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
                               fontWeight: active ? 800 : 600,
                               fontSize: "9.5px",
                               cursor: "pointer",
@@ -7015,17 +7091,18 @@ function ProfileEditor({
               type="button"
               onClick={() => setActiveTab(tab)}
               style={{
-                padding: "4px 2px",
+                padding: "5px 2px",
                 fontSize: "10.5px",
-                fontWeight: active ? 700 : 500,
+                fontWeight: active ? 800 : 600,
                 borderRadius: "4px",
                 border: "none",
                 background: active ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: active ? "#0f172a" : "#64748b",
-                boxShadow: active ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                color: active ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
+                boxShadow: active ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
                 cursor: "pointer",
                 textTransform: "capitalize",
                 textAlign: "center",
+                transition: "all 0.15s ease",
               }}
             >
               {tab}
@@ -11454,7 +11531,7 @@ function NavbarEditor({
   const navbarBorderColor = getVal("navbar_border_color", isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(226, 232, 240, 0.8)");
 
   return (
-    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       {/* 5 Clean Navigation Tabs */}
       <div
         style={{
@@ -12084,7 +12161,7 @@ function NavbarEditor({
       {/* TAB 5: COLORS & THEME */}
       {activeTab === "colors" && (
         <section style={sectionCardStyle(isLightMode)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100%", boxSizing: "border-box" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
             <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Navbar & Background
             </span>
@@ -12165,6 +12242,7 @@ function NavbarEditor({
 
 export default function EditorSidebar({
   siteDefinition,
+  publishedSiteDefinition,
   selectedBlockId,
   selectedTab,
   onTabChange,
@@ -12246,7 +12324,14 @@ export default function EditorSidebar({
 
   const handleApplySnapshot = async (id: string) => {
     setAppliedSnapshotId(id);
-    const next = applyThemeSnapshot(siteDefinition, id);
+    const next = applyThemeSnapshot(siteDefinition, id, publishedSiteDefinition);
+    onSiteDefinitionChange(next);
+    setRefreshCounter((c) => c + 1);
+  };
+
+  const handleApplyThemeMode = (mode: ThemeMode) => {
+    setAppliedSnapshotId(null);
+    const next = applyThemeMode(siteDefinition, mode);
     onSiteDefinitionChange(next);
     setRefreshCounter((c) => c + 1);
   };
@@ -12271,6 +12356,10 @@ export default function EditorSidebar({
         ? (_rawSelectedBlock || { id: "customer_orders", type: "customer_orders", props: {} })
       : (selectedBlockId === "customer_support" || selectedBlockId === "support" || selectedBlockId === "customersupport" || selectedBlockId === "support_desk" || selectedBlockId === "helpdesk")
         ? (_rawSelectedBlock || { id: "customer_support", type: "customer_support", props: {} })
+      : (selectedBlockId === "navbar" || selectedBlockId === "header")
+        ? (_rawSelectedBlock || { id: "navbar", type: "navbar", props: {} })
+      : (selectedBlockId === "footer")
+        ? (_rawSelectedBlock || { id: "footer", type: "footer", props: {} })
       : _rawSelectedBlock;
   const editableConfig = selectedBlock
     ? getEditableConfigForBlock(selectedBlock.type)
@@ -12660,7 +12749,22 @@ export default function EditorSidebar({
         </button>
       </div>
 
-      {selectedTab === "theme" ? (
+      {selectedTab === "theme" ? (() => {
+        const currentTheme = siteDefinition.theme || {};
+        const rawActiveSnapId =
+          appliedSnapshotId !== undefined && appliedSnapshotId !== null
+            ? appliedSnapshotId
+            : (currentTheme.active_snapshot_id || null);
+
+        const activeSnapId = savedSnapshots.some((s: any) => s.id === rawActiveSnapId)
+          ? rawActiveSnapId
+          : null;
+
+        const isSnapshotActive = Boolean(activeSnapId);
+        const isLightSelected = !isSnapshotActive && currentTheme.mode === "light";
+        const isDarkSelected = !isSnapshotActive && currentTheme.mode === "dark";
+
+        return (
         <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
           {/* Saved Snapshots Section */}
           <section style={{ ...sectionCardStyle(isLightMode), boxSizing: "border-box", overflow: "visible" }}>
@@ -12725,25 +12829,9 @@ export default function EditorSidebar({
                     paddingRight: showAllSnapshots ? "2px" : "0",
                   }}
                 >
-                  {(() => {
-                    const currentTheme = siteDefinition.theme || {};
-                    const activeSnapId =
-                      appliedSnapshotId ||
-                      currentTheme.active_snapshot_id ||
-                      savedSnapshots.find((s: any) => {
-                        return (
-                          (s.theme?.mode || "light") === (currentTheme.mode || "light") &&
-                          s.theme?.primary_bg === currentTheme.primary_bg &&
-                          s.theme?.accent_color === currentTheme.accent_color &&
-                          s.theme?.navbar_bg === currentTheme.navbar_bg &&
-                          s.theme?.text_color === currentTheme.text_color
-                        );
-                      })?.id ||
-                      savedSnapshots[0]?.id;
-
-                    return (showAllSnapshots ? savedSnapshots : savedSnapshots.slice(0, 3)).map((snap: any) => {
-                      const th = snap.theme || {};
-                      const isCurrentActive = snap.id === activeSnapId;
+                  {(showAllSnapshots ? savedSnapshots : savedSnapshots.slice(0, 3)).map((snap: any) => {
+                    const th = snap.theme || {};
+                    const isCurrentActive = snap.id === activeSnapId;
 
                     return (
                       <div
@@ -12845,8 +12933,7 @@ export default function EditorSidebar({
                         </div>
                       </div>
                     );
-                  });
-                })()}
+                  })}
                 </div>
 
                 {savedSnapshots.length > 3 && (
@@ -12887,12 +12974,20 @@ export default function EditorSidebar({
               APPEARANCE & MODE
             </div>
 
-            <div style={{ display: "flex", gap: "3px", padding: "2px", background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9", borderRadius: "5px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+                padding: "2px",
+                background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+                borderRadius: "5px",
+                border: `1px solid ${tokens.border}`,
+              }}
+            >
               <button
                 type="button"
-                onClick={() =>
-                  onSiteDefinitionChange(applyThemeMode(siteDefinition, "light"))
-                }
+                onClick={() => handleApplyThemeMode("light")}
                 style={{
                   flex: 1,
                   padding: "4px 6px",
@@ -12900,12 +12995,12 @@ export default function EditorSidebar({
                   border: "none",
                   cursor: "pointer",
                   background:
-                    siteDefinition.theme?.mode === "light"
+                    isLightSelected
                       ? (isDark ? tokens.surfaceBg : "#ffffff")
                       : "transparent",
                   color:
-                    siteDefinition.theme?.mode === "light" ? tokens.textPrimary : tokens.textMuted,
-                  boxShadow: siteDefinition.theme?.mode === "light" ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.06)") : "none",
+                    isLightSelected ? tokens.textPrimary : tokens.textMuted,
+                  boxShadow: isLightSelected ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.06)") : "none",
                   fontSize: "10.5px",
                   fontWeight: 700,
                   display: "flex",
@@ -12913,6 +13008,18 @@ export default function EditorSidebar({
                   justifyContent: "center",
                   gap: "4px",
                   transition: "all 0.12s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isLightSelected) {
+                    e.currentTarget.style.color = tokens.textPrimary;
+                    e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isLightSelected) {
+                    e.currentTarget.style.color = tokens.textMuted;
+                    e.currentTarget.style.background = "transparent";
+                  }
                 }}
               >
                 <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -12929,11 +13036,21 @@ export default function EditorSidebar({
                 Light
               </button>
 
+              {/* Vertical Separator Divider */}
+              <div
+                style={{
+                  width: "1px",
+                  height: "14px",
+                  background: isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.12)",
+                  alignSelf: "center",
+                  flexShrink: 0,
+                  borderRadius: "1px",
+                }}
+              />
+
               <button
                 type="button"
-                onClick={() =>
-                  onSiteDefinitionChange(applyThemeMode(siteDefinition, "dark"))
-                }
+                onClick={() => handleApplyThemeMode("dark")}
                 style={{
                   flex: 1,
                   padding: "4px 6px",
@@ -12941,12 +13058,12 @@ export default function EditorSidebar({
                   border: "none",
                   cursor: "pointer",
                   background:
-                    siteDefinition.theme?.mode === "dark"
+                    isDarkSelected
                       ? (isDark ? tokens.surfaceBg : "#000000")
                       : "transparent",
                   color:
-                    siteDefinition.theme?.mode === "dark" ? (isDark ? tokens.accent : "#ffffff") : tokens.textMuted,
-                  boxShadow: siteDefinition.theme?.mode === "dark" ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.25)") : "none",
+                    isDarkSelected ? (isDark ? tokens.accent : "#ffffff") : tokens.textMuted,
+                  boxShadow: isDarkSelected ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.25)") : "none",
                   fontSize: "10.5px",
                   fontWeight: 700,
                   display: "flex",
@@ -12954,6 +13071,18 @@ export default function EditorSidebar({
                   justifyContent: "center",
                   gap: "4px",
                   transition: "all 0.12s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isDarkSelected) {
+                    e.currentTarget.style.color = tokens.textPrimary;
+                    e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isDarkSelected) {
+                    e.currentTarget.style.color = tokens.textMuted;
+                    e.currentTarget.style.background = "transparent";
+                  }
                 }}
               >
                 <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -13151,7 +13280,7 @@ export default function EditorSidebar({
             </div>
           </section>
         </div>
-      ) : (
+      ); })() : (
         <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
           {/* Dynamic Page & Inspector Breadcrumb Header */}
           <div style={{ paddingBottom: "4px", borderBottom: `1px solid ${tokens.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box" }}>
@@ -13319,7 +13448,7 @@ export default function EditorSidebar({
                   onSiteDefinitionChange={onSiteDefinitionChange}
                   siteDefinition={siteDefinition}
                 />
-              ) : selectedBlock.type === "navbar" || selectedBlock.type === "header" ? (
+              ) : selectedBlock.type === "navbar" || selectedBlock.type === "header" || selectedBlockId === "navbar" || selectedBlockId === "header" ? (
                 <NavbarEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
@@ -13367,7 +13496,7 @@ export default function EditorSidebar({
                   onSiteDefinitionChange={onSiteDefinitionChange}
                   siteDefinition={siteDefinition}
                 />
-              ) : selectedBlock.type === "footer" ? (
+              ) : selectedBlock.type === "footer" || selectedBlockId === "footer" ? (
                 <FooterEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}

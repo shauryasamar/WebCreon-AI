@@ -160,6 +160,20 @@ export const AdminFaqFullView: React.FC<{ siteId?: string; onBack?: () => void }
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
+  // Scroll to top on mount matching AdminLayout / BuilderPage mechanism
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+
+    const scrollContainers = document.querySelectorAll<HTMLElement>(
+      ".builder-preview-scroll, [class*='builder-preview'], main"
+    );
+    scrollContainers.forEach((el) => {
+      el.scrollTop = 0;
+    });
+  }, []);
+
   // Fetch FAQ Catalog
   const fetchFaqs = useCallback(async (catSlug?: string) => {
     setLoading(true);

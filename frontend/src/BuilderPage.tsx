@@ -1355,6 +1355,16 @@ function BuilderPageContent() {
         } catch (_) {}
       }
 
+      if (typeof window !== "undefined" && currentSiteId) {
+        try {
+          localStorage.setItem(`wc_published_site_def_${currentSiteId}`, JSON.stringify(finalDef));
+          const currentSlug = siteSlug || updatedSite.slug || siteSlugParam;
+          if (currentSlug) {
+            localStorage.setItem(`wc_published_site_def_${currentSlug}`, JSON.stringify(finalDef));
+          }
+        } catch (_) {}
+      }
+
       // Invalidate memory and local caches so customer storefront immediately renders new theme
       const currentSlug = siteSlug || updatedSite.slug || siteSlugParam;
       if (currentSlug) {
@@ -2227,6 +2237,12 @@ function BuilderPageContent() {
         setPublishedSiteDefinition(cleanPublishedDefinition);
         if (cleanPublishedDefinition) {
           baselineSiteDefinitionRef.current = cleanPublishedDefinition;
+          if (typeof window !== "undefined") {
+            try {
+              if (data.id) localStorage.setItem(`wc_published_site_def_${data.id}`, JSON.stringify(cleanPublishedDefinition));
+              if (data.slug) localStorage.setItem(`wc_published_site_def_${data.slug}`, JSON.stringify(cleanPublishedDefinition));
+            } catch (_) {}
+          }
         }
 
         let parsedSiteDefinition: SiteDefinition = isStoreRoute
@@ -3134,6 +3150,7 @@ function BuilderPageContent() {
         <EditorSidebar
           key={resolvedSiteId || siteId || "editor-sidebar"}
           siteDefinition={activeSiteDefinition}
+          publishedSiteDefinition={publishedSiteDefinition || undefined}
           selectedBlockId={selectedBlockId}
           selectedTab={editorTab}
           onTabChange={setEditorTab}

@@ -237,6 +237,20 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
   // Legal Full View State
   const [selectedLegalDoc, setSelectedLegalDoc] = useState<LegalDocType>("privacy");
 
+  // Scroll to top when switching between Overview, FAQ, and Legal & Company views (matching AdminLayout / BuilderPage mechanism)
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+
+    const scrollContainers = document.querySelectorAll<HTMLElement>(
+      ".builder-preview-scroll, [class*='builder-preview'], main"
+    );
+    scrollContainers.forEach((el) => {
+      el.scrollTop = 0;
+    });
+  }, [viewMode, selectedLegalDoc]);
+
   // Restore Draft if session expired previously
   useEffect(() => {
     try {

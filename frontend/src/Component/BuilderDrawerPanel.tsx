@@ -1942,13 +1942,13 @@ export default function BuilderDrawerPanel({
                       style={{
                         padding: "6px 10px",
                         borderRadius: "6px",
-                        border: isCurrentlyActive ? `1px solid ${tokens.border}` : "none",
+                        border: isJustApplied ? "none" : isCurrentlyActive ? `1px solid ${tokens.border}` : "none",
                         background: isJustApplied
                           ? tokens.success
                           : isCurrentlyActive
                             ? (isDark ? tokens.surfaceBg : "#f8fafc")
                             : tokens.accent,
-                        color: isCurrentlyActive ? tokens.textSecondary : "#ffffff",
+                        color: isJustApplied ? "#ffffff" : isCurrentlyActive ? tokens.textSecondary : "#ffffff",
                         fontSize: "11px",
                         fontWeight: 700,
                         cursor:

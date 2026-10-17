@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { useAdminTheme } from "../context/ThemeContext";
 
 export type LegalDocType = "privacy" | "terms" | "refund" | "about" | "contact";
@@ -8,13 +8,55 @@ interface AdminLegalFullViewProps {
   onBack: () => void;
 }
 
+const LEGAL_DOC_TABS: { key: LegalDocType; label: string }[] = [
+  { key: "privacy", label: "Privacy Policy" },
+  { key: "terms", label: "Terms of Service" },
+  { key: "refund", label: "Refund Policy" },
+  { key: "about", label: "About WebCreon" },
+  { key: "contact", label: "Contact Us" },
+];
+
 export const AdminLegalFullView: React.FC<AdminLegalFullViewProps> = ({
   initialDoc = "privacy",
   onBack,
 }) => {
   const { isDark, tokens } = useAdminTheme();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [activeDoc, setActiveDoc] = useState<LegalDocType>(initialDoc);
+
+  useEffect(() => {
+    setActiveDoc(initialDoc);
+  }, [initialDoc]);
+
+  // Existing admin scroll-to-top mechanism from AdminLayout / BuilderPage
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+
+    const scrollContainers = document.querySelectorAll<HTMLElement>(
+      ".builder-preview-scroll, [class*='builder-preview'], main"
+    );
+    scrollContainers.forEach((el) => {
+      el.scrollTop = 0;
+    });
+
+    if (rootRef.current) {
+      let parent = rootRef.current.parentElement;
+      while (parent) {
+        if (parent.scrollTop > 0) parent.scrollTop = 0;
+        parent = parent.parentElement;
+      }
+    }
+  }, [activeDoc]);
+
+  const handleSelectDoc = (docKey: LegalDocType) => {
+    setActiveDoc(docKey);
+  };
+
   return (
     <div
+      ref={rootRef}
       style={{
         width: "100%",
         color: tokens.textPrimary,
@@ -22,10 +64,15 @@ export const AdminLegalFullView: React.FC<AdminLegalFullViewProps> = ({
         boxSizing: "border-box",
       }}
     >
-      {/* Top Single Navigation Button */}
+      {/* Top Navigation Bar: Back Button + Doc Switcher Pills */}
       <div
         style={{
           marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "12px",
         }}
       >
         <button
@@ -70,6 +117,46 @@ export const AdminLegalFullView: React.FC<AdminLegalFullViewProps> = ({
           </svg>
           <span>Back to Help & Support</span>
         </button>
+
+        {/* Document Switcher Tabs */}
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            background: isDark ? tokens.surfaceBg : "#f1f5f9",
+            padding: "3px",
+            borderRadius: "8px",
+            border: `1px solid ${tokens.border}`,
+            flexWrap: "wrap",
+            gap: "2px",
+          }}
+        >
+          {LEGAL_DOC_TABS.map((tab) => {
+            const isSelected = activeDoc === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => handleSelectDoc(tab.key)}
+                style={{
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "5px 12px",
+                  background: isSelected ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
+                  color: isSelected ? tokens.textPrimary : tokens.textSecondary,
+                  boxShadow: isSelected ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.06)") : "none",
+                  fontSize: "12.5px",
+                  fontWeight: isSelected ? 700 : 500,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Main Document Content Container */}
@@ -85,11 +172,11 @@ export const AdminLegalFullView: React.FC<AdminLegalFullViewProps> = ({
           lineHeight: 1.7,
         }}
       >
-        {initialDoc === "privacy" && <PrivacyPolicyDocument />}
-        {initialDoc === "terms" && <TermsOfServiceDocument />}
-        {initialDoc === "refund" && <RefundPolicyDocument />}
-        {initialDoc === "about" && <AboutWebCreonDocument />}
-        {initialDoc === "contact" && <ContactUsDocument />}
+        {activeDoc === "privacy" && <PrivacyPolicyDocument />}
+        {activeDoc === "terms" && <TermsOfServiceDocument />}
+        {activeDoc === "refund" && <RefundPolicyDocument />}
+        {activeDoc === "about" && <AboutWebCreonDocument />}
+        {activeDoc === "contact" && <ContactUsDocument />}
       </div>
     </div>
   );

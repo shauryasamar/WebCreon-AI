@@ -1244,7 +1244,7 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
             userSelect: "none",
           }}
         >
-          <div style={{ width: effectiveSiteId ? "170px" : "160px", flexShrink: 0 }}>Timestamp ▼</div>
+          <div style={{ width: effectiveSiteId ? "170px" : "160px", flexShrink: 0 }}>Timestamp</div>
           {!effectiveSiteId && <div style={{ width: "140px", flexShrink: 0 }}>Website</div>}
           <div style={{ width: effectiveSiteId ? "160px" : "140px", flexShrink: 0 }}>Category</div>
           <div style={{ width: effectiveSiteId ? "180px" : "170px", flexShrink: 0 }}>Actor</div>
