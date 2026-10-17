@@ -907,64 +907,86 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                 </span>
               </div>
 
-              <form onSubmit={handleSaveSubdomain} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <form onSubmit={handleSaveSubdomain} style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>
                     Store Subdomain Prefix
                   </label>
-                  <div style={{ display: "flex", alignItems: "center", flexWrap: "nowrap", borderRadius: "7px", border: `1px solid ${tokens.border}`, overflow: "hidden", background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", maxWidth: "520px" }}>
-                    <div style={{ padding: "0 10px", color: tokens.textMuted, display: "grid", placeItems: "center" }}>
-                      <GlobeIcon />
-                    </div>
-                    <input
-                      type="text"
-                      value={subdomainInput}
-                      onChange={(e) => setSubdomainInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                      placeholder="your-brand-slug"
-                      className="wc-input-focus"
-                      disabled={!canEdit || subdomainSubmitting}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", boxSizing: "border-box" }}>
+                    <div
                       style={{
+                        display: "flex",
+                        alignItems: "center",
+                        flexWrap: "nowrap",
+                        borderRadius: "7px",
+                        border: `1px solid ${tokens.border}`,
+                        overflow: "hidden",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                         flex: 1,
                         minWidth: 0,
-                        padding: "8px 4px",
-                        border: "none",
-                        outline: "none",
-                        fontSize: "13.5px",
-                        fontFamily: "monospace",
-                        color: tokens.textPrimary,
-                        colorScheme: isDark ? "dark" : "light",
-                        background: "transparent",
+                        boxSizing: "border-box",
                       }}
-                    />
-                    <span style={{ padding: "8px 12px", background: isDark ? tokens.surfaceBg : "#f8fafc", color: tokens.textSecondary, fontSize: "13px", fontWeight: 600, borderLeft: `1px solid ${tokens.border}`, userSelect: "none", whiteSpace: "nowrap", flexShrink: 0 }}>
-                      .{platformBaseDomain}
-                    </span>
+                    >
+                      <div style={{ padding: "0 10px", color: tokens.textMuted, display: "grid", placeItems: "center" }}>
+                        <GlobeIcon />
+                      </div>
+                      <input
+                        type="text"
+                        value={subdomainInput}
+                        onChange={(e) => setSubdomainInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                        placeholder="your-brand-slug"
+                        className="wc-input-focus"
+                        disabled={!canEdit || subdomainSubmitting}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          padding: "8px 4px",
+                          border: "none",
+                          outline: "none",
+                          fontSize: "13.5px",
+                          fontFamily: "monospace",
+                          color: tokens.textPrimary,
+                          colorScheme: isDark ? "dark" : "light",
+                          background: "transparent",
+                        }}
+                      />
+                      <span style={{ padding: "8px 12px", background: isDark ? tokens.surfaceBg : "#f8fafc", color: tokens.textSecondary, fontSize: "13px", fontWeight: 600, borderLeft: `1px solid ${tokens.border}`, userSelect: "none", whiteSpace: "nowrap", flexShrink: 0 }}>
+                        .{platformBaseDomain}
+                      </span>
+                    </div>
+
+                    {canEdit && (
+                      <button
+                        type="submit"
+                        disabled={subdomainSubmitting || !subdomainInput.trim() || subdomainInput.trim() === activeStore.slug}
+                        style={{
+                          padding: "8px 18px",
+                          borderRadius: "7px",
+                          background: subdomainInput.trim() !== activeStore.slug && subdomainInput.trim()
+                            ? (tokens.accent || "#2563eb")
+                            : (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9"),
+                          color: subdomainInput.trim() !== activeStore.slug && subdomainInput.trim()
+                            ? "#ffffff"
+                            : tokens.textMuted,
+                          border: `1px solid ${subdomainInput.trim() !== activeStore.slug && subdomainInput.trim() ? "transparent" : tokens.border}`,
+                          fontSize: "12.5px",
+                          fontWeight: 600,
+                          whiteSpace: "nowrap",
+                          cursor: subdomainSubmitting || !subdomainInput.trim() || subdomainInput.trim() === activeStore.slug ? "not-allowed" : "pointer",
+                          boxShadow: subdomainInput.trim() !== activeStore.slug && subdomainInput.trim() ? `0 1px 2px ${(tokens.accent || "#2563eb")}40` : "none",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {subdomainSubmitting ? "Saving..." : "Save Subdomain"}
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", width: "100%" }}>
                   <span style={{ fontSize: "11.5px", color: tokens.textSecondary }}>
                     🛡️ Previous slugs remain protected for 90 days to prevent domain hijacking.
                   </span>
-                  {canEdit && subdomainInput.trim() !== activeStore.slug && (
-                    <button
-                      type="submit"
-                      disabled={subdomainSubmitting || !subdomainInput.trim()}
-                      style={{
-                        padding: "7px 16px",
-                        borderRadius: "6px",
-                        background: tokens.accent || "#2563eb",
-                        color: "#ffffff",
-                        border: "none",
-                        fontSize: "12.5px",
-                        fontWeight: 600,
-                        cursor: subdomainSubmitting ? "not-allowed" : "pointer",
-                        boxShadow: `0 1px 2px ${(tokens.accent || "#2563eb")}40`,
-                      }}
-                    >
-                      {subdomainSubmitting ? "Saving..." : "Save Subdomain"}
-                    </button>
-                  )}
                 </div>
               </form>
             </div>
@@ -1201,12 +1223,12 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                 </div>
               ) : (
                 /* Connect New Custom Domain Input */
-                <form onSubmit={handleConnectCustomDomain} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <form onSubmit={handleConnectCustomDomain} style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Connect a Custom Domain
                     </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", maxWidth: "520px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", boxSizing: "border-box" }}>
                       <input
                         type="text"
                         value={customDomainInput}
@@ -1216,6 +1238,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                         disabled={!canEdit || customDomainSubmitting}
                         style={{
                           flex: 1,
+                          minWidth: 0,
                           padding: "8px 12px",
                           borderRadius: "7px",
                           border: `1px solid ${tokens.border}`,
@@ -1225,6 +1248,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                           colorScheme: isDark ? "dark" : "light",
                           background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                           outline: "none",
+                          boxSizing: "border-box",
                         }}
                       />
                       {canEdit && (
@@ -1232,7 +1256,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                           type="submit"
                           disabled={customDomainSubmitting || !customDomainAnalysis.clean || !customDomainAnalysis.isValid || customDomainAnalysis.isApex}
                           style={{
-                            padding: "8px 16px",
+                            padding: "8px 18px",
                             borderRadius: "7px",
                             background: tokens.accent || "#2563eb",
                             color: "#ffffff",
@@ -1242,6 +1266,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                             whiteSpace: "nowrap",
                             cursor: customDomainSubmitting || !customDomainAnalysis.clean || customDomainAnalysis.isApex ? "not-allowed" : "pointer",
                             boxShadow: `0 1px 2px ${(tokens.accent || "#2563eb")}40`,
+                            transition: "all 0.15s ease",
                           }}
                         >
                           {customDomainSubmitting ? "Connecting..." : "Connect Domain"}
