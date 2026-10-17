@@ -308,20 +308,61 @@ def get_store_metrics_for_period(
 import re
 
 def is_data_deletion_attempt(message: str) -> bool:
-    """Checks for explicit data deletion attempts targeting orders, products, or tables with regex word boundaries."""
-    msg_lower = message.lower()
-    delete_pattern = r"\b(delete|drop|purge|destroy|erase|truncate|wipe|del|remove)\b"
-    target_pattern = r"\b(all orders|orders|order|products|product|table|tables|database|db|all reviews|reviews|users|customers)\b"
-    
-    # Must match both a delete action and a data entity
-    has_delete = bool(re.search(delete_pattern, msg_lower))
-    has_target = bool(re.search(target_pattern, msg_lower))
-    
-    # Exception: removing a filter or clearing search is UI, not data deletion
-    if "remove filter" in msg_lower or "clear filter" in msg_lower or "clear search" in msg_lower:
-        return False
-        
-    return has_delete and has_target
+    """
+    Checks for explicit, destructive data deletion attempts targeting database tables, records, or entities.
+    Carefully distinguishes between SQL/Data destruction vs UI styling/layout instructions
+    (e.g., 'drop shadow', 'dropdown', 'remove border', 'product cards', 'order summary').
+    """
+    msg_lower = message.lower().strip()
+
+    # 1. Immediate exemptions for design, styling, and UI terminology
+    ui_design_terms = [
+        "drop shadow", "drop-shadow", "dropshadow", "drop shadows",
+        "drop down", "dropdown", "drop-down",
+        "drag and drop", "drag-and-drop", "drag & drop",
+        "price drop", "price drops", "collection drop", "product drop",
+        "remove border", "remove shadow", "remove background", "remove bg",
+        "remove color", "remove padding", "remove margin", "remove radius",
+        "remove outline", "remove badge", "remove button", "remove icon",
+        "remove filter", "clear filter", "clear search",
+        "frosted glass", "border radius", "pill corners",
+    ]
+    if any(term in msg_lower for term in ui_design_terms):
+        raw_sql_probes = ["drop table", "truncate table", "delete from", "drop database", "drop schema"]
+        if not any(probe in msg_lower for probe in raw_sql_probes):
+            return False
+
+    # 2. UI Component Context: 'product card(s)', 'product grid', 'order summary', 'order history' are UI blocks
+    ui_components = [
+        "product card", "product cards", "product grid", "product carousel",
+        "product detail", "product tile", "product page", "order summary",
+        "order history", "order card", "order tracking", "review card",
+    ]
+    if any(comp in msg_lower for comp in ui_components):
+        design_actions = ["style", "color", "background", "border", "shadow", "radius", "padding", "margin", "glass", "card"]
+        raw_sql_probes = ["drop table", "truncate table", "delete from", "drop database", "drop schema"]
+        if any(act in msg_lower for act in design_actions) and not any(probe in msg_lower for probe in raw_sql_probes):
+            return False
+
+    # 3. Direct SQL destructive statements
+    sql_delete_pattern = r"\b(drop\s+(table|database|schema|view|column)|truncate\s+(table\s+)?|delete\s+from)\b"
+    if re.search(sql_delete_pattern, msg_lower):
+        return True
+
+    # 4. Destructive natural language commands targeting backend datasets
+    destructive_action_pattern = (
+        r"\b(delete|purge|destroy|erase|truncate|wipe)\s+"
+        r"(all\s+|every\s+|the\s+|our\s+|all\s+the\s+)?(from\s+)?"
+        r"(orders|order\s+records|products|product\s+catalog|customers|users|database|db|reviews|all\s+reviews|records|tables)\b"
+    )
+    if re.search(destructive_action_pattern, msg_lower):
+        return True
+
+    # 5. Specific target ID deletions, e.g. "delete order #1234", "delete product #45"
+    if re.search(r"\b(delete|purge|erase|drop)\s+(order|product|user|customer)\s+(#?[a-z0-9\-_]{4,})\b", msg_lower):
+        return True
+
+    return False
 
 
 def mutate_order_status_in_db(

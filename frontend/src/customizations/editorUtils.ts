@@ -2297,10 +2297,6 @@ export function getSiteStorageId(siteDefinition?: EditorSiteDefinition): string 
     if (id && typeof id === "string" && id.trim()) return id.trim();
     const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
     if (slug && typeof slug === "string" && slug.trim()) return slug.trim();
-    const brand = siteDefinition?.site?.brand_name;
-    if (brand && typeof brand === "string" && brand.trim()) {
-      return brand.trim().toLowerCase().replace(/\s+/g, "_");
-    }
   }
   if (typeof window !== "undefined") {
     try {
@@ -2309,12 +2305,19 @@ export function getSiteStorageId(siteDefinition?: EditorSiteDefinition): string 
       if (match && match[2]) return match[2].trim();
     } catch { }
   }
+  if (siteDefinition) {
+    const brand = siteDefinition?.site?.brand_name;
+    if (brand && typeof brand === "string" && brand.trim()) {
+      return brand.trim().toLowerCase().replace(/\s+/g, "_");
+    }
+  }
   return "default_site";
 }
 
 export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): any[] {
   const siteId = getSiteStorageId(siteDefinition);
   const slug = (siteDefinition as any)?.slug || (siteDefinition as any)?.site?.slug;
+  const brand = siteDefinition?.site?.brand_name ? String(siteDefinition.site.brand_name).trim().toLowerCase().replace(/\s+/g, "_") : "";
   let inStorage: any[] = [];
 
   if (typeof window !== "undefined") {
@@ -2324,21 +2327,26 @@ export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): an
       localStorage.removeItem("webnirmaan_saved_themes_default_site");
       localStorage.removeItem("webnirmaan_saved_themes_latest");
 
-      if (siteId && siteId !== "default_site") {
-        const rawSpecific = localStorage.getItem(`webnirmaan_saved_themes_${siteId}`);
-        if (rawSpecific) {
-          const parsed = JSON.parse(rawSpecific);
-          if (Array.isArray(parsed)) inStorage.push(...parsed);
-        }
+      const keysToCheck = new Set<string>();
+      if (siteId && siteId !== "default_site") keysToCheck.add(`webnirmaan_saved_themes_${siteId}`);
+      if (slug && slug !== "default_site") keysToCheck.add(`webnirmaan_saved_themes_${slug}`);
+      if (brand && brand !== "default_site") keysToCheck.add(`webnirmaan_saved_themes_${brand}`);
+
+      const path = window.location.pathname || "";
+      const match = path.match(/\/(builder|store)\/([^/?#]+)/);
+      if (match && match[2] && match[2] !== "default_site") {
+        keysToCheck.add(`webnirmaan_saved_themes_${match[2].trim()}`);
       }
 
-      if (slug && slug !== siteId && slug !== "default_site") {
-        const rawSlug = localStorage.getItem(`webnirmaan_saved_themes_${slug}`);
-        if (rawSlug) {
-          const parsed = JSON.parse(rawSlug);
-          if (Array.isArray(parsed)) inStorage.push(...parsed);
+      keysToCheck.forEach((k) => {
+        const rawSpecific = localStorage.getItem(k);
+        if (rawSpecific) {
+          try {
+            const parsed = JSON.parse(rawSpecific);
+            if (Array.isArray(parsed)) inStorage.push(...parsed);
+          } catch { }
         }
-      }
+      });
     } catch { }
   }
 
@@ -2506,9 +2514,24 @@ export function saveThemeSnapshot(
       if (slug && slug !== siteId && slug !== "default_site") {
         localStorage.setItem(`webnirmaan_saved_themes_${slug}`, JSON.stringify(updatedList));
       }
+      const path = window.location.pathname || "";
+      const match = path.match(/\/(builder|store)\/([^/?#]+)/);
+      if (match && match[2] && match[2] !== siteId && match[2] !== slug && match[2] !== "default_site") {
+        localStorage.setItem(`webnirmaan_saved_themes_${match[2].trim()}`, JSON.stringify(updatedList));
+      }
       window.dispatchEvent(new CustomEvent("webnirmaan_theme_saved", { detail: { siteId, slug, snapshots: updatedList } }));
     } catch { }
   }
+  const isCustomPaletteSave = Boolean(customThemeProps && Object.keys(cleanCustomPatch).length > 0);
+
+  if (isCustomPaletteSave) {
+    // When saving a suggested theme to library from chat, keep active canvas theme untouched
+    return {
+      ...siteDefinition,
+      saved_themes: updatedList,
+    } as any;
+  }
+
   const finalTheme: Record<string, any> = {
     ...siteDefinition.theme,
     ...themeToSave,

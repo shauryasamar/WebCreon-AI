@@ -4,6 +4,7 @@ Master router using LangGraph StateGraph to coordinate specialized sub-agents.
 """
 
 import json
+import re
 from decimal import Decimal
 from typing import Dict, Any, List, Optional, TypedDict
 from pydantic import BaseModel, Field
@@ -89,13 +90,16 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
     user_msg = state["user_message"]
     # 1. Safety Guardrail & SQL Injection Probe check
     user_msg_clean = user_msg.lower().strip()
+    sql_injection_patterns = [
+        r"\bunion\s+(all\s+)?select\b",
+        r"\b(or|and)\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+['\"]?\b",
+        r";\s*(drop\s+(table|database|schema)|delete\s+from|truncate\s+table)\b",
+        r"\b(pg_shadow|pg_user|information_schema|pg_sleep)\b",
+        r"\b(drop|truncate)\s+table\b",
+        r"['\"]hacked['\"]",
+    ]
     is_sql_injection_probe = any(
-        inj in user_msg_clean
-        for inj in [
-            "union select", "union all select", "1=1", "; drop", "; delete", "; truncate",
-            "pg_shadow", "pg_user", "information_schema", "pg_sleep", "drop table", "truncate table",
-            "'hacked'", "\"hacked\""
-        ]
+        bool(re.search(pat, user_msg_clean)) for pat in sql_injection_patterns
     )
     if is_data_deletion_attempt(user_msg) or is_sql_injection_probe:
         return {
@@ -115,14 +119,17 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
         "revert it", "undo it", "rollback", "roll back", "put it back",
         "change it back", "bring back the old", "bring back previous",
         "discard changes", "cancel that change", "restore older version",
-        "make it like before", "how it was before"
+        "make it like before", "how it was before", "revert last change",
+        "revert the last change", "undo last change", "undo the last change",
+        "revert that change", "undo that change", "revert change"
     ]
 
+    # Non-pure indicators are words indicating a second separate action or entity
     non_pure_indicators = [
-        "and", "ad", "then", "also", "plus", "add", "create", "show", "what", "list",
-        "change", "make", "set", "turn", "paint", "color", "colour", "background", "bg",
+        "and", "then", "also", "plus", "show", "what", "list",
+        "paint", "color", "colour", "background", "bg",
         "red", "blue", "green", "yellow", "black", "white", "pink", "purple", "orange",
-        "navbar", "header", "footer", "hero", "page", "card", "button", "theme",
+        "navbar", "header", "footer", "hero", "card", "button", "theme",
         "orders", "sales", "products", "banner", "support", "ticket", "table", "details"
     ]
 
@@ -130,11 +137,12 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
     has_non_pure_words = any(w in non_pure_indicators for w in words)
     has_revert_keyword = any(t in user_msg_clean for t in revert_triggers)
 
-    is_pure_revert = (
+    revert_pattern = r"^(can you\s+)?(please\s+)?(undo|revert|rollback|restore|go back|take back|discard)(\s+(back|it|the|that|last|previous|changes?|version|change))*(\s+like before|\s+to previous|\s+older version|\s+how it was before)?$"
+    is_pure_revert = bool(re.search(revert_pattern, user_msg_clean)) or (
         has_revert_keyword
         and not has_clause_delimiters
         and not has_non_pure_words
-        and len(words) <= 5
+        and len(words) <= 6
     )
     if is_pure_revert:
         return {
@@ -193,7 +201,7 @@ TARGET COMPONENTS (100% COVERAGE):
 navbar (top bar/header), footer (bottom bar/copyright), hero (top banner/slides styling, button colors, backgrounds, text), product_grid (catalog grid), product_carousel (product slider), section_group_carousel (category story carousel), category_grid (category boxes/tiles), card (product boxes/cards/item titles/prices), product_detail (item page), cart (cart drawer/bag), order_summary, delivery_form, payment, place_order, filter, sort, pagination, order_history, support, notification, profile, background (page canvas), banner_create (ONLY when adding/creating a NEW promotional banner slide), revert, overall (store-wide).
 
 RULES:
-1. 'hero' vs 'banner_create': If user asks to change, recolor, style, or adjust banner buttons/background/text, use 'hero'. ONLY use 'banner_create' when the user explicitly asks to add/create a NEW banner slide!
+1. 'banner_create' vs 'hero': Whenever the user asks to CREATE, ADD, GENERATE, or MAKE a promotional banner, slide, or hero banner (even if buttons, copy, discounts, or colors for that new banner are specified, e.g. "Create a promotional hero banner for 25% OFF with a Shop Now button"), ALWAYS classify as 'banner_create'! ONLY classify as 'hero' when the user asks to style, recolor, or adjust an ALREADY EXISTING banner without creating a new one (e.g. "make hero background darker", "change banner button to blue").
 2. Multi-target carousel/section styling: use 'multi:comp1,comp2' (e.g. 'multi:product_carousel,section_group_carousel').
 3. Pronoun & follow-up resolution: If user says "make it black" or "change it", check Conversation History for the previously discussed component.
 4. Single analytical questions asking for multiple metrics (e.g. "what are new orders and their stock") are a single 'DB_QUERY', NOT compound."""),
@@ -232,6 +240,24 @@ RULES:
                     else:
                         target_comp = comp_candidate
                     break
+
+        # Disambiguate banner_create:
+        # If user explicitly asks to create, add, generate, or insert a promotional banner/slide,
+        # it MUST be banner_create, regardless of whether buttons, copy, or colors are specified.
+        has_banner_creation = bool(re.search(
+            r"\b(create|add|insert|generate|new|make)\s+(a\s+|an\s+|the\s+)?([a-z0-9\-%]+\s+)*(banner|slide|hero\s+banner)\b",
+            user_msg_clean
+        ))
+        if has_banner_creation and not any(w in user_msg_clean for w in ["existing banner", "modify the banner", "recolor the banner"]):
+            raw_intent = "DESIGN"
+            target_comp = "banner_create"
+
+        # Disambiguate revert / undo misclassifications:
+        # Reverting design changes is ALWAYS DESIGN with target_component='revert', never MUTATION
+        if any(w in user_msg_clean for w in ["revert", "undo", "rollback", "restore previous", "go back"]):
+            if raw_intent in ("MUTATION", "CHAT", "GUARDRAIL"):
+                raw_intent = "DESIGN"
+                target_comp = "revert"
 
         # Disambiguate MUTATION misclassifications:
         # If router flagged MUTATION but the prompt is actually styling a storefront component and has no DB write signals

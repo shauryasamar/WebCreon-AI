@@ -1202,11 +1202,15 @@ function BuilderPageContent() {
   );
   const isTargetSiteToHeal = (initialCachedSite?.id === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a" || siteId === "9e86e420-7776-4383-8cc1-fe3d9f6cf36a");
   const [siteDefinition, setSiteDefinition] = useState<SiteDefinition | null>(
-    initialCachedSite?.site_definition || initialCachedSite?.draft_definition || null
+    isStoreRoute
+      ? (initialCachedSite?.site_definition || initialCachedSite?.draft_definition || null)
+      : (initialCachedSite?.draft_definition || initialCachedSite?.site_definition || null)
   );
   const [draftSiteDefinition, setDraftSiteDefinition] =
     useState<SiteDefinition | null>(
-      initialCachedSite?.site_definition || initialCachedSite?.draft_definition || null
+      isStoreRoute
+        ? (initialCachedSite?.site_definition || initialCachedSite?.draft_definition || null)
+        : (initialCachedSite?.draft_definition || initialCachedSite?.site_definition || null)
     );
   const [publishedSiteDefinition, setPublishedSiteDefinition] =
     useState<SiteDefinition | null>(
@@ -1820,7 +1824,9 @@ function BuilderPageContent() {
     }
 
     if (cachedTarget && (cachedTarget.id === siteId || cachedTarget.slug === siteSlugParam)) {
-      const def = cachedTarget.site_definition || cachedTarget.draft_definition;
+      const def = isStoreRoute
+        ? (cachedTarget.site_definition || cachedTarget.draft_definition)
+        : (cachedTarget.draft_definition || cachedTarget.site_definition);
       setSiteDefinition(def || null);
       setDraftSiteDefinition(def || null);
       setPublishedSiteDefinition(cachedTarget.site_definition || null);
@@ -1888,7 +1894,35 @@ function BuilderPageContent() {
 
         setPublishedSiteDefinition(data.site_definition || null);
 
-        let parsedSiteDefinition: SiteDefinition = (data.site_definition || data.draft_definition);
+        let parsedSiteDefinition: SiteDefinition = isStoreRoute
+          ? (data.site_definition || data.draft_definition)
+          : (data.draft_definition || data.site_definition);
+
+        // Merge saved theme snapshots across draft and published so snapshots are NEVER lost
+        const draftThemes = Array.isArray((data.draft_definition as any)?.saved_themes)
+          ? (data.draft_definition as any).saved_themes
+          : [];
+        const pubThemes = Array.isArray((data.site_definition as any)?.saved_themes)
+          ? (data.site_definition as any).saved_themes
+          : [];
+
+        const mergedSavedThemesMap = new Map<string, any>();
+        [...draftThemes, ...pubThemes].forEach((item) => {
+          if (item && item.id && !mergedSavedThemesMap.has(item.id)) {
+            mergedSavedThemesMap.set(item.id, item);
+          }
+        });
+        const mergedSavedThemes = Array.from(mergedSavedThemesMap.values()).slice(0, 30);
+
+        if (parsedSiteDefinition) {
+          parsedSiteDefinition = {
+            ...parsedSiteDefinition,
+            id: data.id,
+            site_id: data.id,
+            slug: data.slug,
+            saved_themes: mergedSavedThemes.length > 0 ? mergedSavedThemes : ((parsedSiteDefinition as any)?.saved_themes || []),
+          };
+        }
 
         // Auto-heal cross-tenant contamination:
         // 1. If this site is 9e86e420-7776-4383-8cc1-fe3d9f6cf36a (user's affected site)
@@ -1905,7 +1939,13 @@ function BuilderPageContent() {
           (isTargetContaminatedSite || brandMismatch)
         ) {
           console.warn(`[Tenant Isolation] Restoring clean published definition for site "${siteBrand}" (${data.id}).`);
-          parsedSiteDefinition = data.site_definition;
+          parsedSiteDefinition = {
+            ...data.site_definition,
+            id: data.id,
+            site_id: data.id,
+            slug: data.slug,
+            saved_themes: mergedSavedThemes.length > 0 ? mergedSavedThemes : ((data.site_definition as any)?.saved_themes || []),
+          };
 
           // Clear any local poisoned snapshots for this site
           try {
@@ -1922,7 +1962,7 @@ function BuilderPageContent() {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               credentials: "include",
-              body: JSON.stringify({ draft_definition: data.site_definition }),
+              body: JSON.stringify({ draft_definition: parsedSiteDefinition }),
             }).catch(() => { });
           }
         }

@@ -1495,14 +1495,14 @@ CANONICAL_COMPONENT_PROPERTY_MAP: Dict[str, Dict[str, Union[str, List[str]]]] = 
         "text_color": "hero_text_color",
         "font_color": "hero_text_color",
         "hero_text_color": "hero_text_color",
-        "button_bg": ["hero_accent", "accent_color", "button_bg_color"],
-        "btn_bg": ["hero_accent", "accent_color", "button_bg_color"],
-        "button_color": ["hero_accent", "accent_color", "button_bg_color"],
-        "btn_color": ["hero_accent", "accent_color", "button_bg_color"],
-        "cta_bg": ["hero_accent", "accent_color", "button_bg_color"],
-        "hero_accent": ["hero_accent", "accent_color", "button_bg_color"],
-        "accent": ["hero_accent", "accent_color", "button_bg_color"],
-        "accent_color": ["hero_accent", "accent_color", "button_bg_color"],
+        "button_bg": ["hero_accent", "button_bg_color"],
+        "btn_bg": ["hero_accent", "button_bg_color"],
+        "button_color": ["hero_accent", "button_bg_color"],
+        "btn_color": ["hero_accent", "button_bg_color"],
+        "cta_bg": ["hero_accent", "button_bg_color"],
+        "hero_accent": ["hero_accent", "button_bg_color"],
+        "accent": "hero_accent",
+        "accent_color": "hero_accent",
         "height": "banner_height",
         "banner_height": "banner_height",
         "radius": "border_radius",
@@ -2207,6 +2207,16 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
     if any(u in msg_lower for u in unmapped_words) and not any(s in msg_lower for s in supported_words):
         return "unsupported"
 
+    # Explicit Banner Creation Priority:
+    # If the user prompt asks to create/add/generate/insert a banner or slide,
+    # it must ALWAYS resolve to banner_create, even if caller passed generic 'hero'.
+    has_banner_creation = bool(re.search(
+        r"\b(create|add|insert|generate|new|make)\s+(a\s+|an\s+|the\s+)?([a-z0-9\-%]+\s+)*(banner|slide|hero\s+banner)\b", 
+        msg_lower
+    ))
+    if has_banner_creation and not any(w in msg_lower for w in ["existing banner", "modify the banner", "style the banner", "recolor the banner"]):
+        return "banner_create"
+
     if target_component:
         t_clean = target_component.lower().strip()
         if t_clean == "unsupported":
@@ -2214,13 +2224,12 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
         if t_clean in ["revert", "undo"]:
             return "revert"
         if t_clean in ["banner_create", "create_banner", "add_banner"]:
-            # Check if user is actually styling existing banner elements rather than creating a new one
+            # Only downgrade if the user is explicitly telling to style an existing banner without any creation verbs
+            has_create_verb = bool(re.search(r"\b(create|add|insert|generate|new|make)\b", msg_lower))
             is_styling_existing = any(w in msg_lower for w in [
-                "button color", "btn color", "button", "background", "bg", "text color", "height", "border",
-                "color of banner", "color for the banner", "banner to red", "banner to blue", "banner to black",
-                "existing banner", "existing banners", "style the banner", "make the button", "turn the button",
-                "change the button", "modify the banner", "color of the banner"
-            ]) and not any(w in msg_lower for w in ["add banner", "create banner", "new banner", "add a banner", "create a banner", "add slide", "create slide", "insert banner"])
+                "existing banner", "existing banners", "style the banner", "modify the banner", 
+                "color of banner", "color of the banner", "banner to red", "banner to blue"
+            ]) and not has_create_verb
             if is_styling_existing:
                 return "hero"
             return "banner_create"
@@ -2238,9 +2247,9 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
     if any(w in msg_lower for w in ["undo", "revert", "restore previous", "go back", "take back"]) and not any(w in msg_lower for w in ["change", "make", "set", "color", "background", "navbar"]):
         return "revert"
 
-    # 2. Banner Creation (ONLY when explicit creation keywords are present)
-    is_explicit_banner_create = any(w in msg_lower for w in ["add banner", "create banner", "new banner", "add slide", "create slide", "add a banner", "create a banner", "insert banner", "generate banner", "add promotional slide"])
-    if is_explicit_banner_create and not any(w in msg_lower for w in ["change button", "button color", "existing banner", "color of banner"]):
+    # 2. Banner Creation (Detect creation verbs governing banner or slide)
+    has_banner_creation = bool(re.search(r"\b(create|add|insert|generate|new|make)\s+(a\s+|an\s+|the\s+)?([a-z0-9\-%]+\s+)*(banner|slide|hero\s+banner)\b", msg_lower))
+    if has_banner_creation and not any(w in msg_lower for w in ["existing banner", "modify the banner", "style the banner"]):
         return "banner_create"
 
     # 3. Comprehensive multi-word scan using sorted aliases (consuming matched tokens to avoid substring collisions)

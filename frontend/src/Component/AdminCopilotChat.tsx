@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
-import { saveThemeSnapshot, updateThemeValues } from "../customizations/editorUtils";
+import { getSiteStorageId, saveThemeSnapshot, updateThemeValues } from "../customizations/editorUtils";
 import { AiAvatar } from "./AiAvatar";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
@@ -687,8 +687,24 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       if (!themePatch.hero_accent) {
         themePatch.hero_accent = themePatch.accent_color;
       }
-      const updatedDef = saveThemeSnapshot(siteDefinition as any, themeName, themePatch);
+      const sId = siteId || (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || getSiteStorageId(siteDefinition as any);
+      const defWithId = {
+        ...siteDefinition,
+        id: (siteDefinition as any)?.id || sId,
+        site_id: (siteDefinition as any)?.site_id || sId,
+      };
+
+      const updatedDef = saveThemeSnapshot(defWithId as any, themeName, themePatch);
       onSiteDefinitionChange(updatedDef);
+
+      if (typeof window !== "undefined" && sId && sId !== "default_site") {
+        fetch(`${API_BASE_URL}/sites/${sId}/draft`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ draft_definition: updatedDef }),
+        }).catch((err) => console.error("Failed to persist theme snapshot to server:", err));
+      }
     }
 
     setToastMsg(`Saved "${themeName}" to SAVED SNAPSHOTS in sidepanel!`);
@@ -756,6 +772,16 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
 
     // Apply immediately on the builder canvas
     onSiteDefinitionChange(updatedDef);
+
+    const sId = siteId || (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || getSiteStorageId(siteDefinition as any);
+    if (typeof window !== "undefined" && sId && sId !== "default_site") {
+      fetch(`${API_BASE_URL}/sites/${sId}/draft`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ draft_definition: updatedDef }),
+      }).catch((err) => console.error("Failed to persist applied theme to server:", err));
+    }
 
     // Add a confirmation message in chat
     const timeNow = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
