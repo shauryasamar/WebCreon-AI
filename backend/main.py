@@ -1579,10 +1579,6 @@ def save_site_draft(
         raise HTTPException(status_code=403, detail="Admin does not have access to this site")
 
     site.draft_definition = payload.draft_definition
-    if site.site_definition and isinstance(payload.draft_definition, dict) and payload.draft_definition.get("saved_themes"):
-        updated_pub = dict(site.site_definition)
-        updated_pub["saved_themes"] = payload.draft_definition.get("saved_themes")
-        site.site_definition = updated_pub
     session.add(site)
     session.commit()
     session.refresh(site)

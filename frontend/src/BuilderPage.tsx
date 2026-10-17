@@ -1424,7 +1424,7 @@ function BuilderPageContent() {
         id: currentId || existing?.id || "",
         slug: currentSlug || existing?.slug || "",
         draft_definition: next,
-        site_definition: siteDefinition || existing?.site_definition || next,
+        site_definition: publishedSiteDefinition || existing?.site_definition || null as any,
         version: existing?.version ?? 1,
         created_at: existing?.created_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -1444,7 +1444,7 @@ function BuilderPageContent() {
         } catch (_) { }
       }
     },
-    [siteSlug, siteSlugParam, resolvedSiteId, siteId, siteDefinition]
+    [siteSlug, siteSlugParam, resolvedSiteId, siteId, publishedSiteDefinition]
   );
 
   // Real-time synchronization when Admin sections are modified (strictly scoped by siteId)
