@@ -196,7 +196,7 @@ CORE INTENTS:
 - 'COMPOUND': User asks for 2+ distinct operations across different domains (e.g. "revert last change and show today's sales"). Break into sub-tasks in `tasks`.
 
 TARGET COMPONENTS (100% COVERAGE):
-navbar (top bar/header), footer (bottom bar/copyright), hero (top banner/slides styling, button colors, backgrounds, text), product_grid (catalog grid), product_carousel (product slider), section_group_carousel (category story carousel), category_grid (category boxes/tiles), card (product boxes/cards/item titles/prices), product_detail (item page), cart (cart drawer/bag), order_summary, delivery_form, payment, place_order, filter, sort, pagination, order_history, support, notification, profile, background (page canvas), banner_create (ONLY when adding/creating a NEW promotional banner slide), revert, overall (store-wide).
+navbar (top bar/header), footer (bottom bar/copyright), hero (top banner/slides styling, button colors, backgrounds, text), product_grid (catalog grid), product_carousel (product slider), section_group_carousel (category story carousel), category_grid (category boxes/tiles), card (product boxes/cards/item titles/prices), product_detail (item page), cart (cart drawer/bag), order_summary, delivery_form, payment, place_order, filter, sort, pagination, order_history, support, notification, profile (customer profile page/card/input fields/text/buttons), profile_dropdown (account dropdown popup in navbar), background (page canvas), banner_create (ONLY when adding/creating a NEW promotional banner slide), revert, overall (store-wide).
 
 RULES:
 1. 'banner_create' vs 'hero': Whenever the user asks to CREATE, ADD, GENERATE, or MAKE a promotional banner, slide, or hero banner (even if buttons, copy, discounts, or colors for that new banner are specified, e.g. "Create a promotional hero banner for 25% OFF with a Shop Now button"), ALWAYS classify as 'banner_create'! ONLY classify as 'hero' when the user asks to style, recolor, or adjust an ALREADY EXISTING banner without creating a new one (e.g. "make hero background darker", "change banner button to blue").
@@ -233,7 +233,7 @@ RULES:
         # If target was unresolved or generic 'overall', but history has a clear previous design component
         if (not target_comp or target_comp == "overall") and is_pronoun_followup and history_str:
             hist_lower = history_str.lower()
-            for comp_candidate in ["section_group_carousel", "product_carousel", "category_grid", "product_grid", "navbar", "footer", "hero", "cart", "card", "filter"]:
+            for comp_candidate in ["section_group_carousel", "product_carousel", "category_grid", "product_grid", "navbar", "footer", "hero", "cart", "card", "filter", "profile", "profile_dropdown"]:
                 if comp_candidate in hist_lower or comp_candidate.replace("_", " ") in hist_lower:
                     if "carousel" in hist_lower and ("section" in hist_lower or "group" in hist_lower) and "product" in hist_lower:
                         target_comp = "multi:product_carousel,section_group_carousel"
@@ -242,13 +242,27 @@ RULES:
                     break
 
         # Disambiguate banner_create:
-        # If user explicitly asks to create, add, generate, or insert a promotional banner/slide,
-        # it MUST be banner_create, regardless of whether buttons, copy, or colors are specified.
-        has_banner_creation = bool(re.search(
-            r"\b(create|add|insert|generate|new|make)\s+(a\s+|an\s+|the\s+)?([a-z0-9\-%]+\s+)*(banner|slide|hero\s+banner)\b",
+        # ONLY trigger banner_create if user asks to create/add/generate a brand new banner slide.
+        # NEVER trigger banner_create when modifying properties of an existing banner (e.g. radius, color, height)!
+        hero_styling_words = [
+            "radius", "radious", "radios", "rounded", "sharp", "pill", "box", "border",
+            "color", "colour", "bg", "background", "height", "size", "bigger", "smaller", "taller", "shorter",
+            "padding", "margin", "dark", "light", "blue", "red", "green", "black", "white",
+            "yellow", "orange", "purple", "pink", "accent", "button", "cta", "font", "text",
+            "existing", "modify", "style", "recolor", "change", "turn", "set", "the hero banner", "the banner"
+        ]
+        has_hero_styling = any(w in user_msg_clean for w in hero_styling_words)
+        has_banner_verb = bool(re.search(
+            r"\b(create|add|insert|generate)\s+(a\s+|an\s+|the\s+)?([a-z0-9\-%]+\s+)*(banner|slide|hero\s+banner)\b",
             user_msg_clean
         ))
-        if has_banner_creation and not any(w in user_msg_clean for w in ["existing banner", "modify the banner", "recolor the banner"]):
+        has_make_new_banner = bool(re.search(
+            r"\bmake\s+(a\s+|an\s+)?([a-z0-9\-%]+\s+)*(banner|slide)\b",
+            user_msg_clean
+        )) and not any(w in user_msg_clean for w in ["the banner", "the hero banner", "banner to", "banner into", "hero to"])
+        has_banner_creation = (has_banner_verb or has_make_new_banner) and not has_hero_styling
+
+        if has_banner_creation:
             raw_intent = "DESIGN"
             target_comp = "banner_create"
 

@@ -186,7 +186,7 @@ export default function AdminResetPasswordPage() {
                 Reset Password
               </h2>
               <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: tokens.textSecondary }}>
-                Set a new password for your WebCreon AI admin workspace
+                Set a new password for your WebCreon admin workspace
               </p>
             </div>
 

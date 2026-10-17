@@ -26,11 +26,17 @@ export type HeroSlide = {
     href: string;
     show?: boolean;
     style?: "solid" | "outline" | "glass";
+    button_bg?: string;
+    background_color?: string;
+    button_color?: string;
+    color?: string;
+    [key: string]: any;
   };
   secondary_cta?: {
     label: string;
     href: string;
     show?: boolean;
+    [key: string]: any;
   };
   product_card?: {
     title: string;
@@ -68,6 +74,11 @@ export type HeroBannerProps = {
     href: string;
     show?: boolean;
     style?: "solid" | "outline" | "glass";
+    button_bg?: string;
+    background_color?: string;
+    button_color?: string;
+    color?: string;
+    [key: string]: any;
   };
   secondary_cta?: {
     label: string;
@@ -106,6 +117,78 @@ export type HeroBannerProps = {
   auto_play?: boolean;
   appBase?: string;
   siteSlug?: string;
+};
+
+export const getButtonShadowFromColor = (color: string): string => {
+  if (!color || typeof color !== "string") {
+    return "0 4px 14px rgba(0, 0, 0, 0.16), 0 1px 2px rgba(0, 0, 0, 0.08)";
+  }
+
+  const trimmed = color.trim().toLowerCase();
+  if (trimmed === "transparent" || trimmed === "none") {
+    return "none";
+  }
+
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let hasRgb = false;
+
+  if (trimmed.startsWith("#")) {
+    let hex = trimmed.slice(1);
+    if (hex.length === 3 || hex.length === 4) {
+      hex = hex.split("").slice(0, 3).map((c) => c + c).join("");
+    }
+    if (hex.length >= 6) {
+      r = parseInt(hex.substring(0, 2), 16);
+      g = parseInt(hex.substring(2, 4), 16);
+      b = parseInt(hex.substring(4, 6), 16);
+      hasRgb = !isNaN(r) && !isNaN(g) && !isNaN(b);
+    }
+  } else {
+    const match = trimmed.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (match) {
+      r = parseInt(match[1], 10);
+      g = parseInt(match[2], 10);
+      b = parseInt(match[3], 10);
+      hasRgb = true;
+    }
+  }
+
+  if (hasRgb) {
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    if (luminance > 0.88) {
+      return "0 4px 14px rgba(0, 0, 0, 0.16), 0 1px 3px rgba(0, 0, 0, 0.08)";
+    }
+    if (luminance < 0.12) {
+      return "0 4px 14px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.15)";
+    }
+    return `0 4px 14px rgba(${r}, ${g}, ${b}, 0.35), 0 1px 2px rgba(0, 0, 0, 0.08)`;
+  }
+
+  return `0 4px 14px color-mix(in srgb, ${color} 35%, transparent), 0 1px 2px rgba(0, 0, 0, 0.08)`;
+};
+
+export const getBadgeBgFromColor = (color: string, fallbackOpacity = 0.15): string => {
+  if (!color || typeof color !== "string") return `rgba(0, 0, 0, ${fallbackOpacity})`;
+  const trimmed = color.trim().toLowerCase();
+  if (trimmed.startsWith("#")) {
+    let hex = trimmed.slice(1);
+    if (hex.length === 3 || hex.length === 4) {
+      hex = hex.split("").slice(0, 3).map((c) => c + c).join("");
+    }
+    if (hex.length >= 6) {
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${fallbackOpacity})`;
+    }
+  }
+  const match = trimmed.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (match) {
+    return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${fallbackOpacity})`;
+  }
+  return `color-mix(in srgb, ${color} ${Math.round(fallbackOpacity * 100)}%, transparent)`;
 };
 
 // Countdown Timer Helper Hook supporting both Starts In & Ends In
@@ -823,13 +906,19 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const primaryBtnStyle = currentSlide.primary_cta?.style || "solid";
 
   const getPrimaryButtonStyle = (): React.CSSProperties => {
+    const primaryBtnBg =
+      currentSlide.primary_cta?.button_bg ||
+      currentSlide.primary_cta?.background_color ||
+      accentColor;
+    const buttonShadow = getButtonShadowFromColor(primaryBtnBg);
+
     if (primaryBtnStyle === "outline") {
       return {
         padding: ctaPadding,
         borderRadius: "999px",
         background: "transparent",
-        border: `1.5px solid ${accentColor}`,
-        color: accentColor,
+        border: `1.5px solid ${primaryBtnBg}`,
+        color: primaryBtnBg,
         fontSize: ctaFontSize,
         fontWeight: 700,
         textDecoration: "none",
@@ -853,12 +942,12 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     return {
       padding: ctaPadding,
       borderRadius: "999px",
-      background: accentColor,
-      color: "#ffffff",
+      background: primaryBtnBg,
+      color: currentSlide.primary_cta?.button_color || currentSlide.primary_cta?.color || "#ffffff",
       fontSize: ctaFontSize,
       fontWeight: 700,
       textDecoration: "none",
-      boxShadow: "0 4px 14px rgba(37,99,235,0.3)",
+      boxShadow: buttonShadow,
       transition: "all 0.15s ease",
     };
   };
@@ -1049,7 +1138,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               {(currentSlide.badge || currentSlide.coupon_code) && (
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start" }}>
                   {currentSlide.badge && (
-                    <span style={{ background: "rgba(37,99,235,0.15)", color: accentColor, fontSize: badgeFontSize, fontWeight: 800, padding: "3px 9px", borderRadius: "999px", width: "fit-content", textTransform: "uppercase" }}>
+                    <span style={{ background: getBadgeBgFromColor(accentColor, 0.15), color: accentColor, fontSize: badgeFontSize, fontWeight: 800, padding: "3px 9px", borderRadius: "999px", width: "fit-content", textTransform: "uppercase" }}>
                       {currentSlide.badge}
                     </span>
                   )}

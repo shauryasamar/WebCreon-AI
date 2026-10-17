@@ -5599,21 +5599,21 @@ const AdminProducts = () => {
                     </td>
                     <td style={tdStyle}>
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div style={{ width: "42px", height: "42px", borderRadius: "6px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                        <div style={{ width: "42px", height: "42px", borderRadius: "6px", backgroundImage: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
                         <div style={{ display: "grid", gap: "6px", flex: 1 }}>
-                          <div style={{ height: "14px", width: `${130 + (idx % 3) * 45}px`, borderRadius: "4px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                          <div style={{ height: "14px", width: `${130 + (idx % 3) * 45}px`, borderRadius: "4px", backgroundImage: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
                           <div style={{ height: "10px", width: "80px", borderRadius: "4px", background: tokens.elevatedSurfaceBg }} />
                         </div>
                       </div>
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ height: "14px", width: "55px", borderRadius: "4px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                      <div style={{ height: "14px", width: "55px", borderRadius: "4px", backgroundImage: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ height: "14px", width: "90px", borderRadius: "4px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                      <div style={{ height: "14px", width: "90px", borderRadius: "4px", backgroundImage: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
                     </td>
                     <td style={tdStyle}>
-                      <div style={{ height: "20px", width: "70px", borderRadius: "12px", background: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                      <div style={{ height: "20px", width: "70px", borderRadius: "12px", backgroundImage: `${isDark ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)" : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)"}`, backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
                     </td>
                     <td style={{ ...tdStyle, textAlign: "right" }}>
                       <div style={{ height: "28px", width: "80px", borderRadius: "6px", background: tokens.elevatedSurfaceBg, marginLeft: "auto" }} />

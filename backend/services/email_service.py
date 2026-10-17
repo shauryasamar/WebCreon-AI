@@ -27,7 +27,7 @@ def send_admin_password_reset_email(to_email: str, reset_link: str, otp_code: st
     smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
     smtp_from = os.getenv("SMTP_FROM", smtp_user or "noreply@webcreon.ai").strip()
 
-    subject = "WebCreon AI Admin - Password Reset Request"
+    subject = "WebCreon Admin - Password Reset Request"
 
     html_content = f"""
     <!DOCTYPE html>
@@ -39,12 +39,12 @@ def send_admin_password_reset_email(to_email: str, reset_link: str, otp_code: st
     <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 40px 20px;">
       <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
         <div style="background: #0f172a; padding: 24px; text-align: center; border-bottom: 2px solid #2563eb;">
-          <h2 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.5px;">WebCreon AI</h2>
+          <h2 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.5px;">WebCreon</h2>
           <p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 13px;">Admin Security Portal</p>
         </div>
         <div style="padding: 32px; color: #334155;">
           <h3 style="margin-top: 0; color: #0f172a;">Password Reset Request</h3>
-          <p>We received a request to reset your password for your WebCreon AI Admin account (<strong>{to_email}</strong>).</p>
+          <p>We received a request to reset your password for your WebCreon Admin account (<strong>{to_email}</strong>).</p>
           
           <div style="background: #f1f5f9; border-radius: 8px; padding: 16px; text-align: center; margin: 24px 0;">
             <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase;">Your 6-Digit Reset Code</p>
@@ -58,7 +58,7 @@ def send_admin_password_reset_email(to_email: str, reset_link: str, otp_code: st
           <p style="font-size: 13px; color: #64748b; margin-top: 24px;">This link and code will expire in <strong>15 minutes</strong>. If you did not request a password reset, you can safely ignore this email.</p>
         </div>
         <div style="background: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
-          &copy; WebCreon AI E-Commerce Platform. All rights reserved.
+          &copy; WebCreon E-Commerce Platform. All rights reserved.
         </div>
       </div>
     </body>
@@ -245,7 +245,7 @@ def send_merchant_support_acknowledgment_email(
           <p style="font-size: 13px; color: #64748b; line-height: 1.5;">You can reply directly to this email with any additional details or screenshots.</p>
         </div>
         <div style="background: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
-          &copy; WebCreon AI Autonomous Storefront Engine. All rights reserved.
+          &copy; WebCreon Autonomous Storefront Engine. All rights reserved.
         </div>
       </div>
     </body>

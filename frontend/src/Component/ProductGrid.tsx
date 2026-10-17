@@ -3,7 +3,7 @@ import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { useCart, Product, isProductPreorderActive } from "../CartContext";
 import FilterSidebar from "./FilterSidebar";
 import { Pagination } from "./Pagination";
-import { resolveThemeTokens } from "../context/ThemeContext";
+import { resolveThemeTokens, getAccessibleBrandColor, getSafePriceColor } from "../context/ThemeContext";
 import { useDeviceMode } from "../context/DeviceModeContext";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
 
@@ -378,14 +378,24 @@ const ProductGrid: React.FC<ProductGridProps> = ({
     pageText = "#0f172a";
   }
 
-  let mutedText = original_price_color;
+  let mutedText = original_price_color || (theme as any)?.original_price_color || (theme as any)?.muted_text_color;
   if (!mutedText || (isCardDark && isColorDarkHex(mutedText)) || (!isCardDark && !isColorDarkHex(mutedText))) {
     mutedText = isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)";
   }
 
-  let faintText = brand_color;
+  const resolvedBrandCandidate =
+    brand_color ||
+    (theme as any)?.brand_color ||
+    (theme as any)?.card_brand_color ||
+    (theme as any)?.brandNameColor ||
+    (theme as any)?.accent_color ||
+    resolvedAccentColor;
+
+  const activeBrandColor = getAccessibleBrandColor(resolvedBrandCandidate, cardBg, isCardDark);
+
+  let faintText = activeBrandColor || (theme as any)?.muted_text_color || (theme as any)?.muted_text || defaultMutedText;
   if (!faintText || (isCardDark && isColorDarkHex(faintText)) || (!isCardDark && !isColorDarkHex(faintText))) {
-    faintText = isCardDark ? "rgba(248, 250, 252, 0.50)" : "rgba(15, 23, 42, 0.45)";
+    faintText = isCardDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.60)";
   }
   const starColor = rating_star_color || "#d97706";
 
@@ -475,15 +485,29 @@ const ProductGrid: React.FC<ProductGridProps> = ({
           ? firstVariant.price
           : product.price;
 
+      const rawComparePrice =
+        (firstVariant as any)?.comparePrice != null
+          ? Number((firstVariant as any).comparePrice)
+          : (firstVariant as any)?.compare_price != null
+          ? Number((firstVariant as any).compare_price)
+          : (firstVariant as any)?.original_price != null
+          ? Number((firstVariant as any).original_price)
+          : (firstVariant as any)?.originalPrice != null
+          ? Number((firstVariant as any).originalPrice)
+          : (product as any)?.compare_price != null
+          ? Number((product as any).compare_price)
+          : (product as any)?.comparePrice != null
+          ? Number((product as any).comparePrice)
+          : (product as any)?.original_price != null
+          ? Number((product as any).original_price)
+          : (product as any)?.originalPrice != null
+          ? Number((product as any).originalPrice)
+          : null;
+
       const normalizedOriginalPrice =
-        typeof (firstVariant as any)?.comparePrice === "number" &&
-          (firstVariant as any).comparePrice > normalizedDisplayPrice
-          ? (firstVariant as any).comparePrice
-          : typeof product.originalPrice === "number" && product.originalPrice > normalizedDisplayPrice
-            ? product.originalPrice
-            : typeof product.compare_price === "number" && product.compare_price > normalizedDisplayPrice
-              ? product.compare_price
-              : undefined;
+        rawComparePrice != null && !isNaN(rawComparePrice) && rawComparePrice > normalizedDisplayPrice
+          ? rawComparePrice
+          : undefined;
 
       const variantList: any[] = product.variant_option?.optionValues || (product as any).variants || [];
       const hasVariants = Array.isArray(variantList) && variantList.length > 0;
@@ -771,7 +795,16 @@ const ProductGrid: React.FC<ProductGridProps> = ({
               : "New";
 
             const brandText = product.brand || product.category || "Collection";
-            const activePriceColor = price_color || pageText;
+            const rawPriceCandidate =
+              price_color ||
+              (theme as any)?.price_color ||
+              (theme as any)?.card_price_color;
+
+            let activePriceColor = getSafePriceColor(rawPriceCandidate, pageText, isCardDark, cardBg);
+            // Selling price should NEVER be red, and should NOT be the exact same color as the brand label
+            if (activePriceColor && activeBrandColor && activePriceColor.toLowerCase() === activeBrandColor.toLowerCase()) {
+              activePriceColor = pageText;
+            }
 
             const badgeCollections = (product.collections || []).filter((c: any) => c && c.is_badge);
 
@@ -1079,7 +1112,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                         style={{
                           fontSize: isMobile ? "8px" : "9.5px",
                           fontWeight: 600,
-                          color: brand_color || faintText,
+                          color: activeBrandColor,
                           textTransform: "uppercase",
                           letterSpacing: "0.08em",
                           lineHeight: 1.2,
@@ -1113,10 +1146,23 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                         paddingTop: "1px",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "baseline" }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", flexWrap: "wrap" }}>
                         <span style={{ fontSize: isMobile ? "13px" : "15.5px", fontWeight: 800, color: activePriceColor }}>
                           ₹{product.normalizedDisplayPrice}
                         </span>
+                        {showOriginal && (
+                          <span
+                            style={{
+                              fontSize: isMobile ? "9.5px" : "11.5px",
+                              color: mutedText,
+                              textDecoration: "line-through",
+                              fontWeight: 500,
+                              opacity: 0.82,
+                            }}
+                          >
+                            ₹{product.normalizedOriginalPrice}
+                          </span>
+                        )}
                       </div>
                       {show_ratings && (
                         <div
@@ -1210,11 +1256,11 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                         style={{
                           fontSize: isMobile ? "8px" : "9.5px",
                           fontWeight: 600,
-                          color: brand_color || faintText,
+                          color: activeBrandColor,
                           textTransform: "uppercase",
                           letterSpacing: "0.08em",
                           lineHeight: 1.2,
-                          borderBottom: `1px solid ${brand_color || faintText}`,
+                          borderBottom: `1px solid ${activeBrandColor}`,
                           paddingBottom: "1px",
                           display: "inline-block",
                           alignSelf: "flex-start",
@@ -1248,10 +1294,23 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                         paddingTop: "1px",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "baseline" }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", flexWrap: "wrap" }}>
                         <span style={{ fontSize: isMobile ? "13px" : "15.5px", fontWeight: 800, color: activePriceColor }}>
                           ₹{product.normalizedDisplayPrice}
                         </span>
+                        {showOriginal && (
+                          <span
+                            style={{
+                              fontSize: isMobile ? "9.5px" : "11.5px",
+                              color: mutedText,
+                              textDecoration: "line-through",
+                              fontWeight: 500,
+                              opacity: 0.82,
+                            }}
+                          >
+                            ₹{product.normalizedOriginalPrice}
+                          </span>
+                        )}
                       </div>
                       {show_ratings && (
                         <div
@@ -1375,7 +1434,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                         style={{
                           fontSize: isMobile ? "8px" : "9.5px",
                           fontWeight: 600,
-                          color: brand_color || faintText,
+                          color: activeBrandColor,
                           textTransform: "uppercase",
                           letterSpacing: "0.12em",
                           lineHeight: 1.2,
@@ -1529,7 +1588,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                           style={{
                             fontSize: isMobile ? "8px" : "9px",
                             fontWeight: 600,
-                            color: brand_color || faintText,
+                            color: activeBrandColor,
                             textTransform: "uppercase",
                             letterSpacing: "0.08em",
                             lineHeight: 1.2,
@@ -1618,10 +1677,23 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                         minWidth: 0,
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "baseline", flexShrink: 0 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "5px", flexShrink: 0 }}>
                         <span style={{ fontSize: isMobile ? "13.5px" : "15.5px", fontWeight: 800, color: activePriceColor }}>
                           ₹{product.normalizedDisplayPrice}
                         </span>
+                        {showOriginal && (
+                          <span
+                            style={{
+                              fontSize: isMobile ? "9.5px" : "11px",
+                              color: mutedText,
+                              textDecoration: "line-through",
+                              fontWeight: 500,
+                              opacity: 0.82,
+                            }}
+                          >
+                            ₹{product.normalizedOriginalPrice}
+                          </span>
+                        )}
                       </div>
                       {show_ratings && (
                         <div
@@ -1703,15 +1775,28 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
                   {show_brand_name && (
-                    <span style={{ fontSize: isMobile ? "8.5px" : "9.5px", fontWeight: 600, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em", lineHeight: 1.2 }}>
+                    <span style={{ fontSize: isMobile ? "8.5px" : "9.5px", fontWeight: 600, color: activeBrandColor, textTransform: "uppercase", letterSpacing: "0.08em", lineHeight: 1.2 }}>
                       {brandText}
                     </span>
                   )}
                   <h3 style={{ margin: "1px 0 2px", fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: isMobile ? "1.25" : "1.3", color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{product.name}</h3>
                   <div style={{ borderTop: "1px solid rgba(148,163,184,0.15)", margin: "2px 0" }} />
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: "1px" }}>
-                    <div style={{ display: "flex", alignItems: "baseline" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", flexWrap: "wrap" }}>
                       <span style={{ fontSize: isMobile ? "14px" : "16px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
+                      {showOriginal && (
+                        <span
+                          style={{
+                            fontSize: isMobile ? "10px" : "12px",
+                            color: mutedText,
+                            textDecoration: "line-through",
+                            fontWeight: 500,
+                            opacity: 0.82,
+                          }}
+                        >
+                          ₹{product.normalizedOriginalPrice}
+                        </span>
+                      )}
                     </div>
                     {show_ratings && (
                       <div style={{ fontSize: isMobile ? "9.5px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>

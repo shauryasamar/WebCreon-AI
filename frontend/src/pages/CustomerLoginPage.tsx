@@ -801,7 +801,7 @@ export default function CustomerLoginPage(props: CustomerLoginPageProps = {}) {
                     WebkitTextFillColor: "transparent",
                   }}
                 >
-                  WebCreon AI
+                  WebCreon
                 </span>
               </a>
             </div>

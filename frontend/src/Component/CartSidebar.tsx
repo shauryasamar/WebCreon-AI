@@ -11,9 +11,11 @@ type CartTheme = {
   name?: string;
   mode?: string;
   primary_bg?: string;
+  card_bg?: string;
   text_color?: string;
   accent_color?: string;
   festival_theme?: string;
+  [key: string]: any;
 };
 
 type CartSidebarProps = {
@@ -631,7 +633,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     background_color ||
     (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_bg) ||
     theme?.primary_bg ||
-    (isDark ? "#0b1020" : "#f8fafc");
+    (isDark ? "#121316" : "#f8fafc");
 
   const resolvedTextColor =
     text_color ||
@@ -733,16 +735,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const shellBg =
       panel_color ||
       background_color ||
-      (theme as any)?.cart_panel_bg ||
-      (theme as any)?.cart_bg ||
-      "#0f172a";
+      (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_panel_bg || (theme as any)?.cart_bg) ||
+      theme?.primary_bg ||
+      theme?.card_bg ||
+      (isDark ? "#121316" : "#ffffff");
     const panelBg =
       panel_color ||
-      (theme as any)?.cart_panel_bg ||
+      (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_panel_bg) ||
       mixHex(shellBg, "#ffffff", 0.05);
     const cardBg =
       card_color ||
-      (theme as any)?.cart_card_bg ||
+      (isCheckoutSummary ? (theme as any)?.summary_card_bg : (theme as any)?.cart_card_bg) ||
       mixHex(shellBg, "#ffffff", 0.07);
     const mutedBg = mixHex(cardBg, "#000000", 0.15);
     const inputBg = card_color || mixHex(cardBg, "#000000", 0.12);
@@ -776,6 +779,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     };
   }, [
     isDark,
+    isCheckoutSummary,
     resolvedPrimaryBg,
     resolvedTextColor,
     resolvedAccentColor,
@@ -785,6 +789,24 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     card_color,
     border_color,
     muted_text_color,
+    text_color,
+    theme,
+    (theme as any)?.cart_bg,
+    (theme as any)?.cart_panel_bg,
+    (theme as any)?.cart_card_bg,
+    (theme as any)?.cart_text_color,
+    (theme as any)?.cart_accent_color,
+    (theme as any)?.cart_border_color,
+    (theme as any)?.summary_bg,
+    (theme as any)?.summary_card_bg,
+    (theme as any)?.summary_text_color,
+    (theme as any)?.summary_accent_color,
+    (theme as any)?.summary_border_color,
+    theme?.primary_bg,
+    theme?.card_bg,
+    theme?.text_color,
+    theme?.accent_color,
+    (theme as any)?.active_snapshot_id,
   ]);
 
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);

@@ -1916,6 +1916,134 @@ const deliveryFormFields = [
   styleSoftBorderColorField,
 ];
 
+const profileCardBgField = {
+  key: "card_bg",
+  label: "Card Background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const profileBorderColorField = {
+  key: "border_color",
+  label: "Card Border Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const profileTitleColorField = {
+  key: "title_color",
+  label: "Heading & Label Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const profileSubtextColorField = {
+  key: "subtext_color",
+  label: "Subtitle & Muted Text Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const profileInputBgField = {
+  key: "input_bg",
+  label: "Input Background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const profileInputBorderField = {
+  key: "input_border",
+  label: "Input Border Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const profileInputTextColorField = {
+  key: "input_text_color",
+  label: "Input Text Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const profileButtonBgColorField = {
+  key: "button_bg_color",
+  label: "Save Button Background",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const profileButtonTextColorField = {
+  key: "button_text_color",
+  label: "Save Button Text Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const profileSignOutColorField = {
+  key: "sign_out_color",
+  label: "Sign Out Button Color",
+  type: "color" as const,
+  target: "props" as const,
+};
+
+const profileCardPaddingField = {
+  key: "card_padding",
+  label: "Card Padding (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 12,
+  max: 64,
+  step: 4,
+};
+
+const profileCardRadiusField = {
+  key: "card_radius",
+  label: "Card Corner Radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 36,
+  step: 2,
+};
+
+const profileInputRadiusField = {
+  key: "input_radius",
+  label: "Input Corner Radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 24,
+  step: 2,
+};
+
+const profileButtonRadiusField = {
+  key: "button_radius",
+  label: "Button Corner Radius (px)",
+  type: "number" as const,
+  target: "props" as const,
+  min: 0,
+  max: 24,
+  step: 2,
+};
+
+const profileFields = [
+  styleMaxWidthField,
+  profileCardRadiusField,
+  profileCardPaddingField,
+  profileInputRadiusField,
+  profileButtonRadiusField,
+  profileCardBgField,
+  profileBorderColorField,
+  profileTitleColorField,
+  profileSubtextColorField,
+  profileInputBgField,
+  profileInputBorderField,
+  profileInputTextColorField,
+  profileButtonBgColorField,
+  profileButtonTextColorField,
+  profileSignOutColorField,
+];
+
 export const editorRegistry: EditorRegistry = {
   product_grid: {
     displayName: "Product Grid",
@@ -2259,27 +2387,23 @@ export const editorRegistry: EditorRegistry = {
 
   profile_details: {
     displayName: "Profile Details",
-    fields: [
-      styleMaxWidthField,
-      styleBorderRadiusField,
-      stylePaddingField,
-    ],
+    fields: profileFields,
   },
   profiledetails: {
     displayName: "Profile Details",
-    fields: [
-      styleMaxWidthField,
-      styleBorderRadiusField,
-      stylePaddingField,
-    ],
+    fields: profileFields,
   },
   profile: {
     displayName: "Profile Details",
-    fields: [
-      styleMaxWidthField,
-      styleBorderRadiusField,
-      stylePaddingField,
-    ],
+    fields: profileFields,
+  },
+  customer_profile: {
+    displayName: "Profile Details",
+    fields: profileFields,
+  },
+  customerprofile: {
+    displayName: "Profile Details",
+    fields: profileFields,
   },
 
   signin_form: {
@@ -2439,19 +2563,6 @@ export const editorRegistry: EditorRegistry = {
         label: "Footer Border Color",
         type: "color" as const,
         target: "theme" as const,
-      },
-      {
-        key: "show_newsletter",
-        label: "Show Newsletter Signup",
-        type: "checkbox" as const,
-        target: "props" as const,
-      },
-      {
-        key: "newsletter_title",
-        label: "Newsletter Heading Text",
-        type: "text" as const,
-        target: "props" as const,
-        placeholder: "Subscribe to Our Newsletter",
       },
       {
         key: "show_social_links",

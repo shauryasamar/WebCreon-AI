@@ -736,7 +736,7 @@ with Session(engine) as session:
     print(f"  - HSN Summary & Tax Breakout    : Taxable ₹{inv_k.taxable_value}, CGST ₹{inv_k.cgst_amount}, SGST ₹{inv_k.sgst_amount}")
     print(f"  - QR Code Status                : {inv_k.qr_code_data}")
     print(f"    Note: QR contains structured invoice verification metadata (Invoice#, Date, GSTIN, Total).")
-    print(f"    E-Invoice IRN QR Disclosure: WebCreon AI generates an authentic merchant invoice QR. Government IRN/e-Invoice portal registration applies under Notification 13/2020-CT to suppliers with aggregate turnover exceeding ₹5 Crore.")
+    print(f"    E-Invoice IRN QR Disclosure: WebCreon generates an authentic merchant invoice QR. Government IRN/e-Invoice portal registration applies under Notification 13/2020-CT to suppliers with aggregate turnover exceeding ₹5 Crore.")
 
 print("\n" + "=" * 80)
 print("ALL STEP 4 LIVE EVIDENCE CHECKS COMPLETED!")

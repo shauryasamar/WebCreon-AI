@@ -15,7 +15,7 @@ export const AdminGeneralSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
   const canEdit = isOwner || hasPermission("general_settings:edit");
 
   const [storeName, setStoreName] = useState("WebCreon Flagship Store");
-  const [tagline, setTagline] = useState("Premium online shopping experience powered by WebCreon AI");
+  const [tagline, setTagline] = useState("Premium online shopping experience powered by WebCreon");
   const [supportEmail, setSupportEmail] = useState("support@brandstore.com");
   const [supportPhone, setSupportPhone] = useState("+91 98765 43210");
   const [currency, setCurrency] = useState("INR");
@@ -493,7 +493,7 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
       id: "copilot-usage",
       category: "storefront",
       icon: "🤖",
-      title: "Using WebCreon AI Co-Pilot",
+      title: "Using WebCreon Co-Pilot",
       desc: "Prompt the builder assistant to regenerate sections, create sales banners, or audit SEO.",
       readTime: "2 min read",
     },
@@ -637,7 +637,7 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
             </span>
           </div>
           <h3 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: tokens.textPrimary }}>
-            WebCreon AI Co-Pilot
+            WebCreon Co-Pilot
           </h3>
           <p style={{ margin: "0 0 16px 0", fontSize: "12.5px", color: tokens.textSecondary, lineHeight: 1.45 }}>
             Ask questions, debug storefront styles, or auto-generate marketing sections using the drawer co-pilot chat.

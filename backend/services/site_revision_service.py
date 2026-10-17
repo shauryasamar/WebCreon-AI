@@ -31,6 +31,7 @@ def create_site_revision(
     patch_applied: Optional[Dict[str, Any]] = None,
     expected_base_version: Optional[int] = None,
     operation_id: Optional[str | UUID] = None,
+    revision_id: Optional[str | UUID] = None,
 ) -> Tuple[bool, Optional[int], Optional[str], Optional[Dict[str, Any]]]:
     """
     Persists a new immutable site revision with optimistic concurrency check.
@@ -56,13 +57,17 @@ def create_site_revision(
 
     new_version = current_version + 1
     try:
+        rev_uuid = UUID(str(revision_id)) if revision_id else uuid4()
+    except (ValueError, TypeError, AttributeError):
+        rev_uuid = uuid4()
+    try:
         op_uuid = UUID(str(operation_id)) if operation_id else uuid4()
     except (ValueError, TypeError, AttributeError):
         op_uuid = uuid4()
     a_uuid = UUID(str(actor_id))
 
     revision_record = {
-        "revision_id": str(revision_id),
+        "revision_id": str(rev_uuid),
         "site_id": str(s_uuid),
         "version": new_version,
         "parent_version": current_version,

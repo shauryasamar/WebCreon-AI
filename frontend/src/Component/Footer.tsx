@@ -17,8 +17,6 @@ type FooterProps = {
   links?: Array<{ label: string; href: string }>;
   appBase?: string;
   siteSlug?: string;
-  show_newsletter?: boolean;
-  newsletter_title?: string;
   show_social_links?: boolean;
   social_links?: Array<{ platform: string; url: string }>;
   footer_bg?: string;
@@ -80,8 +78,6 @@ const Footer: React.FC<FooterProps> = (props) => {
       { label: "Privacy Policy", href: "/privacy" },
       { label: "Terms of Service", href: "/terms" },
     ],
-    show_newsletter = true,
-    newsletter_title = "Subscribe to Our Newsletter",
     show_social_links = true,
     social_links = [
       { platform: "Instagram", url: "https://instagram.com" },
@@ -163,8 +159,6 @@ const Footer: React.FC<FooterProps> = (props) => {
     const w = window.innerWidth;
     return { isMobile: w < 768, isSmallMobile: w < 480 };
   });
-  const [subscribed, setSubscribed] = useState(false);
-  const [emailInput, setEmailInput] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -211,7 +205,8 @@ const Footer: React.FC<FooterProps> = (props) => {
     festivalBg ||
     directBg ||
     theme?.secondary_bg ||
-    (isDarkTheme ? "#0f172a" : theme?.primary_bg || "#f8fafc");
+    theme?.primary_bg ||
+    (isDarkTheme ? "#0e0f12" : "#f8fafc");
 
   const isFooterDark = isColorDarkHex(footerBg);
   const isLight = !isFooterDark;
@@ -250,10 +245,6 @@ const Footer: React.FC<FooterProps> = (props) => {
   const brandFontSize = props.brand_font_size ? (typeof props.brand_font_size === "number" ? `${props.brand_font_size}px` : props.brand_font_size) : undefined;
   const taglineFontSize = props.tagline_font_size ? (typeof props.tagline_font_size === "number" ? `${props.tagline_font_size}px` : props.tagline_font_size) : undefined;
   const linkFontSize = props.link_font_size ? (typeof props.link_font_size === "number" ? `${props.link_font_size}px` : props.link_font_size) : undefined;
-
-  const newsletterSubtitle = props.newsletter_subtitle || "";
-  const newsletterPlaceholder = props.newsletter_placeholder || "Enter your email...";
-  const newsletterButtonText = props.newsletter_button_text || "Join";
 
   const resolvedPaddingY =
     props.padding_y !== undefined && props.padding_y !== null && String(props.padding_y).trim() !== ""
@@ -333,15 +324,6 @@ const Footer: React.FC<FooterProps> = (props) => {
         )}
       </div>
     );
-  };
-
-  const handleSubscribe = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!emailInput.trim()) return;
-    setSubscribed(true);
-    setTimeout(() => {
-      setEmailInput("");
-    }, 4000);
   };
 
   const getSocialIconSvg = (platform: string) => {
@@ -468,107 +450,14 @@ const Footer: React.FC<FooterProps> = (props) => {
       </div>
     ) : null;
 
-  const renderNewsletter = (fullWidthMobile = true) =>
-    show_newsletter ? (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px",
-          width: "100%",
-          maxWidth: isMobile ? "100%" : "380px",
-          boxSizing: "border-box",
-        }}
-      >
-        <span style={{ fontSize: isMobile ? "13px" : "14px", fontWeight: 700, color: textColor, letterSpacing: "-0.01em" }}>
-          {newsletter_title}
-        </span>
-        {newsletterSubtitle && (
-          <span style={{ fontSize: isMobile ? "11.5px" : "12px", color: mutedText, lineHeight: 1.45 }}>
-            {newsletterSubtitle}
-          </span>
-        )}
-        {subscribed ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "10px 14px",
-              borderRadius: "12px",
-              background: isLight ? "rgba(16, 185, 129, 0.1)" : "rgba(16, 185, 129, 0.2)",
-              border: `1px solid ${isLight ? "rgba(16, 185, 129, 0.3)" : "rgba(16, 185, 129, 0.4)"}`,
-              color: isLight ? "#065f46" : "#34d399",
-              fontSize: "13px",
-              fontWeight: 600,
-            }}
-          >
-            <span>✓</span> Thank you for subscribing!
-          </div>
-        ) : (
-          <form
-            onSubmit={handleSubscribe}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "4px 4px 4px 14px",
-              borderRadius: "12px",
-              background: inputBg,
-              border: `1px solid ${borderColor}`,
-              boxSizing: "border-box",
-              width: "100%",
-            }}
-          >
-            <input
-              type="email"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              placeholder={newsletterPlaceholder}
-              required
-              style={{
-                flex: 1,
-                minHeight: "36px",
-                border: "none",
-                background: "transparent",
-                color: textColor,
-                fontSize: "13.5px",
-                outline: "none",
-                minWidth: 0,
-              }}
-            />
-            <button
-              type="submit"
-              style={{
-                minHeight: "36px",
-                padding: "8px 16px",
-                borderRadius: "8px",
-                border: "none",
-                background: accentColor,
-                color: "#ffffff",
-                fontSize: "13px",
-                fontWeight: 700,
-                cursor: "pointer",
-                transition: "opacity 0.2s, transform 0.1s",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-            >
-              {newsletterButtonText}
-            </button>
-          </form>
-        )}
-      </div>
-    ) : null;
-
   // 1. Apple / Vercel Minimal
   if (layout === "apple_minimal") {
     return (
       <footer style={{ ...footerStyle, background: footerBg }}>
         {renderFooterFestiveBackdrop()}
-        <div style={{ position: "relative", zIndex: 1, maxWidth: resolvedMaxWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: isMobile ? "20px" : "32px", boxSizing: "border-box" }}>
+        <div style={{ position: "relative", zIndex: 1, maxWidth: resolvedMaxWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: isMobile ? "20px" : "28px", boxSizing: "border-box" }}>
           
-          {/* Top Section: Brand + Newsletter */}
+          {/* Top Section: Brand + Navigation Links */}
           <div
             style={{
               display: "flex",
@@ -576,23 +465,23 @@ const Footer: React.FC<FooterProps> = (props) => {
               justifyContent: "space-between",
               alignItems: isMobile ? "center" : "flex-start",
               textAlign: isMobile ? "center" : "left",
-              gap: isMobile ? "16px" : "24px",
+              gap: isMobile ? "18px" : "32px",
               boxSizing: "border-box",
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", alignItems: isMobile ? "center" : "flex-start", gap: "8px", maxWidth: isMobile ? "100%" : "420px" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: isMobile ? "center" : "flex-start", gap: "8px", maxWidth: isMobile ? "100%" : "440px" }}>
               {showBrand && (
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <div
                     style={{
-                      width: "28px",
-                      height: "28px",
+                      width: "30px",
+                      height: "30px",
                       borderRadius: "8px",
                       background: accentColor,
                       color: "#fff",
                       display: "grid",
                       placeItems: "center",
-                      fontSize: "12px",
+                      fontSize: "13px",
                       fontWeight: 800,
                       boxShadow: `0 4px 12px ${accentColor}33`,
                       flexShrink: 0,
@@ -606,35 +495,21 @@ const Footer: React.FC<FooterProps> = (props) => {
                 </div>
               )}
               {showTagline && tagline && (
-                <span style={{ fontSize: isMobile ? "12px" : "13.5px", color: mutedText, lineHeight: 1.45, maxWidth: isMobile ? "320px" : "100%" }}>
+                <span style={{ fontSize: isMobile ? "12px" : "13.5px", color: mutedText, lineHeight: 1.5, maxWidth: isMobile ? "320px" : "100%" }}>
                   {tagline}
                 </span>
               )}
             </div>
 
-            {renderNewsletter()}
-          </div>
-
-          {/* Middle Section: Navigation Links & Social Links */}
-          <div
-            style={{
-              display: "flex",
-              flexDirection: isMobile ? "column" : "row",
-              justifyContent: "space-between",
-              alignItems: isMobile ? "center" : "center",
-              gap: isMobile ? "14px" : "20px",
-              borderTop: `1px solid ${borderColor}`,
-              paddingTop: isMobile ? "14px" : "24px",
-              boxSizing: "border-box",
-            }}
-          >
+            {/* Navigation Links */}
             <div
               style={{
                 display: "flex",
                 flexWrap: "wrap",
-                justifyContent: isMobile ? "center" : "flex-start",
-                gap: isMobile ? "6px 14px" : "12px 24px",
+                justifyContent: isMobile ? "center" : "flex-end",
+                gap: isMobile ? "8px 16px" : "12px 24px",
                 alignItems: "center",
+                maxWidth: isMobile ? "100%" : "540px",
               }}
             >
               {links.map((link, idx) => (
@@ -661,16 +536,29 @@ const Footer: React.FC<FooterProps> = (props) => {
                 </a>
               ))}
             </div>
+          </div>
+
+          {/* Bottom Section: Copyright & Social Links */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: isMobile ? "column-reverse" : "row",
+              justifyContent: "space-between",
+              alignItems: isMobile ? "center" : "center",
+              gap: isMobile ? "14px" : "20px",
+              borderTop: `1px solid ${borderColor}`,
+              paddingTop: isMobile ? "14px" : "20px",
+              boxSizing: "border-box",
+            }}
+          >
+            {showCopyright ? (
+              <div style={{ fontSize: "11.5px", color: mutedText, textAlign: isMobile ? "center" : "left", lineHeight: 1.5 }}>
+                {displayCopyright}
+              </div>
+            ) : <div />}
 
             {renderSocials(isMobile)}
           </div>
-
-          {/* Bottom Copyright */}
-          {showCopyright && (
-            <div style={{ fontSize: "11px", color: mutedText, textAlign: isMobile ? "center" : "left", lineHeight: 1.5, borderTop: isMobile ? `1px dashed ${borderColor}` : "none", paddingTop: isMobile ? "10px" : "0" }}>
-              {displayCopyright}
-            </div>
-          )}
         </div>
       </footer>
     );
@@ -695,7 +583,7 @@ const Footer: React.FC<FooterProps> = (props) => {
             margin: "0 auto",
             display: "flex",
             flexDirection: "column",
-            gap: isMobile ? "22px" : "28px",
+            gap: isMobile ? "18px" : "22px",
             textAlign: "center",
             alignItems: "center",
             boxSizing: "border-box",
@@ -714,17 +602,13 @@ const Footer: React.FC<FooterProps> = (props) => {
             )}
           </div>
 
-          <div style={{ width: "100%", maxWidth: "400px", display: "flex", justifyContent: "center" }}>
-            {renderNewsletter()}
-          </div>
-
           <div
             style={{
               display: isMobile ? "grid" : "flex",
               gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : undefined,
               flexWrap: isMobile ? undefined : "wrap",
               justifyContent: "center",
-              gap: isMobile ? "8px 16px" : "14px 24px",
+              gap: isMobile ? "8px 16px" : "12px 24px",
               width: "100%",
               maxWidth: "500px",
             }}
@@ -739,7 +623,7 @@ const Footer: React.FC<FooterProps> = (props) => {
                   color: textColor,
                   fontWeight: 600,
                   textDecoration: "none",
-                  padding: "6px 8px",
+                  padding: "6px 12px",
                   borderRadius: "8px",
                   background: isMobile ? socialBg : "transparent",
                   textAlign: "center",
@@ -760,7 +644,7 @@ const Footer: React.FC<FooterProps> = (props) => {
           {renderSocials(true)}
 
           {showCopyright && (
-            <div style={{ fontSize: "12px", color: mutedText, marginTop: "4px" }}>
+            <div style={{ fontSize: "11.5px", color: mutedText, marginTop: "4px" }}>
               {displayCopyright}
             </div>
           )}
@@ -780,23 +664,21 @@ const Footer: React.FC<FooterProps> = (props) => {
             maxWidth: resolvedMaxWidth,
             margin: "0 auto",
             display: "grid",
-            gridTemplateColumns: isMobile
-              ? "1fr"
-              : "repeat(auto-fit, minmax(240px, 1fr))",
-            gap: isMobile ? "24px" : "36px",
-            paddingBottom: isMobile ? "20px" : "32px",
+            gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr",
+            gap: isMobile ? "24px" : "48px",
+            paddingBottom: isMobile ? "20px" : "28px",
             boxSizing: "border-box",
           }}
         >
           {/* Brand & About */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: isMobile ? "100%" : "480px" }}>
             {showBrand && (
-              <span style={{ fontWeight: 800, fontSize: isMobile ? "18px" : "20px", color: textColor, letterSpacing: "-0.02em" }}>
+              <span style={{ fontWeight: 800, fontSize: isMobile ? "18px" : "22px", color: textColor, letterSpacing: "-0.02em" }}>
                 {brandName}
               </span>
             )}
             {showTagline && tagline && (
-              <p style={{ margin: 0, fontSize: "13.5px", color: mutedText, lineHeight: 1.55 }}>
+              <p style={{ margin: 0, fontSize: "13.5px", color: mutedText, lineHeight: 1.6 }}>
                 {tagline}
               </p>
             )}
@@ -806,7 +688,7 @@ const Footer: React.FC<FooterProps> = (props) => {
           </div>
 
           {/* Quick Links */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <span style={{ fontWeight: 700, fontSize: "12px", color: textColor, textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Quick Links
             </span>
@@ -814,7 +696,7 @@ const Footer: React.FC<FooterProps> = (props) => {
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: "8px 16px",
+                gap: "10px 20px",
               }}
             >
               {links.map((link, idx) => (
@@ -823,28 +705,26 @@ const Footer: React.FC<FooterProps> = (props) => {
                   href={link.href || "#"}
                   onClick={(e) => handleLinkClick(e, link.href)}
                   style={{
-                    fontSize: "13px",
+                    fontSize: "13.5px",
                     color: mutedText,
                     textDecoration: "none",
-                    padding: "3px 0",
-                    transition: "color 0.2s ease",
+                    padding: "2px 0",
+                    transition: "color 0.2s ease, transform 0.15s ease",
+                    display: "inline-block",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.color = textColor;
+                    e.currentTarget.style.transform = "translateX(2px)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.color = mutedText;
+                    e.currentTarget.style.transform = "translateX(0)";
                   }}
                 >
                   {link.label}
                 </a>
               ))}
             </div>
-          </div>
-
-          {/* Newsletter Form */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {renderNewsletter()}
           </div>
         </div>
 
@@ -879,7 +759,7 @@ const Footer: React.FC<FooterProps> = (props) => {
             margin: "0 auto",
             display: "flex",
             flexDirection: "column",
-            gap: isMobile ? "20px" : "32px",
+            gap: isMobile ? "18px" : "26px",
             alignItems: "center",
             boxSizing: "border-box",
           }}
@@ -894,10 +774,6 @@ const Footer: React.FC<FooterProps> = (props) => {
               {tagline}
             </p>
           )}
-
-          <div style={{ width: "100%", maxWidth: "380px", display: "flex", justifyContent: "center" }}>
-            {renderNewsletter()}
-          </div>
 
           <div
             style={{
@@ -972,48 +848,49 @@ const Footer: React.FC<FooterProps> = (props) => {
       {renderFooterFestiveBackdrop()}
       <div style={{ position: "relative", zIndex: 1, maxWidth: resolvedMaxWidth, margin: "0 auto", display: "flex", flexDirection: "column", gap: isMobile ? "22px" : "28px", boxSizing: "border-box" }}>
         
-        {/* Brand & 4 Carved Out Link Buttons */}
+        {/* Brand & Tagline */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            alignItems: isMobile ? "center" : "flex-start",
+          }}
+        >
+          {showBrand && (
+            <div
+              style={{
+                padding: "8px 20px",
+                borderRadius: "999px",
+                background: neoBg,
+                boxShadow: neoButtonShadow,
+                display: "inline-flex",
+                alignItems: "center",
+                alignSelf: isMobile ? "center" : "auto",
+                width: "fit-content",
+              }}
+            >
+              <span style={{ fontWeight: 800, fontSize: isMobile ? "15px" : "16px", color: neoTextColor }}>{brandName}</span>
+            </div>
+          )}
+          {showTagline && tagline && (
+            <p style={{ margin: 0, fontSize: isMobile ? "12.5px" : "13px", color: mutedText, lineHeight: 1.5, textAlign: isMobile ? "center" : "left", maxWidth: "520px" }}>
+              {tagline}
+            </p>
+          )}
+        </div>
+
+        {/* Carved Out Link Buttons & Socials */}
         <div
           style={{
             display: "flex",
             flexDirection: isMobile ? "column" : "row",
             justifyContent: "space-between",
             alignItems: isMobile ? "stretch" : "center",
-            gap: "16px",
+            gap: isMobile ? "16px" : "20px",
             boxSizing: "border-box",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-              alignItems: isMobile ? "center" : "flex-start",
-            }}
-          >
-            {showBrand && (
-              <div
-                style={{
-                  padding: "8px 20px",
-                  borderRadius: "999px",
-                  background: neoBg,
-                  boxShadow: neoButtonShadow,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  alignSelf: isMobile ? "center" : "auto",
-                  width: "fit-content",
-                }}
-              >
-                <span style={{ fontWeight: 800, fontSize: isMobile ? "15px" : "16px", color: neoTextColor }}>{brandName}</span>
-              </div>
-            )}
-            {showTagline && tagline && (
-              <p style={{ margin: 0, fontSize: isMobile ? "12.5px" : "13px", color: mutedText, lineHeight: 1.5, textAlign: isMobile ? "center" : "left", maxWidth: "420px" }}>
-                {tagline}
-              </p>
-            )}
-          </div>
-
           <div
             style={{
               display: isMobile ? "grid" : "flex",
@@ -1054,99 +931,8 @@ const Footer: React.FC<FooterProps> = (props) => {
               </a>
             ))}
           </div>
-        </div>
 
-        {/* Newsletter & Socials */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: isMobile ? "column" : "row",
-            justifyContent: "space-between",
-            alignItems: isMobile ? "stretch" : "center",
-            gap: isMobile ? "20px" : "24px",
-            boxSizing: "border-box",
-          }}
-        >
-          {show_newsletter && (
-            <div style={{ width: "100%", maxWidth: isMobile ? "100%" : "380px" }}>
-              <span style={{ fontSize: isMobile ? "13px" : "14px", fontWeight: 700, color: neoTextColor, letterSpacing: "-0.01em", display: "block", marginBottom: "8px", textAlign: isMobile ? "center" : "left" }}>
-                {newsletter_title}
-              </span>
-              {subscribed ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "10px 16px",
-                    borderRadius: "999px",
-                    background: isLight ? "rgba(16, 185, 129, 0.1)" : "rgba(16, 185, 129, 0.2)",
-                    boxShadow: neoInsetShadow,
-                    color: isLight ? "#065f46" : "#34d399",
-                    fontSize: "13px",
-                    fontWeight: 600,
-                  }}
-                >
-                  <span>✓</span> Thank you for subscribing!
-                </div>
-              ) : (
-                <form
-                  onSubmit={handleSubscribe}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "4px 4px 4px 16px",
-                    borderRadius: "999px",
-                    background: neoBg,
-                    boxShadow: neoInsetShadow,
-                    width: "100%",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <input
-                    type="email"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder={newsletterPlaceholder}
-                    required
-                    style={{
-                      flex: 1,
-                      minHeight: "36px",
-                      border: "none",
-                      background: "transparent",
-                      color: neoTextColor,
-                      fontSize: "13.5px",
-                      outline: "none",
-                      minWidth: 0,
-                    }}
-                  />
-                  <button
-                    type="submit"
-                    style={{
-                      minHeight: "36px",
-                      padding: "8px 18px",
-                      borderRadius: "999px",
-                      border: "none",
-                      background: accentColor,
-                      color: "#ffffff",
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      boxShadow: neoButtonShadow,
-                      transition: "opacity 0.2s, transform 0.1s",
-                      whiteSpace: "nowrap",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {newsletterButtonText}
-                  </button>
-                </form>
-              )}
-            </div>
-          )}
-
-          {renderSocials()}
+          {renderSocials(isMobile)}
         </div>
 
         {/* Bottom Details */}
@@ -1157,10 +943,11 @@ const Footer: React.FC<FooterProps> = (props) => {
             justifyContent: "space-between",
             fontSize: "12px",
             color: mutedText,
-            marginTop: "8px",
+            marginTop: "6px",
             gap: "6px",
             borderTop: `1px solid ${isLight ? "rgba(166,180,200,0.2)" : "rgba(255,255,255,0.05)"}`,
             paddingTop: isMobile ? "14px" : "10px",
+            textAlign: isMobile ? "center" : "left",
           }}
         >
           {showCopyright && <span>{displayCopyright}</span>}

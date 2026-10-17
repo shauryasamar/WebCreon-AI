@@ -65,11 +65,25 @@ export default function CustomerProfilePage({
   const activeSlug = propSiteSlug || routeSlug || "";
   const navigate = useNavigate();
 
-  const customProps = useMemo(() => ({
-    ...(propTheme || {}),
+  const { siteData } = usePublicSiteTheme(activeSlug);
+
+  const profileOverrides = useMemo(() => ({
     ...(restProps.props || {}),
     ...restProps,
-  }), [propTheme, restProps]);
+    ...(siteData?.theme?.profile || {}),
+    ...(siteData?.profile_props || {}),
+    ...(propTheme?.profile || {}),
+    ...((propTheme as any)?.profile_props || {}),
+    ...((restProps as any)?.profile_props || {}),
+    ...((restProps.props as any)?.profile_props || {}),
+    ...((restProps.props as any)?.theme?.profile || {}),
+  }), [siteData, propTheme, restProps]);
+
+  const customProps = useMemo(() => ({
+    ...(siteData?.theme || {}),
+    ...(propTheme || {}),
+    ...profileOverrides,
+  }), [siteData, propTheme, profileOverrides]);
 
   const isInsideEditor =
     Boolean(restProps.editMode) ||
@@ -77,7 +91,6 @@ export default function CustomerProfilePage({
 
   const { user: realUser, isAuthenticated, loading: authLoading, refreshMe, updateProfile, changePassword, logout, deleteAccount } =
     useCustomerAuth();
-  const { siteData } = usePublicSiteTheme(activeSlug);
 
   const user = (!realUser && isInsideEditor) ? SAMPLE_PREVIEW_USER : realUser;
 
@@ -150,46 +163,88 @@ export default function CustomerProfilePage({
   const activeTheme: Record<string, any> = (propTheme || siteData?.theme || {}) as Record<string, any>;
   const isLight = activeTheme.mode !== "dark";
 
-  const primaryBg = activeTheme.primary_bg || (isLight ? "#f8fafc" : "#0f172a");
-  const baseCardBg = activeTheme.card_bg || activeTheme.secondary_bg || (isLight ? "#ffffff" : "#1e293b");
+  const primaryBg =
+    profileOverrides.page_bg ||
+    profileOverrides.primary_bg ||
+    profileOverrides.page_background ||
+    customProps.page_bg ||
+    (siteData?.theme?.profile?.primary_bg || siteData?.profile_props?.primary_bg) ||
+    activeTheme.primary_bg ||
+    (isLight ? "#f8fafc" : "#121316");
+  const baseCardBg = activeTheme.card_bg || activeTheme.secondary_bg || (isLight ? "#ffffff" : "#18181b");
   const fallbackCardBg =
     baseCardBg.toLowerCase().trim() === primaryBg.toLowerCase().trim()
       ? isLight
         ? "#ffffff"
-        : "#1e293b"
+        : "#18181b"
       : baseCardBg;
 
-  const cardBg = customProps.card_bg || customProps.background_color || fallbackCardBg;
+  const cardBg =
+    profileOverrides.card_bg ||
+    profileOverrides.card_bg_color ||
+    profileOverrides.background_color ||
+    (profileOverrides as any).background ||
+    (profileOverrides as any).card ||
+    fallbackCardBg;
   const isDarkCard = isColorDarkHex(cardBg);
   const isDarkPrimary = isColorDarkHex(primaryBg);
 
-  const rawTextColor = customProps.title_color || customProps.text_color || activeTheme.text_color;
-  const textColor = (rawTextColor && (isColorDarkHex(rawTextColor) !== isDarkCard))
-    ? rawTextColor
-    : (isDarkCard ? "#f8fafc" : "#0f172a");
+  const explicitTitleColor =
+    profileOverrides.title_color ||
+    profileOverrides.text_color ||
+    profileOverrides.text ||
+    customProps.title_color ||
+    customProps.text_color;
+  const textColor = explicitTitleColor
+    ? explicitTitleColor
+    : (activeTheme.text_color && (isColorDarkHex(activeTheme.text_color) !== isDarkCard))
+    ? activeTheme.text_color
+    : (isDarkCard ? "#f8fafc" : "#18181b");
 
-  const rawSubtext =
+  const explicitSubtextColor =
+    profileOverrides.subtext_color ||
+    profileOverrides.muted_text_color ||
+    profileOverrides.muted_text ||
     customProps.subtext_color ||
-    customProps.muted_text_color ||
-    (activeTheme as any)?.muted_text ||
-    (activeTheme as any)?.muted_text_color;
-  const subtextColor = (rawSubtext && (isColorDarkHex(rawSubtext) !== isDarkCard))
-    ? rawSubtext
+    customProps.muted_text_color;
+  const rawThemeSubtext = (activeTheme as any)?.muted_text || (activeTheme as any)?.muted_text_color;
+  const subtextColor = explicitSubtextColor
+    ? explicitSubtextColor
+    : (rawThemeSubtext && (isColorDarkHex(rawThemeSubtext) !== isDarkCard))
+    ? rawThemeSubtext
     : (isDarkCard ? "rgba(226, 232, 240, 0.75)" : "rgba(51, 65, 85, 0.75)");
 
-  const pageHeaderTextColor = (rawTextColor && (isColorDarkHex(rawTextColor) !== isDarkPrimary))
-    ? rawTextColor
-    : (isDarkPrimary ? "#f8fafc" : "#0f172a");
+  const pageHeaderTextColor = explicitTitleColor
+    ? explicitTitleColor
+    : (activeTheme.text_color && (isColorDarkHex(activeTheme.text_color) !== isDarkPrimary))
+    ? activeTheme.text_color
+    : (isDarkPrimary ? "#f8fafc" : "#18181b");
 
-  const pageHeaderSubtextColor = (rawSubtext && (isColorDarkHex(rawSubtext) !== isDarkPrimary))
-    ? rawSubtext
+  const pageHeaderSubtextColor = explicitSubtextColor
+    ? explicitSubtextColor
+    : (rawThemeSubtext && (isColorDarkHex(rawThemeSubtext) !== isDarkPrimary))
+    ? rawThemeSubtext
     : (isDarkPrimary ? "rgba(226, 232, 240, 0.75)" : "rgba(51, 65, 85, 0.75)");
 
-  const accentColor = customProps.button_bg_color || activeTheme.accent_color || "#2563eb";
+  const accentColor =
+    profileOverrides.button_bg_color ||
+    profileOverrides.accent_color ||
+    profileOverrides.button_bg ||
+    customProps.button_bg_color ||
+    activeTheme.accent_color ||
+    "#2563eb";
   const accessibleAccentColor = getAccessibleAccentColor(accentColor, cardBg);
-  const buttonTextColor = customProps.button_text_color || (isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a");
-  const borderColor = customProps.border_color
-    ? customProps.border_color
+  const buttonTextColor =
+    profileOverrides.button_text_color ||
+    profileOverrides.button_text ||
+    customProps.button_text_color ||
+    (isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a");
+  const borderColor =
+    profileOverrides.border_color ||
+    profileOverrides.border ||
+    profileOverrides.card_border ||
+    customProps.border_color
+    ? (profileOverrides.border_color || profileOverrides.border || profileOverrides.card_border || customProps.border_color)
     : isDarkCard
     ? "rgba(255, 255, 255, 0.12)"
     : "rgba(15, 23, 42, 0.12)";
@@ -220,13 +275,55 @@ export default function CustomerProfilePage({
   const inputRadius = parseDimension(customProps.input_radius, "10px");
   const buttonRadius = parseDimension(customProps.button_radius, "10px");
 
-  const inputBg = customProps.input_bg || (isDarkCard ? "rgba(255, 255, 255, 0.05)" : "#ffffff");
-  const isInputDark = isColorDarkHex(inputBg);
-  const inputTextColor = (customProps.input_text_color && (isColorDarkHex(customProps.input_text_color) !== isInputDark))
-    ? customProps.input_text_color
-    : (isInputDark ? "#f8fafc" : "#0f172a");
-  const inputBorder = customProps.input_border
-    ? `1px solid ${customProps.input_border}`
+  // Check if a color string has low opacity / translucency
+  const isTranslucent = (c?: string) => {
+    if (!c || c === "transparent") return true;
+    if (typeof c === "string" && c.startsWith("rgba")) {
+      const parts = c.match(/[\d.]+/g);
+      if (parts && parts.length >= 4) {
+        const alpha = parseFloat(parts[3]);
+        return alpha < 0.6;
+      }
+    }
+    return false;
+  };
+
+  const defaultInputBg = isDarkCard ? "rgba(255, 255, 255, 0.05)" : "#ffffff";
+  const inputBg =
+    profileOverrides.input_bg ||
+    profileOverrides.inputs_bg ||
+    profileOverrides.input_background ||
+    customProps.input_bg ||
+    (customProps as any)?.profile_input_bg ||
+    (activeTheme as any)?.profile?.input_bg ||
+    (activeTheme as any)?.profile_input_bg ||
+    (activeTheme as any)?.input_bg ||
+    defaultInputBg;
+
+  // If input background is translucent, the perceived background is the parent card background!
+  const isInputDark = isTranslucent(inputBg) ? isDarkCard : isColorDarkHex(inputBg);
+
+  // Directly honor user's explicit input_text_color without rejection; default intelligently based on effective darkness
+  const inputTextColor =
+    profileOverrides.input_text_color ||
+    profileOverrides.input_textColor ||
+    profileOverrides.input_text ||
+    profileOverrides.inputs_text_color ||
+    profileOverrides.inputs_text ||
+    customProps.input_text_color ||
+    (customProps as any)?.profile_input_text_color ||
+    (activeTheme as any)?.profile?.input_text_color ||
+    (activeTheme as any)?.profile_input_text ||
+    (activeTheme as any)?.input_text_color ||
+    (isInputDark ? "#f8fafc" : "#18181b");
+
+  const explicitInputBorder =
+    profileOverrides.input_border ||
+    profileOverrides.input_border_color ||
+    customProps.input_border;
+
+  const inputBorder = explicitInputBorder
+    ? (explicitInputBorder.includes("px") || explicitInputBorder.includes("solid") ? explicitInputBorder : `1px solid ${explicitInputBorder}`)
     : isInputDark
     ? "rgba(255, 255, 255, 0.16)"
     : "rgba(15, 23, 42, 0.16)";
@@ -580,6 +677,12 @@ export default function CustomerProfilePage({
         </div>
 
         {/* WIDE MAIN PROFILE CARD */}
+        <style>{`
+          .wc-profile-input::placeholder {
+            color: ${isInputDark ? "rgba(248, 250, 252, 0.45)" : "rgba(15, 23, 42, 0.45)"} !important;
+            opacity: 1;
+          }
+        `}</style>
         <div
           style={{
             background: cardBg,
@@ -726,6 +829,7 @@ export default function CustomerProfilePage({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your full name"
+                  className="wc-profile-input"
                   style={{
                     width: "100%",
                     height: "44px",
@@ -735,6 +839,7 @@ export default function CustomerProfilePage({
                     border: inputBorder,
                     background: inputBg,
                     color: inputTextColor,
+                    colorScheme: isInputDark ? "dark" : "light",
                     fontSize: "14px",
                     outline: "none",
                   }}
@@ -755,6 +860,7 @@ export default function CustomerProfilePage({
                   type="email"
                   disabled
                   value={email}
+                  className="wc-profile-input"
                   style={{
                     width: "100%",
                     height: "44px",
@@ -789,6 +895,7 @@ export default function CustomerProfilePage({
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+91 98765 43210"
+                    className="wc-profile-input"
                     style={{
                       width: "100%",
                       height: "44px",
@@ -798,6 +905,7 @@ export default function CustomerProfilePage({
                       border: inputBorder,
                       background: inputBg,
                       color: inputTextColor,
+                      colorScheme: isInputDark ? "dark" : "light",
                       fontSize: "14px",
                       outline: "none",
                     }}
@@ -822,6 +930,7 @@ export default function CustomerProfilePage({
                   <select
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
+                    className="wc-profile-input"
                     style={{
                       width: "100%",
                       height: "44px",
@@ -831,17 +940,18 @@ export default function CustomerProfilePage({
                       border: inputBorder,
                       background: inputBg,
                       color: inputTextColor,
+                      colorScheme: isInputDark ? "dark" : "light",
                       fontSize: "14px",
                       outline: "none",
                       cursor: "pointer",
                     }}
                   >
-                    <option value="" style={{ background: inputBg, color: inputTextColor }}>Select Gender</option>
-                    <option value="Male" style={{ background: inputBg, color: inputTextColor }}>Male</option>
-                    <option value="Female" style={{ background: inputBg, color: inputTextColor }}>Female</option>
-                    <option value="Non-Binary" style={{ background: inputBg, color: inputTextColor }}>Non-Binary</option>
-                    <option value="Other" style={{ background: inputBg, color: inputTextColor }}>Other</option>
-                    <option value="Prefer not to say" style={{ background: inputBg, color: inputTextColor }}>Prefer not to say</option>
+                    <option value="" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Select Gender</option>
+                    <option value="Male" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Male</option>
+                    <option value="Female" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Female</option>
+                    <option value="Non-Binary" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Non-Binary</option>
+                    <option value="Other" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Other</option>
+                    <option value="Prefer not to say" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Prefer not to say</option>
                   </select>
                 </div>
               )}
@@ -864,6 +974,7 @@ export default function CustomerProfilePage({
                     type="date"
                     value={dob}
                     onChange={(e) => setDob(e.target.value)}
+                    className="wc-profile-input"
                     style={{
                       width: "100%",
                       height: "44px",
@@ -873,6 +984,7 @@ export default function CustomerProfilePage({
                       border: inputBorder,
                       background: inputBg,
                       color: inputTextColor,
+                      colorScheme: isInputDark ? "dark" : "light",
                       fontSize: "14px",
                       outline: "none",
                     }}
@@ -1084,6 +1196,7 @@ export default function CustomerProfilePage({
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       placeholder="Enter your current password"
+                      className="wc-profile-input"
                       style={{
                         width: "100%",
                         height: "42px",
@@ -1093,6 +1206,7 @@ export default function CustomerProfilePage({
                         border: inputBorder,
                         background: inputBg,
                         color: inputTextColor,
+                        colorScheme: isInputDark ? "dark" : "light",
                         fontSize: "14px",
                         outline: "none",
                       }}
@@ -1140,6 +1254,7 @@ export default function CustomerProfilePage({
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Minimum 6 characters"
+                      className="wc-profile-input"
                       style={{
                         width: "100%",
                         height: "42px",
@@ -1149,6 +1264,7 @@ export default function CustomerProfilePage({
                         border: inputBorder,
                         background: inputBg,
                         color: inputTextColor,
+                        colorScheme: isInputDark ? "dark" : "light",
                         fontSize: "14px",
                         outline: "none",
                       }}
@@ -1193,6 +1309,7 @@ export default function CustomerProfilePage({
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Repeat new password"
+                    className="wc-profile-input"
                     style={{
                       width: "100%",
                       height: "42px",
@@ -1202,6 +1319,7 @@ export default function CustomerProfilePage({
                       border: inputBorder,
                       background: inputBg,
                       color: inputTextColor,
+                      colorScheme: isInputDark ? "dark" : "light",
                       fontSize: "14px",
                       outline: "none",
                     }}

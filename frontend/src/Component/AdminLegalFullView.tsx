@@ -210,7 +210,7 @@ function PrivacyPolicyDocument() {
       {/* Overview */}
       <div>
         <p style={{ margin: 0 }}>
-          WebCreon Technologies Private Limited (&ldquo;WebCreon&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) operates the WebCreon AI Autonomous Website Builder, e-commerce storefront infrastructure, payment routing, and customer management platform. This Privacy Policy sets out how we collect, store, process, protect, and delete information across merchant workspaces, custom storefront domains, and customer checkout sessions.
+          WebCreon Technologies Private Limited (&ldquo;WebCreon&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) operates the WebCreon Autonomous Website Builder, e-commerce storefront infrastructure, payment routing, and customer management platform. This Privacy Policy sets out how we collect, store, process, protect, and delete information across merchant workspaces, custom storefront domains, and customer checkout sessions.
         </p>
       </div>
 

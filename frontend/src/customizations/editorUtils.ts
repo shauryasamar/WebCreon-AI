@@ -1,5 +1,18 @@
 import { editorRegistry } from "./editorRegistry";
 import { EditableBlockConfig, EditorField } from "./editorTypes";
+import {
+  isColorDarkHex,
+  isRedOrDestructiveColor,
+  getSafePriceColor,
+  getAccessibleBrandColor,
+} from "../context/ThemeContext";
+
+export {
+  isColorDarkHex,
+  isRedOrDestructiveColor,
+  getSafePriceColor,
+  getAccessibleBrandColor,
+};
 
 export type EditorBlock = {
   id: string;
@@ -114,8 +127,6 @@ export type EditorSiteDefinition = {
     copyrightText?: string;
     tagline?: string;
     links?: Array<{ label: string; href: string }>;
-    show_newsletter?: boolean;
-    newsletter_title?: string;
     show_social_links?: boolean;
     social_links?: Array<{ platform: string; url: string }>;
   };
@@ -167,6 +178,62 @@ const DEFAULT_LIGHT_THEME: Partial<ThemeValues> = {
   hero_bg: "#f8fafc",
   hero_text_color: "#0f172a",
   hero_accent: "#2563eb",
+  cart_bg: "#ffffff",
+  cart_panel_bg: "#f8fafc",
+  cart_card_bg: "#ffffff",
+  cart_text_color: "#0f172a",
+  cart_accent_color: "#2563eb",
+  cart_border_color: "rgba(15,23,42,0.08)",
+  summary_bg: "#ffffff",
+  summary_card_bg: "#ffffff",
+  summary_text_color: "#0f172a",
+  summary_accent_color: "#2563eb",
+  summary_border_color: "rgba(15,23,42,0.08)",
+  product_detail_bg: "#ffffff",
+  product_detail_text: "#0f172a",
+  product_detail_btn_bg: "#2563eb",
+  product_detail_btn_text: "#ffffff",
+  badge_bg_color: "rgba(37,99,235,0.08)",
+  badge_border_color: "rgba(37,99,235,0.2)",
+  product_detail_badge_bg: "rgba(37,99,235,0.08)",
+  product_detail_badge_border: "rgba(37,99,235,0.2)",
+  profile_dropdown_bg: "#ffffff",
+  profile_dropdown_text: "#0f172a",
+  profile_dropdown_border: "rgba(15,23,42,0.08)",
+  delivery_form_bg: "#ffffff",
+  delivery_form_text: "#0f172a",
+  delivery_form_border: "rgba(15,23,42,0.08)",
+  delivery_form_btn_bg: "#2563eb",
+  delivery_form_btn_text: "#ffffff",
+  payment_bg: "#ffffff",
+  payment_card_bg: "#ffffff",
+  payment_text_color: "#0f172a",
+  payment_accent_color: "#2563eb",
+  payment_border_color: "rgba(15,23,42,0.08)",
+  place_order_bg: "#ffffff",
+  place_order_btn_bg: "#2563eb",
+  place_order_btn_text: "#ffffff",
+  order_history_bg: "#ffffff",
+  order_history_card_bg: "#ffffff",
+  order_history_text: "#0f172a",
+  order_history_muted_text: "rgba(15,23,42,0.65)",
+  order_history_border: "rgba(15,23,42,0.08)",
+  order_history_accent_color: "#2563eb",
+  support_bg: "#ffffff",
+  support_card_bg: "#ffffff",
+  support_chat_bg: "#ffffff",
+  support_text_color: "#0f172a",
+  support_muted_text: "rgba(15,23,42,0.65)",
+  support_accent_color: "#2563eb",
+  support_border_color: "rgba(15,23,42,0.08)",
+  card_bg_color: "#ffffff",
+  card_text_color: "#0f172a",
+  product_name_color: "#0f172a",
+  price_color: "#0f172a",
+  card_price_color: "#0f172a",
+  brand_color: "#2563eb",
+  card_brand_color: "#2563eb",
+  card_border_color: "rgba(15,23,42,0.08)",
 };
 
 const DEFAULT_DARK_THEME: Partial<ThemeValues> = {
@@ -188,6 +255,62 @@ const DEFAULT_DARK_THEME: Partial<ThemeValues> = {
   hero_bg: "#1a1c21",
   hero_text_color: "#f8fafc",
   hero_accent: "#60a5fa",
+  cart_bg: "#121316",
+  cart_panel_bg: "#1a1c21",
+  cart_card_bg: "#22252b",
+  cart_text_color: "#f8fafc",
+  cart_accent_color: "#3b82f6",
+  cart_border_color: "rgba(255, 255, 255, 0.1)",
+  summary_bg: "#121316",
+  summary_card_bg: "#22252b",
+  summary_text_color: "#f8fafc",
+  summary_accent_color: "#3b82f6",
+  summary_border_color: "rgba(255, 255, 255, 0.1)",
+  product_detail_bg: "#121316",
+  product_detail_text: "#f8fafc",
+  product_detail_btn_bg: "#3b82f6",
+  product_detail_btn_text: "#ffffff",
+  badge_bg_color: "rgba(59,130,246,0.15)",
+  badge_border_color: "rgba(59,130,246,0.3)",
+  product_detail_badge_bg: "rgba(59,130,246,0.15)",
+  product_detail_badge_border: "rgba(59,130,246,0.3)",
+  profile_dropdown_bg: "#22252b",
+  profile_dropdown_text: "#f8fafc",
+  profile_dropdown_border: "rgba(255, 255, 255, 0.1)",
+  delivery_form_bg: "#22252b",
+  delivery_form_text: "#f8fafc",
+  delivery_form_border: "rgba(255, 255, 255, 0.1)",
+  delivery_form_btn_bg: "#3b82f6",
+  delivery_form_btn_text: "#ffffff",
+  payment_bg: "#22252b",
+  payment_card_bg: "#22252b",
+  payment_text_color: "#f8fafc",
+  payment_accent_color: "#3b82f6",
+  payment_border_color: "rgba(255, 255, 255, 0.1)",
+  place_order_bg: "#22252b",
+  place_order_btn_bg: "#3b82f6",
+  place_order_btn_text: "#ffffff",
+  order_history_bg: "#121316",
+  order_history_card_bg: "#22252b",
+  order_history_text: "#f8fafc",
+  order_history_muted_text: "rgba(248, 250, 252, 0.72)",
+  order_history_border: "rgba(255, 255, 255, 0.1)",
+  order_history_accent_color: "#3b82f6",
+  support_bg: "#121316",
+  support_card_bg: "#22252b",
+  support_chat_bg: "#121316",
+  support_text_color: "#f8fafc",
+  support_muted_text: "rgba(248, 250, 252, 0.72)",
+  support_accent_color: "#3b82f6",
+  support_border_color: "rgba(255, 255, 255, 0.1)",
+  card_bg_color: "#22252b",
+  card_text_color: "#f8fafc",
+  product_name_color: "#f8fafc",
+  price_color: "#ffffff",
+  card_price_color: "#ffffff",
+  brand_color: "#60a5fa",
+  card_brand_color: "#60a5fa",
+  card_border_color: "rgba(255, 255, 255, 0.1)",
 };
 
 export const FESTIVAL_THEME_PRESETS: Record<
@@ -236,8 +359,6 @@ function buildGlobalFooterBlock(siteDefinition: EditorSiteDefinition): EditorBlo
         { label: "Privacy Policy", href: "/privacy" },
         { label: "Terms of Service", href: "/terms" },
       ],
-      show_newsletter: siteDefinition.footer?.show_newsletter ?? true,
-      newsletter_title: siteDefinition.footer?.newsletter_title || "Subscribe to Our Newsletter",
       show_social_links: siteDefinition.footer?.show_social_links ?? true,
       social_links: siteDefinition.footer?.social_links || [
         { platform: "Instagram", url: "https://instagram.com" },
@@ -600,6 +721,168 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
         if (targetTheme.support_accent_color) {
           updatedProps.accent_color = targetTheme.support_accent_color;
           updatedProps.support_accent_color = targetTheme.support_accent_color;
+        }
+      } else if (
+        btype === "cart" ||
+        btype === "cart_view" ||
+        btype === "cart_sidebar" ||
+        btype === "cart_items" ||
+        btype === "order_summary" ||
+        bid === "cart" ||
+        bid === "cart_sidebar" ||
+        bid === "cart_view" ||
+        bid === "cart_items" ||
+        bid === "order_summary" ||
+        bid.includes("cart")
+      ) {
+        if (targetTheme.cart_bg) {
+          updatedProps.background_color = targetTheme.cart_bg;
+          updatedProps.cart_bg = targetTheme.cart_bg;
+        } else if (targetTheme.primary_bg) {
+          updatedProps.background_color = targetTheme.primary_bg;
+          updatedProps.cart_bg = targetTheme.primary_bg;
+        }
+        if (targetTheme.cart_panel_bg) {
+          updatedProps.panel_color = targetTheme.cart_panel_bg;
+          updatedProps.cart_panel_bg = targetTheme.cart_panel_bg;
+        } else if (targetTheme.card_bg) {
+          updatedProps.panel_color = targetTheme.card_bg;
+          updatedProps.cart_panel_bg = targetTheme.card_bg;
+        }
+        if (targetTheme.cart_card_bg) {
+          updatedProps.card_color = targetTheme.cart_card_bg;
+          updatedProps.cart_card_bg = targetTheme.cart_card_bg;
+        } else if (targetTheme.card_bg) {
+          updatedProps.card_color = targetTheme.card_bg;
+          updatedProps.cart_card_bg = targetTheme.card_bg;
+        }
+        if (targetTheme.cart_text_color) {
+          updatedProps.text_color = targetTheme.cart_text_color;
+          updatedProps.cart_text_color = targetTheme.cart_text_color;
+        } else if (targetTheme.text_color) {
+          updatedProps.text_color = targetTheme.text_color;
+          updatedProps.cart_text_color = targetTheme.text_color;
+        }
+        if (targetTheme.cart_accent_color) {
+          updatedProps.accent_color = targetTheme.cart_accent_color;
+          updatedProps.cart_accent_color = targetTheme.cart_accent_color;
+        } else if (targetTheme.accent_color) {
+          updatedProps.accent_color = targetTheme.accent_color;
+          updatedProps.cart_accent_color = targetTheme.accent_color;
+        }
+        if (targetTheme.cart_border_color) {
+          updatedProps.border_color = targetTheme.cart_border_color;
+          updatedProps.cart_border_color = targetTheme.cart_border_color;
+        } else if (targetTheme.navbar_border_color || targetTheme.card_border_color) {
+          const bc = targetTheme.navbar_border_color || targetTheme.card_border_color;
+          updatedProps.border_color = bc;
+          updatedProps.cart_border_color = bc;
+        }
+      } else if (
+        btype === "profile" ||
+        btype === "profile_details" ||
+        bid === "profile" ||
+        bid === "profile_details" ||
+        bid.includes("profile")
+      ) {
+        if (targetTheme.card_bg) {
+          updatedProps.card_bg = targetTheme.card_bg;
+        }
+        if (targetTheme.primary_bg) {
+          updatedProps.page_bg = targetTheme.primary_bg;
+        }
+        if (targetTheme.text_color) {
+          updatedProps.text_color = targetTheme.text_color;
+        }
+        if (targetTheme.accent_color) {
+          updatedProps.accent_color = targetTheme.accent_color;
+        }
+      } else if (
+        btype === "product_grid" ||
+        btype === "productgrid" ||
+        btype === "product_carousel" ||
+        btype === "productcarousel" ||
+        btype === "section_group_carousel" ||
+        btype === "category_grid"
+      ) {
+        if (targetTheme.card_bg) {
+          updatedProps.card_bg_color = targetTheme.card_bg;
+        }
+        if (targetTheme.card_text_color || targetTheme.product_name_color || targetTheme.text_color) {
+          updatedProps.product_name_color = targetTheme.card_text_color || targetTheme.product_name_color || targetTheme.text_color;
+        }
+        if (targetTheme.card_border_color || targetTheme.navbar_border_color) {
+          updatedProps.card_border_color = targetTheme.card_border_color || targetTheme.navbar_border_color;
+        }
+        const isDarkTheme = targetTheme?.mode === "dark" || isColorDarkHex(targetTheme?.primary_bg);
+        if (targetTheme.brand_color || targetTheme.accent_color) {
+          updatedProps.brand_color = targetTheme.brand_color || targetTheme.accent_color;
+        }
+        if (targetTheme.price_color) {
+          updatedProps.price_color = getSafePriceColor(
+            targetTheme.price_color,
+            targetTheme.card_text_color || targetTheme.product_name_color || targetTheme.text_color || (isDarkTheme ? "#ffffff" : "#0f172a"),
+            isDarkTheme,
+            targetTheme.card_bg
+          );
+        } else {
+          updatedProps.price_color = isDarkTheme ? "#ffffff" : "#0f172a";
+        }
+      } else if (
+        btype === "delivery_form" ||
+        btype === "deliveryform" ||
+        btype === "delivery_address_form" ||
+        bid === "delivery_form"
+      ) {
+        if (targetTheme.delivery_form_bg || targetTheme.card_bg) {
+          updatedProps.background_color = targetTheme.delivery_form_bg || targetTheme.card_bg;
+        }
+        if (targetTheme.delivery_form_text || targetTheme.text_color) {
+          updatedProps.text_color = targetTheme.delivery_form_text || targetTheme.text_color;
+        }
+        if (targetTheme.delivery_form_border || targetTheme.navbar_border_color) {
+          updatedProps.border_color = targetTheme.delivery_form_border || targetTheme.navbar_border_color;
+        }
+        if (targetTheme.delivery_form_btn_bg || targetTheme.accent_color) {
+          updatedProps.button_bg_color = targetTheme.delivery_form_btn_bg || targetTheme.accent_color;
+        }
+        if (targetTheme.delivery_form_btn_text) {
+          updatedProps.button_text_color = targetTheme.delivery_form_btn_text;
+        }
+      } else if (
+        btype === "payment_methods" ||
+        btype === "paymentmethods" ||
+        bid === "payment_methods"
+      ) {
+        if (targetTheme.payment_bg || targetTheme.card_bg) {
+          updatedProps.card_bg = targetTheme.payment_bg || targetTheme.card_bg;
+        }
+        if (targetTheme.payment_text_color || targetTheme.text_color) {
+          updatedProps.text_color = targetTheme.payment_text_color || targetTheme.text_color;
+        }
+        if (targetTheme.payment_accent_color || targetTheme.accent_color) {
+          updatedProps.accent_color = targetTheme.payment_accent_color || targetTheme.accent_color;
+        }
+        if (targetTheme.payment_border_color || targetTheme.navbar_border_color) {
+          updatedProps.border_color = targetTheme.payment_border_color || targetTheme.navbar_border_color;
+        }
+      } else if (
+        btype === "place_order_cta" ||
+        btype === "placeordercta" ||
+        btype === "checkout_review" ||
+        bid === "place_order_cta"
+      ) {
+        if (targetTheme.place_order_bg || targetTheme.card_bg) {
+          updatedProps.card_bg = targetTheme.place_order_bg || targetTheme.card_bg;
+        }
+        if (targetTheme.place_order_btn_bg || targetTheme.accent_color) {
+          updatedProps.button_bg_color = targetTheme.place_order_btn_bg || targetTheme.accent_color;
+        }
+        if (targetTheme.place_order_btn_text) {
+          updatedProps.button_text_color = targetTheme.place_order_btn_text;
+        }
+        if (targetTheme.place_order_text || targetTheme.text_color) {
+          updatedProps.text_color = targetTheme.place_order_text || targetTheme.text_color;
         }
       }
 
@@ -2469,7 +2752,7 @@ export function saveThemeSnapshot(
   delete cleanBaseTheme.banner_width;
   delete cleanBaseTheme.slides;
 
-  // Capture product detail and card block overrides into theme object for snapshot
+  // Capture product detail, card block, and cart block overrides into theme object for snapshot
   let pdBadgeBg: string | undefined;
   let pdBadgeBorder: string | undefined;
   let pdPanelBg: string | undefined;
@@ -2482,6 +2765,13 @@ export function saveThemeSnapshot(
   let cardBlockBorder: string | undefined;
   let cardBlockBrand: string | undefined;
   let cardBlockPrice: string | undefined;
+
+  let cartBlockBg: string | undefined;
+  let cartBlockPanelBg: string | undefined;
+  let cartBlockCardBg: string | undefined;
+  let cartBlockText: string | undefined;
+  let cartBlockAccent: string | undefined;
+  let cartBlockBorder: string | undefined;
 
   (siteDefinition.pages || []).forEach((page) => {
     (page.blocks || []).forEach((block) => {
@@ -2506,6 +2796,23 @@ export function saveThemeSnapshot(
         if (props.text_color) pdTextColor = props.text_color;
         if (props.button_bg_color) pdBtnBg = props.button_bg_color;
         if (props.button_text_color) pdBtnText = props.button_text_color;
+      }
+
+      if (
+        btype === "cart" ||
+        btype === "cart_view" ||
+        btype === "cart_sidebar" ||
+        btype === "cart_items" ||
+        btype === "order_summary" ||
+        String(block.id || "").toLowerCase().includes("cart")
+      ) {
+        const props = block.props || {};
+        if (props.cart_bg || props.background_color) cartBlockBg = props.cart_bg || props.background_color;
+        if (props.cart_panel_bg || props.panel_color) cartBlockPanelBg = props.cart_panel_bg || props.panel_color;
+        if (props.cart_card_bg || props.card_color) cartBlockCardBg = props.cart_card_bg || props.card_color;
+        if (props.cart_text_color || props.text_color) cartBlockText = props.cart_text_color || props.text_color;
+        if (props.cart_accent_color || props.accent_color) cartBlockAccent = props.cart_accent_color || props.accent_color;
+        if (props.cart_border_color || props.border_color) cartBlockBorder = props.cart_border_color || props.border_color;
       }
 
       if (
@@ -2551,8 +2858,88 @@ export function saveThemeSnapshot(
   delete cleanCustomPatch.banner_width;
   delete cleanCustomPatch.slides;
 
+  const mode: ThemeMode = (cleanBaseTheme.mode === "light" ? "light" : "dark") as ThemeMode;
+  const baseDefaults = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
+
+  const primaryBg = cleanBaseTheme.primary_bg || baseDefaults.primary_bg;
+  const cardBg = cleanBaseTheme.card_bg || baseDefaults.card_bg;
+  const textColor = cleanBaseTheme.text_color || baseDefaults.text_color;
+  const mutedText = cleanBaseTheme.muted_text_color || baseDefaults.muted_text_color;
+  const accentColor = cleanBaseTheme.accent_color || baseDefaults.accent_color;
+  const borderColor = cleanBaseTheme.navbar_border_color || cleanBaseTheme.card_border_color || baseDefaults.navbar_border_color;
+
+  const componentBaselines: Record<string, any> = {
+    cart_bg: primaryBg,
+    cart_panel_bg: cardBg,
+    cart_card_bg: cardBg,
+    cart_text_color: textColor,
+    cart_accent_color: accentColor,
+    cart_border_color: borderColor,
+    summary_bg: primaryBg,
+    summary_card_bg: cardBg,
+    summary_text_color: textColor,
+    summary_accent_color: accentColor,
+    summary_border_color: borderColor,
+    product_detail_bg: cardBg,
+    product_detail_text: textColor,
+    product_detail_btn_bg: accentColor,
+    product_detail_btn_text: "#ffffff",
+    badge_bg_color: "rgba(37,99,235,0.08)",
+    badge_border_color: "rgba(37,99,235,0.2)",
+    product_detail_badge_bg: "rgba(37,99,235,0.08)",
+    product_detail_badge_border: "rgba(37,99,235,0.2)",
+    delivery_form_bg: cardBg,
+    delivery_form_text: textColor,
+    delivery_form_border: borderColor,
+    delivery_form_btn_bg: accentColor,
+    delivery_form_btn_text: "#ffffff",
+    delivery_form_input_bg: primaryBg,
+    delivery_form_input_text: textColor,
+    payment_bg: cardBg,
+    payment_card_bg: cardBg,
+    payment_text_color: textColor,
+    payment_accent_color: accentColor,
+    payment_border_color: borderColor,
+    place_order_bg: cardBg,
+    place_order_btn_bg: accentColor,
+    place_order_btn_text: "#ffffff",
+    place_order_text: textColor,
+    profile_dropdown_bg: cardBg,
+    profile_dropdown_text: textColor,
+    profile_dropdown_border: borderColor,
+    order_history_bg: primaryBg,
+    order_history_card_bg: cardBg,
+    order_history_text: textColor,
+    order_history_muted_text: mutedText,
+    order_history_border: borderColor,
+    order_history_accent_color: accentColor,
+    support_bg: primaryBg,
+    support_card_bg: cardBg,
+    support_chat_bg: cardBg,
+    support_surface_bg: cardBg,
+    support_text_color: textColor,
+    support_muted_text: mutedText,
+    support_accent_color: accentColor,
+    support_border_color: borderColor,
+    card_bg: cardBg,
+    card_bg_color: cardBg,
+    card_text_color: textColor,
+    product_name_color: textColor,
+    card_border_color: borderColor,
+    brand_color: accentColor,
+    price_color: getSafePriceColor(undefined, textColor, isDark),
+  };
+
   const themeToSave: Record<string, any> = {
+    ...baseDefaults,
+    ...componentBaselines,
     ...cleanBaseTheme,
+    ...(cartBlockBg ? { cart_bg: cartBlockBg } : {}),
+    ...(cartBlockPanelBg ? { cart_panel_bg: cartBlockPanelBg } : {}),
+    ...(cartBlockCardBg ? { cart_card_bg: cartBlockCardBg } : {}),
+    ...(cartBlockText ? { cart_text_color: cartBlockText } : {}),
+    ...(cartBlockAccent ? { cart_accent_color: cartBlockAccent } : {}),
+    ...(cartBlockBorder ? { cart_border_color: cartBlockBorder } : {}),
     ...(pdBadgeBg ? { badge_bg_color: pdBadgeBg, product_detail_badge_bg: pdBadgeBg } : {}),
     ...(pdBadgeBorder ? { badge_border_color: pdBadgeBorder, product_detail_badge_border: pdBadgeBorder } : {}),
     ...(pdPanelBg ? { product_detail_bg: pdPanelBg } : {}),
@@ -2684,8 +3071,78 @@ export function applyThemeSnapshot(
     publishedSiteDefinition
   );
 
+  const primaryBg = cleanPatchProps.primary_bg || baseDefaults.primary_bg;
+  const cardBg = cleanPatchProps.card_bg || baseDefaults.card_bg;
+  const textColor = cleanPatchProps.text_color || baseDefaults.text_color;
+  const mutedText = cleanPatchProps.muted_text_color || baseDefaults.muted_text_color;
+  const accentColor = cleanPatchProps.accent_color || baseDefaults.accent_color;
+  const borderColor = cleanPatchProps.navbar_border_color || cleanPatchProps.card_border_color || baseDefaults.navbar_border_color;
+
+  const componentBaselines: Record<string, any> = {
+    cart_bg: primaryBg,
+    cart_panel_bg: cardBg,
+    cart_card_bg: cardBg,
+    cart_text_color: textColor,
+    cart_accent_color: accentColor,
+    cart_border_color: borderColor,
+    summary_bg: primaryBg,
+    summary_card_bg: cardBg,
+    summary_text_color: textColor,
+    summary_accent_color: accentColor,
+    summary_border_color: borderColor,
+    product_detail_bg: cardBg,
+    product_detail_text: textColor,
+    product_detail_btn_bg: accentColor,
+    product_detail_btn_text: "#ffffff",
+    badge_bg_color: "rgba(37,99,235,0.08)",
+    badge_border_color: "rgba(37,99,235,0.2)",
+    product_detail_badge_bg: "rgba(37,99,235,0.08)",
+    product_detail_badge_border: "rgba(37,99,235,0.2)",
+    delivery_form_bg: cardBg,
+    delivery_form_text: textColor,
+    delivery_form_border: borderColor,
+    delivery_form_btn_bg: accentColor,
+    delivery_form_btn_text: "#ffffff",
+    delivery_form_input_bg: primaryBg,
+    delivery_form_input_text: textColor,
+    payment_bg: cardBg,
+    payment_card_bg: cardBg,
+    payment_text_color: textColor,
+    payment_accent_color: accentColor,
+    payment_border_color: borderColor,
+    place_order_bg: cardBg,
+    place_order_btn_bg: accentColor,
+    place_order_btn_text: "#ffffff",
+    place_order_text: textColor,
+    profile_dropdown_bg: cardBg,
+    profile_dropdown_text: textColor,
+    profile_dropdown_border: borderColor,
+    order_history_bg: primaryBg,
+    order_history_card_bg: cardBg,
+    order_history_text: textColor,
+    order_history_muted_text: mutedText,
+    order_history_border: borderColor,
+    order_history_accent_color: accentColor,
+    support_bg: primaryBg,
+    support_card_bg: cardBg,
+    support_chat_bg: cardBg,
+    support_surface_bg: cardBg,
+    support_text_color: textColor,
+    support_muted_text: mutedText,
+    support_accent_color: accentColor,
+    support_border_color: borderColor,
+    card_bg: cardBg,
+    card_bg_color: cardBg,
+    card_text_color: textColor,
+    product_name_color: textColor,
+    card_border_color: borderColor,
+    brand_color: accentColor,
+    price_color: getSafePriceColor(undefined, textColor, isDark),
+  };
+
   const updatedTheme: any = {
     ...baseDefaults,
+    ...componentBaselines,
     ...cleanPatchProps,
     mode,
     active_snapshot_id: snapshotId,

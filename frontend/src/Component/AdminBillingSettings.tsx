@@ -585,7 +585,7 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
           key: key_id,
           amount: amount,
           currency: currency || "INR",
-          name: "WebCreon AI",
+          name: "WebCreon",
           description: `${targetPlan} Plan Subscription (${billingInterval === "yearly" ? "1 Year" : billingInterval === "3months" ? "3 Months" : "30 days"})`,
           image: `${window.location.origin}/logo.png`,
           order_id: isMock ? undefined : razorpay_order_id,

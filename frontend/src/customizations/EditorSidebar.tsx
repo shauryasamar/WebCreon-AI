@@ -1312,7 +1312,7 @@ function CompactColorRow({
             width: "18px",
             height: "18px",
             borderRadius: "4px",
-            background: isTransparent ? "transparent" : (rawStr || placeholder || defaultFallbackHex),
+            backgroundColor: isTransparent ? "transparent" : (rawStr || placeholder || defaultFallbackHex),
             backgroundImage: isTransparent
               ? "linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)"
               : undefined,
@@ -1447,7 +1447,7 @@ function ModernColorPicker({
             width: "20px",
             height: "20px",
             borderRadius: "4px",
-            background: isTransparent ? "transparent" : (rawStr || placeholder || defaultFallbackHex),
+            backgroundColor: isTransparent ? "transparent" : (rawStr || placeholder || defaultFallbackHex),
             backgroundImage: isTransparent
               ? "linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)"
               : undefined,
@@ -2055,6 +2055,12 @@ const NumberStepperField = ({
         max={max}
         step={step}
         value={value}
+        draggable={false}
+        onDragStart={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
         onChange={(e) => {
           const next = clamp(Number(e.target.value));
           setInputValue(String(next));
@@ -2229,6 +2235,14 @@ function HeroSlidesEditor({
   };
 
   // Drag and Drop Reordering
+  const [canDragIdx, setCanDragIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    const handleGlobalMouseUp = () => setCanDragIdx(null);
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
+  }, []);
+
   const handleDragStart = (index: number) => {
     setDraggedIdx(index);
   };
@@ -2245,6 +2259,7 @@ function HeroSlidesEditor({
 
   const handleDragEnd = () => {
     setDraggedIdx(null);
+    setCanDragIdx(null);
   };
 
   return (
@@ -2421,8 +2436,16 @@ function HeroSlidesEditor({
             return (
               <div
                 key={slide.id || idx}
-                draggable
-                onDragStart={() => handleDragStart(idx)}
+                draggable={canDragIdx === idx}
+                onDragStart={(e) => {
+                  const isHandle = (e.target as HTMLElement)?.closest?.('[data-drag-handle="true"]');
+                  if (canDragIdx !== idx && !isHandle) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                  }
+                  handleDragStart(idx);
+                }}
                 onDragOver={(e) => handleDragOver(e, idx)}
                 onDragEnd={handleDragEnd}
                 style={{
@@ -2455,7 +2478,24 @@ function HeroSlidesEditor({
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "5px", minWidth: 0, flex: 1, overflow: "hidden" }}>
-                    <span style={{ cursor: "grab", fontSize: "10px", color: "#94a3b8", userSelect: "none", flexShrink: 0 }}>
+                    <span
+                      data-drag-handle="true"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setCanDragIdx(idx);
+                      }}
+                      onMouseUp={() => setCanDragIdx(null)}
+                      title="Click and drag dots to reorder"
+                      style={{
+                        cursor: "grab",
+                        fontSize: "12px",
+                        color: isDark ? "#94a3b8" : "#64748b",
+                        userSelect: "none",
+                        flexShrink: 0,
+                        padding: "1px 4px",
+                        borderRadius: "3px",
+                      }}
+                    >
                       ⋮⋮
                     </span>
                     <span style={{ fontSize: "9px", fontWeight: 700, padding: "1px 4px", borderRadius: "3px", background: isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0", color: isDark ? tokens.textSecondary : "#334155", flexShrink: 0 }}>
@@ -2491,7 +2531,15 @@ function HeroSlidesEditor({
 
                 {/* Accordion Body */}
                 {isExpanded && (
-                  <div style={{ padding: "6px 8px", borderTop: `1px solid ${tokens.border}`, display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box", background: isDark ? tokens.surfaceBg : "#ffffff" }}>
+                  <div
+                    draggable={false}
+                    onDragStart={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    style={{ padding: "6px 8px", borderTop: `1px solid ${tokens.border}`, display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box", background: isDark ? tokens.surfaceBg : "#ffffff" }}
+                  >
                     {/* Compact Sub-tabs */}
                     <div
                       style={{
@@ -2872,8 +2920,11 @@ function HeroSlidesEditor({
 
                         <CompactColorRow
                           label="Accent / CTA Color"
-                          value={slide.hero_accent || slide.accent_color || siteDefinition.theme?.accent_color || "#2563eb"}
-                          onChange={(val) => handleSlideChange(idx, "hero_accent", val)}
+                          value={slide.primary_cta?.button_bg || slide.hero_accent || slide.accent_color || siteDefinition.theme?.accent_color || "#2563eb"}
+                          onChange={(val) => {
+                            handleSlideChange(idx, "hero_accent", val);
+                            handleSlideChange(idx, "primary_cta.button_bg", val);
+                          }}
                         />
 
                         {/* Festive Motif Position & Opacity (when festival theme is enabled) */}
@@ -3100,6 +3151,24 @@ function HeroSlidesEditor({
                                   { label: "Glass", value: "glass" },
                                 ]}
                               />
+                              {primaryStyle !== "glass" && (
+                                <div style={{ marginTop: "3px" }}>
+                                  <CompactColorRow
+                                    label="Button Color"
+                                    value={
+                                      slide.primary_cta?.button_bg ||
+                                      slide.hero_accent ||
+                                      slide.accent_color ||
+                                      siteDefinition.theme?.accent_color ||
+                                      "#2563eb"
+                                    }
+                                    onChange={(val) => {
+                                      handleSlideChange(idx, "primary_cta.button_bg", val);
+                                      handleSlideChange(idx, "hero_accent", val);
+                                    }}
+                                  />
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -4736,13 +4805,6 @@ function FooterEditor({
   const showTagline = getVal("show_tagline", true) !== false;
   const showCopyright = getVal("show_copyright", true) !== false;
 
-  // Newsletter
-  const showNewsletter = getVal("show_newsletter", true) !== false;
-  const newsletterTitle = getVal("newsletter_title", "Subscribe to Our Newsletter");
-  const newsletterSubtitle = getVal("newsletter_subtitle", "Get weekly updates on new arrivals, special promotions and deals.");
-  const newsletterPlaceholder = getVal("newsletter_placeholder", "Enter your email...");
-  const newsletterButtonText = getVal("newsletter_button_text", "Join");
-
   // Social Links
   const showSocialLinks = getVal("show_social_links", true) !== false;
   const socialIconVariant = getVal("social_icon_variant", "pill");
@@ -4994,7 +5056,7 @@ function FooterEditor({
         </div>
       )}
 
-      {/* ── 2. Content Tab (Brand, Tagline, Copyright & Newsletter) ─────────── */}
+      {/* ── 2. Content Tab (Brand, Tagline & Copyright) ─────────── */}
       {activeTab === "content" && (
         <div style={{ display: "grid", gap: "8px" }}>
           {/* Brand Identity & Copy */}
@@ -5064,72 +5126,6 @@ function FooterEditor({
                   />
                 </div>
               </div>
-            </div>
-          </section>
-
-          {/* Newsletter Subscription */}
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Newsletter Subscription
-            </div>
-            <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Show Newsletter Form</label>
-                <SegmentedRow
-                  value={showNewsletter ? "on" : "off"}
-                  onChange={(v) => updateProps({ show_newsletter: v === "on" })}
-                  options={[{ label: "On", value: "on" }, { label: "Off", value: "off" }]}
-                />
-              </div>
-
-              {showNewsletter && (
-                <>
-                  <div style={{ display: "grid", gap: "2px" }}>
-                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Heading</label>
-                    <input
-                      type="text"
-                      value={newsletterTitle}
-                      placeholder="Subscribe to Our Newsletter"
-                      onChange={(e) => updateProps({ newsletter_title: e.target.value })}
-                      style={sharedInputStyle(!isDark)}
-                    />
-                  </div>
-
-                  <div style={{ display: "grid", gap: "2px" }}>
-                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Subtitle</label>
-                    <input
-                      type="text"
-                      value={newsletterSubtitle}
-                      placeholder="Get weekly updates..."
-                      onChange={(e) => updateProps({ newsletter_subtitle: e.target.value })}
-                      style={sharedInputStyle(!isDark)}
-                    />
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                    <div style={{ display: "grid", gap: "2px" }}>
-                      <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Placeholder</label>
-                      <input
-                        type="text"
-                        value={newsletterPlaceholder}
-                        placeholder="Enter email..."
-                        onChange={(e) => updateProps({ newsletter_placeholder: e.target.value })}
-                        style={sharedInputStyle(!isDark)}
-                      />
-                    </div>
-                    <div style={{ display: "grid", gap: "2px" }}>
-                      <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Button Text</label>
-                      <input
-                        type="text"
-                        value={newsletterButtonText}
-                        placeholder="Join"
-                        onChange={(e) => updateProps({ newsletter_button_text: e.target.value })}
-                        style={sharedInputStyle(!isDark)}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
           </section>
         </div>
@@ -5203,6 +5199,27 @@ function CartEditor({
 
   const updateProps = (patch: Record<string, any>) => {
     const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+
+    // Mirror cart block colors to nextDef.theme so saveThemeSnapshot and theme persistence keep them
+    if (patch.background_color || patch.cart_bg) {
+      nextDef.theme = { ...(nextDef.theme || {}), cart_bg: patch.cart_bg || patch.background_color };
+    }
+    if (patch.panel_color || patch.cart_panel_bg) {
+      nextDef.theme = { ...(nextDef.theme || {}), cart_panel_bg: patch.cart_panel_bg || patch.panel_color };
+    }
+    if (patch.card_color || patch.cart_card_bg) {
+      nextDef.theme = { ...(nextDef.theme || {}), cart_card_bg: patch.cart_card_bg || patch.card_color };
+    }
+    if (patch.text_color || patch.cart_text_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), cart_text_color: patch.cart_text_color || patch.text_color };
+    }
+    if (patch.accent_color || patch.cart_accent_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), cart_accent_color: patch.cart_accent_color || patch.accent_color };
+    }
+    if (patch.border_color || patch.cart_border_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), cart_border_color: patch.cart_border_color || patch.border_color };
+    }
+
     const cartTypes = new Set([
       "cart",
       "cart_view",

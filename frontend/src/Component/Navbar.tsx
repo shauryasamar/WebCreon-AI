@@ -1616,6 +1616,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const resolvedProfileDropdownBg =
     (theme as any)?.profile_dropdown_bg ||
+    (theme as any)?.profile?.dropdown_bg ||
+    (theme as any)?.profile?.profile_dropdown_bg ||
     theme?.dialog_bg ||
     theme?.surface_bg ||
     (isSiteThemeDark ? (theme?.card_bg || "#0f172a") : "#ffffff");
@@ -1630,6 +1632,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const resolvedDialogBg = resolvedProfileDropdownBg;
 
+  const resolvedProfileDropdownBorder =
+    (theme as any)?.profile_dropdown_border ||
+    (theme as any)?.profile?.dropdown_border ||
+    (theme as any)?.profile?.profile_dropdown_border ||
+    (theme as any)?.border_color ||
+    (isSiteThemeDark ? "rgba(255,255,255,0.12)" : "#e2e8f0");
+
   const resolvedDialogBorder =
     (theme as any)?.notification_border_color ||
     (theme as any)?.border_color ||
@@ -1637,11 +1646,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const isDialogDark = isColorDarkHex(resolvedProfileDropdownBg);
   const dropdownBg = resolvedProfileDropdownBg;
-  const dropdownBorderColor = resolvedDialogBorder;
+  const dropdownBorderColor = resolvedProfileDropdownBorder;
 
   const isDropdownLight = !isDialogDark;
   const dropdownTextColor =
     (theme as any)?.profile_dropdown_text ||
+    (theme as any)?.profile?.dropdown_text ||
+    (theme as any)?.profile?.profile_dropdown_text ||
     (isDropdownLight ? "#0f172a" : "#ffffff");
   const dropdownMutedText = isDropdownLight ? "#64748b" : "rgba(255,255,255,0.7)";
   const dropdownIconBg = isDropdownLight ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)";

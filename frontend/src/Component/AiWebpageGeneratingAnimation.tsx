@@ -99,7 +99,7 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
         style={{
           height: "2.5px",
           width: "100%",
-          background: "linear-gradient(90deg, #2563eb, #ec4899, #10b981, #2563eb)",
+          backgroundImage: "linear-gradient(90deg, #2563eb, #ec4899, #10b981, #2563eb)",
           backgroundSize: "200% 100%",
           animation: "aiLaserShimmer 2s linear infinite",
         }}
@@ -135,7 +135,7 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
       >
         <div style={{ display: "flex", alignItems: "center" }}>
           <span style={{ fontSize: "11px", color: subtextColor, fontWeight: 600 }}>
-            WebCreon AI Engine
+            WebCreon Engine
           </span>
         </div>
 

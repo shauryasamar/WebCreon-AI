@@ -291,7 +291,7 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
     id: "footer-glassmorphism",
     category: "footer",
     title: "Glassmorphic Footer",
-    description: "Translucent frosted bottom bar with backdrop blur and newsletter field.",
+    description: "Translucent frosted bottom bar with backdrop blur and quick link navigation.",
     tag: "Frosted Glass",
     targetType: "footer",
     patch: {
@@ -330,7 +330,7 @@ export const COMPONENT_ASSETS: ComponentAsset[] = [
     id: "footer-neo-modern",
     category: "footer",
     title: "Neo Modern Footer",
-    description: "Soft tactile neumorphic footer with rounded subscription bar.",
+    description: "Soft tactile neumorphic footer with sculpted link buttons.",
     tag: "Neumorphic",
     targetType: "footer",
     patch: {

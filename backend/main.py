@@ -1741,6 +1741,7 @@ def get_public_site_theme_fast(
         "site_name": brand_name,
         "logo": logo_val,
         "theme": site_theme,
+        "profile_props": effective_def.get("profile_props") or site_def.get("profile_props") or draft_def.get("profile_props") or site_theme.get("profile") or {},
         "crm_enabled": bool(site_def.get("crm_enabled", draft_def.get("crm_enabled", True))),
         "navbar": {
             "brandName": site_def.get("navbar", {}).get("brandName") or site_def.get("header", {}).get("brandName") or brand_name,

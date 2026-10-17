@@ -709,7 +709,7 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
                     WebkitTextFillColor: "transparent",
                   }}
                 >
-                  WebCreon AI
+                  WebCreon
                 </span>
               </a>
             </div>

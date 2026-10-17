@@ -219,7 +219,7 @@ export const SupportAgentLoginPage: React.FC = () => {
         </form>
 
         <div style={{ marginTop: "24px", textAlign: "center", fontSize: "12px", color: "#94a3b8" }}>
-          Protected Customer Support Portal · WebCreon AI
+          Protected Customer Support Portal · WebCreon
         </div>
       </div>
     </div>

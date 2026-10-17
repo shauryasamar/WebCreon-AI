@@ -110,15 +110,57 @@ function getErrorMessage(data: any, fallback: string) {
   return fallback;
 }
 
+function evictBulkyLocalStorageCaches() {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      // Do NOT remove customer auth tokens or essential credentials
+      if (
+        key.startsWith("wc_customer_token_") ||
+        key.startsWith("wc_admin_token") ||
+        key === "admin_user_session"
+      ) {
+        continue;
+      }
+      // Target bulky snapshot / theme / chat / orders caches that fill the 5MB browser quota
+      if (
+        key.startsWith("wc_site_snapshot_") ||
+        key.startsWith("webnirmaan_copilot_chat_") ||
+        key.startsWith("webnirmaan_saved_themes_") ||
+        key.startsWith("wc_published_site_def_") ||
+        key.startsWith("wc_admin_products_") ||
+        key.startsWith("wc_admin_orders_") ||
+        key.startsWith("wc_customer_orders_")
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => {
+      try {
+        localStorage.removeItem(k);
+      } catch {}
+    });
+  } catch {}
+}
+
 function getTenantToken(websiteName?: string): string | null {
   if (typeof window === "undefined" || !websiteName) return null;
   const clean = websiteName.trim().toLowerCase();
   const base = clean.split("-")[0];
-  return (
-    localStorage.getItem(`wc_customer_token_${clean}`) ||
-    localStorage.getItem(`wc_customer_token_${base}`) ||
-    null
-  );
+  try {
+    return (
+      localStorage.getItem(`wc_customer_token_${clean}`) ||
+      localStorage.getItem(`wc_customer_token_${base}`) ||
+      sessionStorage.getItem(`wc_customer_token_${clean}`) ||
+      sessionStorage.getItem(`wc_customer_token_${base}`) ||
+      null
+    );
+  } catch {
+    return null;
+  }
 }
 
 function setTenantToken(websiteName: string, token: string, siteId?: string, siteSlug?: string) {
@@ -138,7 +180,21 @@ function setTenantToken(websiteName: string, token: string, siteId?: string, sit
     keys.add(cleanSlug.split("-")[0]);
   }
   keys.forEach((k) => {
-    if (k) localStorage.setItem(`wc_customer_token_${k}`, token);
+    if (!k) return;
+    try {
+      localStorage.setItem(`wc_customer_token_${k}`, token);
+    } catch {
+      // Quota exceeded: evict non-essential bulky caches and retry
+      try {
+        evictBulkyLocalStorageCaches();
+        localStorage.setItem(`wc_customer_token_${k}`, token);
+      } catch {
+        // Fallback to sessionStorage so login never crashes or fails
+        try {
+          sessionStorage.setItem(`wc_customer_token_${k}`, token);
+        } catch {}
+      }
+    }
   });
   try {
     window.dispatchEvent(
@@ -167,9 +223,16 @@ function clearTenantToken(websiteName?: string, siteId?: string, siteSlug?: stri
   }
   keys.forEach((k) => {
     if (k) {
-      localStorage.removeItem(`wc_customer_token_${k}`);
-      localStorage.removeItem(`wc_customer_orders_${k}`);
-      localStorage.removeItem(`guest_cart:${k}`);
+      try {
+        localStorage.removeItem(`wc_customer_token_${k}`);
+      } catch {}
+      try {
+        sessionStorage.removeItem(`wc_customer_token_${k}`);
+      } catch {}
+      try {
+        localStorage.removeItem(`wc_customer_orders_${k}`);
+        localStorage.removeItem(`guest_cart:${k}`);
+      } catch {}
     }
   });
   try {

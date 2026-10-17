@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useCart, Product, isProductPreorderActive } from "../CartContext";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
-import { resolveThemeTokens, isColorDarkHex } from "../context/ThemeContext";
+import { resolveThemeTokens, isColorDarkHex, getAccessibleBrandColor, getSafePriceColor } from "../context/ThemeContext";
 import { useDeviceMode } from "../context/DeviceModeContext";
 
 export interface ProductCarouselFilterRules {
@@ -365,14 +365,24 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
 
   const pageText = productCardTitleColor;
 
-  let mutedText = original_price_color;
+  let mutedText = original_price_color || (theme as any)?.original_price_color || (theme as any)?.muted_text_color;
   if (!mutedText || (isCardDark && isColorDarkHex(mutedText)) || (!isCardDark && !isColorDarkHex(mutedText))) {
     mutedText = isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)";
   }
 
-  let faintText = brand_color;
+  const resolvedBrandCandidate =
+    brand_color ||
+    (theme as any)?.brand_color ||
+    (theme as any)?.card_brand_color ||
+    (theme as any)?.brandNameColor ||
+    (theme as any)?.accent_color ||
+    resolvedAccentColor;
+
+  const activeBrandColor = getAccessibleBrandColor(resolvedBrandCandidate, cardBg, isCardDark);
+
+  let faintText = activeBrandColor || (theme as any)?.muted_text_color || (theme as any)?.muted_text || defaultMutedText;
   if (!faintText || (isCardDark && isColorDarkHex(faintText)) || (!isCardDark && !isColorDarkHex(faintText))) {
-    faintText = isCardDark ? "rgba(248, 250, 252, 0.50)" : "rgba(15, 23, 42, 0.45)";
+    faintText = isCardDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.60)";
   }
 
   const starColor = rating_star_color || "#d97706";
@@ -595,15 +605,29 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
           ? firstVariant.price
           : product.price;
 
+      const rawComparePrice =
+        (firstVariant as any)?.comparePrice != null
+          ? Number((firstVariant as any).comparePrice)
+          : (firstVariant as any)?.compare_price != null
+          ? Number((firstVariant as any).compare_price)
+          : (firstVariant as any)?.original_price != null
+          ? Number((firstVariant as any).original_price)
+          : (firstVariant as any)?.originalPrice != null
+          ? Number((firstVariant as any).originalPrice)
+          : (product as any)?.compare_price != null
+          ? Number((product as any).compare_price)
+          : (product as any)?.comparePrice != null
+          ? Number((product as any).comparePrice)
+          : (product as any)?.original_price != null
+          ? Number((product as any).original_price)
+          : (product as any)?.originalPrice != null
+          ? Number((product as any).originalPrice)
+          : null;
+
       const normalizedOriginalPrice =
-        typeof (firstVariant as any)?.comparePrice === "number" &&
-          (firstVariant as any).comparePrice > normalizedDisplayPrice
-          ? (firstVariant as any).comparePrice
-          : typeof product.originalPrice === "number" && product.originalPrice > normalizedDisplayPrice
-            ? product.originalPrice
-            : typeof product.compare_price === "number" && product.compare_price > normalizedDisplayPrice
-              ? product.compare_price
-              : undefined;
+        rawComparePrice != null && !isNaN(rawComparePrice) && rawComparePrice > normalizedDisplayPrice
+          ? rawComparePrice
+          : undefined;
 
       const variantList: any[] = product.variant_option?.optionValues || (product as any).variants || [];
       const hasVariants = Array.isArray(variantList) && variantList.length > 0;
@@ -682,7 +706,16 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
 
   const resolvedImageFit = image_fit || "cover";
   const resolvedImageBg = image_bg || (isLight ? "#f8fafc" : "rgba(255,255,255,0.04)");
-  const activePriceColor = price_color || pageText;
+  const rawPriceCandidate =
+    price_color ||
+    (theme as any)?.price_color ||
+    (theme as any)?.card_price_color;
+
+  let activePriceColor = getSafePriceColor(rawPriceCandidate, pageText, isCardDark, cardBg);
+  // Selling price should NEVER be red, and should NOT be the exact same color as the brand label
+  if (activePriceColor && activeBrandColor && activePriceColor.toLowerCase() === activeBrandColor.toLowerCase()) {
+    activePriceColor = pageText;
+  }
 
   // Exact Card Renderer with Uniform Proportional Scaling (Width & Height scale together)
   const renderSingleProductCard = (
@@ -1048,7 +1081,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 style={{
                   fontSize: scalePx(9.5, 8),
                   fontWeight: 600,
-                  color: brand_color || faintText,
+                  color: activeBrandColor,
                   textTransform: "uppercase",
                   letterSpacing: "0.08em",
                   lineHeight: 1.2,
@@ -1083,10 +1116,23 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 paddingTop: scalePx(1, 1),
               }}
             >
-              <div style={{ display: "flex", alignItems: "baseline" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: scalePx(5, 3), flexWrap: "wrap" }}>
                 <span style={{ fontSize: scalePx(15.5, 13), fontWeight: 800, color: activePriceColor }}>
                   ₹{product.normalizedDisplayPrice}
                 </span>
+                {showOriginal && (
+                  <span
+                    style={{
+                      fontSize: scalePx(11.5, 9.5),
+                      color: mutedText,
+                      textDecoration: "line-through",
+                      fontWeight: 500,
+                      opacity: 0.82,
+                    }}
+                  >
+                    ₹{product.normalizedOriginalPrice}
+                  </span>
+                )}
               </div>
               {show_ratings && (
                 <div
@@ -1186,11 +1232,11 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 style={{
                   fontSize: scalePx(9.5, 8),
                   fontWeight: 600,
-                  color: brand_color || faintText,
+                  color: activeBrandColor,
                   textTransform: "uppercase",
                   letterSpacing: "0.08em",
                   lineHeight: 1.2,
-                  borderBottom: `1px solid ${brand_color || faintText}`,
+                  borderBottom: `1px solid ${activeBrandColor}`,
                   paddingBottom: "1px",
                   display: "inline-block",
                   alignSelf: "flex-start",
@@ -1225,10 +1271,23 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 paddingTop: scalePx(1, 1),
               }}
             >
-              <div style={{ display: "flex", alignItems: "baseline" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: scalePx(5, 3), flexWrap: "wrap" }}>
                 <span style={{ fontSize: scalePx(15.5, 13), fontWeight: 800, color: activePriceColor }}>
                   ₹{product.normalizedDisplayPrice}
                 </span>
+                {showOriginal && (
+                  <span
+                    style={{
+                      fontSize: scalePx(11.5, 9.5),
+                      color: mutedText,
+                      textDecoration: "line-through",
+                      fontWeight: 500,
+                      opacity: 0.82,
+                    }}
+                  >
+                    ₹{product.normalizedOriginalPrice}
+                  </span>
+                )}
               </div>
               {show_ratings && (
                 <div
@@ -1358,7 +1417,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 style={{
                   fontSize: scalePx(9.5, 8),
                   fontWeight: 600,
-                  color: brand_color || faintText,
+                  color: activeBrandColor,
                   textTransform: "uppercase",
                   letterSpacing: "0.12em",
                   lineHeight: 1.2,
@@ -1522,7 +1581,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                   style={{
                     fontSize: scalePx(9.5, 7.5),
                     fontWeight: 600,
-                    color: brand_color || faintText,
+                    color: activeBrandColor,
                     textTransform: "uppercase",
                     letterSpacing: "0.08em",
                     lineHeight: 1.2,
@@ -1612,10 +1671,23 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 minWidth: 0,
               }}
             >
-              <div style={{ display: "flex", alignItems: "baseline", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: scalePx(4, 3), flexShrink: 0 }}>
                 <span style={{ fontSize: scalePx(15.5, 12.5), fontWeight: 800, color: activePriceColor }}>
                   ₹{product.normalizedDisplayPrice}
                 </span>
+                {showOriginal && (
+                  <span
+                    style={{
+                      fontSize: scalePx(11, 9),
+                      color: mutedText,
+                      textDecoration: "line-through",
+                      fontWeight: 500,
+                      opacity: 0.82,
+                    }}
+                  >
+                    ₹{product.normalizedOriginalPrice}
+                  </span>
+                )}
               </div>
               {show_ratings && (
                 <div
@@ -1703,7 +1775,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: scalePx(2, 1.5), padding: `${scalePx(4, 2)} ${scalePx(4, 2)} ${scalePx(2, 1)}`, flex: 1 }}>
           {show_brand_name && (
-            <span style={{ fontSize: scalePx(9.5, 8), fontWeight: 600, color: brand_color || faintText, textTransform: "uppercase", letterSpacing: "0.08em", lineHeight: 1.2 }}>
+            <span style={{ fontSize: scalePx(9.5, 8), fontWeight: 600, color: activeBrandColor, textTransform: "uppercase", letterSpacing: "0.08em", lineHeight: 1.2 }}>
               {brandText}
             </span>
           )}
@@ -1727,8 +1799,21 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
           </h3>
           <div style={{ borderTop: "1px solid rgba(148,163,184,0.15)", margin: "2px 0" }} />
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: scalePx(1, 1) }}>
-            <div style={{ display: "flex", alignItems: "baseline" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: scalePx(5, 3), flexWrap: "wrap" }}>
               <span style={{ fontSize: scalePx(15.5, 12.5), fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
+              {showOriginal && (
+                <span
+                  style={{
+                    fontSize: scalePx(11.5, 9.5),
+                    color: mutedText,
+                    textDecoration: "line-through",
+                    fontWeight: 500,
+                    opacity: 0.82,
+                  }}
+                >
+                  ₹{product.normalizedOriginalPrice}
+                </span>
+              )}
             </div>
             {show_ratings && (
               <div style={{ fontSize: scalePx(10.5, 8.5), fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>

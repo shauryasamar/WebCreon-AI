@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL as API_BASE } from "../config/api";
 import GlassToast from "./GlassToast";
@@ -1437,7 +1437,7 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
               left: 0,
               right: 0,
               height: "2.5px",
-              background: "linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #2563eb 100%)",
+              backgroundImage: "linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #2563eb 100%)",
               backgroundSize: "200% 100%",
               animation: "storeShimmer 1.2s infinite linear",
               zIndex: 20,

@@ -1315,33 +1315,28 @@ export default function BuilderDrawerPanel({
             const currentProps = block.props ?? {};
             const isProductBlock = targetType === "product_grid" || blockType.includes("product") || blockType === "product_grid" || blockType === "product_carousel";
 
-            // If applying a product card preset, clean out all stale manual style overrides so the new preset applies freshly
+            // If applying a product card preset, clean out all stale manual layout/geometry overrides so the new preset applies freshly, but PRESERVE all theme colors!
             let baseProps = { ...currentProps };
             if (isProductBlock && (mergedPatch.card_style || mergedPatch.cardStyle)) {
               delete baseProps.image_aspect_ratio;
               delete baseProps.image_radius;
               delete baseProps.image_corner_radius;
               delete baseProps.card_radius;
-              delete baseProps.card_bg_color;
-              delete baseProps.card_border_color;
               delete baseProps.card_shadow;
               delete baseProps.card_width;
               delete baseProps.padding_y;
               delete baseProps.padding_x;
               delete baseProps.gap;
               delete baseProps.grid_gap;
-              delete baseProps.price_color;
-              delete baseProps.original_price_color;
-              delete baseProps.rating_star_color;
               delete baseProps.product_name_font_size;
               delete baseProps.product_name_font_weight;
               delete baseProps.product_name_font_family;
               delete baseProps.product_name_font_style;
-              delete baseProps.product_name_color;
               delete baseProps.product_title_font_size;
               delete baseProps.product_title_font_weight;
               delete baseProps.product_title_font_family;
-              delete baseProps.product_title_color;
+              // Preserve card_bg_color, card_border_color, price_color, original_price_color,
+              // brand_color, product_name_color, product_title_color, and rating_star_color
             }
 
             const patchToApply = { ...mergedPatch };
@@ -1642,7 +1637,7 @@ export default function BuilderDrawerPanel({
                   style={{
                     height: "54px",
                     borderRadius: "10px",
-                    background: isDark
+                    backgroundImage: isDark
                       ? "linear-gradient(90deg, #21262d 25%, #30363d 50%, #21262d 75%)"
                       : "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)",
                     backgroundSize: "200% 100%",

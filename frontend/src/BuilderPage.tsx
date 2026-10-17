@@ -239,11 +239,6 @@ function getFooterEditorProps(siteDefinition: SiteDefinition) {
     show_brand: f.show_brand !== false,
     show_tagline: f.show_tagline !== false,
     show_copyright: f.show_copyright !== false,
-    show_newsletter: f.show_newsletter !== false,
-    newsletter_title: f.newsletter_title || "Subscribe to Our Newsletter",
-    newsletter_subtitle: f.newsletter_subtitle || "",
-    newsletter_placeholder: f.newsletter_placeholder || "Enter your email...",
-    newsletter_button_text: f.newsletter_button_text || "Join",
     show_social_links: f.show_social_links !== false,
     social_links: Array.isArray(f.social_links) && f.social_links.length > 0
       ? f.social_links
@@ -2580,16 +2575,44 @@ function BuilderPageContent() {
   const cartPage = useMemo(() => {
     if (!activeSiteDefinition || !Array.isArray(activeSiteDefinition.pages)) return null;
     const exact = activeSiteDefinition.pages.find(
-      (p) => p.route === "/cart" || p.route === "cart" || p.role === "cart"
+      (p) => p.route === "/cart" || p.route === "cart" || p.role === "cart" || p.id === "cart" || p.id === "page-cart"
     );
-    if (exact) return exact;
+    const theme = activeSiteDefinition?.theme || {};
+    const cartThemeProps: Record<string, any> = {};
+    if (theme.cart_bg) cartThemeProps.background_color = theme.cart_bg;
+    else if (theme.primary_bg) cartThemeProps.background_color = theme.primary_bg;
+
+    if (theme.cart_panel_bg) cartThemeProps.panel_color = theme.cart_panel_bg;
+    else if (theme.card_bg) cartThemeProps.panel_color = theme.card_bg;
+
+    if (theme.cart_card_bg) cartThemeProps.card_color = theme.cart_card_bg;
+    else if (theme.card_bg) cartThemeProps.card_color = theme.card_bg;
+
+    if (theme.cart_text_color) cartThemeProps.text_color = theme.cart_text_color;
+    else if (theme.text_color) cartThemeProps.text_color = theme.text_color;
+
+    if (theme.cart_accent_color) cartThemeProps.accent_color = theme.cart_accent_color;
+    else if (theme.accent_color) cartThemeProps.accent_color = theme.accent_color;
+
+    if (theme.cart_border_color) cartThemeProps.border_color = theme.cart_border_color;
+    else if (theme.navbar_border_color || theme.card_border_color) cartThemeProps.border_color = theme.cart_border_color || theme.navbar_border_color || theme.card_border_color;
+
+    if (exact) {
+      return {
+        ...exact,
+        blocks: (exact.blocks || []).map((b) => ({
+          ...b,
+          props: { ...cartThemeProps, ...(b.props || {}) },
+        })),
+      };
+    }
     return {
       id: "fallback-cart-page",
       name: "Cart",
       route: "/cart",
       show_in_nav: false,
       blocks: [
-        { id: "cart_view", type: "cart_view", props: {} },
+        { id: "cart_view", type: "cart_view", props: cartThemeProps },
       ],
     } as Page;
   }, [activeSiteDefinition]);
@@ -2616,20 +2639,31 @@ function BuilderPageContent() {
           type !== "footer"
         );
       });
+      const profileProps = {
+        ...(activeSiteDefinition?.profile_props || {}),
+        ...(activeSiteDefinition?.theme?.profile || {}),
+      };
       return {
         ...exact,
-        blocks: cleanBlocks.length > 0 ? cleanBlocks : [
-          { id: "profile_details", type: "profile_details", props: {} },
+        blocks: cleanBlocks.length > 0 ? cleanBlocks.map((b) => ({
+          ...b,
+          props: { ...(b.props || {}), ...profileProps },
+        })) : [
+          { id: "profile_details", type: "profile_details", props: profileProps },
         ],
       };
     }
+    const profileProps = {
+      ...(activeSiteDefinition?.profile_props || {}),
+      ...(activeSiteDefinition?.theme?.profile || {}),
+    };
     return {
       id: "fallback-profile-page",
       name: "Customer Profile",
       route: "/profile",
       show_in_nav: false,
       blocks: [
-        { id: "profile_details", type: "profile_details", props: {} },
+        { id: "profile_details", type: "profile_details", props: profileProps },
       ],
     } as Page;
   }, [activeSiteDefinition]);

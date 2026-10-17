@@ -495,7 +495,7 @@ function AboutWebCreonContent() {
     <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
       <div style={{ borderBottom: "1px solid #e2e8f0", paddingBottom: "12px" }}>
         <h1 style={{ margin: "0 0 4px 0", fontSize: "22px", fontWeight: 800, color: "#0f172a" }}>
-          About WebCreon AI
+          About WebCreon
         </h1>
         <div style={{ fontSize: "12px", color: "#64748b" }}>
           Autonomous Storefront & Website Creation Engine &bull; Version 2.4.0

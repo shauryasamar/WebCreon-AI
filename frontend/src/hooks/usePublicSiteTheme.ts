@@ -155,6 +155,7 @@ export function usePublicSiteTheme(slug?: string) {
               logoUrl: tData?.logo || tData?.navbar?.logoUrl,
             },
             theme: tData?.theme || {},
+            profile_props: tData?.profile_props || tData?.theme?.profile || {},
           };
         } else {
           // 2. Fallback to full site endpoint if needed
@@ -196,6 +197,7 @@ export function usePublicSiteTheme(slug?: string) {
               logoUrl: extractedLogo,
             },
             theme: themeObj,
+            profile_props: def.profile_props || themeObj?.profile || {},
           };
         }
 

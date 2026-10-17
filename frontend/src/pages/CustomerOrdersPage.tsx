@@ -3909,11 +3909,11 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ height: "18px", width: "160px", borderRadius: "6px", background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                  <div style={{ height: "18px", width: "160px", borderRadius: "6px", backgroundImage: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
                   <div style={{ height: "24px", width: "80px", borderRadius: "999px", background: "#f1f5f9" }} />
                 </div>
                 <div style={{ height: "14px", width: "100px", borderRadius: "4px", background: "#f1f5f9" }} />
-                <div style={{ height: "40px", width: "100%", borderRadius: "8px", background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
+                <div style={{ height: "40px", width: "100%", borderRadius: "8px", backgroundImage: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "storeShimmer 1.4s infinite" }} />
               </div>
             ))}
           </div>
