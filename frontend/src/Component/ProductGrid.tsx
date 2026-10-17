@@ -363,33 +363,30 @@ const ProductGrid: React.FC<ProductGridProps> = ({
 
   const resolvedAccentColor = accent_color || (theme as any)?.accent_color || accentColor || "#3b82f6";
 
-  const preferredTextColor =
+  const rawPreferredTextColor =
     product_name_color ||
     product_title_color ||
     title_color ||
     (theme as any)?.product_name_color ||
     (theme as any)?.card_text_color;
 
-  const pageText =
-    preferredTextColor ||
-    defaultTextColor ||
-    (isCardDark ? "#ffffff" : "#0f172a");
+  // Zero-Camouflage Contrast Guardrail: Guarantee text is always readable
+  let pageText = rawPreferredTextColor || defaultTextColor || (isCardDark ? "#ffffff" : "#0f172a");
+  if (isCardDark && isColorDarkHex(pageText)) {
+    pageText = "#ffffff";
+  } else if (!isCardDark && !isColorDarkHex(pageText)) {
+    pageText = "#0f172a";
+  }
 
-  const mutedText =
-    original_price_color ||
-    (defaultMutedText && isColorDarkHex(defaultMutedText) !== isCardDark
-      ? defaultMutedText
-      : isCardDark
-        ? "rgba(248, 250, 252, 0.72)"
-        : "rgba(15, 23, 42, 0.65)");
+  let mutedText = original_price_color;
+  if (!mutedText || (isCardDark && isColorDarkHex(mutedText)) || (!isCardDark && !isColorDarkHex(mutedText))) {
+    mutedText = isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)";
+  }
 
-  const faintText =
-    brand_color ||
-    (defaultFaintText && isColorDarkHex(defaultFaintText) !== isCardDark
-      ? defaultFaintText
-      : isCardDark
-        ? "rgba(248, 250, 252, 0.50)"
-        : "rgba(15, 23, 42, 0.45)");
+  let faintText = brand_color;
+  if (!faintText || (isCardDark && isColorDarkHex(faintText)) || (!isCardDark && !isColorDarkHex(faintText))) {
+    faintText = isCardDark ? "rgba(248, 250, 252, 0.50)" : "rgba(15, 23, 42, 0.45)";
+  }
   const starColor = rating_star_color || "#d97706";
 
   const subtleBorder = `1px solid ${resolvedBorderColor}`;

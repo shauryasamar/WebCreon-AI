@@ -1021,15 +1021,7 @@ async def copilot_chat_endpoint(
         ai_call_fn=_run_copilot,
     )
 
-    if result.get("design_modified") and result.get("updated_draft_definition"):
-        try:
-            site_obj = session.get(Site, site_uuid)
-            if site_obj:
-                site_obj.draft_definition = result["updated_draft_definition"]
-                session.add(site_obj)
-                session.commit()
-        except Exception as dde:
-            print("Failed to auto-save copilot draft:", dde)
+    # Design updates stay client-side in the frontend draft until the user explicitly saves a snapshot or publishes
 
     complete_operation(
         operation_id=req.operation_id or str(uuid4()),
@@ -1111,16 +1103,7 @@ async def copilot_chat_stream_endpoint(
                     reply_txt = str(event.get("assistant_reply", ""))
                     if reply_txt:
                         total_output_chars = max(total_output_chars, len(reply_txt))
-                    if event.get("design_modified") and event.get("updated_draft_definition"):
-                        try:
-                            with Session(engine) as db_draft_sess:
-                                site_obj = db_draft_sess.get(Site, site_uuid)
-                                if site_obj:
-                                    site_obj.draft_definition = event["updated_draft_definition"]
-                                    db_draft_sess.add(site_obj)
-                                    db_draft_sess.commit()
-                        except Exception as dde:
-                            print("Failed to auto-save copilot stream draft:", dde)
+                    # Design updates stay client-side in the frontend draft until user saves snapshot or publishes
                 yield f"data: {json.dumps(event)}\n\n"
 
             # Commit token credit deduction at end of stream

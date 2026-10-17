@@ -142,6 +142,20 @@ function toFullAppPath(appBase: string, route?: string | null) {
   return normalized ? `${appBase}/${normalized}` : appBase;
 }
 
+function canonicalJson(obj: any): string {
+  if (obj === null || obj === undefined || typeof obj !== "object") {
+    return JSON.stringify(obj);
+  }
+  if (Array.isArray(obj)) {
+    return `[${obj.map(canonicalJson).join(",")}]`;
+  }
+  const keys = Object.keys(obj).sort();
+  const filteredKeys = keys.filter(
+    (k) => !["id", "site_id", "slug", "saved_themes", "created_at", "updated_at", "version"].includes(k)
+  );
+  return `{${filteredKeys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(",")}}`;
+}
+
 
 function isProductDetailBlockType(type: string) {
   return [
@@ -1236,6 +1250,20 @@ function BuilderPageContent() {
   const [adminAuthenticated, setAdminAuthenticated] = useState(!!authAdmin);
   const [deviceMode, setDeviceMode] = useState<"desktop" | "mobile">("desktop");
 
+  // Undo / Redo / Revert History System
+  const [undoStack, setUndoStack] = useState<SiteDefinition[]>([]);
+  const [redoStack, setRedoStack] = useState<SiteDefinition[]>([]);
+  const lastHistoryPushTimeRef = useRef<number>(0);
+  const baselineSiteDefinitionRef = useRef<SiteDefinition | null>(null);
+  const [historyActionToast, setHistoryActionToast] = useState<string | null>(null);
+
+  // Set baseline definition once site loads
+  useEffect(() => {
+    if ((publishedSiteDefinition || siteDefinition) && !baselineSiteDefinitionRef.current) {
+      baselineSiteDefinitionRef.current = publishedSiteDefinition || siteDefinition;
+    }
+  }, [publishedSiteDefinition, siteDefinition]);
+
   // When rendered inside a preview iframe, sync live definitions from parent window
   useEffect(() => {
     if (typeof window === "undefined" || window.self === window.top) return;
@@ -1252,9 +1280,9 @@ function BuilderPageContent() {
   }, []);
 
   const hasUnpublishedChanges = useMemo(() => {
-    const base = publishedSiteDefinition || siteDefinition;
+    const base = publishedSiteDefinition || baselineSiteDefinitionRef.current || siteDefinition;
     if (!draftSiteDefinition || !base) return false;
-    return JSON.stringify(draftSiteDefinition) !== JSON.stringify(base);
+    return canonicalJson(draftSiteDefinition) !== canonicalJson(base);
   }, [draftSiteDefinition, publishedSiteDefinition, siteDefinition]);
 
   // Real-time synchronization when CRM is toggled from AdminSupportDesk
@@ -1312,8 +1340,20 @@ function BuilderPageContent() {
       setSiteDefinition(finalDef);
       setDraftSiteDefinition(finalDef);
       setPublishedSiteDefinition(finalDef);
+      baselineSiteDefinitionRef.current = finalDef;
+      setUndoStack([]);
+      setRedoStack([]);
       setPublishSuccess(true);
       setTimeout(() => setPublishSuccess(false), 3000);
+
+      // Clear client-side draft and history from sessionStorage upon successful publish
+      if (typeof window !== "undefined" && currentSiteId) {
+        try {
+          sessionStorage.removeItem(`wc_client_draft_${currentSiteId}`);
+          sessionStorage.removeItem(`wc_undo_stack_${currentSiteId}`);
+          sessionStorage.removeItem(`wc_redo_stack_${currentSiteId}`);
+        } catch (_) {}
+      }
 
       // Invalidate memory and local caches so customer storefront immediately renders new theme
       const currentSlug = siteSlug || updatedSite.slug || siteSlugParam;
@@ -1402,7 +1442,23 @@ function BuilderPageContent() {
   };
 
   const handleSiteDefinitionChange = useCallback(
-    (next: SiteDefinition) => {
+    (next: SiteDefinition, skipHistory: boolean = false) => {
+      if (!skipHistory) {
+        const currentActive = draftSiteDefinition || activeSiteDefinition || publishedSiteDefinition || siteDefinition;
+        if (currentActive) {
+          const currentStr = JSON.stringify(currentActive);
+          const nextStr = JSON.stringify(next);
+          if (currentStr !== nextStr) {
+            const now = Date.now();
+            if (now - lastHistoryPushTimeRef.current > 500) {
+              setUndoStack((prev) => [...prev.slice(-49), currentActive]);
+              setRedoStack([]);
+              lastHistoryPushTimeRef.current = now;
+            }
+          }
+        }
+      }
+
       setDraftSiteDefinition(next);
       const nextBrand =
         next.site?.brand_name ||
@@ -1442,10 +1498,262 @@ function BuilderPageContent() {
         try {
           localStorage.setItem(`wc_site_snapshot_${currentId}`, JSON.stringify(updatedSnapshot));
         } catch (_) { }
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem(`wc_client_draft_${currentId}`, JSON.stringify(next));
+          } catch (_) {}
+        }
       }
     },
-    [siteSlug, siteSlugParam, resolvedSiteId, siteId, publishedSiteDefinition]
+    [siteSlug, siteSlugParam, resolvedSiteId, siteId, publishedSiteDefinition, draftSiteDefinition, activeSiteDefinition, siteDefinition]
   );
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    const currentActive = draftSiteDefinition || activeSiteDefinition;
+    const previous = undoStack[undoStack.length - 1];
+    const newUndoStack = undoStack.slice(0, -1);
+
+    setUndoStack(newUndoStack);
+    if (currentActive) {
+      setRedoStack((prev) => [...prev.slice(-49), currentActive]);
+    }
+    setDraftSiteDefinition(previous);
+
+    const nextBrand =
+      previous.site?.brand_name ||
+      (previous as any).site_name ||
+      (previous as any).name ||
+      (previous.theme as any)?.brandName ||
+      (previous.theme as any)?.brand_name ||
+      (previous.footer as any)?.brandName;
+    if (nextBrand) {
+      setSiteName(nextBrand);
+    }
+
+    const currentSlug = siteSlug || siteSlugParam;
+    const currentId = resolvedSiteId || siteId;
+    const existing =
+      (currentSlug ? siteSlugMemoryCache.get(currentSlug) : null) ||
+      (currentId ? siteSlugMemoryCache.get(currentId) : null);
+
+    const updatedSnapshot: SavedSite = {
+      id: currentId || existing?.id || "",
+      slug: currentSlug || existing?.slug || "",
+      draft_definition: previous,
+      site_definition: publishedSiteDefinition || existing?.site_definition || (null as any),
+      version: existing?.version ?? 1,
+      created_at: existing?.created_at ?? new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (currentSlug) {
+      siteSlugMemoryCache.set(currentSlug, updatedSnapshot);
+      try {
+        localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(updatedSnapshot));
+      } catch (_) {}
+    }
+    if (currentId) {
+      siteSlugMemoryCache.set(currentId, updatedSnapshot);
+      try {
+        localStorage.setItem(`wc_site_snapshot_${currentId}`, JSON.stringify(updatedSnapshot));
+      } catch (_) {}
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem(`wc_client_draft_${currentId}`, JSON.stringify(previous));
+        } catch (_) {}
+      }
+    }
+
+    setHistoryActionToast(`Undid change (${newUndoStack.length} earlier ${newUndoStack.length === 1 ? "step" : "steps"} remaining)`);
+    setTimeout(() => setHistoryActionToast(null), 2500);
+  }, [undoStack, draftSiteDefinition, activeSiteDefinition, siteSlug, siteSlugParam, resolvedSiteId, siteId, publishedSiteDefinition]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    const currentActive = draftSiteDefinition || activeSiteDefinition;
+    const nextState = redoStack[redoStack.length - 1];
+    const newRedoStack = redoStack.slice(0, -1);
+
+    setRedoStack(newRedoStack);
+    if (currentActive) {
+      setUndoStack((prev) => [...prev.slice(-49), currentActive]);
+    }
+    setDraftSiteDefinition(nextState);
+
+    const nextBrand =
+      nextState.site?.brand_name ||
+      (nextState as any).site_name ||
+      (nextState as any).name ||
+      (nextState.theme as any)?.brandName ||
+      (nextState.theme as any)?.brand_name ||
+      (nextState.footer as any)?.brandName;
+    if (nextBrand) {
+      setSiteName(nextBrand);
+    }
+
+    const currentSlug = siteSlug || siteSlugParam;
+    const currentId = resolvedSiteId || siteId;
+    const existing =
+      (currentSlug ? siteSlugMemoryCache.get(currentSlug) : null) ||
+      (currentId ? siteSlugMemoryCache.get(currentId) : null);
+
+    const updatedSnapshot: SavedSite = {
+      id: currentId || existing?.id || "",
+      slug: currentSlug || existing?.slug || "",
+      draft_definition: nextState,
+      site_definition: publishedSiteDefinition || existing?.site_definition || (null as any),
+      version: existing?.version ?? 1,
+      created_at: existing?.created_at ?? new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (currentSlug) {
+      siteSlugMemoryCache.set(currentSlug, updatedSnapshot);
+      try {
+        localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(updatedSnapshot));
+      } catch (_) {}
+    }
+    if (currentId) {
+      siteSlugMemoryCache.set(currentId, updatedSnapshot);
+      try {
+        localStorage.setItem(`wc_site_snapshot_${currentId}`, JSON.stringify(updatedSnapshot));
+      } catch (_) {}
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem(`wc_client_draft_${currentId}`, JSON.stringify(nextState));
+        } catch (_) {}
+      }
+    }
+
+    setHistoryActionToast("Redid change");
+    setTimeout(() => setHistoryActionToast(null), 2500);
+  }, [redoStack, draftSiteDefinition, activeSiteDefinition, siteSlug, siteSlugParam, resolvedSiteId, siteId, publishedSiteDefinition]);
+
+  const handleRevertAll = useCallback(() => {
+    const baseline = publishedSiteDefinition || baselineSiteDefinitionRef.current || siteDefinition;
+    if (!baseline) return;
+
+    setUndoStack([]);
+    setRedoStack([]);
+    setDraftSiteDefinition(baseline);
+    baselineSiteDefinitionRef.current = baseline;
+
+    const nextBrand =
+      baseline.site?.brand_name ||
+      (baseline as any).site_name ||
+      (baseline as any).name ||
+      (baseline.theme as any)?.brandName ||
+      (baseline.theme as any)?.brand_name ||
+      (baseline.footer as any)?.brandName;
+    if (nextBrand) {
+      setSiteName(nextBrand);
+    }
+
+    const currentSlug = siteSlug || siteSlugParam;
+    const currentId = resolvedSiteId || siteId;
+    const existing =
+      (currentSlug ? siteSlugMemoryCache.get(currentSlug) : null) ||
+      (currentId ? siteSlugMemoryCache.get(currentId) : null);
+
+    const updatedSnapshot: SavedSite = {
+      id: currentId || existing?.id || "",
+      slug: currentSlug || existing?.slug || "",
+      draft_definition: baseline,
+      site_definition: publishedSiteDefinition || baseline,
+      version: existing?.version ?? 1,
+      created_at: existing?.created_at ?? new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (currentSlug) {
+      siteSlugMemoryCache.set(currentSlug, updatedSnapshot);
+      try {
+        localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(updatedSnapshot));
+      } catch (_) {}
+    }
+    if (currentId) {
+      siteSlugMemoryCache.set(currentId, updatedSnapshot);
+      try {
+        localStorage.setItem(`wc_site_snapshot_${currentId}`, JSON.stringify(updatedSnapshot));
+      } catch (_) {}
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.removeItem(`wc_client_draft_${currentId}`);
+          sessionStorage.removeItem(`wc_undo_stack_${currentId}`);
+          sessionStorage.removeItem(`wc_redo_stack_${currentId}`);
+        } catch (_) {}
+      }
+    }
+
+    // Persist draft reset to server so refresh/reload permanently retains the reverted state
+    const targetSiteId = currentId || resolvedSiteId || siteId;
+    if (targetSiteId && targetSiteId !== "default_site") {
+      fetch(`${API_BASE_URL}/sites/${targetSiteId}/draft`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ draft_definition: baseline }),
+      }).catch((err) => console.error("Failed to reset draft on server:", err));
+    }
+
+    setHistoryActionToast("Reverted all draft changes back to default published state");
+    setTimeout(() => setHistoryActionToast(null), 3000);
+  }, [publishedSiteDefinition, siteDefinition, draftSiteDefinition, activeSiteDefinition, siteSlug, siteSlugParam, resolvedSiteId, siteId]);
+
+  // Keep undoStack and redoStack persisted in sessionStorage so they survive accidental reloads
+  useEffect(() => {
+    const sId = resolvedSiteId || siteId;
+    if (typeof window !== "undefined" && sId) {
+      try {
+        if (undoStack.length > 0) {
+          sessionStorage.setItem(`wc_undo_stack_${sId}`, JSON.stringify(undoStack));
+        } else {
+          sessionStorage.removeItem(`wc_undo_stack_${sId}`);
+        }
+      } catch (_) {}
+    }
+  }, [undoStack, resolvedSiteId, siteId]);
+
+  useEffect(() => {
+    const sId = resolvedSiteId || siteId;
+    if (typeof window !== "undefined" && sId) {
+      try {
+        if (redoStack.length > 0) {
+          sessionStorage.setItem(`wc_redo_stack_${sId}`, JSON.stringify(redoStack));
+        } else {
+          sessionStorage.removeItem(`wc_redo_stack_${sId}`);
+        }
+      } catch (_) {}
+    }
+  }, [redoStack, resolvedSiteId, siteId]);
+
+  // Global Keyboard Shortcuts (Ctrl+Z for Undo, Ctrl+Y or Ctrl+Shift+Z for Redo)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      const isEditable = (e.target as HTMLElement)?.isContentEditable;
+      if (tag === "input" || tag === "textarea" || isEditable) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        if (e.shiftKey) {
+          e.preventDefault();
+          handleRedo();
+        } else {
+          e.preventDefault();
+          handleUndo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleUndo, handleRedo]);
 
   // Real-time synchronization when Admin sections are modified (strictly scoped by siteId)
   useEffect(() => {
@@ -1892,12 +2200,6 @@ function BuilderPageContent() {
 
         if (cancelled) return;
 
-        setPublishedSiteDefinition(data.site_definition || null);
-
-        let parsedSiteDefinition: SiteDefinition = isStoreRoute
-          ? (data.site_definition || data.draft_definition)
-          : (data.draft_definition || data.site_definition);
-
         // Merge saved theme snapshots across draft and published so snapshots are NEVER lost
         const draftThemes = Array.isArray((data.draft_definition as any)?.saved_themes)
           ? (data.draft_definition as any).saved_themes
@@ -1914,6 +2216,23 @@ function BuilderPageContent() {
         });
         const mergedSavedThemes = Array.from(mergedSavedThemesMap.values()).slice(0, 30);
 
+        const cleanPublishedDefinition = data.site_definition ? {
+          ...data.site_definition,
+          id: data.id,
+          site_id: data.id,
+          slug: data.slug,
+          saved_themes: mergedSavedThemes.length > 0 ? mergedSavedThemes : ((data.site_definition as any)?.saved_themes || []),
+        } : null;
+
+        setPublishedSiteDefinition(cleanPublishedDefinition);
+        if (cleanPublishedDefinition) {
+          baselineSiteDefinitionRef.current = cleanPublishedDefinition;
+        }
+
+        let parsedSiteDefinition: SiteDefinition = isStoreRoute
+          ? (cleanPublishedDefinition || data.draft_definition)
+          : (data.draft_definition || cleanPublishedDefinition || data.site_definition);
+
         if (parsedSiteDefinition) {
           parsedSiteDefinition = {
             ...parsedSiteDefinition,
@@ -1922,6 +2241,46 @@ function BuilderPageContent() {
             slug: data.slug,
             saved_themes: mergedSavedThemes.length > 0 ? mergedSavedThemes : ((parsedSiteDefinition as any)?.saved_themes || []),
           };
+        }
+
+        if (!baselineSiteDefinitionRef.current && parsedSiteDefinition) {
+          baselineSiteDefinitionRef.current = parsedSiteDefinition;
+        }
+
+        // Check if user has an active client-side working draft or history preserved across page reload
+        if (!isStoreRoute && typeof window !== "undefined" && data.id) {
+          try {
+            const clientDraftRaw = sessionStorage.getItem(`wc_client_draft_${data.id}`);
+            if (clientDraftRaw) {
+              const clientDraft = JSON.parse(clientDraftRaw);
+              if (clientDraft && typeof clientDraft === "object") {
+                const baseToCompare = cleanPublishedDefinition || parsedSiteDefinition;
+                if (baseToCompare && canonicalJson(clientDraft) === canonicalJson(baseToCompare)) {
+                  sessionStorage.removeItem(`wc_client_draft_${data.id}`);
+                  sessionStorage.removeItem(`wc_undo_stack_${data.id}`);
+                  sessionStorage.removeItem(`wc_redo_stack_${data.id}`);
+                  setUndoStack([]);
+                  setRedoStack([]);
+                } else {
+                  parsedSiteDefinition = clientDraft;
+                }
+              }
+            }
+            const undoStackRaw = sessionStorage.getItem(`wc_undo_stack_${data.id}`);
+            if (undoStackRaw) {
+              const parsedUndo = JSON.parse(undoStackRaw);
+              if (Array.isArray(parsedUndo)) {
+                setUndoStack(parsedUndo);
+              }
+            }
+            const redoStackRaw = sessionStorage.getItem(`wc_redo_stack_${data.id}`);
+            if (redoStackRaw) {
+              const parsedRedo = JSON.parse(redoStackRaw);
+              if (Array.isArray(parsedRedo)) {
+                setRedoStack(parsedRedo);
+              }
+            }
+          } catch (_) {}
         }
 
         // Auto-heal cross-tenant contamination:
@@ -3612,34 +3971,167 @@ function BuilderPageContent() {
           )}
         </div>
 
-        {/* Floating Bottom-Right Corner Publish Button (Appears only when changes exist and user has publish permission) */}
+        {/* Floating Toast Notification for Undo / Redo / Revert Actions */}
+        {historyActionToast && (
+          <div
+            style={{
+              position: "fixed",
+              top: showAdminTopbar ? "62px" : "16px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 10000,
+              background: isDark ? "rgba(15, 23, 42, 0.95)" : "rgba(30, 41, 59, 0.95)",
+              backdropFilter: "blur(8px)",
+              color: "#ffffff",
+              padding: "7px 16px",
+              borderRadius: "8px",
+              fontSize: "12px",
+              fontWeight: 600,
+              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35)",
+              display: "flex",
+              alignItems: "center",
+              gap: "7px",
+              pointerEvents: "none",
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 7v6h6" />
+              <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+            </svg>
+            {historyActionToast}
+          </div>
+        )}
+
+        {/* Floating Bottom-Right Corner Action Bar (Appears only when changes exist or during publishing) */}
         {showAdminTopbar && !isStoreRoute && !isAdminRoute && canPublish && (hasUnpublishedChanges || publishing || publishSuccess) && (
-          <button
-            type="button"
-            onClick={handlePublish}
-            disabled={publishing}
+          <div
             style={{
               position: "fixed",
               bottom: "24px",
               right: "24px",
               zIndex: 9999,
-              padding: "10px 22px",
-              borderRadius: "999px",
-              border: "none",
-              background: "linear-gradient(135deg, #0f62ab, #0a467c)",
-              color: "#fbbf24",
-              fontSize: "13px",
-              fontWeight: 800,
-              cursor: publishing ? "default" : "pointer",
               display: "flex",
               alignItems: "center",
-              gap: "8px",
-              boxShadow: "0 6px 20px rgba(15,98,171,0.45)",
-              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+              gap: "6px",
+              background: isDark ? "rgba(15, 23, 42, 0.94)" : "rgba(255, 255, 255, 0.96)",
+              backdropFilter: "blur(14px)",
+              border: `1px solid ${isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.1)"}`,
+              padding: "4px 4px 4px 6px",
+              borderRadius: "999px",
+              boxShadow: isDark
+                ? "0 10px 30px -5px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255,255,255,0.06)"
+                : "0 10px 30px -5px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(15, 23, 42, 0.05)",
+              transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
             }}
           >
-            {publishing ? "Publishing..." : publishSuccess ? "Published" : "Publish"}
-          </button>
+            {undoStack.length > 0 && (
+              <button
+                type="button"
+                onClick={handleUndo}
+                title="Undo (Ctrl+Z)"
+                aria-label="Undo"
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  background: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.06)",
+                  border: "none",
+                  color: tokens.textPrimary,
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  transition: "all 0.15s ease",
+                  padding: 0,
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 7v6h6" />
+                  <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+                </svg>
+              </button>
+            )}
+
+            {redoStack.length > 0 && (
+              <button
+                type="button"
+                onClick={handleRedo}
+                title="Redo (Ctrl+Y)"
+                aria-label="Redo"
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  background: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.06)",
+                  border: "none",
+                  color: tokens.textPrimary,
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  transition: "all 0.15s ease",
+                  padding: 0,
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 7v6h-6" />
+                  <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+                </svg>
+              </button>
+            )}
+
+            {hasUnpublishedChanges && (
+              <button
+                type="button"
+                onClick={handleRevertAll}
+                title="Revert all changes"
+                aria-label="Revert all changes"
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fee2e2",
+                  border: "none",
+                  color: "#ef4444",
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  transition: "all 0.15s ease",
+                  padding: 0,
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                </svg>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handlePublish}
+              disabled={publishing || (!hasUnpublishedChanges && !publishSuccess)}
+              style={{
+                padding: "8px 20px",
+                borderRadius: "999px",
+                border: "none",
+                background: publishSuccess
+                  ? "linear-gradient(135deg, #10b981, #059669)"
+                  : "linear-gradient(135deg, #0f62ab, #0a467c)",
+                color: publishSuccess ? "#ffffff" : "#fbbf24",
+                fontSize: "13px",
+                fontWeight: 800,
+                cursor: publishing || (!hasUnpublishedChanges && !publishSuccess) ? "default" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                boxShadow: publishSuccess
+                  ? "0 4px 14px rgba(16, 185, 129, 0.4)"
+                  : "0 4px 14px rgba(15, 98, 171, 0.45)",
+                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+              }}
+            >
+              {publishing ? "Publishing..." : publishSuccess ? "Published ✓" : "Publish"}
+            </button>
+          </div>
         )}
       </BuilderShell>
 

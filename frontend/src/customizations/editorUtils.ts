@@ -399,7 +399,9 @@ export const ALL_COMPONENT_OVERRIDE_KEYS = [
   "notification_drawer_bg", "notification_drawer_text", "notification_bg", "notification_text", "notification_border_color",
   "profile_dropdown_bg", "profile_dropdown_text", "profile_dropdown_border",
   "support_bg", "support_card_bg", "support_chat_bg", "support_surface_bg", "support_text_color", "support_muted_text", "support_accent_color", "support_border_color", "customer_bubble_bg", "customer_bubble_text", "agent_bubble_bg", "agent_bubble_text",
-  "grid_bg", "grid_text_color", "outer_bg_color"
+  "grid_bg", "grid_text_color", "outer_bg_color",
+  "product_name_color", "product_title_color", "card_title_color", "card_border_color", "subtitle_color", "image_bg",
+  "card_price_color", "card_brand_color", "card_text_color"
 ];
 
 export function applyThemeToPages(pages: EditorPage[], targetTheme: any): EditorPage[] {
@@ -460,6 +462,15 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
       delete updatedProps.badge_border_color;
       delete updatedProps.product_detail_badge_bg;
       delete updatedProps.product_detail_badge_border;
+      delete updatedProps.product_name_color;
+      delete updatedProps.product_title_color;
+      delete updatedProps.card_title_color;
+      delete updatedProps.card_border_color;
+      delete updatedProps.subtitle_color;
+      delete updatedProps.image_bg;
+      delete updatedProps.card_price_color;
+      delete updatedProps.card_brand_color;
+      delete updatedProps.card_text_color;
 
       for (const k of ALL_COMPONENT_OVERRIDE_KEYS) {
         delete updatedProps[k];
@@ -2386,7 +2397,18 @@ export function getSavedThemeSnapshots(siteDefinition: EditorSiteDefinition): an
     }
   }
 
-  return Array.from(map.values()).slice(0, 30);
+  const result = Array.from(map.values()).slice(0, 30);
+  if (typeof window !== "undefined" && inMemory.length > 0) {
+    try {
+      if (siteId && siteId !== "default_site") {
+        localStorage.setItem(`webnirmaan_saved_themes_${siteId}`, JSON.stringify(result));
+      }
+      if (slug && slug !== siteId && slug !== "default_site") {
+        localStorage.setItem(`webnirmaan_saved_themes_${slug}`, JSON.stringify(result));
+      }
+    } catch { }
+  }
+  return result;
 }
 
 export function saveThemeSnapshot(
@@ -2403,7 +2425,7 @@ export function saveThemeSnapshot(
     }
   });
 
-  // Capture hero and product detail block overrides into theme object for snapshot
+  // Capture hero, product detail, and card block overrides into theme object for snapshot
   let heroBlockBg: string | undefined;
   let heroBlockText: string | undefined;
   let heroBlockAccent: string | undefined;
@@ -2414,6 +2436,12 @@ export function saveThemeSnapshot(
   let pdTextColor: string | undefined;
   let pdBtnBg: string | undefined;
   let pdBtnText: string | undefined;
+
+  let cardBlockBg: string | undefined;
+  let cardBlockText: string | undefined;
+  let cardBlockBorder: string | undefined;
+  let cardBlockBrand: string | undefined;
+  let cardBlockPrice: string | undefined;
 
   (siteDefinition.pages || []).forEach((page) => {
     (page.blocks || []).forEach((block) => {
@@ -2454,6 +2482,28 @@ export function saveThemeSnapshot(
         if (props.button_bg_color) pdBtnBg = props.button_bg_color;
         if (props.button_text_color) pdBtnText = props.button_text_color;
       }
+
+      if (
+        btype === "product_grid" ||
+        btype === "productgrid" ||
+        btype === "product_carousel" ||
+        btype === "productcarousel" ||
+        btype === "section_group_carousel" ||
+        btype === "category_grid"
+      ) {
+        const props = block.props || {};
+        if (props.card_bg_color) cardBlockBg = props.card_bg_color;
+        else if (props.card_bg) cardBlockBg = props.card_bg;
+
+        if (props.product_name_color) cardBlockText = props.product_name_color;
+        else if (props.product_title_color) cardBlockText = props.product_title_color;
+        else if (props.card_title_color) cardBlockText = props.card_title_color;
+        else if (props.title_color) cardBlockText = props.title_color;
+
+        if (props.card_border_color) cardBlockBorder = props.card_border_color;
+        if (props.brand_color) cardBlockBrand = props.brand_color;
+        if (props.price_color) cardBlockPrice = props.price_color;
+      }
     });
   });
 
@@ -2477,6 +2527,11 @@ export function saveThemeSnapshot(
     ...(pdTextColor ? { product_detail_text: pdTextColor } : {}),
     ...(pdBtnBg ? { product_detail_btn_bg: pdBtnBg } : {}),
     ...(pdBtnText ? { product_detail_btn_text: pdBtnText } : {}),
+    ...(cardBlockBg ? { card_bg: cardBlockBg, card_bg_color: cardBlockBg } : {}),
+    ...(cardBlockText ? { card_text_color: cardBlockText, product_name_color: cardBlockText, title_color: cardBlockText } : {}),
+    ...(cardBlockBorder ? { card_border_color: cardBlockBorder } : {}),
+    ...(cardBlockBrand ? { brand_color: cardBlockBrand } : {}),
+    ...(cardBlockPrice ? { price_color: cardBlockPrice } : {}),
     ...cleanCustomPatch,
   };
 

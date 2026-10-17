@@ -786,15 +786,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
     // Apply immediately on the builder canvas
     onSiteDefinitionChange(updatedDef);
 
-    const sId = siteId || (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || getSiteStorageId(siteDefinition as any);
-    if (typeof window !== "undefined" && sId && sId !== "default_site") {
-      fetch(`${API_BASE_URL}/sites/${sId}/draft`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ draft_definition: updatedDef }),
-      }).catch((err) => console.error("Failed to persist applied theme to server:", err));
-    }
+    // Draft changes remain client-side until user saves snapshot or publishes
 
     // Add a confirmation message in chat
     const timeNow = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -1075,14 +1067,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
           }
         }
         onSiteDefinitionChange(updatedDraft);
-        if (typeof window !== "undefined" && requestSiteId) {
-          fetch(`${API_BASE_URL}/sites/${requestSiteId}/draft`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ draft_definition: updatedDraft }),
-          }).catch((err) => console.error("Failed to persist copilot draft:", err));
-        }
+        // Draft changes remain client-side until user saves snapshot or publishes
       }
 
       setMessages((prev) =>
@@ -2078,34 +2063,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
               </svg>
               <span>Clear Chat</span>
             </button>
-          ) : <div />}
-
-          {snapshotHistory.length > 0 && (
-            <button
-              type="button"
-              onClick={handleUndoLastChange}
-              title="Revert storefront design to previous snapshot"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-                padding: "3px 8px",
-                borderRadius: "6px",
-                border: `1px solid ${isDark ? "rgba(255, 255, 255, 0.14)" : "#cbd5e1"}`,
-                background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                color: tokens.textSecondary,
-                fontSize: "11px",
-                fontWeight: 500,
-                cursor: "pointer",
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 7v6h6" />
-                <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
-              </svg>
-              <span>Undo ({snapshotHistory.length})</span>
-            </button>
-          )}
+          ) : null}
         </div>
       )}
 

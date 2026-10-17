@@ -138,7 +138,8 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
     has_revert_keyword = any(t in user_msg_clean for t in revert_triggers)
 
     revert_pattern = r"^(can you\s+)?(please\s+)?(undo|revert|rollback|restore|go back|take back|discard)(\s+(back|it|the|that|last|previous|changes?|version|change))*(\s+like before|\s+to previous|\s+older version|\s+how it was before)?$"
-    is_pure_revert = bool(re.search(revert_pattern, user_msg_clean)) or (
+    default_theme_pattern = r"^(can you\s+)?(please\s+)?(apply|reset|restore|go back to|switch to|use)?\s*(the\s+)?(default|original|initial|first)\s+(theme|palette|colors?|styling|design)\s*$"
+    is_pure_revert = bool(re.search(revert_pattern, user_msg_clean)) or bool(re.search(default_theme_pattern, user_msg_clean)) or (
         has_revert_keyword
         and not has_clause_delimiters
         and not has_non_pure_words

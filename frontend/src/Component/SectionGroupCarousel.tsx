@@ -205,11 +205,21 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
       : theme?.card_shadow || (isLight ? "0 2px 8px -1px rgba(0, 0, 0, 0.05)" : "0 4px 12px rgba(0, 0, 0, 0.4)");
 
   const resolvedTitleColor = title_color || (theme as any)?.grid_text_color || theme?.text_color || tokens.textColor;
-  const resolvedCardTitleColor = card_title_color || (theme as any)?.card_text_color || (theme as any)?.product_name_color || resolvedTitleColor;
-  const resolvedSubtitleColor =
-    subtitle_color || theme?.muted_text_color || (isLight ? "rgba(15, 23, 42, 0.65)" : "rgba(241, 245, 249, 0.65)");
-  const resolvedAccentColor = accent_color || theme?.accent_color || tokens.accentColor;
   const isCardDark = isColorDarkHex(resolvedCardBg);
+
+  const rawCardTitleColor = card_title_color || (theme as any)?.card_text_color || (theme as any)?.product_name_color || resolvedTitleColor;
+  let resolvedCardTitleColor = rawCardTitleColor;
+  if (isCardDark && isColorDarkHex(resolvedCardTitleColor)) {
+    resolvedCardTitleColor = "#ffffff";
+  } else if (!isCardDark && !isColorDarkHex(resolvedCardTitleColor)) {
+    resolvedCardTitleColor = "#0f172a";
+  }
+
+  let resolvedSubtitleColor = subtitle_color || theme?.muted_text_color;
+  if (!resolvedSubtitleColor || (isCardDark && isColorDarkHex(resolvedSubtitleColor)) || (!isCardDark && !isColorDarkHex(resolvedSubtitleColor))) {
+    resolvedSubtitleColor = isCardDark ? "rgba(241, 245, 249, 0.70)" : "rgba(15, 23, 42, 0.65)";
+  }
+  const resolvedAccentColor = accent_color || theme?.accent_color || tokens.accentColor;
   const resolvedImageBg = image_bg || (isCardDark ? "rgba(255, 255, 255, 0.05)" : "#f1f5f9");
   const resolvedImageFit = image_fit || "cover";
   const resolvedMaxWidth =

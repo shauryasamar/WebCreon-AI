@@ -12249,20 +12249,6 @@ export default function EditorSidebar({
     const next = applyThemeSnapshot(siteDefinition, id);
     onSiteDefinitionChange(next);
     setRefreshCounter((c) => c + 1);
-
-    const sId = (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || getSiteStorageId(siteDefinition);
-    if (sId && sId !== "default_site") {
-      try {
-        await fetch(`${API_BASE_URL}/sites/${sId}/draft`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ draft_definition: next }),
-        });
-      } catch (err) {
-        console.error("Failed to persist applied theme snapshot on server:", err);
-      }
-    }
   };
 
   const textColor = isDark ? tokens.textPrimary : "#0f172a";
