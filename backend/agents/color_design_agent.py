@@ -1314,8 +1314,8 @@ COMPONENT_ALLOWED_KEYS = {
     "product_card": {"card_bg", "card_bg_color", "card_text_color", "card_border_color", "border_color", "background_color", "card_shadow", "card_radius", "card_padding", "image_aspect_ratio", "image_fit", "image_bg", "image_radius", "product_name_color", "brand_color", "card_brand_color", "price_color", "original_price_color", "rating_star_color", "text_color", "muted_text", "accent_color"},
     "product_detail": {"product_detail_bg", "product_detail_text", "product_detail_btn_bg", "product_detail_btn_text", "product_detail_padding", "product_detail_radius", "border_color", "background_color", "text_color", "secondary_bg", "accent_color", "image_aspect_ratio", "image_fit"},
     "cart": {"cart_bg", "cart_text_color", "cart_card_bg", "cart_accent_color", "cart_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "accent_color", "cart_radius", "cart_padding"},
-    "order_summary": {"summary_bg", "summary_card_bg", "summary_text_color", "summary_accent_color", "summary_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "accent_color", "summary_radius", "summary_padding"},
-    "delivery_form": {"delivery_form_bg", "delivery_form_card_bg", "delivery_form_text", "delivery_form_input_bg", "delivery_form_input_text", "delivery_form_border", "delivery_form_btn_bg", "delivery_form_btn_text", "delivery_form_radius", "delivery_form_padding", "border_color", "background_color", "text_color", "card_bg", "card_color", "accent_color"},
+    "order_summary": {"summary_bg", "order_summary_bg", "summary_card_bg", "order_summary_card_bg", "summary_text_color", "order_summary_text", "summary_accent_color", "order_summary_accent", "summary_border_color", "order_summary_border", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "accent_color", "summary_radius", "summary_padding"},
+    "delivery_form": {"delivery_form_bg", "delivery_form_card_bg", "delivery_form_text", "delivery_form_input_bg", "delivery_form_input_text", "delivery_form_border", "delivery_form_input_border", "form_border_color", "input_border", "input_borders", "delivery_form_btn_bg", "delivery_form_btn_text", "delivery_form_radius", "delivery_form_padding", "border_color", "background_color", "text_color", "card_bg", "card_color", "accent_color"},
     "payment": {"payment_bg", "payment_card_bg", "payment_text_color", "payment_accent_color", "payment_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "card_color", "accent_color", "payment_radius", "payment_padding"},
     "place_order": {"place_order_bg", "place_order_card_bg", "place_order_btn_bg", "place_order_btn_text", "place_order_text", "place_order_border", "border_color", "background_color", "text_color", "card_bg", "card_color", "accent_color", "place_order_radius", "place_order_btn_height", "title_color", "section_title_color"},
     "filter": {"filter_modal_bg", "filter_modal_text", "filter_btn_bg", "filter_btn_text", "filter_bg", "filter_card_bg", "filter_text_color", "filter_border_color", "filter_accent_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "accent_color", "filter_radius", "filter_padding"},
@@ -1877,15 +1877,16 @@ COMPONENT PROPERTY REFERENCE FOR ALL 20 COMPONENTS:
   - Border: cart_border_color
   - Radius: cart_radius
 - Order Summary ('order_summary'):
-  - Container background: summary_bg
-  - Summary card background: summary_card_bg
-  - Text: summary_text_color
-  - Accent: summary_accent_color
-  - Border: summary_border_color
+  - Container background: summary_bg / order_summary_bg
+  - Summary card background: summary_card_bg / order_summary_card_bg
+  - Text: summary_text_color / order_summary_text
+  - Accent: summary_accent_color / order_summary_accent
+  - Border: summary_border_color / order_summary_border
   - Radius: summary_radius
 - Delivery Form ('delivery_form'):
   - Form background: delivery_form_bg
   - Input field background: delivery_form_input_bg
+  - Input field borders / field border: form_border_color / delivery_form_border
   - Input field text: delivery_form_input_text
   - Label & body text: delivery_form_text
   - Button background: delivery_form_btn_bg
@@ -3406,26 +3407,36 @@ def execute_design_actions(
                     if p not in theme_keys_changed:
                         theme_keys_changed.append(p)
                 elif comp == "order_summary":
-                    if p in ("summary_bg", "panel_bg", "background", "bg", "background_color", "panel_color"):
+                    if p in ("summary_bg", "order_summary_bg", "panel_bg", "background", "bg", "background_color", "panel_color"):
                         theme["summary_bg"] = val
+                        theme["order_summary_bg"] = val
                         applied_patch["summary_bg"] = val
-                        theme_keys_changed.append("summary_bg")
-                    elif p in ("summary_card_bg", "card_bg", "card_bg_color", "card_color"):
+                        applied_patch["order_summary_bg"] = val
+                        theme_keys_changed.extend(["summary_bg", "order_summary_bg"])
+                    elif p in ("summary_card_bg", "order_summary_card_bg", "card_bg", "card_bg_color", "card_color"):
                         theme["summary_card_bg"] = val
+                        theme["order_summary_card_bg"] = val
                         applied_patch["summary_card_bg"] = val
-                        theme_keys_changed.append("summary_card_bg")
-                    elif p in ("summary_text_color", "text_color", "text"):
+                        applied_patch["order_summary_card_bg"] = val
+                        theme_keys_changed.extend(["summary_card_bg", "order_summary_card_bg"])
+                    elif p in ("summary_text_color", "order_summary_text", "text_color", "text"):
                         theme["summary_text_color"] = val
+                        theme["order_summary_text"] = val
                         applied_patch["summary_text_color"] = val
-                        theme_keys_changed.append("summary_text_color")
-                    elif p in ("summary_accent_color", "accent_color", "accent", "button_color"):
+                        applied_patch["order_summary_text"] = val
+                        theme_keys_changed.extend(["summary_text_color", "order_summary_text"])
+                    elif p in ("summary_accent_color", "order_summary_accent", "accent_color", "accent", "button_color"):
                         theme["summary_accent_color"] = val
+                        theme["order_summary_accent"] = val
                         applied_patch["summary_accent_color"] = val
-                        theme_keys_changed.append("summary_accent_color")
-                    elif p in ("summary_border_color", "border_color", "border"):
+                        applied_patch["order_summary_accent"] = val
+                        theme_keys_changed.extend(["summary_accent_color", "order_summary_accent"])
+                    elif p in ("summary_border_color", "order_summary_border", "border_color", "border"):
                         theme["summary_border_color"] = val
+                        theme["order_summary_border"] = val
                         applied_patch["summary_border_color"] = val
-                        theme_keys_changed.append("summary_border_color")
+                        applied_patch["order_summary_border"] = val
+                        theme_keys_changed.extend(["summary_border_color", "order_summary_border"])
                 elif comp == "cart":
                     if p in ("cart_bg", "cart_panel_bg", "panel_bg", "background", "bg", "background_color"):
                         theme["cart_bg"] = val
@@ -3470,10 +3481,12 @@ def execute_design_actions(
                         theme["delivery_form_btn_bg"] = val
                         applied_patch["delivery_form_btn_bg"] = val
                         theme_keys_changed.append("delivery_form_btn_bg")
-                    elif p in ("delivery_form_border", "border", "border_color"):
+                    elif p in ("delivery_form_border", "delivery_form_input_border", "form_border_color", "input_border", "input_borders", "border", "border_color"):
                         theme["delivery_form_border"] = val
+                        theme["form_border_color"] = val
                         applied_patch["delivery_form_border"] = val
-                        theme_keys_changed.append("delivery_form_border")
+                        applied_patch["form_border_color"] = val
+                        theme_keys_changed.extend(["delivery_form_border", "form_border_color"])
                 elif comp == "payment":
                     if p in ("payment_bg", "bg", "background", "background_color"):
                         theme["payment_bg"] = val
@@ -3723,18 +3736,28 @@ def execute_design_actions(
                         bprops["navbar_border_color"] = val
                         bprops["navbar_outer_bg"] = val
                     elif comp == "order_summary" or ("summary" in norm_btype and "cart" not in norm_btype):
-                        if p in ("summary_bg", "panel_bg", "bg", "background", "background_color", "panel_color"):
+                        if p in ("summary_bg", "order_summary_bg", "panel_bg", "bg", "background", "background_color", "panel_color"):
                             bprops["background_color"] = val
                             bprops["panel_color"] = val
-                        elif p in ("summary_card_bg", "card_bg", "card_bg_color", "card_color"):
+                            bprops["summary_bg"] = val
+                            bprops["order_summary_bg"] = val
+                        elif p in ("summary_card_bg", "order_summary_card_bg", "card_bg", "card_bg_color", "card_color"):
                             bprops["card_color"] = val
                             bprops["card_bg"] = val
-                        elif p in ("summary_text_color", "text_color", "text", "font_color"):
+                            bprops["summary_card_bg"] = val
+                            bprops["order_summary_card_bg"] = val
+                        elif p in ("summary_text_color", "order_summary_text", "text_color", "text", "font_color"):
                             bprops["text_color"] = val
-                        elif p in ("summary_accent_color", "accent_color", "accent", "button_bg", "btn_bg"):
+                            bprops["summary_text_color"] = val
+                            bprops["order_summary_text"] = val
+                        elif p in ("summary_accent_color", "order_summary_accent", "accent_color", "accent", "button_bg", "btn_bg"):
                             bprops["accent_color"] = val
-                        elif p in ("summary_border_color", "border_color", "border"):
+                            bprops["summary_accent_color"] = val
+                            bprops["order_summary_accent"] = val
+                        elif p in ("summary_border_color", "order_summary_border", "border_color", "border"):
                             bprops["border_color"] = val
+                            bprops["summary_border_color"] = val
+                            bprops["order_summary_border"] = val
                         else:
                             bprops[p] = val
                     elif comp == "cart" or "cart" in norm_btype:
@@ -3765,6 +3788,7 @@ def execute_design_actions(
                             bprops["delivery_form_card_bg"] = val
                         elif p in ("delivery_form_input_bg", "input_bg", "input_color"):
                             bprops["input_color"] = val
+                            bprops["form_input_bg"] = val
                             bprops["delivery_form_input_bg"] = val
                         elif p in ("delivery_form_text", "text", "text_color"):
                             bprops["text_color"] = val
@@ -3772,8 +3796,9 @@ def execute_design_actions(
                         elif p in ("delivery_form_btn_bg", "btn_bg", "button_bg", "button_bg_color", "accent_color"):
                             bprops["button_bg_color"] = val
                             bprops["delivery_form_btn_bg"] = val
-                        elif p in ("delivery_form_border", "border", "border_color"):
+                        elif p in ("delivery_form_border", "delivery_form_input_border", "form_border_color", "input_border", "input_borders", "border", "border_color"):
                             bprops["border_color"] = val
+                            bprops["form_border_color"] = val
                             bprops["delivery_form_border"] = val
                         else:
                             bprops[p] = val
@@ -3952,16 +3977,15 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
         return "unsupported"
 
     # Explicit Banner Creation Priority:
-    # ONLY trigger banner_create if user asks to create/add/generate a brand new banner slide.
-    # NEVER trigger banner_create when modifying properties of an existing banner (e.g. radius, color, height)!
-    hero_styling_words = [
-        "radius", "radious", "radios", "rounded", "sharp", "pill", "box", "border",
-        "color", "colour", "bg", "background", "height", "size", "bigger", "smaller", "taller", "shorter",
-        "padding", "margin", "dark", "light", "blue", "red", "green", "black", "white",
-        "yellow", "orange", "purple", "pink", "accent", "button", "cta", "font", "text",
-        "existing", "modify", "style", "recolor", "change", "turn", "set", "the hero banner", "the banner"
-    ]
-    has_hero_styling = any(w in msg_lower for w in hero_styling_words)
+    # Explicit Banner Creation Priority:
+    # Trigger banner_create when user asks to create/add/generate/make a promotional banner slide.
+    # Distinguish creation from explicit styling of an existing banner.
+    is_explicit_existing_edit = any(w in msg_lower for w in [
+        "existing banner", "existing banners", "existing hero", "style the banner", "modify the banner",
+        "color of banner", "color of the banner", "banner to red", "banner to blue",
+        "hero background to", "banner background to", "hero radius", "banner radius",
+        "change the banner", "change banner color", "recolor the banner"
+    ])
     has_banner_verb = bool(re.search(
         r"\b(create|add|insert|generate)\s+(a\s+|an\s+|the\s+)?([a-z0-9\-%]+\s+)*(banner|slide|hero\s+banner)\b",
         msg_lower
@@ -3970,7 +3994,7 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
         r"\bmake\s+(a\s+|an\s+)?([a-z0-9\-%]+\s+)*(banner|slide)\b",
         msg_lower
     )) and not any(w in msg_lower for w in ["the banner", "the hero banner", "banner to", "banner into", "hero to"])
-    has_banner_creation = (has_banner_verb or has_make_new_banner) and not has_hero_styling
+    has_banner_creation = (has_banner_verb or has_make_new_banner) and not is_explicit_existing_edit
     if has_banner_creation:
         return "banner_create"
 
@@ -4005,7 +4029,6 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
         return "revert"
 
     # 2. Banner Creation (Detect creation verbs governing banner or slide)
-    has_banner_creation = (has_banner_verb or has_make_new_banner) and not has_hero_styling
     if has_banner_creation:
         return "banner_create"
 
@@ -4033,12 +4056,14 @@ def detect_target_component(user_message: str, target_component: Optional[str] =
             found_components.remove("navbar")
 
     if len(found_components) > 1:
-        # Only collapse 'card' if it was used as a qualifier (e.g. "category cards"), not when user explicitly targets product cards
+        # Only collapse 'card' if it was used as a qualifier or inside composite components, not when user explicitly targets product cards
         has_explicit_product_card = any(w in msg_lower for w in ["product card", "product cards", "catalog card", "item card"])
-        if not has_explicit_product_card:
-            if "category_grid" in found_components and "card" in found_components and "category card" in msg_lower:
-                found_components.remove("card")
-            if "product_carousel" in found_components and "card" in found_components and "carousel card" in msg_lower:
+        if not has_explicit_product_card and "card" in found_components:
+            composite_parents = {
+                "order_summary", "cart", "order_history", "profile", "review",
+                "support", "category_grid", "product_carousel", "delivery_form", "checkout"
+            }
+            if found_components & composite_parents:
                 found_components.remove("card")
         if len(found_components) == 1:
             return list(found_components)[0]
@@ -4140,7 +4165,7 @@ async def handle_color_and_design_request(
                 "data_cards": [],
                 "applied_patch": {"banner_created": headline_text},
                 "target_component": "hero",
-                "assistant_reply": f"Added a new **{new_slide.get('badge') or 'Promotional'}** banner to your homepage! ✨ Headline: *'{headline_text}'*.{coupon_text}",
+                "assistant_reply": f"Added a new **{new_slide.get('badge') or 'Promotional'}** banner to your homepage! Headline: *'{headline_text}'*.{coupon_text}",
             }
 
     # 4. Palette Suggestions Handler & Conversational Follow-Up Resolution
@@ -4164,6 +4189,10 @@ async def handle_color_and_design_request(
         or re.search(r"\b(few|some|several|couple|\d+)\b.*\b(theme|themes|tmplete|template|palette|palettes|pallete|palletes|pallette|pallettes)\b", msg_lower)
         or (re.search(r"#[0-9a-fA-F]{3,6}", msg_lower) and any(w in msg_lower for w in ["theme", "themes", "palette", "palettes", "pallete", "palletes", "pallette", "pallettes"]))
     )
+    has_direct_styling_intent = any(w in msg_lower for w in ["camouflage", "fix", "same theme as", "change", "set to", "turn to", "make it", "borders", "background to"])
+    if has_direct_styling_intent and not wants_palette_suggestions:
+        msg_suggests_palettes = False
+
     if wants_palette_suggestions or msg_suggests_palettes or msg_is_followup:
         if target_comp and target_comp != "overall":
             comp_palettes = await generate_component_palette_suggestions(

@@ -737,18 +737,18 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
         bid.includes("cart")
       ) {
         const isOrderSummaryBlock = btype === "order_summary" || bid === "order_summary" || bid === "checkout_order_summary";
-        const summaryBg = isOrderSummaryBlock && targetTheme.order_summary_bg ? targetTheme.order_summary_bg : (targetTheme.cart_bg || targetTheme.primary_bg);
-        const summaryCardBg = isOrderSummaryBlock && (targetTheme.order_summary_card_bg || targetTheme.order_summary_bg) ? (targetTheme.order_summary_card_bg || targetTheme.order_summary_bg) : (targetTheme.cart_card_bg || targetTheme.card_bg);
-        const summaryText = isOrderSummaryBlock && targetTheme.order_summary_text ? targetTheme.order_summary_text : (targetTheme.cart_text_color || targetTheme.text_color);
-        const summaryAccent = isOrderSummaryBlock && targetTheme.order_summary_accent ? targetTheme.order_summary_accent : (targetTheme.cart_accent_color || targetTheme.accent_color);
-        const summaryBorder = isOrderSummaryBlock && targetTheme.order_summary_border ? targetTheme.order_summary_border : (targetTheme.cart_border_color || targetTheme.navbar_border_color || targetTheme.card_border_color);
+        const summaryBg = isOrderSummaryBlock && (targetTheme.order_summary_bg || targetTheme.summary_bg) ? (targetTheme.order_summary_bg || targetTheme.summary_bg) : (targetTheme.cart_bg || targetTheme.primary_bg);
+        const summaryCardBg = isOrderSummaryBlock && (targetTheme.order_summary_card_bg || targetTheme.order_summary_bg || targetTheme.summary_card_bg || targetTheme.summary_bg) ? (targetTheme.order_summary_card_bg || targetTheme.order_summary_bg || targetTheme.summary_card_bg || targetTheme.summary_bg) : (targetTheme.cart_card_bg || targetTheme.card_bg);
+        const summaryText = isOrderSummaryBlock && (targetTheme.order_summary_text || targetTheme.summary_text_color || targetTheme.summary_text) ? (targetTheme.order_summary_text || targetTheme.summary_text_color || targetTheme.summary_text) : (targetTheme.cart_text_color || targetTheme.text_color);
+        const summaryAccent = isOrderSummaryBlock && (targetTheme.order_summary_accent || targetTheme.summary_accent_color || targetTheme.summary_accent) ? (targetTheme.order_summary_accent || targetTheme.summary_accent_color || targetTheme.summary_accent) : (targetTheme.cart_accent_color || targetTheme.accent_color);
+        const summaryBorder = isOrderSummaryBlock && (targetTheme.order_summary_border || targetTheme.summary_border_color || targetTheme.summary_border) ? (targetTheme.order_summary_border || targetTheme.summary_border_color || targetTheme.summary_border) : (targetTheme.cart_border_color || targetTheme.navbar_border_color || targetTheme.card_border_color);
 
         if (summaryBg) {
           updatedProps.background_color = summaryBg;
           updatedProps.cart_bg = summaryBg;
         }
-        if (targetTheme.cart_panel_bg || (isOrderSummaryBlock && targetTheme.order_summary_bg)) {
-          const panelBg = isOrderSummaryBlock && targetTheme.order_summary_bg ? targetTheme.order_summary_bg : targetTheme.cart_panel_bg;
+        if (targetTheme.cart_panel_bg || (isOrderSummaryBlock && (targetTheme.order_summary_bg || targetTheme.summary_bg))) {
+          const panelBg = isOrderSummaryBlock && (targetTheme.order_summary_bg || targetTheme.summary_bg) ? (targetTheme.order_summary_bg || targetTheme.summary_bg) : targetTheme.cart_panel_bg;
           updatedProps.panel_color = panelBg;
           updatedProps.cart_panel_bg = panelBg;
         } else if (targetTheme.card_bg) {
@@ -848,13 +848,17 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
         if (targetTheme.delivery_form_bg || targetTheme.card_bg) {
           updatedProps.background_color = targetTheme.delivery_form_bg || targetTheme.card_bg;
           updatedProps.card_bg = targetTheme.delivery_form_card_bg || targetTheme.delivery_form_bg || targetTheme.card_bg;
+          updatedProps.form_panel_bg = targetTheme.delivery_form_bg || targetTheme.card_bg;
         }
         if (targetTheme.delivery_form_text || targetTheme.text_color) {
           updatedProps.text_color = targetTheme.delivery_form_text || targetTheme.text_color;
           updatedProps.title_color = targetTheme.delivery_form_text || targetTheme.text_color;
         }
-        if (targetTheme.delivery_form_border || targetTheme.navbar_border_color) {
-          updatedProps.border_color = targetTheme.delivery_form_border || targetTheme.navbar_border_color;
+        if (targetTheme.delivery_form_border || targetTheme.form_border_color || targetTheme.delivery_form_input_border || targetTheme.navbar_border_color) {
+          const borderVal = targetTheme.form_border_color || targetTheme.delivery_form_border || targetTheme.delivery_form_input_border || targetTheme.navbar_border_color;
+          updatedProps.border_color = borderVal;
+          updatedProps.form_border_color = borderVal;
+          updatedProps.soft_border_color = borderVal;
         }
         if (targetTheme.delivery_form_btn_bg || targetTheme.accent_color) {
           updatedProps.button_bg_color = targetTheme.delivery_form_btn_bg || targetTheme.accent_color;
@@ -2559,6 +2563,8 @@ export function updateBlockProps(
       delivery_form_card_bg: cardBg,
       delivery_form_text: textColor,
       delivery_form_border: borderColor,
+      delivery_form_input_border: borderColor,
+      form_border_color: borderColor,
       delivery_form_btn_bg: accentColor,
       delivery_form_btn_text: "#ffffff",
       delivery_form_input_bg: primaryBg,

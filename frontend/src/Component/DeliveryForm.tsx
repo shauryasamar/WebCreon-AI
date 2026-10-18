@@ -503,12 +503,20 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
       (isContainerDark ? alpha(resolvedAccent, 0.18) : alpha(resolvedAccent, 0.08));
 
     const finalBorder =
+      form_border_color ||
       border_color ||
+      (themeObject as any)?.form_border_color ||
       (themeObject as any)?.delivery_form_border ||
+      (themeObject as any)?.delivery_form_input_border ||
       (isContainerDark ? "rgba(255, 255, 255, 0.14)" : "#e2e8f0");
 
     const finalSoftBorder =
       soft_border_color ||
+      form_border_color ||
+      border_color ||
+      (themeObject as any)?.form_border_color ||
+      (themeObject as any)?.delivery_form_border ||
+      (themeObject as any)?.delivery_form_input_border ||
       (isContainerDark ? "rgba(255, 255, 255, 0.10)" : "#e2e8f0");
 
     const finalInputBg =
@@ -983,7 +991,8 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
     minHeight: "42px",
     padding: "10px 12px",
     borderRadius: `${resolvedFieldRadius}px`,
-    border: `1px solid ${palette.border}`,
+    border: `1px solid ${form_border_color || palette.border}`,
+    borderColor: form_border_color || palette.border,
     background: palette.inputBg,
     color: palette.inputText,
     outline: "none",

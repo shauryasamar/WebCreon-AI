@@ -154,11 +154,46 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
             "active_agent": "Color & Design Agent (Revert)",
         }
 
-    # 1C. Palette / Theme Suggestion fast-path check & Conversational Follow-Up Resolution
+    from agents.color_design_agent import detect_target_component
+    detected_comp = detect_target_component(user_msg_clean)
+
+    # 1C. Banner Creation Fast-Path
+    if detected_comp == "banner_create":
+        return {
+            "intent": "DESIGN",
+            "is_compound": False,
+            "compound_tasks": [],
+            "target_component": "banner_create",
+            "wants_palette_suggestions": False,
+            "active_agent": "Color & Design Agent (Banner)",
+        }
+
+    # 1D. Direct Component Override Fast-Path (Bypasses redundant ~2,200 token Router LLM for instant direct styling)
+    design_style_signals = [
+        "change", "make", "set", "turn", "update", "style", "fix", "camouflage", "camofladge", "contrast",
+        "color", "colour", "bg", "background", "border", "borders", "radius", "padding",
+        "shadow", "text", "theme", "#", "font", "white", "black", "blue", "red", "green", "dark", "light"
+    ]
+    is_direct_styling = (
+        detected_comp not in ("unsupported", "revert", "banner_create", "overall", None)
+        and any(s in user_msg_clean for s in design_style_signals)
+        and not any(w in user_msg_clean for w in ["and show", "and check", "and list", "and tell", "and how", "how to", "where is", "suggest", "recommend", "options", "ideas"])
+    )
+    if is_direct_styling:
+        return {
+            "intent": "DESIGN",
+            "is_compound": False,
+            "compound_tasks": [],
+            "target_component": detected_comp,
+            "wants_palette_suggestions": False,
+            "active_agent": "Color & Design Agent (Direct)",
+        }
+
+    # 1E. Palette / Theme Suggestion fast-path check & Conversational Follow-Up Resolution
     suggestion_patterns = [
         r"\b(suggest|recommend|ideas?|options?)\b.*\b(theme|themes|tmplete|template|palette|palettes|colors?|colours?)\b",
         r"\b(theme|themes|tmplete|template|palette|palettes)\b.*\b(suggest|suggestion|suggestions|recommend|recommendation|recommendations|ideas?|options?)\b",
-        r"\b(give|gve|ive|gimme|show|generate|genrate|create|provide|share|need|want|make)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b",
+        r"\b(give|gve|ive|gimme|show|generate|genrate|create|provide|share|need|want)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b",
         r"\b\d+\s+.*(theme|themes|palette|palettes)\b",
         r"\b(few|some|several|couple|different|multiple)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b",
         r"\b(theme|themes|palette|palettes)\s+(suggestions?|options?|ideas?)\b",
@@ -166,13 +201,6 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
         r"\b(palette|palettes)\b",
         r"\b(?:[1-6]|one|two|three|four|five|six)\s+(?:more|different|new)\b",
     ]
-    direct_override_pattern = r"\b(?:change|make|set|turn|update|style)\s+(?:the\s+)?(?:store\s+|page\s+)?(navbar|header|footer|hero|banner|background|canvas|card|button)\b"
-    is_direct_component_override = bool(re.search(direct_override_pattern, user_msg_clean)) or any(w in user_msg_clean for w in [
-        "change navbar", "change header", "change footer", "change hero", "change banner",
-        "change background", "change card", "make navbar", "make header", "make footer",
-        "make hero", "make button", "set navbar", "set footer", "set hero", "set background",
-        "turn navbar", "turn footer", "turn hero", "turn background", "turn card"
-    ])
     
     # Check conversational follow-ups (e.g. "give me new one", "3 more", "5 more", "didn't like any")
     history_str_clean = str(state.get("history_str") or "").lower()
@@ -188,8 +216,9 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
         r"^\s*give\s*me\s*(?:new\s*one|[1-6]|\d+)\s*$",
     ]
     is_palette_followup = has_palette_context and any(bool(re.search(pat, user_msg_clean)) for pat in followup_request_patterns)
-    is_palette_suggestion_request = not is_direct_component_override and (
-        any(bool(re.search(pat, user_msg_clean)) for pat in suggestion_patterns) or is_palette_followup
+    is_palette_suggestion_request = (
+        detected_comp in ("overall", None)
+        and (any(bool(re.search(pat, user_msg_clean)) for pat in suggestion_patterns) or is_palette_followup)
     )
     if is_palette_suggestion_request and not any(a in user_msg_clean for a in ["how to", "where is", "help with", "explain how", "documentation"]):
         return {
@@ -200,20 +229,6 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
             "wants_palette_suggestions": True,
             "active_agent": "Color & Design Agent (Palettes)",
         }
-
-    # 1D. Direct Component Override Fast-Path (Bypasses redundant ~2,200 token Router LLM for instant direct styling)
-    if is_direct_component_override and not any(w in user_msg_clean for w in ["and show", "and check", "and list", "and tell", "and how"]):
-        from agents.color_design_agent import detect_target_component
-        detected_comp = detect_target_component(user_msg_clean)
-        if detected_comp and detected_comp not in ("unsupported", "revert", "banner_create"):
-            return {
-                "intent": "DESIGN",
-                "is_compound": False,
-                "compound_tasks": [],
-                "target_component": detected_comp,
-                "wants_palette_suggestions": False,
-                "active_agent": "Color & Design Agent (Direct)",
-            }
 
     # 2. Semantic Intent Router with Deep Sentiment, Context, & 100% Storefront Component Coverage
     router_prompt = ChatPromptTemplate.from_messages([
@@ -276,16 +291,12 @@ RULES:
                     break
 
         # Disambiguate banner_create:
-        # ONLY trigger banner_create if user asks to create/add/generate a brand new banner slide.
-        # NEVER trigger banner_create when modifying properties of an existing banner (e.g. radius, color, height)!
-        hero_styling_words = [
-            "radius", "radious", "radios", "rounded", "sharp", "pill", "box", "border",
-            "color", "colour", "bg", "background", "height", "size", "bigger", "smaller", "taller", "shorter",
-            "padding", "margin", "dark", "light", "blue", "red", "green", "black", "white",
-            "yellow", "orange", "purple", "pink", "accent", "button", "cta", "font", "text",
-            "existing", "modify", "style", "recolor", "change", "turn", "set", "the hero banner", "the banner"
-        ]
-        has_hero_styling = any(w in user_msg_clean for w in hero_styling_words)
+        is_explicit_existing_edit = any(w in user_msg_clean for w in [
+            "existing banner", "existing banners", "existing hero", "style the banner", "modify the banner",
+            "color of banner", "color of the banner", "banner to red", "banner to blue",
+            "hero background to", "banner background to", "hero radius", "banner radius",
+            "change the banner", "change banner color", "recolor the banner"
+        ])
         has_banner_verb = bool(re.search(
             r"\b(create|add|insert|generate)\s+(a\s+|an\s+|the\s+)?([a-z0-9\-%]+\s+)*(banner|slide|hero\s+banner)\b",
             user_msg_clean
@@ -294,7 +305,7 @@ RULES:
             r"\bmake\s+(a\s+|an\s+)?([a-z0-9\-%]+\s+)*(banner|slide)\b",
             user_msg_clean
         )) and not any(w in user_msg_clean for w in ["the banner", "the hero banner", "banner to", "banner into", "hero to"])
-        has_banner_creation = (has_banner_verb or has_make_new_banner) and not has_hero_styling
+        has_banner_creation = (has_banner_verb or has_make_new_banner) and not is_explicit_existing_edit
 
         if has_banner_creation:
             raw_intent = "DESIGN"
