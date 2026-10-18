@@ -685,6 +685,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
         "delivery_form_bg", "delivery_form_card_bg", "delivery_form_text", "delivery_form_border", "delivery_form_btn_bg", "delivery_form_btn_text", "delivery_form_input_bg", "delivery_form_input_text", "form_border_color", "delivery_form_input_border",
         "cart_bg", "cart_panel_bg", "cart_card_bg", "cart_text_color", "cart_accent_color", "cart_border_color",
         "payment_bg", "payment_card_bg", "payment_text_color", "payment_accent_color", "payment_border_color",
+        "order_history_bg", "order_history_card_bg", "order_history_text", "order_history_muted_text", "order_history_border", "order_history_accent_color", "order_history_radius",
       ];
       const sourceObj = themeObj?.patch || themeObj?.theme || themeObj || {};
       for (const key of paletteKeys) {
