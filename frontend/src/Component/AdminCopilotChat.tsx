@@ -799,7 +799,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
 
     // Direct, instant confirmation via toast notification without modifying chat messages or scrolling
     const palName = palette.name || "Theme";
-    setToastMsg(`Applied "${palName}" theme live to your store! ✨`);
+    setToastMsg(`Applied "${palName}" theme live to your store.`);
     setTimeout(() => setToastMsg(null), 3000);
   };
 
@@ -1136,11 +1136,11 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
         @keyframes copilotToastFadeIn {
           from {
             opacity: 0;
-            transform: translateY(-8px);
+            transform: translate(-50%, -8px);
           }
           to {
             opacity: 1;
-            transform: translateY(0);
+            transform: translate(-50%, 0);
           }
         }
       `}</style>
@@ -1149,26 +1149,47 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
         <div
           style={{
             position: "absolute",
-            top: "10px",
-            left: "14px",
-            right: "14px",
+            top: "12px",
+            left: "50%",
+            transform: "translateX(-50%)",
             zIndex: 100,
             pointerEvents: "none",
-            padding: "8px 14px",
-            background: isDark ? "rgba(16, 185, 129, 0.2)" : "rgba(240, 253, 244, 0.94)",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "7px 14px",
+            background: isDark ? "rgba(15, 23, 42, 0.92)" : "rgba(255, 255, 255, 0.96)",
             backdropFilter: "blur(12px) saturate(180%)",
             WebkitBackdropFilter: "blur(12px) saturate(180%)",
-            color: isDark ? "#a7f3d0" : "#14532d",
-            border: `1px solid ${isDark ? "rgba(52, 211, 153, 0.3)" : "rgba(22, 163, 74, 0.3)"}`,
+            color: isDark ? "#f8fafc" : "#0f172a",
+            border: `1px solid ${isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.10)"}`,
             fontSize: "12px",
-            fontWeight: 600,
-            borderRadius: "10px",
-            textAlign: "center",
-            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.15)",
-            animation: "copilotToastFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+            fontWeight: 500,
+            borderRadius: "9999px",
+            whiteSpace: "nowrap",
+            maxWidth: "calc(100% - 28px)",
+            boxShadow: isDark
+              ? "0 10px 25px -4px rgba(0, 0, 0, 0.5), 0 4px 10px -2px rgba(0, 0, 0, 0.3)"
+              : "0 10px 25px -4px rgba(15, 23, 42, 0.12), 0 4px 10px -2px rgba(15, 23, 42, 0.06)",
+            animation: "copilotToastFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
         >
-          {toastMsg}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={isDark ? "#34d399" : "#059669"}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ flexShrink: 0 }}
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+            {toastMsg}
+          </span>
         </div>
       )}
 
