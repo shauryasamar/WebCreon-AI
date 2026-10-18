@@ -219,6 +219,18 @@ body.is-mobile-preview * {
   -ms-overflow-style: none !important;
 }
 
+.no-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+  background: transparent !important;
+}
+
 .is-mobile-preview::-webkit-scrollbar,
 .is-mobile-preview *::-webkit-scrollbar,
 .builder-preview-scroll::-webkit-scrollbar,

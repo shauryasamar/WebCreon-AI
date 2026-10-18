@@ -408,11 +408,11 @@ const labelStyle: React.CSSProperties = {
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "new", label: "New" },
-  { key: "preorders", label: "Pre-Orders" },
   { key: "yet_to_ship", label: "Yet to Ship" },
   { key: "yet_to_deliver", label: "Yet to Deliver" },
   { key: "delivered", label: "Delivered" },
   { key: "cancelled", label: "Cancelled" },
+  { key: "preorders", label: "Pre-Orders" },
 ];
 
 
@@ -3203,9 +3203,14 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
         <>
           {/* Orders Subtabs (Clean Underline Filter Bar with Count Badges) */}
           <div
+            className="no-scrollbar"
             style={{
               display: "flex",
-              flexWrap: "wrap",
+              flexWrap: "nowrap",
+              overflowX: "auto",
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+              WebkitOverflowScrolling: "touch",
               gap: "4px",
               borderBottom: `1px solid ${tokens.border}`,
               marginBottom: "16px",
@@ -3225,6 +3230,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
+                    flexShrink: 0,
                     gap: "8px",
                     padding: "10px 14px",
                     border: "none",
@@ -5008,9 +5014,14 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
         <>
           {/* Returns Subtabs (Clean Underline Filter Bar with Count Badges) */}
           <div
+            className="no-scrollbar"
             style={{
               display: "flex",
-              flexWrap: "wrap",
+              flexWrap: "nowrap",
+              overflowX: "auto",
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+              WebkitOverflowScrolling: "touch",
               gap: "4px",
               borderBottom: `1px solid ${tokens.border}`,
               marginBottom: "16px",
@@ -5029,6 +5040,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
+                    flexShrink: 0,
                     gap: "8px",
                     padding: "10px 14px",
                     border: "none",
