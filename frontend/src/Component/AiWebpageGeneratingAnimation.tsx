@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 
 type AiWebpageGeneratingAnimationProps = {
   brandName?: string;
@@ -8,116 +8,122 @@ type AiWebpageGeneratingAnimationProps = {
 };
 
 const DEFAULT_STEPS = [
-  "Analyzing Brand Vibe & WCAG Palette Tokens...",
-  "Synthesizing Responsive Navbar & Layout Specs...",
-  "Structuring Product Catalog & Data Bindings...",
-  "Compiling Theme Tokens & Page Definitions...",
-  "Finalizing Webpage Blueprint...",
+  "Analyzing brand niche and requirements...",
+  "Synthesizing navigation hierarchy and header...",
+  "Structuring product layout and catalog bindings...",
+  "Compiling design tokens and theme styling...",
+  "Finalizing production-ready storefront...",
 ];
 
 export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimationProps> = ({
-  brandName = "Your Website",
+  brandName = "Your Store",
   themeMode = "light",
   progress: externalProgress,
   currentMessage: externalMessage,
 }) => {
-  const [internalStepIndex, setInternalStepIndex] = useState(0);
-  const [internalProgress, setInternalProgress] = useState(15);
-
   const isDark = themeMode === "dark";
+  
+  // Progress strictly starts at 0%
+  const [displayedProgress, setDisplayedProgress] = useState(0);
+  const [stepIndex, setStepIndex] = useState(0);
+
+  // Target progress reference to allow smooth fluid interpolation
+  const targetProgress = typeof externalProgress === "number" ? externalProgress : 0;
+  const targetRef = useRef(targetProgress);
+  targetRef.current = targetProgress;
 
   useEffect(() => {
-    if (typeof externalProgress === "number") {
-      setInternalProgress(externalProgress);
-      return;
-    }
+    // Smooth interpolation towards targetProgress
+    const interval = setInterval(() => {
+      setDisplayedProgress((current) => {
+        const target = targetRef.current;
+        if (typeof externalProgress === "number") {
+          if (current < target) {
+            const step = Math.max(1, Math.ceil((target - current) * 0.18));
+            return Math.min(target, current + step);
+          } else if (current > target) {
+            return target;
+          }
+          return current;
+        }
 
-    const stepInterval = setInterval(() => {
-      setInternalStepIndex((prev) => {
-        if (prev < DEFAULT_STEPS.length - 1) return prev + 1;
-        return prev;
+        // If no external progress provided, gently advance up to 92%
+        if (current < 92) {
+          return current + 1;
+        }
+        return current;
       });
-    }, 900);
+    }, 45);
 
-    const progressInterval = setInterval(() => {
-      setInternalProgress((prev) => {
-        if (prev < 92) return prev + Math.floor(Math.random() * 6) + 4;
-        return 96;
-      });
-    }, 150);
-
-    return () => {
-      clearInterval(stepInterval);
-      clearInterval(progressInterval);
-    };
+    return () => clearInterval(interval);
   }, [externalProgress]);
 
-  const activeProgress = typeof externalProgress === "number" ? externalProgress : internalProgress;
-  const activeMessage =
-    externalMessage || DEFAULT_STEPS[Math.min(internalStepIndex, DEFAULT_STEPS.length - 1)];
+  // Sync step message based on progress or external input
+  useEffect(() => {
+    if (externalMessage) return;
 
-  // Theme-aware tokens
-  const containerBg = isDark
-    ? "linear-gradient(145deg, #18181b 0%, #242429 100%)"
-    : "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)";
+    if (displayedProgress < 20) setStepIndex(0);
+    else if (displayedProgress < 45) setStepIndex(1);
+    else if (displayedProgress < 70) setStepIndex(2);
+    else if (displayedProgress < 90) setStepIndex(3);
+    else setStepIndex(4);
+  }, [displayedProgress, externalMessage]);
 
-  const containerBorder = isDark
-    ? "1px solid rgba(255, 255, 255, 0.12)"
-    : "1px solid rgba(15, 23, 42, 0.12)";
+  const activeMessage = externalMessage || DEFAULT_STEPS[stepIndex];
 
+  // WebCreon Brand Color System: Max 4-5 focused colors
+  // 1. Primary Blue: #0f62ab (Light) / #3b82f6 (Dark)
+  // 2. Amber Accent: #ffaa00
+  // 3. Base Background: #ffffff / #0b0f19
+  // 4. Elevated Surface: #f8fafc / #111827
+  // 5. High-contrast Text: #0f172a / #f8fafc with Slate secondary #64748b / #94a3b8
+
+  const brandBlue = isDark ? "#3b82f6" : "#0f62ab";
+  const brandAmber = "#ffaa00";
+
+  const containerBg = isDark ? "#0b0f19" : "#ffffff";
+  const containerBorder = isDark ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid rgba(15, 23, 42, 0.1)";
   const shadowStyle = isDark
-    ? "0 12px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(59, 130, 246, 0.12)"
-    : "0 10px 30px rgba(15, 23, 42, 0.08), 0 0 15px rgba(37, 99, 235, 0.06)";
+    ? "0 10px 30px rgba(0, 0, 0, 0.6), 0 0 1px rgba(59, 130, 246, 0.2)"
+    : "0 8px 24px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04)";
 
-  const headerBg = isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(241, 245, 249, 0.8)";
-  const headerBorder = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.08)";
-  const textColor = isDark ? "#f4f4f5" : "#0f172a";
-  const subtextColor = isDark ? "#a1a1aa" : "#64748b";
-  const wireframeBg = isDark ? "#121214" : "#f1f5f9";
+  const headerBg = isDark ? "rgba(255, 255, 255, 0.02)" : "#f8fafc";
+  const headerBorder = isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(15, 23, 42, 0.06)";
+  
+  const textColor = isDark ? "#f8fafc" : "#0f172a";
+  const subtextColor = isDark ? "#94a3b8" : "#64748b";
+
+  const wireframeCanvasBg = isDark ? "#111827" : "#f8fafc";
   const wireframeBorder = isDark ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid rgba(15, 23, 42, 0.08)";
-  const wireframeBlockBg = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(15, 23, 42, 0.06)";
-  const wireframePillBg = isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(15, 23, 42, 0.2)";
+  const wireframeBlockBg = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(15, 23, 42, 0.05)";
+  const wireframePillBg = isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.15)";
+
+  const roundedPct = Math.round(displayedProgress);
 
   return (
     <div
       style={{
         width: "100%",
         maxWidth: "460px",
-        margin: "10px 0",
-        borderRadius: "16px",
+        margin: "8px 0",
+        borderRadius: "14px",
         background: containerBg,
         border: containerBorder,
         boxShadow: shadowStyle,
         overflow: "hidden",
         color: textColor,
-        fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         position: "relative",
       }}
     >
-      {/* Top Laser Shimmer Bar */}
-      <div
-        style={{
-          height: "2.5px",
-          width: "100%",
-          backgroundImage: "linear-gradient(90deg, #2563eb, #ec4899, #10b981, #2563eb)",
-          backgroundSize: "200% 100%",
-          animation: "aiLaserShimmer 2s linear infinite",
-        }}
-      />
-
       <style>{`
-        @keyframes aiLaserShimmer {
-          0% { background-position: 0% 0%; }
-          100% { background-position: 200% 0%; }
+        @keyframes webcreonPulse {
+          0%, 100% { opacity: 0.4; transform: scale(0.95); }
+          50% { opacity: 1; transform: scale(1.1); }
         }
-        @keyframes aiScanBeam {
-          0% { transform: translateY(-100%); opacity: 0.2; }
-          50% { opacity: 0.7; }
-          100% { transform: translateY(280%); opacity: 0.2; }
-        }
-        @keyframes aiPulseGlow {
-          0%, 100% { opacity: 0.4; transform: scale(1); }
-          50% { opacity: 0.9; transform: scale(1.08); }
+        @keyframes subtleScan {
+          0% { transform: translateY(-100%); }
+          100% { transform: translateY(320%); }
         }
       `}</style>
 
@@ -130,28 +136,42 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
           justifyContent: "space-between",
           borderBottom: `1px solid ${headerBorder}`,
           background: headerBg,
-          backdropFilter: "blur(8px)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <span style={{ fontSize: "11px", color: subtextColor, fontWeight: 600 }}>
-            WebCreon Engine
+        {/* Brand Logo Lockup */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <div
+            style={{
+              fontFamily: "'Outfit', 'Inter', sans-serif",
+              fontSize: "13px",
+              fontWeight: 900,
+              letterSpacing: "-0.01em",
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            <span style={{ color: brandBlue }}>WEB</span>
+            <span style={{ color: brandAmber }}>CREON</span>
+          </div>
+          <span style={{ fontSize: "11px", color: subtextColor, fontWeight: 500 }}>
+            · Engine
           </span>
         </div>
 
+        {/* Status Pill */}
         <div
           style={{
-            padding: "3px 10px",
+            padding: "3px 9px",
             borderRadius: "999px",
-            background: isDark ? "rgba(99, 102, 241, 0.15)" : "rgba(37, 99, 235, 0.1)",
-            border: isDark ? "1px solid rgba(99, 102, 241, 0.3)" : "1px solid rgba(37, 99, 235, 0.25)",
+            background: isDark ? "rgba(59, 130, 246, 0.12)" : "rgba(15, 98, 171, 0.08)",
+            border: isDark ? "1px solid rgba(59, 130, 246, 0.25)" : "1px solid rgba(15, 98, 171, 0.18)",
             fontSize: "10px",
-            color: isDark ? "#818cf8" : "#2563eb",
+            color: brandBlue,
             fontWeight: 700,
             display: "flex",
             alignItems: "center",
             gap: "5px",
-            letterSpacing: "0.4px",
+            letterSpacing: "0.3px",
           }}
         >
           <span
@@ -159,65 +179,96 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
               width: "5px",
               height: "5px",
               borderRadius: "50%",
-              background: isDark ? "#818cf8" : "#2563eb",
-              boxShadow: isDark ? "0 0 6px #818cf8" : "0 0 6px #2563eb",
-              animation: "aiPulseGlow 1.5s infinite",
+              background: brandAmber,
+              boxShadow: `0 0 5px ${brandAmber}`,
+              animation: "webcreonPulse 1.8s ease-in-out infinite",
             }}
           />
-          GENERATING WEBPAGE
+          GENERATING STORE
         </div>
       </div>
 
-      {/* Main Content & Wireframe Simulation */}
+      {/* Main Body */}
       <div style={{ padding: "14px 16px" }}>
-        {/* Status Header */}
+        {/* Header Text & Accurate % */}
         <div style={{ marginBottom: "10px", textAlign: "left" }}>
-          <div style={{ fontSize: "14px", fontWeight: 800, color: textColor, marginBottom: "2px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div
+            style={{
+              fontSize: "14px",
+              fontWeight: 700,
+              color: textColor,
+              marginBottom: "3px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <div>
-              Building <span style={{ color: isDark ? "#a5b4fc" : "#2563eb" }}>{brandName}</span>
+              Building <span style={{ color: brandBlue }}>{brandName}</span>
             </div>
-            <div style={{ fontSize: "12px", fontWeight: 800, color: isDark ? "#38bdf8" : "#2563eb" }}>
-              {Math.round(activeProgress)}%
+            <div
+              style={{
+                fontSize: "13px",
+                fontWeight: 800,
+                color: brandBlue,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {roundedPct}%
             </div>
           </div>
-          <div style={{ fontSize: "12px", color: subtextColor, display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ color: isDark ? "#38bdf8" : "#0284c7", fontWeight: 700 }}>
-              AI Pipeline:
-            </span>
-            <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+
+          <div
+            style={{
+              fontSize: "12px",
+              color: subtextColor,
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <span style={{ color: subtextColor, fontWeight: 600 }}>Step:</span>
+            <span
+              style={{
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                color: textColor,
+              }}
+            >
               {activeMessage}
             </span>
           </div>
         </div>
 
-        {/* Progress Bar */}
+        {/* Clean, Accurate Progress Bar */}
         <div
           style={{
             width: "100%",
-            height: "5px",
+            height: "4px",
             borderRadius: "999px",
             background: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.08)",
             overflow: "hidden",
-            marginBottom: "12px",
+            marginBottom: "14px",
           }}
         >
           <div
             style={{
               height: "100%",
-              width: `${Math.min(activeProgress, 100)}%`,
-              background: "linear-gradient(90deg, #2563eb 0%, #ec4899 50%, #10b981 100%)",
+              width: `${Math.min(Math.max(roundedPct, 0), 100)}%`,
+              background: brandBlue,
               borderRadius: "999px",
-              transition: "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+              transition: "width 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
             }}
           />
         </div>
 
-        {/* Compact Animated Webpage Blueprint Container */}
+        {/* Minimalist Webpage Blueprint */}
         <div
           style={{
             borderRadius: "10px",
             border: wireframeBorder,
-            background: wireframeBg,
+            background: wireframeCanvasBg,
             padding: "10px",
             position: "relative",
             overflow: "hidden",
@@ -225,21 +276,22 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
             gap: "8px",
           }}
         >
-          {/* Laser Scanning Line */}
+          {/* Subtle Neutral Scanning Line */}
           <div
             style={{
               position: "absolute",
               top: 0,
               left: 0,
               right: 0,
-              height: "30px",
+              height: "22px",
               background: isDark
-                ? "linear-gradient(180deg, rgba(99, 102, 241, 0.2) 0%, rgba(99, 102, 241, 0) 100%)"
-                : "linear-gradient(180deg, rgba(37, 99, 235, 0.15) 0%, rgba(37, 99, 235, 0) 100%)",
-              borderBottom: isDark ? "1.5px solid rgba(99, 102, 241, 0.5)" : "1.5px solid rgba(37, 99, 235, 0.4)",
+                ? "linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 100%)"
+                : "linear-gradient(180deg, rgba(15, 23, 42, 0.05) 0%, rgba(15, 23, 42, 0) 100%)",
+              borderBottom: isDark ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(15, 23, 42, 0.12)",
+              opacity: 0.6,
               pointerEvents: "none",
               zIndex: 10,
-              animation: "aiScanBeam 2s ease-in-out infinite",
+              animation: "subtleScan 2.4s ease-in-out infinite",
             }}
           />
 
@@ -255,12 +307,40 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <div style={{ width: "16px", height: "16px", borderRadius: "4px", background: "linear-gradient(135deg, #2563eb, #ec4899)" }} />
-              <div style={{ width: "50px", height: "6px", borderRadius: "3px", background: wireframePillBg }} />
+              <div
+                style={{
+                  width: "14px",
+                  height: "14px",
+                  borderRadius: "3px",
+                  background: wireframePillBg,
+                }}
+              />
+              <div
+                style={{
+                  width: "48px",
+                  height: "5px",
+                  borderRadius: "3px",
+                  background: wireframePillBg,
+                }}
+              />
             </div>
             <div style={{ display: "flex", gap: "6px" }}>
-              <div style={{ width: "24px", height: "6px", borderRadius: "3px", background: wireframePillBg }} />
-              <div style={{ width: "24px", height: "6px", borderRadius: "3px", background: wireframePillBg }} />
+              <div
+                style={{
+                  width: "22px",
+                  height: "5px",
+                  borderRadius: "3px",
+                  background: wireframePillBg,
+                }}
+              />
+              <div
+                style={{
+                  width: "22px",
+                  height: "5px",
+                  borderRadius: "3px",
+                  background: wireframePillBg,
+                }}
+              />
             </div>
           </div>
 
@@ -268,23 +348,55 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
           <div
             style={{
               padding: "12px 10px",
-              borderRadius: "8px",
-              background: isDark
-                ? "linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(236, 72, 153, 0.08) 100%)"
-                : "linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(236, 72, 153, 0.05) 100%)",
-              border: isDark ? "1px solid rgba(99, 102, 241, 0.2)" : "1px solid rgba(37, 99, 235, 0.15)",
+              borderRadius: "6px",
+              background: wireframeBlockBg,
               display: "flex",
               flexDirection: "column",
               gap: "6px",
               alignItems: "flex-start",
             }}
           >
-            <div style={{ width: "60px", height: "10px", borderRadius: "999px", background: isDark ? "rgba(99, 102, 241, 0.4)" : "rgba(37, 99, 235, 0.3)" }} />
-            <div style={{ width: "70%", height: "10px", borderRadius: "3px", background: wireframePillBg }} />
-            <div style={{ width: "45%", height: "5px", borderRadius: "3px", background: wireframePillBg }} />
+            <div
+              style={{
+                width: "42px",
+                height: "6px",
+                borderRadius: "3px",
+                background: wireframePillBg,
+              }}
+            />
+            <div
+              style={{
+                width: "70%",
+                height: "8px",
+                borderRadius: "3px",
+                background: wireframePillBg,
+              }}
+            />
+            <div
+              style={{
+                width: "45%",
+                height: "5px",
+                borderRadius: "3px",
+                background: wireframePillBg,
+              }}
+            />
             <div style={{ display: "flex", gap: "6px", marginTop: "2px" }}>
-              <div style={{ width: "55px", height: "18px", borderRadius: "6px", background: "linear-gradient(90deg, #2563eb, #1d4ed8)" }} />
-              <div style={{ width: "40px", height: "18px", borderRadius: "6px", background: wireframeBlockBg }} />
+              <div
+                style={{
+                  width: "50px",
+                  height: "16px",
+                  borderRadius: "4px",
+                  background: isDark ? "rgba(255, 255, 255, 0.16)" : "rgba(15, 23, 42, 0.16)",
+                }}
+              />
+              <div
+                style={{
+                  width: "36px",
+                  height: "16px",
+                  borderRadius: "4px",
+                  background: wireframePillBg,
+                }}
+              />
             </div>
           </div>
 
@@ -302,9 +414,29 @@ export const AiWebpageGeneratingAnimation: React.FC<AiWebpageGeneratingAnimation
                   gap: "4px",
                 }}
               >
-                <div style={{ height: "30px", borderRadius: "4px", background: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.08)" }} />
-                <div style={{ width: "75%", height: "5px", borderRadius: "2px", background: wireframePillBg }} />
-                <div style={{ width: "40%", height: "5px", borderRadius: "2px", background: "rgba(16, 185, 129, 0.6)" }} />
+                <div
+                  style={{
+                    height: "28px",
+                    borderRadius: "4px",
+                    background: isDark ? "rgba(255, 255, 255, 0.07)" : "rgba(15, 23, 42, 0.07)",
+                  }}
+                />
+                <div
+                  style={{
+                    width: "75%",
+                    height: "4px",
+                    borderRadius: "2px",
+                    background: wireframePillBg,
+                  }}
+                />
+                <div
+                  style={{
+                    width: "35%",
+                    height: "4px",
+                    borderRadius: "2px",
+                    background: isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(15, 23, 42, 0.25)",
+                  }}
+                />
               </div>
             ))}
           </div>

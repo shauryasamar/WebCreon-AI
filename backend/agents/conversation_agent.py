@@ -40,27 +40,27 @@ LAYOUT_ARCHETYPE_CHOICES = [
     {
         "id": "apple_minimal",
         "label": "Clean & Minimal",
-        "description": "Spacious floating pill layout with clean typography — like Apple or Linear",
+        "description": "Centered floating navigation, generous whitespace, large hero product showcase, and minimalist card borders.",
     },
     {
         "id": "glassmorphism_premium",
         "label": "Frosted Island",
-        "description": "Floating translucent island with soft background blur and glowing edges",
+        "description": "Floating glass navigation bar with background blur, translucent product overlays, and subtle ambient glow accents.",
     },
     {
         "id": "modern_marketplace",
         "label": "Modern Marketplace",
-        "description": "High-density layout with prominent search and category badges — like Amazon",
+        "description": "Full-width header with persistent search bar, horizontal category filter pills, and a dense multi-column product catalog.",
     },
     {
         "id": "luxury_fashion",
         "label": "Haute Luxury",
-        "description": "Editorial serif typography with generous spacing — high-end boutique aesthetic",
+        "description": "Editorial serif headers, high-fashion portrait imagery frames, fine hairline dividers, and elegant muted borders.",
     },
     {
         "id": "neo_modern",
-        "label": "Neo-Modern 2026",
-        "description": "Tactile rounded contours with soft neumorphic controls and friendly curves",
+        "label": "Neo-Modern",
+        "description": "Rounded pill navigation, smooth high-radius cards, compact category badges, and solid high-contrast buttons.",
     },
 ]
 
@@ -68,24 +68,24 @@ SURFACE_MATERIALITY_CHOICES = [
     {
         "id": "solid",
         "label": "Classic Solid",
-        "description": "Crisp, opaque surfaces with high-contrast modern styling",
+        "description": "Crisp, opaque surfaces with high-contrast borders and solid block card backgrounds.",
     },
     {
         "id": "glass_navbar",
         "label": "Glass Navbar",
-        "description": "Translucent frosted glass navigation bar with solid page content",
+        "description": "Translucent frosted glass navigation bar with solid page content and crisp product cards.",
     },
     {
         "id": "full_glass",
         "label": "Full Glass Ecosystem",
-        "description": "Frosted glass finish across navbar, product cards, drawers, and overlays",
+        "description": "Frosted glass finish across navbar, product cards, sliding drawers, and checkout overlays.",
     },
 ]
 
 BUILD_NOW_CHOICE = {
     "id": "build_now",
-    "label": "⚡ Build Store Immediately",
-    "description": "Synthesize website immediately with designer-recommended defaults",
+    "label": "Build Store Immediately",
+    "description": "Generate storefront now using AI-recommended layout, catalog structure, and theme defaults.",
 }
 
 LAYOUT_ARCHETYPE_MAP = {
@@ -237,6 +237,7 @@ async def advance_session(session_id: str, user_reply: Optional[str] = None) -> 
     # 1. Direct matching for Explicit Build Triggers ONLY (Buttons / Skip Setup)
     explicit_build_triggers = [
         "build_now",
+        "build store immediately",
         "⚡ build store immediately",
         "build now with defaults",
         "generate with defaults now",
@@ -262,10 +263,16 @@ async def advance_session(session_id: str, user_reply: Optional[str] = None) -> 
     # 3. Direct matching for Interactive Palette Selection
     if user_reply and session.palette_options and not session.collected.get("chosen_palette"):
         for i, pal in enumerate(session.palette_options):
-            if (pal.get("id", "").lower() == reply_lower or 
-                f"option {i+1}" in reply_lower or 
-                str(i+1) == reply_lower or 
-                pal.get("name", "").lower() in reply_lower):
+            pal_id = pal.get("id", "").lower()
+            pal_name = pal.get("name", "").lower()
+            if (
+                pal_id == reply_lower
+                or pal_id in reply_lower
+                or pal_name in reply_lower
+                or reply_lower in pal_name
+                or f"option {i+1}" in reply_lower
+                or str(i+1) == reply_lower
+            ):
                 session.collected["chosen_palette"] = pal
                 session.collected["color_theme"] = pal["name"]
                 break
@@ -275,12 +282,21 @@ async def advance_session(session_id: str, user_reply: Optional[str] = None) -> 
         for arch in LAYOUT_ARCHETYPE_CHOICES:
             arch_id = arch["id"].lower()
             arch_label = arch["label"].lower()
-            if arch_id == reply_lower or arch_id in reply_lower or arch_label == reply_lower or arch_label in reply_lower:
+            if (
+                arch_id == reply_lower
+                or arch_id in reply_lower
+                or arch_label == reply_lower
+                or arch_label in reply_lower
+                or reply_lower in arch_label
+            ):
                 session.collected["layout_archetype"] = arch["id"]
                 mapped = LAYOUT_ARCHETYPE_MAP.get(arch["id"], {"navbar_layout": "apple_minimal", "footer_layout": "apple_minimal"})
                 session.collected["navbar_layout"] = mapped["navbar_layout"]
                 session.collected["footer_layout"] = mapped["footer_layout"]
                 session.collected["navbar_position"] = "fixed"
+                # Automatically pair appropriate surface materiality so user isn't asked redundant questions
+                if not session.collected.get("surface_materiality"):
+                    session.collected["surface_materiality"] = "glass_navbar" if arch["id"] == "glassmorphism_premium" else "solid"
                 break
 
     # 5. Direct matching for Surface Materiality Selection
@@ -323,12 +339,18 @@ async def advance_session(session_id: str, user_reply: Optional[str] = None) -> 
             session.collected["color_prompt"] = analysis.extracted_color_prompt
         if analysis.extracted_tagline and not session.collected.get("tagline"):
             session.collected["tagline"] = analysis.extracted_tagline
-        if analysis.extracted_layout_archetype and not session.collected.get("layout_archetype"):
-            session.collected["layout_archetype"] = analysis.extracted_layout_archetype
-            mapped = LAYOUT_ARCHETYPE_MAP.get(analysis.extracted_layout_archetype, {"navbar_layout": "apple_minimal", "footer_layout": "apple_minimal"})
-            session.collected["navbar_layout"] = mapped["navbar_layout"]
-            session.collected["footer_layout"] = mapped["footer_layout"]
-            session.collected["navbar_position"] = "fixed"
+        # Only accept LLM-inferred layout if palette is ALREADY chosen and user explicitly answered about layout
+        if analysis.extracted_layout_archetype and not session.collected.get("layout_archetype") and session.collected.get("chosen_palette"):
+            # Check if user reply actually referred to layout archetype
+            archetype_terms = ["minimal", "apple", "frosted", "island", "marketplace", "luxury", "fashion", "neo", "modern", "layout"]
+            if any(term in reply_lower for term in archetype_terms):
+                session.collected["layout_archetype"] = analysis.extracted_layout_archetype
+                mapped = LAYOUT_ARCHETYPE_MAP.get(analysis.extracted_layout_archetype, {"navbar_layout": "apple_minimal", "footer_layout": "apple_minimal"})
+                session.collected["navbar_layout"] = mapped["navbar_layout"]
+                session.collected["footer_layout"] = mapped["footer_layout"]
+                session.collected["navbar_position"] = "fixed"
+                if not session.collected.get("surface_materiality"):
+                    session.collected["surface_materiality"] = "glass_navbar" if analysis.extracted_layout_archetype == "glassmorphism_premium" else "solid"
         if analysis.extracted_surface_materiality and not session.collected.get("surface_materiality"):
             session.collected["surface_materiality"] = analysis.extracted_surface_materiality
 
@@ -484,6 +506,7 @@ async def advance_session_stream(session_id: str, user_reply: Optional[str] = No
     # 1. Direct matching for Explicit Build Triggers ONLY (Buttons / Skip Setup)
     explicit_build_triggers = [
         "build_now",
+        "build store immediately",
         "⚡ build store immediately",
         "build now with defaults",
         "generate with defaults now",

@@ -1211,18 +1211,20 @@ async def generate_color_palettes(
             if has_specific_color:
                 color_desc_str = f"{color_family.upper()} ({exact_user_hex})" if exact_user_hex else color_family.upper()
                 naming_instructions = (
-                    f"CRITICAL REQUIREMENT: The user specifically requested a {color_desc_str} theme. "
-                    f"Every palette title and description MUST explicitly celebrate and feature {color_desc_str} "
-                    f"(e.g. 'Crimson Bold Header & Studio' for a bold red navbar with white body; 'Blush Rose Gelato' for a soft pastel wash; 'Velvet Merlot Luxe' for deep burgundy canvas with gold buttons). "
-                    f"Reflect each theme's unique layout and archetype clearly! DO NOT give them generic names."
+                    f"CRITICAL REQUIREMENT: The user requested a {color_desc_str} palette. "
+                    f"For each palette, provide a 2-3 word name and a single crisp sentence (approx 80-110 characters, 15-18 words) "
+                    f"describing the storefront look: canvas tone, border styling (subtle vs poppy), and button contrast."
                 )
             else:
-                naming_instructions = "Invent original, evocative 2-3 word designer titles (e.g. 'Nordic Sage', 'Obsidian Rose', 'Velvet Bordeaux') and a 1-sentence design note highlighting its color harmony."
+                naming_instructions = (
+                    "For each palette, provide an evocative 2-3 word title and a single crisp sentence (approx 80-110 characters, 15-18 words) "
+                    "describing the storefront look: canvas tone, border styling (subtle vs poppy), and button contrast."
+                )
 
             naming_prompt = ChatPromptTemplate.from_messages([
-                ("system", f"""You are an award-winning luxury branding copywriter.
+                ("system", f"""You are an expert e-commerce UI design director.
 {naming_instructions}
-Return ONLY the name and description matching each palette ID."""),
+CRITICAL: Keep descriptions strictly to 1 short sentence between 80 and 110 characters (fits in 2-3 card lines). Return ONLY the name and description matching each palette ID."""),
                 ("user", "Brand: {brand_name}\nDomain: {domain}\nRequest: {color_description}\nPalettes:\n{palettes}"),
             ])
             structured_naming = naming_prompt | naming_llm.with_structured_output(PaletteNamingResponse, method="function_calling")

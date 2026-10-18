@@ -1290,7 +1290,7 @@ async def generate_site_definition_stream_endpoint(
         return StreamingResponse(paywall_generator(), media_type="text/event-stream")
     async def event_generator():
         try:
-            yield f"data: {json.dumps({'step': 'start', 'progress': 10, 'message': 'Initializing AI generation pipeline...'})}\n\n"
+            yield f"data: {json.dumps({'step': 'start', 'progress': 0, 'message': 'Initializing AI generation pipeline...'})}\n\n"
             
             prompt_text = req.prompt or ""
             collected_reqs = {}
@@ -1795,14 +1795,32 @@ def create_site(
     owner=Depends(enforce_owner_role),
     session: Session = Depends(get_session),
 ):
-    existing_site = session.exec(
-        select(Site).where(Site.slug == payload.slug)
-    ).first()
-    if existing_site:
-        raise HTTPException(status_code=400, detail="Site slug already exists")
+    # Clean & Vanity slug collision resolution
+    candidate_slug = payload.slug.strip().lower()
+    # Strip any accidental legacy timestamp suffixes if present
+    import re
+    candidate_slug = re.sub(r"-\d{10,}$", "", candidate_slug)
+    if not candidate_slug:
+        candidate_slug = "store"
+
+    final_slug = candidate_slug
+    counter = 1
+    suffixes = ["", "-co", "-store", "-shop", "-brand"]
+
+    while True:
+        existing_site = session.exec(
+            select(Site).where(Site.slug == final_slug)
+        ).first()
+        if not existing_site:
+            break
+        if counter < len(suffixes):
+            final_slug = f"{candidate_slug}{suffixes[counter]}"
+        else:
+            final_slug = f"{candidate_slug}-{counter - len(suffixes) + 2}"
+        counter += 1
 
     site = Site(
-        slug=payload.slug,
+        slug=final_slug,
         site_definition=payload.site_definition,
         draft_definition=payload.draft_definition,
     )
@@ -1818,7 +1836,7 @@ def create_site(
     session.add(admin_site)
     session.commit()
 
-    invalidate_public_site_cache(payload.slug, site.id)
+    invalidate_public_site_cache(final_slug, site.id)
     session.refresh(site)
     return site
 

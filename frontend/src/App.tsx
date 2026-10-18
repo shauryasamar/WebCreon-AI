@@ -432,7 +432,7 @@ function AdminSitesPage() {
           text: "Building your website...",
           time: currentTime,
           type: "generating_animation",
-          progress: 15,
+          progress: 0,
           currentStepMessage: "Initializing AI generation pipeline...",
           brandName: detectedBrand,
         },
@@ -523,15 +523,14 @@ function AdminSitesPage() {
       }
 
       const brandName = data.site_definition.site.brand_name || `${data.site_definition.site.site_type} website`;
-      const baseSlug = slugify(brandName) || "website";
-      const uniqueSlug = `${baseSlug}-${Date.now()}`;
+      const cleanSlug = slugify(brandName) || "store";
 
       const createResponse = await fetch(`${API_BASE_URL}/sites`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          slug: uniqueSlug,
+          slug: cleanSlug,
           site_definition: data.site_definition,
           draft_definition: data.site_definition,
         }),
@@ -576,7 +575,7 @@ function AdminSitesPage() {
     }
   };
 
-  const handleSendReply = async (replyText: string) => {
+  const handleSendReply = async (replyText: string, displayText?: string) => {
     const trimmed = replyText.trim();
     if (!trimmed || loading) return;
 
@@ -584,9 +583,11 @@ function AdminSitesPage() {
     const assistantMsgId = `assistant-${Date.now()}`;
     const currentTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+    const visibleText = displayText?.trim() || trimmed;
+
     setMessages((prev) => [
       ...prev,
-      { id: userMsgId, sender: "user", text: trimmed, time: currentTime },
+      { id: userMsgId, sender: "user", text: visibleText, time: currentTime },
       { id: assistantMsgId, sender: "assistant", text: "", time: currentTime, status: "loading" },
     ]);
 
@@ -810,11 +811,17 @@ function AdminSitesPage() {
   };
 
   const handleSelectPaletteOption = (pal: any) => {
-    handleSendReply(pal.id);
+    const displayName = pal.name || pal.id;
+    handleSendReply(displayName, displayName);
   };
 
   const handleSelectChoice = (choice: { id: string; label: string }) => {
-    handleSendReply(choice.id);
+    const rawLabel = choice.label || choice.id;
+    const cleanLabel = rawLabel
+      .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "")
+      .replace(/^⚡\s*/, "")
+      .trim();
+    handleSendReply(cleanLabel, cleanLabel);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -1247,7 +1254,23 @@ function AdminSitesPage() {
                               <span className="onboarding-thinking-dot" style={{ animationDelay: "0.4s" }} />
                             </div>
                           ) : (
-                            <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
+                            <div>
+                              <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
+                              {!isUser && loading && msg.id === messages[messages.length - 1]?.id && (!msg.palette_options?.length && !msg.choices?.length) && (
+                                <div
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    marginTop: "8px",
+                                  }}
+                                >
+                                  <span className="onboarding-thinking-dot" style={{ animationDelay: "0s" }} />
+                                  <span className="onboarding-thinking-dot" style={{ animationDelay: "0.2s" }} />
+                                  <span className="onboarding-thinking-dot" style={{ animationDelay: "0.4s" }} />
+                                </div>
+                              )}
+                            </div>
                           )
                         )}
 
@@ -1299,163 +1322,326 @@ function AdminSitesPage() {
                           </div>
                         )}
 
-                        {/* Palette Options Card Selection */}
+                        {/* Palette Options Card Selection (Copilot-Style Semantic Architecture) */}
                         {msg.palette_options && msg.palette_options.length > 0 && (
                           <div
                             style={{
                               marginTop: "16px",
                               display: "grid",
-                              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
                               gap: "12px",
                             }}
                           >
-                            {msg.palette_options.map((pal: any, idx: number) => (
-                              <div
-                                key={pal.id || idx}
-                                onClick={() => handleSelectPaletteOption(pal)}
-                                style={{
-                                  padding: "12px",
-                                  borderRadius: "12px",
-                                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                                  border: `1.5px solid ${tokens.border}`,
-                                  cursor: "pointer",
-                                  transition: "all 0.15s ease",
-                                  boxShadow: isDark ? "none" : "0 2px 8px rgba(15,23,42,0.04)",
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.borderColor = tokens.accent;
-                                  e.currentTarget.style.transform = "translateY(-2px)";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.borderColor = tokens.border;
-                                  e.currentTarget.style.transform = "translateY(0)";
-                                }}
-                              >
-                                <div style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
-                                  {idx + 1}. {pal.name}
-                                </div>
-                                <div style={{ fontSize: "11px", color: tokens.textSecondary, margin: "4px 0 10px 0" }}>
-                                  {pal.description}
-                                </div>
+                            {msg.palette_options.map((pal: any, idx: number) => {
+                              const pBg = pal.primary_bg || "#ffffff";
+                              const sBg = pal.secondary_bg || pal.card_bg || "#f8fafc";
+                              const aCol = pal.accent_color || "#3b82f6";
+                              const nBg = pal.navbar_bg || pBg;
+                              const fBg = pal.footer_bg || sBg;
 
-                                {/* Swatches */}
-                                <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-                                  <div
-                                    title={`Primary BG: ${pal.primary_bg}`}
-                                    style={{
-                                      width: "24px",
-                                      height: "24px",
-                                      borderRadius: "6px",
-                                      background: pal.primary_bg,
-                                      border: `1px solid ${tokens.border}`,
-                                    }}
-                                  />
-                                  <div
-                                    title={`Accent: ${pal.accent_color}`}
-                                    style={{
-                                      width: "24px",
-                                      height: "24px",
-                                      borderRadius: "6px",
-                                      background: pal.accent_color,
-                                    }}
-                                  />
-                                  <div
-                                    title={`Navbar: ${pal.navbar_bg}`}
-                                    style={{
-                                      width: "24px",
-                                      height: "24px",
-                                      borderRadius: "6px",
-                                      background: pal.navbar_bg,
-                                      border: `1px solid ${tokens.border}`,
-                                    }}
-                                  />
-                                  <div
-                                    title={`Footer: ${pal.footer_bg}`}
-                                    style={{
-                                      width: "24px",
-                                      height: "24px",
-                                      borderRadius: "6px",
-                                      background: pal.footer_bg,
-                                      border: `1px solid ${tokens.border}`,
-                                    }}
-                                  />
-                                </div>
-
-                                <button
-                                  type="button"
+                              return (
+                                <div
+                                  key={pal.id || idx}
+                                  onClick={() => handleSelectPaletteOption(pal)}
                                   style={{
-                                    width: "100%",
-                                    padding: "6px 0",
-                                    borderRadius: "8px",
-                                    border: "none",
-                                    background: tokens.accent,
-                                    color: "#ffffff",
-                                    fontSize: "12px",
-                                    fontWeight: 600,
+                                    padding: "14px",
+                                    borderRadius: "12px",
+                                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                    border: `1.5px solid ${tokens.border}`,
                                     cursor: "pointer",
+                                    transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "10px",
+                                    boxShadow: isDark ? "none" : "0 2px 8px rgba(15,23,42,0.04)",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = tokens.accent;
+                                    e.currentTarget.style.transform = "translateY(-2px)";
+                                    e.currentTarget.style.boxShadow = isDark
+                                      ? "0 8px 24px rgba(0,0,0,0.4)"
+                                      : "0 8px 24px rgba(15,23,42,0.08)";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = tokens.border;
+                                    e.currentTarget.style.transform = "translateY(0)";
+                                    e.currentTarget.style.boxShadow = isDark ? "none" : "0 2px 8px rgba(15,23,42,0.04)";
                                   }}
                                 >
-                                  Select {pal.name}
-                                </button>
-                              </div>
-                            ))}
+                                  {/* Row 1: Title & WCAG Badge */}
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
+                                      {idx + 1}. {pal.name}
+                                    </span>
+                                    <span
+                                      style={{
+                                        fontSize: "10px",
+                                        fontWeight: 600,
+                                        color: isDark ? "#93c5fd" : "#1d4ed8",
+                                        background: isDark ? "rgba(59, 130, 246, 0.15)" : "rgba(37, 99, 235, 0.08)",
+                                        padding: "2px 7px",
+                                        borderRadius: "6px",
+                                      }}
+                                    >
+                                      WCAG AA
+                                    </span>
+                                  </div>
+
+                                  {/* Row 2: Spectrum Preview Bar */}
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      height: "8px",
+                                      borderRadius: "4px",
+                                      overflow: "hidden",
+                                      border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}`,
+                                    }}
+                                  >
+                                    <div style={{ flex: 3.5, background: pBg }} title={`Background: ${pBg}`} />
+                                    <div style={{ flex: 2.0, background: sBg }} title={`Surface: ${sBg}`} />
+                                    <div style={{ flex: 2.0, background: aCol }} title={`Accent CTA: ${aCol}`} />
+                                    <div style={{ flex: 1.5, background: nBg }} title={`Navbar: ${nBg}`} />
+                                    <div style={{ flex: 1.0, background: fBg }} title={`Footer: ${fBg}`} />
+                                  </div>
+
+                                  {/* Row 3: Semantic Color Chips Grid (Where Colors are Used) */}
+                                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "5px" }}>
+                                    {[
+                                      { label: "BG", color: pBg },
+                                      { label: "Accent", color: aCol },
+                                      { label: "Navbar", color: nBg },
+                                      { label: "Footer", color: fBg },
+                                    ].map((sw, sIdx) => (
+                                      <div
+                                        key={sIdx}
+                                        style={{
+                                          display: "flex",
+                                          flexDirection: "column",
+                                          alignItems: "center",
+                                          gap: "3px",
+                                          padding: "5px 2px",
+                                          background: isDark ? "rgba(0,0,0,0.22)" : "#f8fafc",
+                                          borderRadius: "6px",
+                                          border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
+                                          minWidth: 0,
+                                        }}
+                                      >
+                                        <div style={{ display: "flex", alignItems: "center", gap: "3px", maxWidth: "100%" }}>
+                                          <div
+                                            style={{
+                                              width: "8px",
+                                              height: "8px",
+                                              borderRadius: "50%",
+                                              background: sw.color,
+                                              border: "1px solid rgba(0,0,0,0.15)",
+                                              flexShrink: 0,
+                                            }}
+                                          />
+                                          <span
+                                            style={{
+                                              fontSize: "9px",
+                                              fontWeight: 600,
+                                              color: tokens.textMuted,
+                                              whiteSpace: "nowrap",
+                                              overflow: "hidden",
+                                              textOverflow: "ellipsis",
+                                            }}
+                                          >
+                                            {sw.label}
+                                          </span>
+                                        </div>
+                                        <span
+                                          style={{
+                                            fontFamily: "ui-monospace, monospace",
+                                            fontSize: "9px",
+                                            fontWeight: 600,
+                                            color: tokens.textSecondary,
+                                            letterSpacing: "-0.02em",
+                                          }}
+                                        >
+                                          {sw.color}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {/* Row 4: Description (Uniform 3-Line Card Box) */}
+                                  <div
+                                    style={{
+                                      fontSize: "11.5px",
+                                      color: tokens.textSecondary,
+                                      lineHeight: 1.45,
+                                      minHeight: "50px",
+                                      display: "-webkit-box",
+                                      WebkitLineClamp: 3,
+                                      WebkitBoxOrient: "vertical",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                    }}
+                                    title={pal.description || ""}
+                                  >
+                                    {pal.description || "Balanced color harmony for storefront surfaces, clean borders, and accent buttons."}
+                                  </div>
+
+                                  {/* Row 5: Action Button (Pinned to Bottom) */}
+                                  <button
+                                    type="button"
+                                    style={{
+                                      width: "100%",
+                                      padding: "7px 0",
+                                      borderRadius: "8px",
+                                      border: "none",
+                                      background: tokens.accent,
+                                      color: "#ffffff",
+                                      fontSize: "12px",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                      marginTop: "auto",
+                                    }}
+                                  >
+                                    Select {pal.name}
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
 
-                        {/* Choice Cards (Layout Archetypes, Surface Materiality, Build Now) */}
+                        {/* Choice Options (Compact Interactive Selectable Cards) */}
                         {msg.choices && msg.choices.length > 0 && (
                           <div
                             style={{
-                              marginTop: "14px",
+                              marginTop: "12px",
                               display: "grid",
-                              gridTemplateColumns: msg.choices.length <= 3 ? "repeat(auto-fit, minmax(200px, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
-                              gap: "10px",
+                              gridTemplateColumns: msg.choices.length <= 2
+                                ? "repeat(auto-fit, minmax(180px, 1fr))"
+                                : "repeat(auto-fit, minmax(210px, 1fr))",
+                              gap: "8px",
                             }}
                           >
                             {msg.choices.map((choice) => {
                               const isBuildNow = choice.id === "build_now";
+                              const cleanLabel = (choice.label || choice.id)
+                                .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "")
+                                .replace(/^⚡\s*/, "")
+                                .trim();
+                              const cleanDescription = (choice.description || "")
+                                .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "")
+                                .replace(/^⚡\s*/, "")
+                                .trim();
+
                               return (
                                 <button
                                   key={choice.id}
                                   type="button"
                                   onClick={() => handleSelectChoice(choice)}
                                   style={{
-                                    padding: "10px 14px",
-                                    borderRadius: "12px",
+                                    padding: "11px 13px",
+                                    borderRadius: "10px",
                                     border: isBuildNow
-                                      ? `1px solid ${tokens.success}`
-                                      : `1px solid ${tokens.border}`,
+                                      ? (isDark ? "1px solid rgba(59, 130, 246, 0.35)" : "1px solid rgba(15, 98, 171, 0.25)")
+                                      : `1px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.08)"}`,
                                     background: isBuildNow
-                                      ? (isDark ? "rgba(16, 185, 129, 0.15)" : "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)")
-                                      : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
-                                    color: isBuildNow ? (isDark ? tokens.success : "#065f46") : tokens.textPrimary,
+                                      ? (isDark ? "rgba(59, 130, 246, 0.08)" : "rgba(15, 98, 171, 0.035)")
+                                      : (isDark ? "rgba(255, 255, 255, 0.025)" : "#ffffff"),
+                                    color: tokens.textPrimary,
                                     textAlign: "left",
                                     cursor: "pointer",
-                                    transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+                                    transition: "all 0.15s ease",
                                     display: "flex",
                                     flexDirection: "column",
-                                    gap: "4px",
-                                    boxShadow: isDark ? "none" : "0 2px 6px rgba(15,23,42,0.04)",
+                                    justifyContent: "flex-start",
+                                    gap: "6px",
+                                    minHeight: cleanDescription ? "88px" : "42px",
+                                    boxShadow: isDark ? "none" : "0 1px 3px rgba(15,23,42,0.03)",
                                   }}
                                   onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = tokens.accent;
+                                    e.currentTarget.style.background = isBuildNow
+                                      ? (isDark ? "rgba(59, 130, 246, 0.15)" : "rgba(15, 98, 171, 0.07)")
+                                      : (isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(15, 23, 42, 0.03)");
                                     e.currentTarget.style.transform = "translateY(-1px)";
-                                    e.currentTarget.style.boxShadow = isBuildNow
-                                      ? "0 6px 16px rgba(16,185,129,0.25)"
-                                      : (isDark ? "0 6px 16px rgba(0,0,0,0.3)" : "0 6px 16px rgba(37,99,235,0.18)");
-                                    e.currentTarget.style.borderColor = isBuildNow ? tokens.success : tokens.accent;
+                                    const radio = e.currentTarget.querySelector(".choice-radio-dot") as HTMLElement;
+                                    if (radio) {
+                                      radio.style.borderColor = tokens.accent;
+                                      radio.style.background = tokens.accent;
+                                    }
                                   }}
                                   onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = isBuildNow
+                                      ? (isDark ? "rgba(59, 130, 246, 0.35)" : "rgba(15, 98, 171, 0.25)")
+                                      : (isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.08)");
+                                    e.currentTarget.style.background = isBuildNow
+                                      ? (isDark ? "rgba(59, 130, 246, 0.08)" : "rgba(15, 98, 171, 0.035)")
+                                      : (isDark ? "rgba(255, 255, 255, 0.025)" : "#ffffff");
                                     e.currentTarget.style.transform = "translateY(0)";
-                                    e.currentTarget.style.boxShadow = isDark ? "none" : "0 2px 6px rgba(15,23,42,0.04)";
-                                    e.currentTarget.style.borderColor = isBuildNow ? tokens.success : tokens.border;
+                                    const radio = e.currentTarget.querySelector(".choice-radio-dot") as HTMLElement;
+                                    if (radio) {
+                                      radio.style.borderColor = isDark ? "rgba(255,255,255,0.25)" : "rgba(15,23,42,0.25)";
+                                      radio.style.background = "transparent";
+                                    }
                                   }}
                                 >
-                                  <div style={{ fontSize: "13px", fontWeight: 700, color: isBuildNow ? (isDark ? tokens.success : "#047857") : tokens.accentText }}>
-                                    {choice.label}
+                                  {/* Top row: Title + Select badge */}
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
+                                    <span
+                                      style={{
+                                        fontSize: "12.5px",
+                                        fontWeight: 600,
+                                        color: isBuildNow ? (isDark ? "#93c5fd" : "#0f62ab") : tokens.textPrimary,
+                                        whiteSpace: "nowrap",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                      }}
+                                    >
+                                      {cleanLabel}
+                                    </span>
+                                    {isBuildNow ? (
+                                      <span
+                                        style={{
+                                          fontSize: "9.5px",
+                                          fontWeight: 700,
+                                          textTransform: "uppercase",
+                                          letterSpacing: "0.03em",
+                                          padding: "1px 5px",
+                                          borderRadius: "4px",
+                                          background: isDark ? "rgba(59, 130, 246, 0.2)" : "rgba(15, 98, 171, 0.1)",
+                                          color: isDark ? "#93c5fd" : "#0f62ab",
+                                          flexShrink: 0,
+                                        }}
+                                      >
+                                        Fast Track
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="choice-radio-dot"
+                                        style={{
+                                          width: "12px",
+                                          height: "12px",
+                                          borderRadius: "50%",
+                                          border: `1.5px solid ${isDark ? "rgba(255,255,255,0.25)" : "rgba(15,23,42,0.25)"}`,
+                                          display: "inline-block",
+                                          flexShrink: 0,
+                                          transition: "all 0.15s ease",
+                                        }}
+                                      />
+                                    )}
                                   </div>
-                                  {choice.description && (
-                                    <div style={{ fontSize: "11px", color: tokens.textSecondary, lineHeight: 1.4 }}>
-                                      {choice.description}
+
+                                  {/* Bottom row: Description */}
+                                  {cleanDescription && (
+                                    <div
+                                      style={{
+                                        fontSize: "11px",
+                                        color: tokens.textSecondary,
+                                        lineHeight: 1.42,
+                                        display: "-webkit-box",
+                                        WebkitLineClamp: 4,
+                                        WebkitBoxOrient: "vertical",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      {cleanDescription}
                                     </div>
                                   )}
                                 </button>
