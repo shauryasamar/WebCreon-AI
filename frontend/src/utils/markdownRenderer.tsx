@@ -58,7 +58,7 @@ export function renderInlineMarkdown(text: string, theme?: MarkdownThemeProps): 
           target={href.startsWith("http") ? "_blank" : undefined}
           rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
           style={{
-            color: theme?.accentColor || "#2563eb",
+            color: theme?.accentColor || (theme?.isDark ? "#60a5fa" : "#2563eb"),
             textDecoration: "underline",
             fontWeight: 500,
           }}
@@ -92,7 +92,7 @@ export const MarkdownContent: React.FC<{
 }> = ({ content, theme, className = "" }) => {
   const textColor = theme?.textColor || (theme?.isDark ? "#f8fafc" : "#1e293b");
   const mutedColor = theme?.mutedColor || (theme?.isDark ? "#94a3b8" : "#64748b");
-  const accentColor = theme?.accentColor || "#2563eb";
+  const accentColor = theme?.accentColor || (theme?.isDark ? "#60a5fa" : "#2563eb");
   const borderColor = theme?.borderColor || (theme?.isDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.1)");
   const cardBg = theme?.cardBg || (theme?.isDark ? "#1e293b" : "#f8fafc");
 

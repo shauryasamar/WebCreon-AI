@@ -6,6 +6,7 @@ import { useAdminAuth } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
 import AccessDeniedView from "./AccessDeniedView";
 import GlassToast from "./GlassToast";
+import { ToggleSwitch } from "./AdminProducts";
 
 export type StorePage = {
   id: string;
@@ -217,33 +218,6 @@ const CopyIcon: React.FC = () => (
   </svg>
 );
 
-const plainCardStyle: React.CSSProperties = {
-  background: "var(--admin-surface, #ffffff)",
-  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
-  borderRadius: "10px",
-  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "8px 12px",
-  borderRadius: "6px",
-  border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
-  fontSize: "13px",
-  color: "var(--admin-text-primary, #0f172a)",
-  outline: "none",
-  background: "var(--admin-elevated-surface, #f8fafc)",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "12px",
-  fontWeight: 600,
-  color: "var(--admin-text-secondary, #64748b)",
-  marginBottom: "4px",
-};
-
 export interface AdminPagesProps {
   siteId?: string;
   siteSlug?: string;
@@ -252,6 +226,36 @@ export interface AdminPagesProps {
 const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: propSiteSlug }) => {
   const { hasPermission, isOwner } = useAdminAuth();
   const { isDark, tokens } = useAdminTheme();
+
+  // Unified styling tokens matching AdminCoupons & AdminProducts
+  const plainCardStyle: React.CSSProperties = {
+    background: tokens.surfaceBg,
+    borderRadius: "10px",
+    border: `1px solid ${tokens.border}`,
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    height: "36px",
+    padding: "0 10px",
+    borderRadius: "7px",
+    border: `1px solid ${tokens.border}`,
+    fontSize: "13px",
+    color: tokens.textPrimary,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+    colorScheme: isDark ? "dark" : "light",
+    boxSizing: "border-box",
+    outline: "none",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: "12px",
+    fontWeight: 700,
+    color: tokens.textSecondary,
+    marginBottom: "4px",
+    display: "block",
+  };
   const canViewPages = isOwner || hasPermission("pages:view");
   const canCreatePages = isOwner || hasPermission("pages:create");
   const canEditPages = isOwner || hasPermission("pages:edit");
@@ -1588,25 +1592,22 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
             </div>
           )}
 
-      {/* Markdown Editor Modal / Drawer */}
+      {/* Markdown Editor Modal - Organised Industrial Design matching AdminCoupons & AdminProducts */}
       {isEditorOpen && (
         <div
           style={{
             position: "fixed",
             top: "64px",
-            bottom: 0,
             left: 0,
             right: 0,
-            zIndex: 99999,
+            bottom: 0,
             background: "rgba(15, 23, 42, 0.65)",
-            backdropFilter: "blur(6px)",
+            zIndex: 1000,
+            overflowY: "auto",
             display: "flex",
             alignItems: "flex-start",
             justifyContent: "center",
-            padding: "24px 20px 40px 20px",
-            boxSizing: "border-box",
-            overflowY: "auto",
-            animation: "fadeIn 0.15s ease",
+            padding: "24px 16px 48px",
           }}
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsEditorOpen(false);
@@ -1615,648 +1616,723 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
           <div
             style={{
               background: tokens.surfaceBg,
-              borderRadius: "14px",
+              borderRadius: "12px",
               width: "100%",
-              maxWidth: "980px",
-              maxHeight: "calc(100vh - 110px)",
+              maxWidth: "880px",
+              boxShadow: isDark ? "0 24px 48px rgba(0,0,0,0.7)" : "0 24px 48px rgba(0,0,0,0.25)",
+              border: `1px solid ${tokens.border}`,
               display: "flex",
               flexDirection: "column",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)",
               overflow: "hidden",
-              margin: "auto 0",
+              marginBottom: "32px",
+              colorScheme: isDark ? "dark" : "light",
             }}
           >
-            {/* Modal Header */}
+            {/* Sticky Header */}
             <div
               style={{
+                position: "sticky",
+                top: 0,
+                zIndex: 20,
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                padding: "16px 24px",
+                padding: "14px 20px",
                 borderBottom: `1px solid ${tokens.border}`,
-                background: tokens.elevatedSurfaceBg,
-                flexShrink: 0,
+                background: tokens.surfaceBg,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: tokens.textPrimary }}>
-                      {editingPage ? `Edit "${editingPage.title}"` : "Create New Store Page"}
-                    </h2>
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        background: editingPage ? "#eff6ff" : "#ecfdf5",
-                        color: editingPage ? "#2563eb" : "#059669",
-                        padding: "2px 7px",
-                        borderRadius: "999px",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {editingPage ? "Editing" : "New Page"}
-                    </span>
-                  </div>
-                  <p style={{ margin: "2px 0 0 0", fontSize: "12.5px", color: tokens.textSecondary }}>
-                    Configure page details, write structured Markdown content, and adjust SEO settings.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsEditorOpen(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: tokens.textSecondary,
-                  cursor: "pointer",
-                  padding: "6px",
-                  borderRadius: "6px",
-                  display: "grid",
-                  placeItems: "center",
-                  transition: "all 0.15s ease",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#e2e8f0")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                title="Close editor"
-              >
-                <XMarkIcon />
-              </button>
-            </div>
-
-            {/* Modal Body (Scrollable & Cleanly Organized) */}
-            <form
-              onSubmit={handleSavePage}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                flex: 1,
-                overflowY: "auto",
-                padding: "20px 24px",
-                gap: "18px",
-              }}
-            >
-              {editorError && (
-                <div
-                  style={{
-                    padding: "10px 14px",
-                    background: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    borderRadius: "8px",
-                    color: "#b91c1c",
-                    fontSize: "13px",
-                    fontWeight: 500,
-                  }}
-                >
-                  {editorError}
-                </div>
-              )}
-
-              {/* Group 1: General Details */}
-              <div
-                style={{
-                  background: tokens.elevatedSurfaceBg,
-                  border: `1px solid ${tokens.border}`,
-                  borderRadius: "10px",
-                  padding: "16px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                }}
-              >
-                <div style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary, marginBottom: "2px" }}>
-                  1. Page General Information
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr", gap: "12px" }}>
-                  <div>
-                    <label style={labelStyle}>Page Title *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.title}
-                      onChange={(e) => {
-                        const newTitle = e.target.value;
-                        setFormData((prev) => ({
-                          ...prev,
-                          title: newTitle,
-                          slug: (!editingPage || !editingPage.is_default) ? slugify(newTitle) : prev.slug,
-                        }));
-                      }}
-                      placeholder="e.g. Shipping & Delivery Policy"
-                      style={inputStyle}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>
-                      URL Slug * {editingPage?.is_default && <span style={{ color: tokens.textMuted }}>(Core Locked)</span>}
-                    </label>
-                    <div style={{ display: "flex", alignItems: "center" }}>
-                      <span
-                        style={{
-                          padding: "8px 10px",
-                          background: tokens.elevatedSurfaceBg,
-                          border: `1px solid ${tokens.border}`,
-                          borderRight: "none",
-                          borderRadius: "6px 0 0 6px",
-                          fontSize: "12.5px",
-                          color: tokens.textSecondary,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        /
-                      </span>
-                      <input
-                        type="text"
-                        required
-                        disabled={Boolean(editingPage?.is_default)}
-                        value={formData.slug}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, slug: slugify(e.target.value) }))}
-                        placeholder="shipping-policy"
-                        style={{
-                          ...inputStyle,
-                          borderRadius: "0 6px 6px 0",
-                          fontFamily: "monospace",
-                          background: editingPage?.is_default ? (isDark ? tokens.elevatedSurfaceBg : "#f1f5f9") : (isDark ? tokens.surfaceBg : "#ffffff"),
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>Page Type</label>
-                    <select
-                      value={formData.page_type}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, page_type: e.target.value }))}
-                      style={{ ...inputStyle, cursor: "pointer" }}
-                    >
-                      <option value="custom">Custom Content</option>
-                      <option value="about">About Us</option>
-                      <option value="contact">Contact Us</option>
-                      <option value="policy">Privacy Policy</option>
-                      <option value="terms">Terms of Service</option>
-                      <option value="story">Brand Story</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label style={labelStyle}>Subtitle / Headline Tagline (Optional)</label>
-                  <input
-                    type="text"
-                    value={formData.subtitle}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, subtitle: e.target.value }))}
-                    placeholder="e.g. Everything you need to know about our domestic and international order dispatch."
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
-
-              {/* Group 1.5: Contact Specific Fields */}
-              {formData.page_type === "contact" && (
-                <div
-                  style={{
-                    padding: "14px 16px",
-                    background: isDark ? "rgba(2, 132, 199, 0.15)" : "#f0f9ff",
-                    border: `1px solid ${isDark ? "rgba(2, 132, 199, 0.35)" : "#bae6fd"}`,
-                    borderRadius: "10px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
-                  }}
-                >
-                  <div style={{ fontSize: "12.5px", fontWeight: 700, color: isDark ? "#38bdf8" : "#0369a1" }}>
-                    Contact Details Widget
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                    <div>
-                      <label style={{ ...labelStyle, color: "#0369a1" }}>Support Email</label>
-                      <input
-                        type="email"
-                        value={formData.contact_email}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, contact_email: e.target.value }))}
-                        placeholder="rohit.sharma@example.com"
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ ...labelStyle, color: "#0369a1" }}>Support Phone</label>
-                      <input
-                        type="text"
-                        value={formData.contact_phone}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, contact_phone: e.target.value }))}
-                        placeholder="+91 98765 43210"
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ ...labelStyle, color: "#0369a1" }}>Store Address / HQ</label>
-                      <input
-                        type="text"
-                        value={formData.contact_address}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, contact_address: e.target.value }))}
-                        placeholder="Flat 402, Lotus Heights, MG Road, Bengaluru"
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ ...labelStyle, color: "#0369a1" }}>Operating Hours</label>
-                      <input
-                        type="text"
-                        value={formData.contact_hours}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, contact_hours: e.target.value }))}
-                        placeholder="Mon - Sat: 9:00 AM - 7:00 PM IST"
-                        style={inputStyle}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Group 2: Markdown Content & Editor */}
-              <div
-                style={{
-                  background: tokens.surfaceBg,
-                  border: `1px solid ${tokens.border}`,
-                  borderRadius: "10px",
-                  padding: "16px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "8px",
-                  }}
-                >
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
-                    2. Page Content & Layout (Markdown) *
-                  </div>
-
-                  {/* Mode Tabs */}
-                  <div style={{ display: "inline-flex", background: tokens.elevatedSurfaceBg, borderRadius: "6px", padding: "2px", border: `1px solid ${tokens.border}` }}>
-                    <button
-                      type="button"
-                      onClick={() => setEditorTab("write")}
-                      style={{
-                        padding: "4px 12px",
-                        border: "none",
-                        borderRadius: "5px",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        background: editorTab === "write" ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                        color: editorTab === "write" ? tokens.textPrimary : tokens.textSecondary,
-                        boxShadow: editorTab === "write" ? (isDark ? "0 1px 2px rgba(0,0,0,0.4)" : "0 1px 2px rgba(0,0,0,0.08)") : "none",
-                      }}
-                    >
-                      ✏️ Write
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditorTab("preview")}
-                      style={{
-                        padding: "4px 12px",
-                        border: "none",
-                        borderRadius: "5px",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        background: editorTab === "preview" ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                        color: editorTab === "preview" ? tokens.textPrimary : tokens.textSecondary,
-                        boxShadow: editorTab === "preview" ? (isDark ? "0 1px 2px rgba(0,0,0,0.4)" : "0 1px 2px rgba(0,0,0,0.08)") : "none",
-                      }}
-                    >
-                      👁️ Live Preview
-                    </button>
-                  </div>
-                </div>
-
-                {/* Markdown Formatting Toolbar */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "6px 8px",
-                    background: tokens.elevatedSurfaceBg,
-                    border: `1px solid ${tokens.border}`,
-                    borderBottom: "none",
-                    borderRadius: "6px 6px 0 0",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleInsertFormat("**", "**", "bold text")}
-                    title="Bold (**text**)"
-                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontWeight: 700, fontSize: "12px", cursor: "pointer" }}
-                  >
-                    B
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertFormat("*", "*", "italic text")}
-                    title="Italic (*text*)"
-                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontStyle: "italic", fontSize: "12px", cursor: "pointer" }}
-                  >
-                    I
-                  </button>
-                  <span style={{ width: "1px", height: "16px", background: "#cbd5e1", margin: "0 2px" }} />
-                  <button
-                    type="button"
-                    onClick={() => handleInsertFormat("# ", "", "Heading 1")}
-                    title="H1 Heading"
-                    style={{ padding: "4px 7px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}
-                  >
-                    H1
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertFormat("## ", "", "Heading 2")}
-                    title="H2 Heading"
-                    style={{ padding: "4px 7px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}
-                  >
-                    H2
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertFormat("### ", "", "Heading 3")}
-                    title="H3 Heading"
-                    style={{ padding: "4px 7px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}
-                  >
-                    H3
-                  </button>
-                  <span style={{ width: "1px", height: "16px", background: "#cbd5e1", margin: "0 2px" }} />
-                  <button
-                    type="button"
-                    onClick={() => handleInsertFormat("- ", "", "List item")}
-                    title="Bullet List"
-                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
-                  >
-                    • List
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertFormat("1. ", "", "First item")}
-                    title="Numbered List"
-                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
-                  >
-                    1. List
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertFormat("> ", "", "Quote text")}
-                    title="Blockquote"
-                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
-                  >
-                    ❝ Quote
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertFormat("\n---\n", "", "")}
-                    title="Divider line"
-                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
-                  >
-                    — Divider
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertFormat("[", "](https://...)", "Link Text")}
-                    title="Insert Link"
-                    style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
-                  >
-                    🔗 Link
-                  </button>
-
-                  {/* Prebuilt Templates Menu */}
-                  <div style={{ marginLeft: "auto" }}>
-                    <select
-                      defaultValue=""
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          handleApplyTemplate(e.target.value);
-                          e.target.value = "";
-                        }
-                      }}
-                      style={{
-                        padding: "4px 8px",
-                        border: "1px solid #94a3b8",
-                        borderRadius: "4px",
-                        fontSize: "11.5px",
-                        fontWeight: 600,
-                        color: tokens.textPrimary,
-                        background: tokens.surfaceBg,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <option value="" disabled>
-                        📑 Insert Template...
-                      </option>
-                      <option value="privacy">Privacy Policy</option>
-                      <option value="terms">Terms of Service</option>
-                      <option value="faq">FAQ Accordion</option>
-                      <option value="shipping">Shipping & Delivery</option>
-                      <option value="story">Brand Story</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Editor Content Area */}
-                {editorTab === "write" ? (
-                  <textarea
-                    ref={textareaRef}
-                    required
-                    rows={12}
-                    value={formData.content}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
-                    placeholder="Type markdown content..."
+                <span style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary }}>
+                  {editingPage ? `Edit Store Page: ${editingPage.title}` : "Add New Store Page"}
+                </span>
+                {editingPage?.is_default && (
+                  <span
                     style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "12px",
+                      fontSize: "11px",
+                      color: tokens.textSecondary,
+                      background: tokens.elevatedSurfaceBg,
                       border: `1px solid ${tokens.border}`,
-                      borderRadius: "0 0 6px 6px",
-                      fontSize: "13.5px",
-                      fontFamily: "monospace",
-                      lineHeight: 1.5,
-                      resize: "vertical",
-                      minHeight: "220px",
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      padding: "20px",
-                      border: `1px solid ${tokens.border}`,
-                      borderRadius: "0 0 6px 6px",
-                      background: tokens.surfaceBg,
-                      minHeight: "220px",
-                      maxHeight: "360px",
-                      overflowY: "auto",
+                      padding: "2px 7px",
+                      borderRadius: "4px",
+                      fontWeight: 600,
                     }}
                   >
-                    <MarkdownContent content={formData.content} />
-                  </div>
+                    Core Page
+                  </span>
                 )}
               </div>
 
-              {/* Group 3: SEO Metadata Section (Collapsible) */}
-              <details
-                style={{
-                  border: `1px solid ${tokens.border}`,
-                  borderRadius: "10px",
-                  padding: "12px 16px",
-                  background: tokens.elevatedSurfaceBg,
-                }}
-              >
-                <summary style={{ fontSize: "13px", fontWeight: 700, color: tokens.textSecondary, cursor: "pointer" }}>
-                  3. Search Engine Optimization (SEO Meta Tags)
-                </summary>
-                <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "3px" }}>
-                      Meta Title (Recommended under 60 chars)
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={70}
-                      value={formData.meta_title}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, meta_title: e.target.value }))}
-                      placeholder={formData.title ? `${formData.title} | Brand Store` : "Page Title | Brand Store"}
-                      style={inputStyle}
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {/* Live / Draft Toggle */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    background: tokens.elevatedSurfaceBg,
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    border: `1px solid ${tokens.border}`,
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: formData.is_published ? (isDark ? "#4ade80" : "#15803d") : tokens.textSecondary,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        background: formData.is_published ? "#16a34a" : "#94a3b8",
+                        display: "inline-block",
+                      }}
                     />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "3px" }}>
-                      Meta Description (Recommended under 160 chars)
-                    </label>
-                    <textarea
-                      rows={2}
-                      maxLength={160}
-                      value={formData.meta_description}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, meta_description: e.target.value }))}
-                      placeholder="Brief summary shown on Google search results..."
-                      style={{ ...inputStyle, resize: "vertical" }}
-                    />
-                  </div>
+                    <span>{formData.is_published ? "Active on Store" : "Paused"}</span>
+                  </span>
+                  <ToggleSwitch
+                    checked={formData.is_published}
+                    onChange={(val) => setFormData((prev) => ({ ...prev, is_published: val }))}
+                  />
                 </div>
-              </details>
 
-              {/* Modal Footer Controls */}
+                <button
+                  type="button"
+                  onClick={() => setIsEditorOpen(false)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    fontSize: "18px",
+                    cursor: "pointer",
+                    color: tokens.textSecondary,
+                    padding: "4px",
+                    lineHeight: 1,
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                  title="Close form"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Form Body - Structured Industrial Design */}
+            <form onSubmit={handleSavePage} style={{ display: "flex", flexDirection: "column" }}>
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  paddingTop: "14px",
-                  borderTop: `1px solid ${tokens.border}`,
-                  marginTop: "4px",
+                  flexDirection: "column",
+                  gap: "14px",
+                  padding: "16px 20px",
+                  background: tokens.elevatedSurfaceBg,
                 }}
               >
-                {/* Publish Toggle */}
+                {editorError && (
+                  <div
+                    style={{
+                      padding: "10px 14px",
+                      background: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                      border: `1px solid ${isDark ? "rgba(239, 68, 68, 0.3)" : "#fecaca"}`,
+                      borderRadius: "8px",
+                      color: isDark ? "#fca5a5" : "#b91c1c",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {editorError}
+                  </div>
+                )}
+
+                {/* Card 1: General Details */}
                 <div
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "9px",
-                    cursor: "pointer",
-                    userSelect: "none",
+                    background: tokens.surfaceBg,
+                    borderRadius: "8px",
+                    border: `1px solid ${tokens.border}`,
+                    padding: "14px 16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
                   }}
-                  onClick={() => setFormData((prev) => ({ ...prev, is_published: !prev.is_published }))}
                 >
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={formData.is_published}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setFormData((prev) => ({ ...prev, is_published: !prev.is_published }));
-                    }}
+                  <div
                     style={{
-                      position: "relative",
-                      width: "34px",
-                      height: "19px",
-                      borderRadius: "999px",
-                      background: formData.is_published ? "#16a34a" : "#cbd5e1",
-                      border: "none",
-                      cursor: "pointer",
-                      transition: "background 0.2s ease",
-                      padding: 0,
-                      outline: "none",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      flexShrink: 0,
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      color: tokens.textPrimary,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      borderBottom: `1px solid ${tokens.border}`,
+                      paddingBottom: "6px",
+                    }}
+                  >
+                    General Details
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+                    <div>
+                      <label style={labelStyle}>Page Title *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.title}
+                        onChange={(e) => {
+                          const newTitle = e.target.value;
+                          setFormData((prev) => ({
+                            ...prev,
+                            title: newTitle,
+                            slug: (!editingPage || !editingPage.is_default) ? slugify(newTitle) : prev.slug,
+                          }));
+                        }}
+                        placeholder="e.g. Shipping & Delivery Policy"
+                        style={inputStyle}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>
+                        URL Slug * {editingPage?.is_default && <span style={{ color: tokens.textMuted }}>(Core Locked)</span>}
+                      </label>
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <span
+                          style={{
+                            padding: "0 10px",
+                            height: "36px",
+                            display: "flex",
+                            alignItems: "center",
+                            background: tokens.elevatedSurfaceBg,
+                            border: `1px solid ${tokens.border}`,
+                            borderRight: "none",
+                            borderRadius: "7px 0 0 7px",
+                            fontSize: "12.5px",
+                            color: tokens.textSecondary,
+                            fontFamily: "monospace",
+                            boxSizing: "border-box",
+                          }}
+                        >
+                          /
+                        </span>
+                        <input
+                          type="text"
+                          required
+                          disabled={Boolean(editingPage?.is_default)}
+                          value={formData.slug}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, slug: slugify(e.target.value) }))}
+                          placeholder="shipping-policy"
+                          style={{
+                            ...inputStyle,
+                            borderRadius: "0 7px 7px 0",
+                            fontFamily: "monospace",
+                            background: editingPage?.is_default ? tokens.elevatedSurfaceBg : (isDark ? tokens.elevatedSurfaceBg : "#ffffff"),
+                            cursor: editingPage?.is_default ? "not-allowed" : "text",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Page Type</label>
+                      <select
+                        value={formData.page_type}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, page_type: e.target.value }))}
+                        style={{ ...inputStyle, cursor: "pointer" }}
+                      >
+                        <option value="custom">Custom Content</option>
+                        <option value="about">About Us</option>
+                        <option value="contact">Contact Us</option>
+                        <option value="policy">Privacy Policy</option>
+                        <option value="terms">Terms of Service</option>
+                        <option value="story">Brand Story</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Subtitle / Headline Tagline (Optional)</label>
+                    <input
+                      type="text"
+                      value={formData.subtitle}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, subtitle: e.target.value }))}
+                      placeholder="e.g. Everything you need to know about our domestic and international order dispatch."
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                {/* Card 1.5: Contact Specific Fields */}
+                {formData.page_type === "contact" && (
+                  <div
+                    style={{
+                      background: tokens.surfaceBg,
+                      borderRadius: "8px",
+                      border: `1px solid ${tokens.border}`,
+                      padding: "14px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
                     }}
                   >
                     <div
                       style={{
-                        position: "absolute",
-                        top: "2px",
-                        left: formData.is_published ? "17px" : "2px",
-                        width: "15px",
-                        height: "15px",
-                        borderRadius: "50%",
-                        background: tokens.surfaceBg,
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
-                        transition: "left 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        color: tokens.textPrimary,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        borderBottom: `1px solid ${tokens.border}`,
+                        paddingBottom: "6px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
                       }}
-                    />
-                  </button>
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: formData.is_published ? "#15803d" : "#64748b" }}>
-                    {formData.is_published ? "Active (Visible on Storefront)" : "Inactive (Hidden from Storefront)"}
-                  </span>
-                </div>
+                    >
+                      <span>Contact Widget Details</span>
+                      <span
+                        style={{
+                          fontSize: "10.5px",
+                          fontWeight: 600,
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                          background: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+                          color: isDark ? "#93c5fd" : "#2563eb",
+                          textTransform: "none",
+                        }}
+                      >
+                        Live storefront contact cards
+                      </span>
+                    </div>
 
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditorOpen(false)}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+                      <div>
+                        <label style={labelStyle}>Support Email</label>
+                        <input
+                          type="email"
+                          value={formData.contact_email}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, contact_email: e.target.value }))}
+                          placeholder="support@brandstore.com"
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Support Phone</label>
+                        <input
+                          type="text"
+                          value={formData.contact_phone}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, contact_phone: e.target.value }))}
+                          placeholder="+91 98765 43210"
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Store Address / HQ</label>
+                        <input
+                          type="text"
+                          value={formData.contact_address}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, contact_address: e.target.value }))}
+                          placeholder="Flat 402, Lotus Heights, Bengaluru"
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Operating Hours</label>
+                        <input
+                          type="text"
+                          value={formData.contact_hours}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, contact_hours: e.target.value }))}
+                          placeholder="Mon - Sat: 9:00 AM - 7:00 PM IST"
+                          style={inputStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Card 2: Markdown Content & Editor */}
+                <div
+                  style={{
+                    background: tokens.surfaceBg,
+                    borderRadius: "8px",
+                    border: `1px solid ${tokens.border}`,
+                    padding: "14px 16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                  }}
+                >
+                  <div
                     style={{
-                      padding: "8px 16px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      borderBottom: `1px solid ${tokens.border}`,
+                      paddingBottom: "8px",
+                      flexWrap: "wrap",
+                      gap: "8px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        color: tokens.textPrimary,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      Page Content (Markdown) *
+                    </div>
+
+                    {/* Mode Tabs */}
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        background: tokens.elevatedSurfaceBg,
+                        borderRadius: "6px",
+                        padding: "2px",
+                        border: `1px solid ${tokens.border}`,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setEditorTab("write")}
+                        style={{
+                          padding: "3px 10px",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "11.5px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          background: editorTab === "write" ? tokens.surfaceBg : "transparent",
+                          color: editorTab === "write" ? tokens.textPrimary : tokens.textSecondary,
+                          boxShadow: editorTab === "write" ? (isDark ? "0 1px 2px rgba(0,0,0,0.4)" : "0 1px 2px rgba(0,0,0,0.08)") : "none",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        ✏️ Write
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditorTab("preview")}
+                        style={{
+                          padding: "3px 10px",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "11.5px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          background: editorTab === "preview" ? tokens.surfaceBg : "transparent",
+                          color: editorTab === "preview" ? tokens.textPrimary : tokens.textSecondary,
+                          boxShadow: editorTab === "preview" ? (isDark ? "0 1px 2px rgba(0,0,0,0.4)" : "0 1px 2px rgba(0,0,0,0.08)") : "none",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        👁️ Live Preview
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Markdown Formatting Toolbar */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "6px 8px",
                       background: tokens.elevatedSurfaceBg,
                       border: `1px solid ${tokens.border}`,
-                      borderRadius: "7px",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      color: tokens.textSecondary,
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
+                      borderBottom: "none",
+                      borderRadius: "6px 6px 0 0",
+                      flexWrap: "wrap",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#e2e8f0")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = tokens.elevatedSurfaceBg)}
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={editorLoading}
-                    style={{
-                      padding: "8px 20px",
-                      background: "#2563eb",
-                      border: "none",
-                      borderRadius: "7px",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      color: "#ffffff",
-                      cursor: editorLoading ? "not-allowed" : "pointer",
-                      boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
-                      transition: "all 0.15s ease",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
-                  >
-                    {editorLoading ? "Saving..." : editingPage ? "Update Page" : "Publish Page"}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertFormat("**", "**", "bold text")}
+                      title="Bold (**text**)"
+                      style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontWeight: 700, fontSize: "12px", color: tokens.textPrimary, cursor: "pointer" }}
+                    >
+                      B
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertFormat("*", "*", "italic text")}
+                      title="Italic (*text*)"
+                      style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontStyle: "italic", fontSize: "12px", color: tokens.textPrimary, cursor: "pointer" }}
+                    >
+                      I
+                    </button>
+                    <span style={{ width: "1px", height: "16px", background: tokens.border, margin: "0 2px" }} />
+                    <button
+                      type="button"
+                      onClick={() => handleInsertFormat("# ", "", "Heading 1")}
+                      title="H1 Heading"
+                      style={{ padding: "4px 7px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "11px", fontWeight: 700, color: tokens.textPrimary, cursor: "pointer" }}
+                    >
+                      H1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertFormat("## ", "", "Heading 2")}
+                      title="H2 Heading"
+                      style={{ padding: "4px 7px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "11px", fontWeight: 700, color: tokens.textPrimary, cursor: "pointer" }}
+                    >
+                      H2
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertFormat("### ", "", "Heading 3")}
+                      title="H3 Heading"
+                      style={{ padding: "4px 7px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "11px", fontWeight: 700, color: tokens.textPrimary, cursor: "pointer" }}
+                    >
+                      H3
+                    </button>
+                    <span style={{ width: "1px", height: "16px", background: tokens.border, margin: "0 2px" }} />
+                    <button
+                      type="button"
+                      onClick={() => handleInsertFormat("- ", "", "List item")}
+                      title="Bullet List"
+                      style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", color: tokens.textPrimary, cursor: "pointer" }}
+                    >
+                      • List
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertFormat("1. ", "", "First item")}
+                      title="Numbered List"
+                      style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", color: tokens.textPrimary, cursor: "pointer" }}
+                    >
+                      1. List
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertFormat("> ", "", "Quote text")}
+                      title="Blockquote"
+                      style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", color: tokens.textPrimary, cursor: "pointer" }}
+                    >
+                      ❝ Quote
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertFormat("\n---\n", "", "")}
+                      title="Divider line"
+                      style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", color: tokens.textPrimary, cursor: "pointer" }}
+                    >
+                      — Divider
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertFormat("[", "](https://...)", "Link Text")}
+                      title="Insert Link"
+                      style={{ padding: "4px 8px", background: tokens.surfaceBg, border: `1px solid ${tokens.border}`, borderRadius: "4px", fontSize: "12px", color: tokens.textPrimary, cursor: "pointer" }}
+                    >
+                      🔗 Link
+                    </button>
+
+                    {/* Prebuilt Templates Menu */}
+                    <div style={{ marginLeft: "auto" }}>
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleApplyTemplate(e.target.value);
+                            e.target.value = "";
+                          }
+                        }}
+                        style={{
+                          padding: "4px 8px",
+                          border: `1px solid ${tokens.border}`,
+                          borderRadius: "4px",
+                          fontSize: "11.5px",
+                          fontWeight: 600,
+                          color: tokens.textPrimary,
+                          background: tokens.surfaceBg,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <option value="" disabled>
+                          📑 Insert Template...
+                        </option>
+                        <option value="privacy">Privacy Policy</option>
+                        <option value="terms">Terms of Service</option>
+                        <option value="faq">FAQ Accordion</option>
+                        <option value="shipping">Shipping & Delivery</option>
+                        <option value="story">Brand Story</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Editor Content Area */}
+                  {editorTab === "write" ? (
+                    <textarea
+                      ref={textareaRef}
+                      required
+                      rows={12}
+                      value={formData.content}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
+                      placeholder="Type markdown content..."
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "12px",
+                        border: `1px solid ${tokens.border}`,
+                        borderRadius: "0 0 6px 6px",
+                        fontSize: "13px",
+                        fontFamily: "monospace",
+                        lineHeight: 1.5,
+                        resize: "vertical",
+                        minHeight: "220px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        colorScheme: isDark ? "dark" : "light",
+                        outline: "none",
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        padding: "16px",
+                        border: `1px solid ${tokens.border}`,
+                        borderRadius: "0 0 6px 6px",
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        minHeight: "220px",
+                        maxHeight: "360px",
+                        overflowY: "auto",
+                      }}
+                    >
+                      {formData.content.trim() ? (
+                        <MarkdownContent
+                          content={formData.content}
+                          theme={{
+                            isDark,
+                            textColor: tokens.textPrimary,
+                            mutedColor: tokens.textSecondary,
+                            accentColor: isDark ? "#60a5fa" : (tokens.accent || "#2563eb"),
+                            borderColor: tokens.border,
+                            cardBg: tokens.surfaceBg,
+                          }}
+                        />
+                      ) : (
+                        <div style={{ color: tokens.textMuted, fontSize: "13px", fontStyle: "italic", padding: "12px 0" }}>
+                          No content written yet. Switch to the Write tab to start composing in Markdown.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                {/* Card 3: SEO Metadata Section */}
+                <div
+                  style={{
+                    background: tokens.surfaceBg,
+                    borderRadius: "8px",
+                    border: `1px solid ${tokens.border}`,
+                    padding: "14px 16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      color: tokens.textPrimary,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      borderBottom: `1px solid ${tokens.border}`,
+                      paddingBottom: "6px",
+                    }}
+                  >
+                    Search Engine Optimization (SEO)
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div>
+                      <label style={labelStyle}>
+                        Meta Title (Recommended under 60 chars)
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={70}
+                        value={formData.meta_title}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, meta_title: e.target.value }))}
+                        placeholder={formData.title ? `${formData.title} | Brand Store` : "Page Title | Brand Store"}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>
+                        Meta Description (Recommended under 160 chars)
+                      </label>
+                      <textarea
+                        rows={2}
+                        maxLength={160}
+                        value={formData.meta_description}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, meta_description: e.target.value }))}
+                        placeholder="Brief summary shown on Google search results..."
+                        style={{ ...inputStyle, height: "auto", minHeight: "60px", padding: "8px 10px", resize: "vertical" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sticky Footer */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "10px",
+                  padding: "12px 20px",
+                  borderTop: `1px solid ${tokens.border}`,
+                  background: tokens.surfaceBg,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsEditorOpen(false)}
+                  style={{
+                    height: "34px",
+                    padding: "0 16px",
+                    background: tokens.surfaceBg,
+                    border: `1px solid ${tokens.border}`,
+                    borderRadius: "6px",
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                    color: tokens.textSecondary,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editorLoading}
+                  style={{
+                    height: "34px",
+                    padding: "0 18px",
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "12.5px",
+                    fontWeight: 700,
+                    cursor: editorLoading ? "not-allowed" : "pointer",
+                    opacity: editorLoading ? 0.7 : 1,
+                    boxShadow: "0 1px 2px rgba(37,99,235,0.2)",
+                  }}
+                >
+                  {editorLoading ? "Saving..." : editingPage ? "Save Changes" : "Create Page"}
+                </button>
               </div>
             </form>
           </div>
@@ -2272,9 +2348,8 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
             bottom: 0,
             left: 0,
             right: 0,
-            zIndex: 99999,
+            zIndex: 1000,
             background: "rgba(15, 23, 42, 0.65)",
-            backdropFilter: "blur(6px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -2290,14 +2365,15 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
               borderRadius: "12px",
               maxWidth: "420px",
               width: "100%",
-              padding: "24px",
-              boxShadow: "0 20px 30px rgba(0,0,0,0.2)",
+              padding: "20px 24px",
+              border: `1px solid ${tokens.border}`,
+              boxShadow: isDark ? "0 24px 48px rgba(0,0,0,0.7)" : "0 24px 48px rgba(0,0,0,0.25)",
             }}
           >
-            <h3 style={{ margin: "0 0 8px 0", fontSize: "17px", fontWeight: 700, color: "#b91c1c" }}>
+            <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#dc2626" }}>
               Delete Page?
             </h3>
-            <p style={{ margin: "0 0 20px 0", fontSize: "13.5px", color: tokens.textSecondary, lineHeight: 1.5 }}>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.5 }}>
               Are you sure you want to delete <strong>"{deleteTarget.title}"</strong>? Any links pointing to <code>/{deleteTarget.slug}</code> will return a 404 page.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
@@ -2305,11 +2381,12 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                 type="button"
                 onClick={() => setDeleteTarget(null)}
                 style={{
-                  padding: "8px 14px",
-                  background: tokens.elevatedSurfaceBg,
+                  height: "34px",
+                  padding: "0 16px",
+                  background: tokens.surfaceBg,
                   border: `1px solid ${tokens.border}`,
                   borderRadius: "6px",
-                  fontSize: "13px",
+                  fontSize: "12.5px",
                   fontWeight: 600,
                   color: tokens.textSecondary,
                   cursor: "pointer",
@@ -2322,14 +2399,16 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                 disabled={deleteLoading}
                 onClick={handleDeletePage}
                 style={{
-                  padding: "8px 16px",
+                  height: "34px",
+                  padding: "0 18px",
                   background: "#dc2626",
                   border: "none",
                   borderRadius: "6px",
-                  fontSize: "13px",
-                  fontWeight: 600,
+                  fontSize: "12.5px",
+                  fontWeight: 700,
                   color: "#ffffff",
                   cursor: deleteLoading ? "not-allowed" : "pointer",
+                  boxShadow: "0 1px 2px rgba(220,38,38,0.2)",
                 }}
               >
                 {deleteLoading ? "Deleting..." : "Yes, Delete Page"}
