@@ -1673,13 +1673,16 @@ function StandaloneStorePageRedirect({ slug: propSlug }: { slug?: string }) {
       }
     }
 
-    const targetSlug =
+    const isCustomPage = Boolean(params.customSlug || location.pathname.startsWith("/pages/"));
+    const rawSlug =
       propSlug ||
       params.customSlug ||
       location.pathname.replace(/^\/pages\//, "").replace(/^\//, "");
 
+    const destination = isCustomPage ? `pages/${rawSlug}` : rawSlug;
+
     if (activeSlug) {
-      navigate(`/store/${activeSlug}/${targetSlug}`, { replace: true });
+      navigate(`/store/${activeSlug}/${destination}`, { replace: true });
       return;
     }
 
@@ -1691,7 +1694,7 @@ function StandaloneStorePageRedirect({ slug: propSlug }: { slug?: string }) {
           if (Array.isArray(sites) && sites.length > 0) {
             const chosen = sites[0]?.slug || sites[0]?.id;
             if (chosen) {
-              navigate(`/store/${chosen}/${targetSlug}`, { replace: true });
+              navigate(`/store/${chosen}/${destination}`, { replace: true });
               return;
             }
           }
@@ -1739,6 +1742,8 @@ function AppRoutes() {
         <Route path="/privacy" element={<StandaloneStorePageRedirect slug="privacy" />} />
         <Route path="/terms" element={<StandaloneStorePageRedirect slug="terms" />} />
         <Route path="/story" element={<StandaloneStorePageRedirect slug="story" />} />
+        <Route path="/products" element={<StandaloneStorePageRedirect slug="products" />} />
+        <Route path="/product" element={<StandaloneStorePageRedirect slug="products" />} />
         <Route path="/pages/:customSlug" element={<StandaloneStorePageRedirect />} />
 
         <Route element={<RequireAdminAuth />}>

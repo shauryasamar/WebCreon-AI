@@ -114,6 +114,8 @@ type ProductGridProps = {
   show_filter_button?: boolean;
   showFilterButton?: boolean;
   hideFilterButton?: boolean;
+  hide_filter_sidebar?: boolean;
+  hideFilterSidebar?: boolean;
   card_style?: string;
   cardStyle?: string;
   show_brand_name?: boolean;
@@ -211,6 +213,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   show_filter_button,
   showFilterButton,
   hideFilterButton,
+  hide_filter_sidebar,
+  hideFilterSidebar,
   show_brand_name = true,
   theme,
 }) => {
@@ -647,17 +651,19 @@ const ProductGrid: React.FC<ProductGridProps> = ({
         }
       `}</style>
       {/* Header & Filter Toolbar */}
-      <FilterSidebar
-        title={title}
-        subtitle={subtitle}
-        itemCount={itemCount ?? normalizedProducts.length}
-        activeFilterCount={activeFilterCount}
-        sortBy={sortBy}
-        onSortChange={onSortChange}
-        onFilterClick={onFilterClick}
-        showFilterButton={effectiveShowFilterButton}
-        theme={theme}
-      />
+      {!hideFilterSidebar && !hide_filter_sidebar && (
+        <FilterSidebar
+          title={title}
+          subtitle={subtitle}
+          itemCount={itemCount ?? normalizedProducts.length}
+          activeFilterCount={activeFilterCount}
+          sortBy={sortBy}
+          onSortChange={onSortChange}
+          onFilterClick={onFilterClick}
+          showFilterButton={effectiveShowFilterButton}
+          theme={theme}
+        />
+      )}
 
       {isProductsLoading && normalizedProducts.length === 0 ? (
         <div

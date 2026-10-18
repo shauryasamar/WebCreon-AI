@@ -3995,12 +3995,41 @@ function BuilderPageContent() {
                   })}
 
 
+                {/* Singular route aliases so links pointing to /product gracefully resolve to catalog / product detail */}
+                <Route
+                  path="product"
+                  element={<Navigate to="products" replace />}
+                />
+
                 {productDetailPage && (
                   <Route
                     path="products/:productSlug"
                     element={
                       <StorefrontPage
                         key={`product-detail-${productSlug || "unknown"}`}
+                        page={productDetailPage}
+                        siteDefinition={activeSiteDefinition}
+                        selectedProduct={selectedProduct}
+                        siteId={resolvedSiteId || siteId || ""}
+                        siteSlug={siteSlug}
+                        editMode={editMode}
+                        adminTopbarVisible={showAdminTopbar}
+                        selectedBlockId={selectedBlockId}
+                        onSelectBlock={handleSelectBlock}
+                        storefrontNavbarMode={storefrontNavbarMode}
+                        navbarFixedBounds={navbarFixedBounds}
+                        appBase={appBase}
+                      />
+                    }
+                  />
+                )}
+
+                {productDetailPage && (
+                  <Route
+                    path="product/:productSlug"
+                    element={
+                      <StorefrontPage
+                        key={`product-detail-singular-${productSlug || "unknown"}`}
                         page={productDetailPage}
                         siteDefinition={activeSiteDefinition}
                         selectedProduct={selectedProduct}

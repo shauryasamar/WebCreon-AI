@@ -10,6 +10,7 @@ import {
 } from "./FestiveGraphics";
 import { optimizeImageUrl } from "../utils/imageOptimizer";
 import { useDeviceMode } from "../context/DeviceModeContext";
+import { resolveInternalStoreNavigation } from "../utils/navigationUtils";
 
 export type HeroSlide = {
   id?: string;
@@ -309,27 +310,36 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const navigate = useNavigate();
 
   const handleCtaClick = (e: React.MouseEvent<HTMLAnchorElement>, href?: string) => {
-    if (!href || href === "#") {
+    if (!href || href === "#" || href.trim() === "") {
       e.preventDefault();
       return;
     }
-    if (
-      href.startsWith("http://") ||
-      href.startsWith("https://") ||
-      href.startsWith("mailto:") ||
-      href.startsWith("tel:")
-    ) {
+
+    const target = resolveInternalStoreNavigation(href, appBase, siteSlug);
+    if (!target) {
       return;
     }
+
     e.preventDefault();
-    let target = href;
-    const resolvedBase = appBase || (siteSlug ? `/store/${siteSlug}` : "");
-    if (resolvedBase && !target.startsWith("http") && !target.startsWith(resolvedBase)) {
-      const clean = target.startsWith("/") ? target : `/${target}`;
-      target = `${resolvedBase}${clean}`;
+
+    if (target.startsWith("#")) {
+      const el = document.getElementById(target.slice(1));
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth" });
+      }
+      return;
     }
+
     navigate(target);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    try {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+    const preview = typeof document !== "undefined" ? document.querySelector(".builder-preview-scroll") : null;
+    if (preview) {
+      preview.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   const isDarkMode = theme?.mode === "dark";
@@ -1199,6 +1209,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             {!isMobile && responsiveHeight >= 300 && (
               <a
                 href={pCard.product_href || currentSlide.primary_cta?.href || "/products"}
+                onClick={(e) => handleCtaClick(e, pCard.product_href || currentSlide.primary_cta?.href || "/products")}
                 style={{
                   textDecoration: "none",
                   background: isDarkMode ? "rgba(30,41,59,0.9)" : "rgba(255,255,255,0.9)",

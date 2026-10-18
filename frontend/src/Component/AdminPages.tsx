@@ -732,9 +732,9 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
   // Copy Public Link to Clipboard
   const handleCopyLink = (page: StorePage) => {
-    const { fullUrl } = getPagePublicUrls(page);
-    navigator.clipboard.writeText(fullUrl);
-    showToast(`Copied public link: ${fullUrl}`, "success");
+    const { relativePath } = getPagePublicUrls(page);
+    navigator.clipboard.writeText(relativePath);
+    showToast(`Page link copied! Use this in Hero Banner CTAs or buttons.`, "success");
   };
 
   // View Live Storefront Page

@@ -1232,13 +1232,11 @@ const RenderPage: React.FC<RenderPageProps> = ({
 
     // If searching OR viewing an expanded section (via "View All >" or Banner Link):
     // HIDE ALL other hero banners, carousels, category grids, brand grids!
-    // ONLY show filter sidebar, product grid, and pagination.
+    // ONLY show product grid and pagination (ProductGrid embeds FilterSidebar toolbar).
     if (isDedicatedSectionOrSearchView) {
       blocks = blocks.filter((b) => {
         const type = String(b.type || "").toLowerCase();
         return (
-          type === "filter_sidebar" ||
-          type === "filtersidebar" ||
           type === "product_grid" ||
           type === "productgrid" ||
           type === "pagination"
@@ -1269,6 +1267,21 @@ const RenderPage: React.FC<RenderPageProps> = ({
           return !type.includes("banner") && !type.includes("hero");
         });
       }
+    }
+
+    // Filter out redundant filter_sidebar blocks if a product grid listing block is present,
+    // as ProductGrid already embeds FilterSidebar with title, filters, and sorting (preventing duplicate browse products headers).
+    const hasProductListing = blocks.some((b) => {
+      const type = String(b.type || "").toLowerCase();
+      const ds = b.data_source ?? b.datasource ?? undefined;
+      return PRODUCT_LISTING_TYPES.has(type) || ds === "products";
+    });
+
+    if (hasProductListing) {
+      blocks = blocks.filter((b) => {
+        const type = String(b.type || "").toLowerCase();
+        return !FILTER_TYPES.has(type);
+      });
     }
 
     let hasRenderedPrimaryCartBlock = false;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDeviceMode } from "../context/DeviceModeContext";
+import { resolveInternalStoreNavigation } from "../utils/navigationUtils";
 import {
   DiwaliGraphics,
   HoliGraphics,
@@ -96,7 +97,8 @@ const Footer: React.FC<FooterProps> = (props) => {
   const brandName = props.brandName || props.brand_name || theme?.brand_name || "Website";
   const tagline = props.tagline !== undefined ? props.tagline : "Your premium shopping destination.";
 
-  const appBase = props.appBase || (props.siteSlug ? `/store/${props.siteSlug}` : "");
+  const siteSlug = props.siteSlug;
+  const appBase = props.appBase || (siteSlug ? `/store/${siteSlug}` : "");
 
   const navigate = useNavigate();
 
@@ -123,31 +125,33 @@ const Footer: React.FC<FooterProps> = (props) => {
   }, [rawLinks, appBase]);
 
   const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href?: string) => {
-    if (!href || href === "#") {
+    if (!href || href === "#" || href.trim() === "") {
       e.preventDefault();
       return;
     }
-    if (
-      href.startsWith("http://") ||
-      href.startsWith("https://") ||
-      href.startsWith("mailto:") ||
-      href.startsWith("tel:")
-    ) {
+
+    const target = resolveInternalStoreNavigation(href, appBase, siteSlug);
+    if (!target) {
       return;
     }
+
     e.preventDefault();
-    let target = href;
-    if (appBase && !target.startsWith("http") && !target.startsWith(appBase)) {
-      const clean = target.startsWith("/") ? target : `/${target}`;
-      target = `${appBase}${clean}`;
+
+    if (target.startsWith("#")) {
+      const el = document.getElementById(target.slice(1));
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth" });
+      }
+      return;
     }
+
     navigate(target);
     try {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
       window.scrollTo(0, 0);
     }
-    const preview = document.querySelector(".builder-preview-scroll");
+    const preview = typeof document !== "undefined" ? document.querySelector(".builder-preview-scroll") : null;
     if (preview) {
       preview.scrollTo({ top: 0, behavior: "smooth" });
     }
