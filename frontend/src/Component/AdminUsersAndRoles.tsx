@@ -1876,7 +1876,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       required
                       value={userName}
                       onChange={(e) => setUserName(e.target.value)}
-                      placeholder="e.g. Rahul Mehta"
+                      placeholder="e.g. Rohit Sharma"
                       style={inputStyle}
                     />
                   </div>
@@ -1889,7 +1889,7 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       disabled={drawerMode === "edit-user"}
                       value={userEmail}
                       onChange={(e) => setUserEmail(e.target.value)}
-                      placeholder="e.g. rahul.mehta@example.com"
+                      placeholder="e.g. rohit.sharma@example.com"
                       style={{
                         ...inputStyle,
                         background: drawerMode === "edit-user" ? (isDark ? "rgba(255,255,255,0.04)" : "#f8fafc") : (isDark ? tokens.surfaceBg : "#ffffff"),

@@ -800,6 +800,7 @@ const AdminProducts = () => {
 
   // Rich Filter Popover states
   const filterPopoverRef = useRef<HTMLDivElement | null>(null);
+  const filterButtonRef = useRef<HTMLButtonElement | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showFilterPopover, setShowFilterPopover] = useState(false);
   const [showReturnPolicyMenu, setShowReturnPolicyMenu] = useState(false);
@@ -815,6 +816,7 @@ const AdminProducts = () => {
   const [filterHasVideo, setFilterHasVideo] = useState<"all" | "with_video" | "images_only">("all");
   const [filterSortBy, setFilterSortBy] = useState<string>("newest");
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [storeBrands, setStoreBrands] = useState<string[]>([]);
 
@@ -1622,21 +1624,51 @@ const AdminProducts = () => {
   ]);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      const target = event.target as Node;
       if (
+        showReturnPolicyMenu &&
+        returnPolicyMenuRef.current &&
+        !returnPolicyMenuRef.current.contains(target)
+      ) {
+        setShowReturnPolicyMenu(false);
+      }
+      if (
+        showActionsMenu &&
+        actionsMenuRef.current &&
+        !actionsMenuRef.current.contains(target)
+      ) {
+        setShowActionsMenu(false);
+      }
+      if (
+        showFilterPopover &&
         filterPopoverRef.current &&
-        !filterPopoverRef.current.contains(event.target as Node)
+        !filterPopoverRef.current.contains(target) &&
+        !filterButtonRef.current?.contains(target)
       ) {
         setShowFilterPopover(false);
       }
     }
-    if (showFilterPopover) {
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setShowReturnPolicyMenu(false);
+        setShowActionsMenu(false);
+        setShowFilterPopover(false);
+      }
+    }
+
+    if (showReturnPolicyMenu || showActionsMenu || showFilterPopover) {
       document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [showFilterPopover]);
+  }, [showReturnPolicyMenu, showActionsMenu, showFilterPopover]);
 
   const openCodSettingsModal = () => {
     setTempMaxCodLimit(String(maxCodLimit));
@@ -2675,8 +2707,13 @@ const AdminProducts = () => {
             {/* Filter Toggle Button */}
             <div style={{ position: "relative" }}>
               <button
+                ref={filterButtonRef}
                 type="button"
-                onClick={() => setShowFilterPopover(!showFilterPopover)}
+                onClick={() => {
+                  setShowReturnPolicyMenu(false);
+                  setShowActionsMenu(false);
+                  setShowFilterPopover(!showFilterPopover);
+                }}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -4986,6 +5023,9 @@ const AdminProducts = () => {
               <button
                 key={tab.key}
                 onClick={() => {
+                  setShowReturnPolicyMenu(false);
+                  setShowActionsMenu(false);
+                  setShowFilterPopover(false);
                   if (statusFilter === tab.key) return;
                   setSelectedProductIds(new Set());
                   const nextStatus = tab.key as any;
@@ -5304,7 +5344,11 @@ const AdminProducts = () => {
                 <button
                   type="button"
                   disabled={isUpdatingReturnPolicy || !canEditProducts}
-                  onClick={() => setShowReturnPolicyMenu(!showReturnPolicyMenu)}
+                  onClick={() => {
+                    setShowActionsMenu(false);
+                    setShowFilterPopover(false);
+                    setShowReturnPolicyMenu(!showReturnPolicyMenu);
+                  }}
                   title="Configure store default return window"
                   style={{
                     display: "inline-flex",
@@ -5411,10 +5455,14 @@ const AdminProducts = () => {
 
               {/* Actions Dropdown (Compact) */}
               {(canCreateProducts || canEditProducts) && (
-                <div style={{ position: "relative" }}>
+                <div style={{ position: "relative" }} ref={actionsMenuRef}>
                   <button
                     type="button"
-                    onClick={() => setShowActionsMenu(!showActionsMenu)}
+                    onClick={() => {
+                      setShowReturnPolicyMenu(false);
+                      setShowFilterPopover(false);
+                      setShowActionsMenu(!showActionsMenu);
+                    }}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",

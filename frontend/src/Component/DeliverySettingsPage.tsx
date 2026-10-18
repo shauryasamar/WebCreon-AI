@@ -1653,7 +1653,7 @@ export default function DeliverySettingsPage() {
                         <input
                           type="text"
                           required
-                          placeholder="e.g. Rahul Sharma"
+                          placeholder="e.g. Rohit Sharma"
                           value={newAgentName}
                           onChange={(e) => setNewAgentName(e.target.value)}
                           style={{ ...inputStyle, height: "34px" }}
@@ -1686,7 +1686,7 @@ export default function DeliverySettingsPage() {
                             type="tel"
                             required
                             maxLength={10}
-                            placeholder="8825255108"
+                            placeholder="9876543210"
                             value={newAgentPhone}
                             onChange={(e) => setNewAgentPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                             style={{
@@ -2284,7 +2284,7 @@ export default function DeliverySettingsPage() {
                     <input
                       type="email"
                       disabled={!canEdit}
-                      placeholder="name@company.com"
+                      placeholder="rohit.sharma@example.com"
                       value={settings.shiprocket_email}
                       onChange={(e) => {
                         if (!canEdit) return;
@@ -2440,7 +2440,7 @@ export default function DeliverySettingsPage() {
                     <input
                       type="text"
                       disabled={!canEdit}
-                      placeholder="Warehouse Manager"
+                      placeholder="e.g. Rohit Sharma"
                       value={settings.sender_name}
                       onChange={(e) => {
                         if (!canEdit) return;
@@ -2481,7 +2481,7 @@ export default function DeliverySettingsPage() {
                         type="tel"
                         maxLength={10}
                         disabled={!canEdit}
-                        placeholder="8825255108"
+                        placeholder="9876543210"
                         value={settings.sender_phone}
                         onChange={(e) => {
                           if (!canEdit) return;
@@ -2507,7 +2507,7 @@ export default function DeliverySettingsPage() {
                     <input
                       type="text"
                       disabled={!canEdit}
-                      placeholder="e.g. Unit 4, Gate B"
+                      placeholder="e.g. Flat 402, Lotus Heights, MG Road"
                       value={settings.sender_address}
                       onChange={(e) => {
                         if (!canEdit) return;

@@ -8681,7 +8681,7 @@ function SupportEditor({
                   value={getStr("supportEmail", "") || getStr("support_email", "")}
                   onChange={(e) => updateProps({ supportEmail: e.target.value, support_email: e.target.value })}
                   style={textInputStyle}
-                  placeholder="support@yourstore.com"
+                  placeholder="rohit.sharma@example.com"
                 />
               </div>
 
@@ -10875,7 +10875,7 @@ function DeliveryFormEditor({
                   <input
                     type="text"
                     value={getStr("form_name_placeholder", "Full name")}
-                    placeholder="Full name"
+                    placeholder="e.g. Rohit Sharma"
                     onChange={(e) => updateProps({ form_name_placeholder: e.target.value })}
                     style={textInputStyle}
                   />

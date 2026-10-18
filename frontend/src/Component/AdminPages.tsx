@@ -1838,7 +1838,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         type="email"
                         value={formData.contact_email}
                         onChange={(e) => setFormData((prev) => ({ ...prev, contact_email: e.target.value }))}
-                        placeholder="support@store.com"
+                        placeholder="rohit.sharma@example.com"
                         style={inputStyle}
                       />
                     </div>
@@ -1848,7 +1848,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         type="text"
                         value={formData.contact_phone}
                         onChange={(e) => setFormData((prev) => ({ ...prev, contact_phone: e.target.value }))}
-                        placeholder="+1 (800) 555-0199"
+                        placeholder="+91 98765 43210"
                         style={inputStyle}
                       />
                     </div>
@@ -1858,7 +1858,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         type="text"
                         value={formData.contact_address}
                         onChange={(e) => setFormData((prev) => ({ ...prev, contact_address: e.target.value }))}
-                        placeholder="100 Commerce Blvd, Suite 400"
+                        placeholder="Flat 402, Lotus Heights, MG Road, Bengaluru"
                         style={inputStyle}
                       />
                     </div>
@@ -1868,7 +1868,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         type="text"
                         value={formData.contact_hours}
                         onChange={(e) => setFormData((prev) => ({ ...prev, contact_hours: e.target.value }))}
-                        placeholder="Mon - Fri: 9am - 7pm EST"
+                        placeholder="Mon - Sat: 9:00 AM - 7:00 PM IST"
                         style={inputStyle}
                       />
                     </div>

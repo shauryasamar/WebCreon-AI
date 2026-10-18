@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { useAdminAuth } from "../context/AdminAuthContext";
@@ -666,7 +666,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                       type="text"
                       value={formCity}
                       onChange={(e) => setFormCity(e.target.value)}
-                      placeholder="City"
+                      placeholder="e.g. Bengaluru"
                       style={{ ...inputStyle, flex: 1 }}
                     />
                     <input
@@ -674,7 +674,7 @@ export const AdminTaxComplianceDesk: React.FC<{
                       maxLength={6}
                       value={formPincode}
                       onChange={(e) => setFormPincode(e.target.value)}
-                      placeholder="Pincode"
+                      placeholder="560038"
                       style={{ ...inputStyle, width: "100px" }}
                     />
                   </div>

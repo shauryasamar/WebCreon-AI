@@ -537,7 +537,7 @@ export default function TenantPaymentSettingsPage({ siteId: propSiteId }: { site
                   disabled={!canEdit}
                   value={holderName}
                   onChange={(e) => setHolderName(e.target.value)}
-                  placeholder="Full name as registered in bank records"
+                  placeholder="e.g. Rohit Sharma"
                   required
                   style={inputStyle}
                 />

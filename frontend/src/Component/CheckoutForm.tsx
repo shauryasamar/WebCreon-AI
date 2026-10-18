@@ -270,7 +270,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
                     <input
                       id="fullName"
                       name="fullName"
-                      placeholder="Enter your full name"
+                      placeholder="e.g. Rohit Sharma"
                       value={formData.fullName}
                       onChange={handleChange}
                       style={inputStyle}
@@ -305,7 +305,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
                       <input
                         id="email"
                         name="email"
-                        placeholder="you@example.com"
+                        placeholder="rohit.sharma@example.com"
                         value={formData.email}
                         onChange={handleChange}
                         style={inputStyle}
@@ -320,7 +320,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
                     <textarea
                       id="address"
                       name="address"
-                      placeholder="House number, street, area"
+                      placeholder="e.g. Flat 402, Lotus Heights, MG Road"
                       value={formData.address}
                       onChange={handleChange}
                       rows={4}
@@ -347,7 +347,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
                       <input
                         id="city"
                         name="city"
-                        placeholder="City"
+                        placeholder="e.g. Bengaluru"
                         value={formData.city}
                         onChange={handleChange}
                         style={inputStyle}
@@ -361,7 +361,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
                       <input
                         id="pincode"
                         name="pincode"
-                        placeholder="400001"
+                        placeholder="560038"
                         value={formData.pincode}
                         onChange={handleChange}
                         style={inputStyle}

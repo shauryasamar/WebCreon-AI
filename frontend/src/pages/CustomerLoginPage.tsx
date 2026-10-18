@@ -608,7 +608,7 @@ export default function CustomerLoginPage(props: CustomerLoginPageProps = {}) {
                 onFocus={() => setInputFocused("email")}
                 onBlur={() => setInputFocused(null)}
                 autoComplete="email"
-                placeholder="name@example.com"
+                placeholder="rohit.sharma@example.com"
                 style={{
                   width: "100%",
                   height: isMobile ? "36px" : "42px",
@@ -877,7 +877,7 @@ export default function CustomerLoginPage(props: CustomerLoginPageProps = {}) {
                     required
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
-                    placeholder="name@example.com"
+                    placeholder="rohit.sharma@example.com"
                     style={{
                       width: "100%",
                       height: "40px",

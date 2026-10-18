@@ -2169,7 +2169,7 @@ export const AdminSupportDesk: React.FC = () => {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Kunal Singh"
+                      placeholder="e.g. Rohit Sharma"
                       value={newAgentName}
                       onChange={(e) => setNewAgentName(e.target.value)}
                       style={{ ...inputStyle, height: "34px" }}
@@ -2201,7 +2201,7 @@ export const AdminSupportDesk: React.FC = () => {
                       <input
                         type="tel"
                         maxLength={10}
-                        placeholder="9211420420"
+                        placeholder="9876543210"
                         value={newAgentPhone}
                         onChange={(e) => setNewAgentPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                         style={{
@@ -2227,7 +2227,7 @@ export const AdminSupportDesk: React.FC = () => {
                     <input
                       type="email"
                       required
-                      placeholder="kunal@yourbrand.com"
+                      placeholder="rohit.sharma@example.com"
                       value={newAgentEmail}
                       onChange={(e) => setNewAgentEmail(e.target.value)}
                       style={{ ...inputStyle, height: "34px" }}

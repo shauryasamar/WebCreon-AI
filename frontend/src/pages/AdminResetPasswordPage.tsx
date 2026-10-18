@@ -233,7 +233,7 @@ export default function AdminResetPasswordPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@webcreon.com"
+                    placeholder="rohit.sharma@example.com"
                     required
                     style={{
                       height: "36px",

@@ -530,7 +530,7 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
               <label style={labelStyle}>Sender Email</label>
               <input
                 type="email"
-                placeholder="e.g. orders@mystore.com"
+                placeholder="e.g. rohit.sharma@example.com"
                 value={settings.sender_email || ""}
                 onChange={(e) => setSettings({ ...settings, sender_email: e.target.value })}
                 style={inputStyle}
@@ -541,7 +541,7 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
               <label style={labelStyle}>Reply-To Email</label>
               <input
                 type="email"
-                placeholder="e.g. support@mystore.com"
+                placeholder="e.g. rohit.sharma@example.com"
                 value={settings.reply_to_email || ""}
                 onChange={(e) => setSettings({ ...settings, reply_to_email: e.target.value })}
                 style={inputStyle}
@@ -720,7 +720,7 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
               <label style={labelStyle}>Recipient Email</label>
               <input
                 type="email"
-                placeholder="you@domain.com"
+                placeholder="rohit.sharma@example.com"
                 value={testRecipient}
                 onChange={(e) => setTestRecipient(e.target.value)}
                 style={inputStyle}

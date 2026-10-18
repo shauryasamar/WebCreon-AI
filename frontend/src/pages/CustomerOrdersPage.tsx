@@ -5272,7 +5272,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                           type="text"
                                           value={draft?.refund_upi_id || ""}
                                           onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_upi_id: e.target.value.trim() }))}
-                                          placeholder="Enter your UPI ID (e.g. yourname@okhdfcbank or 9876543210@paytm)"
+                                          placeholder="Enter your UPI ID (e.g. rohit.sharma@okhdfcbank or 9876543210@paytm)"
                                           style={{
                                             width: "100%",
                                             borderRadius: "10px",
@@ -5295,7 +5295,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                                             maxLength={70}
                                             value={draft?.refund_account_holder || ""}
                                             onChange={(e) => updateReturnDraft(order.id, (d) => ({ ...d, refund_account_holder: e.target.value.replace(/[^a-zA-Z\s.]/g, "") }))}
-                                            placeholder="Account Holder Full Name *"
+                                            placeholder="Account Holder Full Name (e.g. Rohit Sharma) *"
                                             style={{ width: "100%", borderRadius: "10px", border: cardBorder, background: isLight ? "#ffffff" : "rgba(255,255,255,0.04)", color: textPrimary, padding: "10px 14px", fontSize: "13px" }}
                                           />
                                         </div>

@@ -16,7 +16,7 @@ export const AdminGeneralSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
 
   const [storeName, setStoreName] = useState("WebCreon Flagship Store");
   const [tagline, setTagline] = useState("Premium online shopping experience powered by WebCreon");
-  const [supportEmail, setSupportEmail] = useState("support@brandstore.com");
+  const [supportEmail, setSupportEmail] = useState("rohit.sharma@example.com");
   const [supportPhone, setSupportPhone] = useState("+91 98765 43210");
   const [currency, setCurrency] = useState("INR");
   const [timezone, setTimezone] = useState("Asia/Kolkata");

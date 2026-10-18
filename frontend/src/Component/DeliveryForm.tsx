@@ -1533,7 +1533,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                         maxLength={100}
                         value={draftAddress.fullName}
                         onChange={handleDraftChange("fullName")}
-                        placeholder={form_name_placeholder || "e.g. Rahul Sharma"}
+                        placeholder={form_name_placeholder || "e.g. Rohit Sharma"}
                         required
                         style={{
                           ...inputBaseStyle,
@@ -1602,7 +1602,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                       maxLength={255}
                       value={draftAddress.address}
                       onChange={handleDraftChange("address")}
-                      placeholder={form_address_placeholder || "e.g. Flat 402, Block B, Green Heights"}
+                      placeholder={form_address_placeholder || "e.g. Flat 402, Lotus Heights, MG Road"}
                       required
                       style={{
                         ...inputBaseStyle,
@@ -1633,7 +1633,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                         maxLength={100}
                         value={draftAddress.city}
                         onChange={handleDraftChange("city")}
-                        placeholder={form_city_placeholder || "City / Area"}
+                        placeholder={form_city_placeholder || "e.g. Bengaluru"}
                         required
                         style={{
                           ...inputBaseStyle,
@@ -1657,7 +1657,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                         maxLength={6}
                         value={draftAddress.pincode}
                         onChange={handleDraftChange("pincode")}
-                        placeholder={form_pincode_placeholder || "e.g. 560102"}
+                        placeholder={form_pincode_placeholder || "560038"}
                         required
                         style={{
                           ...inputBaseStyle,
@@ -1680,7 +1680,7 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                       maxLength={120}
                       value={draftAddress.email}
                       onChange={handleDraftChange("email")}
-                      placeholder={form_email_placeholder || "name@example.com"}
+                      placeholder={form_email_placeholder || "rohit.sharma@example.com"}
                       style={{
                         ...inputBaseStyle,
                         background: form_input_bg || inputBaseStyle.background,

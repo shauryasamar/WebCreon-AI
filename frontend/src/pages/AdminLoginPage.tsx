@@ -414,7 +414,7 @@ export default function AdminLoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@webcreon.com"
+                  placeholder="rohit.sharma@example.com"
                   autoComplete="email"
                   required
                   style={{
@@ -667,7 +667,7 @@ export default function AdminLoginPage() {
                     type="email"
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
-                    placeholder="admin@webcreon.com"
+                    placeholder="rohit.sharma@example.com"
                     required
                     style={{
                       height: "40px",

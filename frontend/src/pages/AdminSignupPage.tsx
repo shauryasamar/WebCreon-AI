@@ -357,7 +357,7 @@ export default function AdminSignupPage() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="John Doe"
+                    placeholder="Rohit Sharma"
                     style={{
                       width: "100%",
                       height: "42px",
@@ -384,7 +384,7 @@ export default function AdminSignupPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@webcreon.com"
+                    placeholder="rohit.sharma@example.com"
                     required
                     style={{
                       width: "100%",

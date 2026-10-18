@@ -828,7 +828,7 @@ export default function CustomerProfilePage({
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Your full name"
+                  placeholder="e.g. Rohit Sharma"
                   className="wc-profile-input"
                   style={{
                     width: "100%",

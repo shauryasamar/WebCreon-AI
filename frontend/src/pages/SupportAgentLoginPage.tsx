@@ -138,7 +138,7 @@ export const SupportAgentLoginPage: React.FC = () => {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="agent@yourbrand.com"
+              placeholder="rohit.sharma@example.com"
               style={{
                 width: "100%",
                 height: "40px",

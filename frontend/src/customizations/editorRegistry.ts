@@ -936,7 +936,7 @@ const formNamePlaceholderField = {
   label: "Full Name placeholder",
   type: "text" as const,
   target: "props" as const,
-  placeholder: "e.g. Rahul Sharma",
+  placeholder: "e.g. Rohit Sharma",
 };
 
 const formPhonePlaceholderField = {
@@ -952,7 +952,7 @@ const formAddressPlaceholderField = {
   label: "Flat / Building placeholder",
   type: "text" as const,
   target: "props" as const,
-  placeholder: "e.g. Flat 402, Block B, Green Heights",
+  placeholder: "e.g. Flat 402, Lotus Heights, MG Road",
 };
 
 const formCityPlaceholderField = {
@@ -960,7 +960,7 @@ const formCityPlaceholderField = {
   label: "City / Locality placeholder",
   type: "text" as const,
   target: "props" as const,
-  placeholder: "City / Area",
+  placeholder: "e.g. Bengaluru",
 };
 
 const formPincodePlaceholderField = {
@@ -968,7 +968,7 @@ const formPincodePlaceholderField = {
   label: "Pincode placeholder",
   type: "text" as const,
   target: "props" as const,
-  placeholder: "e.g. 560102",
+  placeholder: "560038",
 };
 
 const formEmailPlaceholderField = {
@@ -976,7 +976,7 @@ const formEmailPlaceholderField = {
   label: "Email placeholder",
   type: "text" as const,
   target: "props" as const,
-  placeholder: "name@example.com",
+  placeholder: "rohit.sharma@example.com",
 };
 
 const formSaveButtonLabelField = {

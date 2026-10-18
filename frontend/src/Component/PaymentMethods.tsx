@@ -739,7 +739,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                         </label>
                         <input
                           type="text"
-                          placeholder="e.g. yourname@okhdfcbank or 9876543210@paytm"
+                          placeholder="e.g. rohit.sharma@okhdfcbank or 9876543210@paytm"
                           value={upiId}
                           onChange={(e) => {
                             const val = e.target.value;

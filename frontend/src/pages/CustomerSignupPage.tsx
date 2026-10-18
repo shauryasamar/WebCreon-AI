@@ -497,7 +497,7 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
                 onFocus={() => setInputFocused("name")}
                 onBlur={() => setInputFocused(null)}
                 autoComplete="name"
-                placeholder="Enter your full name"
+                placeholder="e.g. Rohit Sharma"
                 style={{
                   width: "100%",
                   height: isMobile ? "34px" : "40px",
@@ -530,7 +530,7 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
                 onFocus={() => setInputFocused("email")}
                 onBlur={() => setInputFocused(null)}
                 autoComplete="email"
-                placeholder="name@example.com"
+                placeholder="rohit.sharma@example.com"
                 style={{
                   width: "100%",
                   height: isMobile ? "34px" : "40px",
