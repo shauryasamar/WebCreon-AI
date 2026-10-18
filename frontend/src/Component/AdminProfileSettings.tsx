@@ -162,15 +162,16 @@ export default function AdminProfileSettings() {
       const data = await response.json();
       if (data.avatarUrl) {
         setAvatarUrl(data.avatarUrl);
-        setToast({ message: "Profile photo updated successfully!", type: "success" });
         setIsAvatarModalOpen(false);
-        await refreshAdmin();
       }
     } catch (err: any) {
       console.error("Avatar upload error:", err);
       setToast({ message: err.message || "Failed to upload avatar photo.", type: "error" });
     } finally {
       setUploadingAvatar(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 

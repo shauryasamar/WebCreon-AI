@@ -1,12 +1,17 @@
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, File, UploadFile, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Session, select, func
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+AVATARS_DIR = BASE_DIR / "uploads" / "avatars"
+AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 
 logger = logging.getLogger("auth_router")
 
@@ -662,7 +667,18 @@ def update_admin_profile(
     if payload.phone is not None:
         admin_obj.phone = payload.phone.strip()
     if payload.avatar_url is not None:
-        admin_obj.avatar_url = payload.avatar_url.strip()
+        new_avatar_url = payload.avatar_url.strip()
+        old_avatar_url = admin_obj.avatar_url
+        if old_avatar_url and old_avatar_url != new_avatar_url and "/uploads/avatars/" in old_avatar_url:
+            try:
+                old_filename = old_avatar_url.split("/uploads/avatars/")[-1].split("?")[0].strip()
+                if old_filename and not old_filename.startswith((".", "/")):
+                    old_file_path = AVATARS_DIR / old_filename
+                    if old_file_path.exists() and old_file_path.is_file():
+                        old_file_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+        admin_obj.avatar_url = new_avatar_url
     if payload.timezone is not None:
         admin_obj.timezone = payload.timezone.strip()
     if payload.theme_preference is not None:
@@ -711,18 +727,10 @@ def update_admin_theme(
     return {"themePreference": mode, "admin": serialize_admin(admin_obj, session)}
 
 
-from uuid import uuid4
-from pathlib import Path
-from fastapi import File, UploadFile
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-AVATARS_DIR = BASE_DIR / "uploads" / "avatars"
-AVATARS_DIR.mkdir(parents=True, exist_ok=True)
-
-
 @router.post("/admin/avatar")
 async def upload_admin_avatar(
     file: UploadFile = File(...),
+    apply: bool = Query(False),
     admin=Depends(authenticate_admin),
     session: Session = Depends(get_session),
 ):
@@ -768,26 +776,27 @@ async def upload_admin_avatar(
         with open(target_path, "wb") as f:
             f.write(content)
 
-    old_avatar_url = admin_obj.avatar_url
-
     avatar_url = f"/uploads/avatars/{filename}"
-    admin_obj.avatar_url = avatar_url
-    session.add(admin_obj)
-    session.commit()
-    session.refresh(admin_obj)
 
-    # Clean up old avatar image from disk if it was a local upload
-    if old_avatar_url and "/uploads/avatars/" in old_avatar_url:
-        try:
-            old_filename = old_avatar_url.split("/uploads/avatars/")[-1].split("?")[0].strip()
-            if old_filename and not old_filename.startswith((".", "/")):
-                old_file_path = AVATARS_DIR / old_filename
-                if old_file_path.exists() and old_file_path.is_file() and old_filename != filename:
-                    old_file_path.unlink(missing_ok=True)
-        except Exception:
-            pass
+    if apply:
+        old_avatar_url = admin_obj.avatar_url
+        admin_obj.avatar_url = avatar_url
+        session.add(admin_obj)
+        session.commit()
+        session.refresh(admin_obj)
 
-    return {"avatarUrl": avatar_url, "admin": serialize_admin(admin_obj)}
+        # Clean up old avatar image from disk if it was a local upload
+        if old_avatar_url and "/uploads/avatars/" in old_avatar_url:
+            try:
+                old_filename = old_avatar_url.split("/uploads/avatars/")[-1].split("?")[0].strip()
+                if old_filename and not old_filename.startswith((".", "/")):
+                    old_file_path = AVATARS_DIR / old_filename
+                    if old_file_path.exists() and old_file_path.is_file() and old_filename != filename:
+                        old_file_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    return {"avatarUrl": avatar_url, "admin": serialize_admin(admin_obj, session)}
 
 
 @router.get("/admin/me")
