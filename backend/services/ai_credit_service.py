@@ -605,5 +605,6 @@ def deduct_tokens_from_account(
         session.add(usage_event)
 
     session.commit()
+    print(f"\n💳 [CREDIT DEDUCTED] -{credits_to_debit} AI credit(s) for Admin {admin_id} | Feature: {feature_name} | Tokens: {total_tokens}")
     return credits_to_debit
 

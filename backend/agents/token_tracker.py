@@ -4,6 +4,7 @@ Tracks real-time prompt tokens, completion tokens, total tokens, and USD cost ac
 all agent invocations, sessions, and store building pipelines.
 """
 
+import os
 import threading
 import time
 from typing import Dict, Any, List, Optional
@@ -178,7 +179,7 @@ def _sync_deduct_credits(
     model_name: str,
 ) -> None:
     """Safely looks up the admin context and executes FIFO credit deduction."""
-    if total_tokens <= 0:
+    if total_tokens <= 0 or not session_id or os.getenv("SKIP_PALETTE_CREDIT_DEDUCTION", "false").lower() in ("true", "1", "yes"):
         return
 
     try:
@@ -217,6 +218,15 @@ def _sync_deduct_credits(
                     except Exception:
                         pass
 
+            # 3. Fallback to active admin for local/dev/test requests
+            if not admin_id:
+                try:
+                    admin = db.exec(select(Admin)).first()
+                    if admin:
+                        admin_id = admin.id
+                except Exception:
+                    pass
+
             if admin_id:
                 debited = deduct_tokens_from_account(
                     session=db,
@@ -226,7 +236,6 @@ def _sync_deduct_credits(
                     website_id=website_id,
                     model_name=model_name,
                 )
-                print(f"💳 [CREDIT DEDUCTED] -{debited} credits for Admin {admin_id} (Tokens: {total_tokens}, Agent: {agent_name})")
     except Exception as e:
         print("Credit deduction sync error:", e)
 

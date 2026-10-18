@@ -348,6 +348,27 @@ async def synthesize_agent_response(
             "action": agent_payload.get("action"),
         }
 
+    # 4. Handle Palette Suggestions (Fast-path to eliminate redundant LLM synthesis and save ~1,500 tokens)
+    palette_card = next(
+        (c for c in data_cards if c.get("type") in ("palette_suggestions_card", "component_palette_suggestions_card")),
+        None
+    )
+    if palette_card:
+        pal_count = len(palette_card.get("palettes") or [])
+        target_name = palette_card.get("target_component")
+        if target_name and target_name != "overall":
+            fast_reply = f"Here are {pal_count} distinct color palettes tailored for your **{target_name}**. Click **Apply** on any palette to preview it live!"
+        else:
+            fast_reply = f"Here are {pal_count} distinct, designer-crafted themes tailored for your store. Click **Apply** on any palette to preview it live on your store!"
+
+        return {
+            "assistant_reply": fast_reply,
+            "data_cards": data_cards,
+            "design_modified": False,
+            "next_draft_definition": None,
+            "action": agent_payload.get("action"),
+        }
+
     try:
         from agents.token_tracker import TokenCostCallback
         focused_summary = _build_focused_payload_summary(user_message, agent_payload)
@@ -433,6 +454,31 @@ async def stream_synthesize_agent_response(
             "next_draft_definition": next_draft_definition,
             "action": agent_payload.get("action"),
             "has_reverted_base": agent_payload.get("has_reverted_base", False),
+        }
+        return
+
+    # 4. Handle Palette Suggestions (Fast-path to eliminate redundant LLM streaming synthesis and save ~1,500 tokens)
+    palette_card = next(
+        (c for c in data_cards if c.get("type") in ("palette_suggestions_card", "component_palette_suggestions_card")),
+        None
+    )
+    if palette_card:
+        pal_count = len(palette_card.get("palettes") or [])
+        target_name = palette_card.get("target_component")
+        if target_name and target_name != "overall":
+            msg = f"Here are {pal_count} distinct color palettes tailored for your **{target_name}**. Click **Apply** on any palette to preview it live!"
+        else:
+            msg = f"Here are {pal_count} distinct, designer-crafted themes tailored for your store. Click **Apply** on any palette to preview it live on your store!"
+        yield {"type": "token", "content": msg}
+        yield {
+            "type": "done",
+            "assistant_reply": msg,
+            "data_cards": data_cards,
+            "design_modified": False,
+            "updated_draft_definition": None,
+            "next_draft_definition": None,
+            "action": agent_payload.get("action"),
+            "has_reverted_base": False,
         }
         return
 

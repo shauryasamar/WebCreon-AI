@@ -1423,6 +1423,8 @@ export default function BuilderDrawerPanel({
         background: tokens.surfaceBg,
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         transition: "background 0.2s ease",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
       <style>{`
@@ -2004,12 +2006,14 @@ export default function BuilderDrawerPanel({
       {deleteSiteModal && (
         <div
           style={{
-            position: "fixed",
+            position: "absolute",
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            background: isDark ? "rgba(0, 0, 0, 0.7)" : "rgba(15, 23, 42, 0.45)",
+            background: isDark ? "rgba(0, 0, 0, 0.75)" : "rgba(15, 23, 42, 0.55)",
+            backdropFilter: "blur(4px)",
+            WebkitBackdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -2022,7 +2026,7 @@ export default function BuilderDrawerPanel({
             onClick={(e) => e.stopPropagation()}
             style={{
               width: "100%",
-              maxWidth: "360px",
+              maxWidth: "320px",
               background: tokens.surfaceBg,
               borderRadius: "16px",
               padding: "20px",

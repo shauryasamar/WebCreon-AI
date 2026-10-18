@@ -62,6 +62,8 @@ export const componentRegistry: ComponentRegistry = {
   cart: CartSidebar,
   order_summary: CartSidebar,
   ordersummary: CartSidebar,
+  checkout_order_summary: CartSidebar,
+  checkoutordersummary: CartSidebar,
 
   admin_sidebar: AdminSidebar,
   adminsidebar: AdminSidebar,

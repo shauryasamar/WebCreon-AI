@@ -52,6 +52,8 @@ interface PromoCodeInputProps {
   cardBg?: string;
   inputBg?: string;
   borderColor?: string;
+  placeholder?: string;
+  buttonLabel?: string;
 }
 
 // Helper to determine if a background/text color is dark
@@ -177,6 +179,8 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
   cardBg = "#ffffff",
   inputBg = "#f8fafc",
   borderColor = "rgba(0, 0, 0, 0.1)",
+  placeholder = "Enter promo code",
+  buttonLabel = "Apply",
 }) => {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -478,7 +482,7 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
             <div style={{ position: "relative", flex: 1 }}>
               <input
                 type="text"
-                placeholder="Enter promo code"
+                placeholder={placeholder}
                 value={code}
                 onChange={(e) => {
                   setCode(e.target.value.toUpperCase());
@@ -519,7 +523,7 @@ export const PromoCodeInput: React.FC<PromoCodeInputProps> = ({
                 whiteSpace: "nowrap",
               }}
             >
-              {loading ? "Applying..." : "Apply"}
+              {loading ? "Applying..." : buttonLabel}
             </button>
           </div>
 

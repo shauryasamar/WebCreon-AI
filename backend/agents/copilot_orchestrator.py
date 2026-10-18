@@ -154,23 +154,43 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
             "active_agent": "Color & Design Agent (Revert)",
         }
 
-    # 1C. Palette / Theme Suggestion fast-path check
+    # 1C. Palette / Theme Suggestion fast-path check & Conversational Follow-Up Resolution
     suggestion_patterns = [
         r"\b(suggest|recommend|ideas?|options?)\b.*\b(theme|themes|tmplete|template|palette|palettes|colors?|colours?)\b",
         r"\b(theme|themes|tmplete|template|palette|palettes)\b.*\b(suggest|suggestion|suggestions|recommend|recommendation|recommendations|ideas?|options?)\b",
-        r"\b(give|show|generate|genrate|create|provide|share)\b.*\b(few|some|a\s+few|several|couple|multiple|different|various)\b.*\b(theme|themes|tmplete|template|palette|palettes|colors?|colours?)\b",
-        r"\b(give|show|generate|genrate|create|provide|share)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b",
-        r"\b(few|some|several|couple)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b",
+        r"\b(give|gve|ive|gimme|show|generate|genrate|create|provide|share|need|want|make)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b",
+        r"\b\d+\s+.*(theme|themes|palette|palettes)\b",
+        r"\b(few|some|several|couple|different|multiple)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b",
         r"\b(theme|themes|palette|palettes)\s+(suggestions?|options?|ideas?)\b",
-        r"\b(color|colour)\s+(palette|palettes)\b",
+        r"\b(color|colour|theme|themes)\s+(palette|palettes)\b",
+        r"\b(palette|palettes)\b",
+        r"\b(?:[1-6]|one|two|three|four|five|six)\s+(?:more|different|new)\b",
     ]
-    is_direct_component_override = any(w in user_msg_clean for w in [
+    direct_override_pattern = r"\b(?:change|make|set|turn|update|style)\s+(?:the\s+)?(?:store\s+|page\s+)?(navbar|header|footer|hero|banner|background|canvas|card|button)\b"
+    is_direct_component_override = bool(re.search(direct_override_pattern, user_msg_clean)) or any(w in user_msg_clean for w in [
         "change navbar", "change header", "change footer", "change hero", "change banner",
         "change background", "change card", "make navbar", "make header", "make footer",
         "make hero", "make button", "set navbar", "set footer", "set hero", "set background",
         "turn navbar", "turn footer", "turn hero", "turn background", "turn card"
     ])
-    is_palette_suggestion_request = not is_direct_component_override and any(bool(re.search(pat, user_msg_clean)) for pat in suggestion_patterns)
+    
+    # Check conversational follow-ups (e.g. "give me new one", "3 more", "5 more", "didn't like any")
+    history_str_clean = str(state.get("history_str") or "").lower()
+    has_palette_context = any(term in history_str_clean for term in ["palette", "theme", "suggested themes", "designer-crafted themes"])
+    followup_request_patterns = [
+        r"\b(new\s*one|another(?:\s*one)?|different(?:\s*ones?|\s*options?)?|more\s*options?|other\s*options?)\b",
+        r"\b(?:[1-6]|\d+|few|some|couple)\s*more\b",
+        r"\b(give|show|generate|genrate|create|provide)\s*(?:me\s*)?(?:[1-6]|\d+|more|new|another)\b",
+        r"\b(didn'?t\s*like|don'?t\s*like|not\s*liking|none\s*of\s*(?:these|them|it|those))\b",
+        r"^\s*(?:[1-6]|\d+)\s*more\s*$",
+        r"^\s*more\s*$",
+        r"^\s*new\s*one\s*$",
+        r"^\s*give\s*me\s*(?:new\s*one|[1-6]|\d+)\s*$",
+    ]
+    is_palette_followup = has_palette_context and any(bool(re.search(pat, user_msg_clean)) for pat in followup_request_patterns)
+    is_palette_suggestion_request = not is_direct_component_override and (
+        any(bool(re.search(pat, user_msg_clean)) for pat in suggestion_patterns) or is_palette_followup
+    )
     if is_palette_suggestion_request and not any(a in user_msg_clean for a in ["how to", "where is", "help with", "explain how", "documentation"]):
         return {
             "intent": "DESIGN",
@@ -180,6 +200,20 @@ async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
             "wants_palette_suggestions": True,
             "active_agent": "Color & Design Agent (Palettes)",
         }
+
+    # 1D. Direct Component Override Fast-Path (Bypasses redundant ~2,200 token Router LLM for instant direct styling)
+    if is_direct_component_override and not any(w in user_msg_clean for w in ["and show", "and check", "and list", "and tell", "and how"]):
+        from agents.color_design_agent import detect_target_component
+        detected_comp = detect_target_component(user_msg_clean)
+        if detected_comp and detected_comp not in ("unsupported", "revert", "banner_create"):
+            return {
+                "intent": "DESIGN",
+                "is_compound": False,
+                "compound_tasks": [],
+                "target_component": detected_comp,
+                "wants_palette_suggestions": False,
+                "active_agent": "Color & Design Agent (Direct)",
+            }
 
     # 2. Semantic Intent Router with Deep Sentiment, Context, & 100% Storefront Component Coverage
     router_prompt = ChatPromptTemplate.from_messages([
@@ -811,6 +845,8 @@ async def synthesizer_node(state: CoPilotGraphState) -> Dict[str, Any]:
 
 # Conditional Edge Router Function
 def route_intent(state: CoPilotGraphState) -> str:
+    if state.get("wants_palette_suggestions"):
+        return "color_agent_node"
     intent = state.get("intent", "CHAT")
     if intent == "GUARDRAIL":
         return "guardrail_node"

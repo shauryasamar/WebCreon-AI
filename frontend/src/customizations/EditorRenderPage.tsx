@@ -1338,9 +1338,20 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     }
     if (
       selectedBlockId === "payment_methods" ||
-      selectedBlockId === "checkout_order_summary"
+      selectedBlockId === "checkout_order_summary" ||
+      selectedBlockId === "order_summary" ||
+      selectedBlockId === "ordersummary" ||
+      selectedBlockId.includes("summary")
     ) {
       setCheckoutStep("payment");
+      return;
+    }
+    if (
+      selectedBlockId === "place_order_cta" ||
+      selectedBlockId === "checkout_review" ||
+      selectedBlockId === "review_and_pay"
+    ) {
+      setCheckoutStep("review");
       return;
     }
     const matched = blocksToRender.find((b) => (b.id || b.type) === selectedBlockId);
@@ -1498,7 +1509,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
         (selectedBlockId === "product_detail" && (PRODUCT_DETAIL_TYPES.has(block.type.toLowerCase()) || block.type.includes("detail"))) ||
         (selectedBlockId === "delivery_form" && DELIVERY_TYPES.has(block.type.toLowerCase())) ||
         (selectedBlockId === "payment_methods" && (block.id === "payment_methods" || block.type === "payment_methods" || PAYMENT_TYPES.has(block.type.toLowerCase()))) ||
-        (selectedBlockId === "checkout_order_summary" && (block.id === "checkout_order_summary" || block.type === "checkout_order_summary" || CHECKOUT_SUMMARY_TYPES.has(block.type.toLowerCase()))) ||
+        ((selectedBlockId === "checkout_order_summary" || selectedBlockId === "order_summary" || selectedBlockId === "ordersummary") && (block.id === "checkout_order_summary" || block.type === "checkout_order_summary" || block.id === "order_summary" || block.type === "order_summary" || CHECKOUT_SUMMARY_TYPES.has(block.type.toLowerCase()))) ||
         (selectedBlockId === "place_order_cta" && PLACE_ORDER_TYPES.has(block.type.toLowerCase())) ||
         ((selectedBlockId === "profile_details" || selectedBlockId === "profile") &&
           (block.id === "profile_details" || block.type === "profile_details" || block.type === "profile" || block.type === "profiledetails")) ||
@@ -1758,18 +1769,46 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     : "minmax(0, 1.2fr) minmax(340px, 0.8fr)";
 
   const reviewProps = (placeOrderBlock?.props ?? {}) as Record<string, any>;
-  const deliveryCardBg = (theme as any)?.delivery_form_bg || (theme as any)?.checkout_card_bg || cardBg;
+  const deliveryCardBg =
+    (theme as any)?.delivery_form_bg ||
+    (theme as any)?.checkout_card_bg ||
+    cardBg;
   const isDeliveryCardDark = isColorDarkHex(deliveryCardBg);
-  const deliveryText = (theme as any)?.delivery_form_text || (isDeliveryCardDark ? "#f8fafc" : "#0f172a");
+  const deliveryText =
+    (theme as any)?.delivery_form_text ||
+    (isDeliveryCardDark ? "#f8fafc" : "#0f172a");
 
-  const reviewCardBg = reviewProps.card_bg || reviewProps.card_color || deliveryCardBg;
+  const reviewContainerBg =
+    reviewProps.background_color ||
+    (theme as any)?.place_order_bg ||
+    (theme as any)?.checkout_review_bg ||
+    shellBg;
+  const isReviewContainerDark = isColorDarkHex(reviewContainerBg);
+
+  const reviewCardBg =
+    reviewProps.card_bg ||
+    reviewProps.card_color ||
+    (theme as any)?.place_order_card_bg ||
+    (theme as any)?.checkout_review_card_bg ||
+    deliveryCardBg;
   const isReviewCardDark = isColorDarkHex(reviewCardBg);
-  const reviewCardText = reviewProps.title_color || reviewProps.text_color || (isReviewCardDark ? "#f8fafc" : "#0f172a");
-  const reviewCardMuted = reviewProps.muted_text_color || (isReviewCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
+  const reviewCardText =
+    reviewProps.title_color ||
+    reviewProps.text_color ||
+    (theme as any)?.place_order_text ||
+    (isReviewCardDark ? "#f8fafc" : "#0f172a");
+  const reviewCardMuted =
+    reviewProps.muted_text_color ||
+    (isReviewCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
   const reviewCardRadius = reviewProps.card_radius !== undefined ? `${reviewProps.card_radius}px` : "14px";
   const reviewCardPadding = reviewProps.card_padding !== undefined ? `${reviewProps.card_padding}px` : (isCompactCheckout ? "14px" : "16px");
-  const reviewCardBorder = reviewProps.border_color ? `1px solid ${reviewProps.border_color}` : cardBorder;
-  const reviewAccentColor = reviewProps.accent_color || accentColor;
+  const reviewCardBorder =
+    reviewProps.border_color
+      ? `1px solid ${reviewProps.border_color}`
+      : (theme as any)?.place_order_border
+      ? `1px solid ${(theme as any).place_order_border}`
+      : cardBorder;
+  const reviewAccentColor = reviewProps.accent_color || (theme as any)?.place_order_btn_bg || accentColor;
   const reviewChangeLabel = reviewProps.change_label || "Change";
   const reviewItemsTitle = reviewProps.items_title || "Selected items";
   const reviewDeliveryTitle = reviewProps.delivery_title || "Delivery address";
@@ -2276,9 +2315,11 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                     mode: "checkout_summary",
                     compact: false,
                     paymentMethod: paymentData.method,
-                    show_promo: true,
+                    show_promo: summaryBlock.props?.show_promo !== undefined ? summaryBlock.props.show_promo : true,
+                    show_items: summaryBlock.props?.show_items !== undefined ? summaryBlock.props.show_items : true,
                     show_summary: true,
                     review_mode: true,
+                    ...(summaryBlock.props || {}),
                   })
                   : null}
               </aside>
@@ -2318,8 +2359,14 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
               <div
                 style={{
                   borderRadius: reviewProps.border_radius !== undefined ? `${reviewProps.border_radius}px` : "16px",
-                  border: reviewProps.soft_border_color ? `1px solid ${reviewProps.soft_border_color}` : shellBorder,
-                  background: reviewProps.background_color || shellBg,
+                  border: reviewProps.soft_border_color
+                    ? `1px solid ${reviewProps.soft_border_color}`
+                    : reviewProps.border_color
+                    ? `1px solid ${reviewProps.border_color}`
+                    : (theme as any)?.place_order_border
+                    ? `1px solid ${(theme as any).place_order_border}`
+                    : shellBorder,
+                  background: reviewContainerBg,
                   boxShadow: isLight
                     ? "0 1px 2px rgba(16,24,40,0.04)"
                     : "0 10px 24px rgba(0,0,0,0.16)",
@@ -2344,7 +2391,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                       margin: 0,
                       fontSize: "24px",
                       lineHeight: 1.1,
-                      color: reviewProps.section_title_color || (isColorDarkHex(reviewProps.background_color || shellBg) ? "#f8fafc" : "#0f172a"),
+                      color: reviewProps.section_title_color || (isReviewContainerDark ? "#f8fafc" : "#0f172a"),
                       fontWeight: 700,
                     }}
                   >
@@ -2511,6 +2558,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                         show_promo: false,
                         show_gift_card: false,
                         review_mode: true,
+                        ...(summaryBlock.props || {}),
                       })
                       : null}
 
@@ -2524,8 +2572,8 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
                           (paymentData.method.toUpperCase() === "COD"
                             ? (reviewProps.button_label || "Place Order")
                             : (reviewProps.pay_now_button_label || "Pay Now")),
-                        accentColor: reviewProps.button_bg_color || accentColor,
-                        text_color: reviewProps.button_text_color,
+                        accentColor: reviewProps.button_bg_color || (theme as any)?.place_order_btn_bg || accentColor,
+                        text_color: reviewProps.button_text_color || (theme as any)?.place_order_btn_text,
                         border_radius: reviewProps.button_border_radius ?? reviewProps.button_radius,
                         button_border_radius: reviewProps.button_border_radius ?? reviewProps.button_radius,
                         button_height: reviewProps.button_height,

@@ -733,50 +733,45 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
         bid === "cart_view" ||
         bid === "cart_items" ||
         bid === "order_summary" ||
+        bid === "checkout_order_summary" ||
         bid.includes("cart")
       ) {
-        if (targetTheme.cart_bg) {
-          updatedProps.background_color = targetTheme.cart_bg;
-          updatedProps.cart_bg = targetTheme.cart_bg;
-        } else if (targetTheme.primary_bg) {
-          updatedProps.background_color = targetTheme.primary_bg;
-          updatedProps.cart_bg = targetTheme.primary_bg;
+        const isOrderSummaryBlock = btype === "order_summary" || bid === "order_summary" || bid === "checkout_order_summary";
+        const summaryBg = isOrderSummaryBlock && targetTheme.order_summary_bg ? targetTheme.order_summary_bg : (targetTheme.cart_bg || targetTheme.primary_bg);
+        const summaryCardBg = isOrderSummaryBlock && (targetTheme.order_summary_card_bg || targetTheme.order_summary_bg) ? (targetTheme.order_summary_card_bg || targetTheme.order_summary_bg) : (targetTheme.cart_card_bg || targetTheme.card_bg);
+        const summaryText = isOrderSummaryBlock && targetTheme.order_summary_text ? targetTheme.order_summary_text : (targetTheme.cart_text_color || targetTheme.text_color);
+        const summaryAccent = isOrderSummaryBlock && targetTheme.order_summary_accent ? targetTheme.order_summary_accent : (targetTheme.cart_accent_color || targetTheme.accent_color);
+        const summaryBorder = isOrderSummaryBlock && targetTheme.order_summary_border ? targetTheme.order_summary_border : (targetTheme.cart_border_color || targetTheme.navbar_border_color || targetTheme.card_border_color);
+
+        if (summaryBg) {
+          updatedProps.background_color = summaryBg;
+          updatedProps.cart_bg = summaryBg;
         }
-        if (targetTheme.cart_panel_bg) {
-          updatedProps.panel_color = targetTheme.cart_panel_bg;
-          updatedProps.cart_panel_bg = targetTheme.cart_panel_bg;
+        if (targetTheme.cart_panel_bg || (isOrderSummaryBlock && targetTheme.order_summary_bg)) {
+          const panelBg = isOrderSummaryBlock && targetTheme.order_summary_bg ? targetTheme.order_summary_bg : targetTheme.cart_panel_bg;
+          updatedProps.panel_color = panelBg;
+          updatedProps.cart_panel_bg = panelBg;
         } else if (targetTheme.card_bg) {
           updatedProps.panel_color = targetTheme.card_bg;
           updatedProps.cart_panel_bg = targetTheme.card_bg;
         }
-        if (targetTheme.cart_card_bg) {
-          updatedProps.card_color = targetTheme.cart_card_bg;
-          updatedProps.cart_card_bg = targetTheme.cart_card_bg;
-        } else if (targetTheme.card_bg) {
-          updatedProps.card_color = targetTheme.card_bg;
-          updatedProps.cart_card_bg = targetTheme.card_bg;
+        if (summaryCardBg) {
+          updatedProps.card_color = summaryCardBg;
+          updatedProps.card_bg = summaryCardBg;
+          updatedProps.cart_card_bg = summaryCardBg;
         }
-        if (targetTheme.cart_text_color) {
-          updatedProps.text_color = targetTheme.cart_text_color;
-          updatedProps.cart_text_color = targetTheme.cart_text_color;
-        } else if (targetTheme.text_color) {
-          updatedProps.text_color = targetTheme.text_color;
-          updatedProps.cart_text_color = targetTheme.text_color;
+        if (summaryText) {
+          updatedProps.text_color = summaryText;
+          updatedProps.cart_text_color = summaryText;
+          updatedProps.title_color = summaryText;
         }
-        if (targetTheme.cart_accent_color) {
-          updatedProps.accent_color = targetTheme.cart_accent_color;
-          updatedProps.cart_accent_color = targetTheme.cart_accent_color;
-        } else if (targetTheme.accent_color) {
-          updatedProps.accent_color = targetTheme.accent_color;
-          updatedProps.cart_accent_color = targetTheme.accent_color;
+        if (summaryAccent) {
+          updatedProps.accent_color = summaryAccent;
+          updatedProps.cart_accent_color = summaryAccent;
         }
-        if (targetTheme.cart_border_color) {
-          updatedProps.border_color = targetTheme.cart_border_color;
-          updatedProps.cart_border_color = targetTheme.cart_border_color;
-        } else if (targetTheme.navbar_border_color || targetTheme.card_border_color) {
-          const bc = targetTheme.navbar_border_color || targetTheme.card_border_color;
-          updatedProps.border_color = bc;
-          updatedProps.cart_border_color = bc;
+        if (summaryBorder) {
+          updatedProps.border_color = summaryBorder;
+          updatedProps.cart_border_color = summaryBorder;
         }
       } else if (
         btype === "profile" ||
@@ -829,6 +824,22 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
           updatedProps.price_color = isDarkTheme ? "#ffffff" : "#0f172a";
         }
       } else if (
+        btype === "checkout_steps" ||
+        btype === "checkoutsteps" ||
+        btype === "checkout_stepper" ||
+        bid === "checkout_steps"
+      ) {
+        if (targetTheme.checkout_steps_bg || targetTheme.card_bg) {
+          updatedProps.background_color = targetTheme.checkout_steps_bg || targetTheme.card_bg;
+        }
+        if (targetTheme.checkout_steps_border || targetTheme.place_order_border) {
+          updatedProps.border_color = targetTheme.checkout_steps_border || targetTheme.place_order_border;
+        }
+        if (targetTheme.accent_color) {
+          updatedProps.active_step_bg = targetTheme.accent_color;
+          updatedProps.line_active_color = targetTheme.accent_color;
+        }
+      } else if (
         btype === "delivery_form" ||
         btype === "deliveryform" ||
         btype === "delivery_address_form" ||
@@ -836,9 +847,11 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
       ) {
         if (targetTheme.delivery_form_bg || targetTheme.card_bg) {
           updatedProps.background_color = targetTheme.delivery_form_bg || targetTheme.card_bg;
+          updatedProps.card_bg = targetTheme.delivery_form_card_bg || targetTheme.delivery_form_bg || targetTheme.card_bg;
         }
         if (targetTheme.delivery_form_text || targetTheme.text_color) {
           updatedProps.text_color = targetTheme.delivery_form_text || targetTheme.text_color;
+          updatedProps.title_color = targetTheme.delivery_form_text || targetTheme.text_color;
         }
         if (targetTheme.delivery_form_border || targetTheme.navbar_border_color) {
           updatedProps.border_color = targetTheme.delivery_form_border || targetTheme.navbar_border_color;
@@ -852,13 +865,16 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
       } else if (
         btype === "payment_methods" ||
         btype === "paymentmethods" ||
-        bid === "payment_methods"
+        bid === "payment_methods" ||
+        bid === "payment"
       ) {
         if (targetTheme.payment_bg || targetTheme.card_bg) {
-          updatedProps.card_bg = targetTheme.payment_bg || targetTheme.card_bg;
+          updatedProps.background_color = targetTheme.payment_bg || targetTheme.card_bg;
+          updatedProps.card_bg = targetTheme.payment_card_bg || targetTheme.payment_bg || targetTheme.card_bg;
         }
         if (targetTheme.payment_text_color || targetTheme.text_color) {
           updatedProps.text_color = targetTheme.payment_text_color || targetTheme.text_color;
+          updatedProps.title_color = targetTheme.payment_text_color || targetTheme.text_color;
         }
         if (targetTheme.payment_accent_color || targetTheme.accent_color) {
           updatedProps.accent_color = targetTheme.payment_accent_color || targetTheme.accent_color;
@@ -873,7 +889,8 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
         bid === "place_order_cta"
       ) {
         if (targetTheme.place_order_bg || targetTheme.card_bg) {
-          updatedProps.card_bg = targetTheme.place_order_bg || targetTheme.card_bg;
+          updatedProps.background_color = targetTheme.place_order_bg || targetTheme.card_bg;
+          updatedProps.card_bg = targetTheme.place_order_card_bg || targetTheme.place_order_bg || targetTheme.card_bg;
         }
         if (targetTheme.place_order_btn_bg || targetTheme.accent_color) {
           updatedProps.button_bg_color = targetTheme.place_order_btn_bg || targetTheme.accent_color;
@@ -883,6 +900,12 @@ export function applyThemeToPages(pages: EditorPage[], targetTheme: any): Editor
         }
         if (targetTheme.place_order_text || targetTheme.text_color) {
           updatedProps.text_color = targetTheme.place_order_text || targetTheme.text_color;
+          updatedProps.title_color = targetTheme.place_order_text || targetTheme.text_color;
+          updatedProps.section_title_color = targetTheme.place_order_text || targetTheme.text_color;
+        }
+        if (targetTheme.place_order_border) {
+          updatedProps.border_color = targetTheme.place_order_border;
+          updatedProps.soft_border_color = targetTheme.place_order_border;
         }
       }
 
@@ -1041,7 +1064,14 @@ export function findBlockById(
     };
   }
 
-  if (blockId === "checkout_order_summary" || blockId === "checkoutordersummary") {
+  if (
+    blockId === "checkout_order_summary" ||
+    blockId === "checkoutordersummary" ||
+    blockId === "order_summary" ||
+    blockId === "ordersummary" ||
+    blockId === "checkout_summary" ||
+    blockId.includes("summary")
+  ) {
     const checkoutP = siteDefinition.pages.find(
       (p) =>
         p.role === "checkout" ||
@@ -1053,8 +1083,13 @@ export function findBlockById(
       (b) =>
         b.id === "checkout_order_summary" ||
         b.type === "checkout_order_summary" ||
+        b.type === "checkoutordersummary" ||
         b.type === "order_summary" ||
-        b.id === "order_summary"
+        b.id === "order_summary" ||
+        b.type === "ordersummary" ||
+        b.id === "ordersummary" ||
+        String(b.id || "").toLowerCase().includes("summary") ||
+        String(b.type || "").toLowerCase().includes("summary")
     );
     if (inCheckout) return inCheckout;
     return {
@@ -2470,8 +2505,109 @@ export function updateBlockProps(
   if (nextPatch.navbar_bg && !nextPatch.navbar_outer_bg) {
     nextPatch.navbar_outer_bg = nextPatch.navbar_bg;
   }
+
+  // Detect whether this is a full theme or palette application (e.g. from Copilot suggestions or global palette picker)
+  const isGlobalThemeChange = isGlobalPatch || Boolean(
+    (nextPatch.primary_bg && nextPatch.accent_color) ||
+    (nextPatch.primary_bg && nextPatch.card_bg) ||
+    nextPatch.visual_style ||
+    nextPatch.palette_id ||
+    nextPatch.id
+  );
+
+  let componentBaselines: Record<string, any> = {};
+  if (isGlobalThemeChange) {
+    const rawMode = nextPatch.mode || siteDefinition.theme?.mode;
+    const isDark = rawMode === "dark" || isColorDarkHex(nextPatch.primary_bg || siteDefinition.theme?.primary_bg || "#ffffff");
+    const baseDefaults = isDark ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
+
+    const primaryBg = nextPatch.primary_bg || siteDefinition.theme?.primary_bg || baseDefaults.primary_bg;
+    const cardBg = nextPatch.card_bg || nextPatch.secondary_bg || siteDefinition.theme?.card_bg || baseDefaults.card_bg;
+    const textColor = nextPatch.text_color || siteDefinition.theme?.text_color || baseDefaults.text_color;
+    const mutedText = nextPatch.muted_text_color || nextPatch.muted_text || siteDefinition.theme?.muted_text_color || baseDefaults.muted_text_color;
+    const accentColor = nextPatch.accent_color || siteDefinition.theme?.accent_color || baseDefaults.accent_color;
+    const defaultNeutralBorder = isDark ? "rgba(255, 255, 255, 0.12)" : "#e2e8f0";
+    const borderColor = nextPatch.card_border_color || nextPatch.border_color || siteDefinition.theme?.card_border_color || siteDefinition.theme?.border_color || defaultNeutralBorder;
+    const navbarBorder = nextPatch.navbar_border_color || borderColor;
+
+    componentBaselines = {
+      cart_bg: primaryBg,
+      cart_panel_bg: cardBg,
+      cart_card_bg: cardBg,
+      cart_text_color: textColor,
+      cart_accent_color: accentColor,
+      cart_border_color: borderColor,
+      summary_bg: primaryBg,
+      summary_card_bg: cardBg,
+      summary_text_color: textColor,
+      summary_accent_color: accentColor,
+      summary_border_color: borderColor,
+      order_summary_bg: primaryBg,
+      order_summary_card_bg: cardBg,
+      order_summary_text: textColor,
+      order_summary_accent: accentColor,
+      order_summary_border: borderColor,
+      product_detail_bg: cardBg,
+      product_detail_text: textColor,
+      product_detail_btn_bg: accentColor,
+      product_detail_btn_text: "#ffffff",
+      badge_bg_color: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)",
+      badge_border_color: isDark ? "rgba(59,130,246,0.3)" : "rgba(37,99,235,0.2)",
+      product_detail_badge_bg: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)",
+      product_detail_badge_border: isDark ? "rgba(59,130,246,0.3)" : "rgba(37,99,235,0.2)",
+      delivery_form_bg: cardBg,
+      delivery_form_card_bg: cardBg,
+      delivery_form_text: textColor,
+      delivery_form_border: borderColor,
+      delivery_form_btn_bg: accentColor,
+      delivery_form_btn_text: "#ffffff",
+      delivery_form_input_bg: primaryBg,
+      delivery_form_input_text: textColor,
+      payment_bg: cardBg,
+      payment_card_bg: cardBg,
+      payment_text_color: textColor,
+      payment_accent_color: accentColor,
+      payment_border_color: borderColor,
+      place_order_bg: cardBg,
+      place_order_card_bg: cardBg,
+      place_order_btn_bg: accentColor,
+      place_order_btn_text: "#ffffff",
+      place_order_text: textColor,
+      place_order_border: borderColor,
+      checkout_steps_bg: cardBg,
+      checkout_steps_border: borderColor,
+      checkout_bg: primaryBg,
+      checkout_card_bg: cardBg,
+      profile_dropdown_bg: cardBg,
+      profile_dropdown_text: textColor,
+      profile_dropdown_border: borderColor,
+      order_history_bg: primaryBg,
+      order_history_card_bg: cardBg,
+      order_history_text: textColor,
+      order_history_muted_text: mutedText,
+      order_history_border: borderColor,
+      order_history_accent_color: accentColor,
+      support_bg: primaryBg,
+      support_card_bg: cardBg,
+      support_chat_bg: cardBg,
+      support_surface_bg: cardBg,
+      support_text_color: textColor,
+      support_muted_text: mutedText,
+      support_accent_color: accentColor,
+      support_border_color: borderColor,
+      card_bg: cardBg,
+      card_bg_color: cardBg,
+      card_text_color: textColor,
+      product_name_color: textColor,
+      card_border_color: borderColor,
+      brand_color: accentColor,
+      price_color: getSafePriceColor(undefined, textColor, isDark, cardBg),
+    };
+  }
+
   const updatedTheme = {
     ...siteDefinition.theme,
+    ...componentBaselines,
     ...nextPatch,
   };
 
@@ -2859,7 +2995,8 @@ export function saveThemeSnapshot(
   delete cleanCustomPatch.slides;
 
   const mode: ThemeMode = (cleanBaseTheme.mode === "light" ? "light" : "dark") as ThemeMode;
-  const baseDefaults = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
+  const isDark = mode === "dark";
+  const baseDefaults = isDark ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
 
   const primaryBg = cleanBaseTheme.primary_bg || baseDefaults.primary_bg;
   const cardBg = cleanBaseTheme.card_bg || baseDefaults.card_bg;
@@ -3042,7 +3179,8 @@ export function applyThemeSnapshot(
 
   const patchProps = found.theme;
   const mode: ThemeMode = patchProps.mode === "dark" ? "dark" : "light";
-  const baseDefaults = mode === "dark" ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
+  const isDark = mode === "dark";
+  const baseDefaults = isDark ? DEFAULT_DARK_THEME : DEFAULT_LIGHT_THEME;
 
   const cleanPatchProps: Record<string, any> = {};
   Object.keys(patchProps).forEach((k) => {

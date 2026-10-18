@@ -1736,18 +1736,46 @@ const RenderPage: React.FC<RenderPageProps> = ({
     : "minmax(0, 1.2fr) minmax(340px, 0.8fr)";
 
   const reviewProps = (placeOrderBlock?.props ?? {}) as Record<string, any>;
-  const deliveryCardBg = (theme as any)?.delivery_form_bg || (theme as any)?.checkout_card_bg || cardBg;
+  const deliveryCardBg =
+    (theme as any)?.delivery_form_bg ||
+    (theme as any)?.checkout_card_bg ||
+    cardBg;
   const isDeliveryCardDark = isColorDarkHex(deliveryCardBg);
-  const deliveryText = (theme as any)?.delivery_form_text || (isDeliveryCardDark ? "#f8fafc" : "#0f172a");
+  const deliveryText =
+    (theme as any)?.delivery_form_text ||
+    (isDeliveryCardDark ? "#f8fafc" : "#0f172a");
 
-  const reviewCardBg = reviewProps.card_bg || reviewProps.card_color || deliveryCardBg;
+  const reviewContainerBg =
+    reviewProps.background_color ||
+    (theme as any)?.place_order_bg ||
+    (theme as any)?.checkout_review_bg ||
+    shellBg;
+  const isReviewContainerDark = isColorDarkHex(reviewContainerBg);
+
+  const reviewCardBg =
+    reviewProps.card_bg ||
+    reviewProps.card_color ||
+    (theme as any)?.place_order_card_bg ||
+    (theme as any)?.checkout_review_card_bg ||
+    deliveryCardBg;
   const isReviewCardDark = isColorDarkHex(reviewCardBg);
-  const reviewCardText = reviewProps.title_color || reviewProps.text_color || (isReviewCardDark ? "#f8fafc" : "#0f172a");
-  const reviewCardMuted = reviewProps.muted_text_color || (isReviewCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
+  const reviewCardText =
+    reviewProps.title_color ||
+    reviewProps.text_color ||
+    (theme as any)?.place_order_text ||
+    (isReviewCardDark ? "#f8fafc" : "#0f172a");
+  const reviewCardMuted =
+    reviewProps.muted_text_color ||
+    (isReviewCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)");
   const reviewCardRadius = reviewProps.card_radius !== undefined ? `${reviewProps.card_radius}px` : "14px";
   const reviewCardPadding = reviewProps.card_padding !== undefined ? `${reviewProps.card_padding}px` : (isCompactCheckout ? "14px" : "16px");
-  const reviewCardBorder = reviewProps.border_color ? `1px solid ${reviewProps.border_color}` : cardBorder;
-  const reviewAccentColor = reviewProps.accent_color || accentColor;
+  const reviewCardBorder =
+    reviewProps.border_color
+      ? `1px solid ${reviewProps.border_color}`
+      : (theme as any)?.place_order_border
+      ? `1px solid ${(theme as any).place_order_border}`
+      : cardBorder;
+  const reviewAccentColor = reviewProps.accent_color || (theme as any)?.place_order_btn_bg || accentColor;
   const reviewChangeLabel = reviewProps.change_label || "Change";
   const reviewItemsTitle = reviewProps.items_title || "Selected items";
   const reviewDeliveryTitle = reviewProps.delivery_title || "Delivery address";
@@ -2412,11 +2440,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
                     mode: "checkout_summary",
                     compact: false,
                     paymentMethod: paymentData.method,
-                    show_promo: true,
+                    show_promo: summaryBlock.props?.show_promo !== undefined ? summaryBlock.props.show_promo : true,
+                    show_items: summaryBlock.props?.show_items !== undefined ? summaryBlock.props.show_items : true,
                     show_summary: true,
                     appliedCoupon,
                     onCouponApplied: setAppliedCoupon,
                     onCouponRemoved: () => setAppliedCoupon(null),
+                    ...(summaryBlock.props || {}),
                   })
                   : null}
               </aside>
@@ -2448,8 +2478,14 @@ const RenderPage: React.FC<RenderPageProps> = ({
             <div
               style={{
                 borderRadius: reviewProps.border_radius !== undefined ? `${reviewProps.border_radius}px` : "16px",
-                border: reviewProps.soft_border_color ? `1px solid ${reviewProps.soft_border_color}` : shellBorder,
-                background: reviewProps.background_color || shellBg,
+                border: reviewProps.soft_border_color
+                  ? `1px solid ${reviewProps.soft_border_color}`
+                  : reviewProps.border_color
+                  ? `1px solid ${reviewProps.border_color}`
+                  : (theme as any)?.place_order_border
+                  ? `1px solid ${(theme as any).place_order_border}`
+                  : shellBorder,
+                background: reviewContainerBg,
                 boxShadow: isLight
                   ? "0 1px 2px rgba(16,24,40,0.04)"
                   : "0 10px 24px rgba(0,0,0,0.16)",
@@ -2474,7 +2510,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                     margin: 0,
                     fontSize: "24px",
                     lineHeight: 1.1,
-                    color: reviewProps.section_title_color || (isColorDarkHex(reviewProps.background_color || shellBg) ? "#f8fafc" : "#0f172a"),
+                    color: reviewProps.section_title_color || (theme as any)?.place_order_text || (isReviewContainerDark ? "#f8fafc" : "#0f172a"),
                     fontWeight: 700,
                   }}
                 >
@@ -2644,6 +2680,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
                       show_gift_card: false,
                       review_mode: true,
                       appliedCoupon,
+                      ...(summaryBlock.props || {}),
                     })
                     : null}
 

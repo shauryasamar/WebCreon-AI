@@ -780,48 +780,27 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
       }
     }
 
-    // Apply theme patch via updateThemeValues so all pages and components purge old block-level color locks
-    const updatedDef = updateThemeValues(siteDefinition as any, themePatch);
+    // Apply theme patch via updateThemeValues with isGlobalPatch=true so all pages and components re-baseline to the new palette
+    const updatedDef = updateThemeValues(siteDefinition as any, themePatch, true);
 
     // Apply immediately on the builder canvas
     onSiteDefinitionChange(updatedDef);
 
-    // Draft changes remain client-side until user saves snapshot or publishes
-
-    // Add a confirmation message in chat
-    const timeNow = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    setMessages((prev) => [
-      ...prev,
-      { id: `user-${Date.now()}`, sender: "user", text: `Apply the "${palette.name}" color theme`, time: timeNow },
-    ]);
-
-    // Send to backend so the copilot can acknowledge the change
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/copilot/chat`, {
-        method: "POST",
+    // Persist draft asynchronously to server via standard REST endpoint (0 credits, 0 LLM)
+    const sId = siteId || (siteDefinition as any)?.id || (siteDefinition as any)?.site_id || getSiteStorageId(siteDefinition as any);
+    if (typeof window !== "undefined" && sId && sId !== "default_site") {
+      fetch(`${API_BASE_URL}/sites/${sId}/draft`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          site_id: siteId,
-          message: `I applied the "${palette.name}" color theme with these colors: ${JSON.stringify(themePatch)}`,
-          chat_history: messages.map((m) => ({ sender: m.sender, text: m.text })),
-          draft_definition: updatedDef,
-        }),
-      });
-      const data = await response.json();
-      setMessages((prev) => [
-        ...prev,
-        { id: `asst-${Date.now()}`, sender: "assistant", text: data.assistant_reply || `Applied the **${palette.name}** theme to your store! ✨`, time: timeNow },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { id: `asst-${Date.now()}`, sender: "assistant", text: `Applied the **${palette.name}** theme successfully! ✨`, time: timeNow },
-      ]);
-    } finally {
-      setLoading(false);
+        body: JSON.stringify({ draft_definition: updatedDef }),
+      }).catch((err) => console.error("Failed to persist theme draft to server:", err));
     }
+
+    // Direct, instant confirmation via toast notification without modifying chat messages or scrolling
+    const palName = palette.name || "Theme";
+    setToastMsg(`Applied "${palName}" theme live to your store! ✨`);
+    setTimeout(() => setToastMsg(null), 3000);
   };
 
   const handleCancel = () => {
@@ -1117,6 +1096,7 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
         background: chatBg,
         color: chatText,
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        position: "relative",
       }}
     >
       <style>{`
@@ -1152,23 +1132,40 @@ export const AdminCopilotChat: React.FC<AdminCopilotChatProps> = ({
             opacity: 0.95;
           }
         }
+
+        @keyframes copilotToastFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
       `}</style>
-      {/* Toast Notification Banner */}
+      {/* Toast Notification Banner - Floating Overlay */}
       {toastMsg && (
         <div
           style={{
-            padding: "8px 12px",
-            background: "rgba(240, 253, 244, 0.7)",
+            position: "absolute",
+            top: "10px",
+            left: "14px",
+            right: "14px",
+            zIndex: 100,
+            pointerEvents: "none",
+            padding: "8px 14px",
+            background: isDark ? "rgba(16, 185, 129, 0.2)" : "rgba(240, 253, 244, 0.94)",
             backdropFilter: "blur(12px) saturate(180%)",
             WebkitBackdropFilter: "blur(12px) saturate(180%)",
-            color: "#14532d",
-            border: "1px solid rgba(22, 163, 74, 0.3)",
+            color: isDark ? "#a7f3d0" : "#14532d",
+            border: `1px solid ${isDark ? "rgba(52, 211, 153, 0.3)" : "rgba(22, 163, 74, 0.3)"}`,
             fontSize: "12px",
             fontWeight: 600,
-            borderRadius: "8px",
-            marginBottom: "8px",
+            borderRadius: "10px",
             textAlign: "center",
-            boxShadow: "0 8px 24px 0 rgba(22, 101, 52, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.4)",
+            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.15)",
+            animation: "copilotToastFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
         >
           {toastMsg}

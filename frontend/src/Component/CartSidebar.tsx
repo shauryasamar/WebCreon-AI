@@ -478,6 +478,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const { siteId, slug } = useParams();
 
   const appliedCoupon = propAppliedCoupon !== undefined ? propAppliedCoupon : cartContextCoupon;
+  const isPromoVisible =
+    show_promo !== undefined && show_promo !== null
+      ? Boolean(show_promo)
+      : (theme as any)?.show_promo !== undefined && (theme as any)?.show_promo !== null
+      ? Boolean((theme as any).show_promo)
+      : true;
   const handleCouponApplied = (coupon: ValidatedCoupon) => {
     setCartContextCoupon(coupon);
     propOnCouponApplied?.(coupon);
@@ -625,21 +631,21 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
   const resolvedAccentColor =
     accent_color ||
     accentColor ||
-    (isCheckoutSummary ? (theme as any)?.summary_accent_color : (theme as any)?.cart_accent_color) ||
-    theme?.accent_color ||
-    "#7c3aed";
+    (isCheckoutSummary
+      ? (theme as any)?.summary_accent_color || theme?.accent_color || "#7c3aed"
+      : (theme as any)?.cart_accent_color || theme?.accent_color || "#7c3aed");
 
   const resolvedPrimaryBg =
     background_color ||
-    (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_bg) ||
-    theme?.primary_bg ||
-    (isDark ? "#121316" : "#f8fafc");
+    (isCheckoutSummary
+      ? (theme as any)?.summary_bg || theme?.primary_bg || (isDark ? "#121316" : "#f8fafc")
+      : (theme as any)?.cart_bg || theme?.primary_bg || (isDark ? "#121316" : "#f8fafc"));
 
   const resolvedTextColor =
     text_color ||
-    (isCheckoutSummary ? (theme as any)?.summary_text_color : (theme as any)?.cart_text_color) ||
-    theme?.text_color ||
-    (isDark ? "#e5e7eb" : "#0f172a");
+    (isCheckoutSummary
+      ? (theme as any)?.summary_text_color || theme?.text_color || (isDark ? "#e5e7eb" : "#0f172a")
+      : (theme as any)?.cart_text_color || theme?.text_color || (isDark ? "#e5e7eb" : "#0f172a"));
 
   const hasFestiveTint = Boolean(theme?.festival_theme);
 
@@ -675,35 +681,40 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
     const dynamicShellBorder =
       border_color ||
-      (isCheckoutSummary ? (theme as any)?.summary_border_color : (theme as any)?.cart_border_color) ||
-      (isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(15, 23, 42, 0.09)");
+      (isCheckoutSummary
+        ? (theme as any)?.summary_border_color || (isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(15, 23, 42, 0.09)")
+        : (theme as any)?.cart_border_color || (isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(15, 23, 42, 0.09)"));
 
     const dynamicCardBorder =
       border_color ||
-      (isCheckoutSummary ? (theme as any)?.summary_border_color : (theme as any)?.cart_border_color) ||
-      (isDark ? "rgba(255, 255, 255, 0.11)" : "rgba(15, 23, 42, 0.07)");
+      (isCheckoutSummary
+        ? (theme as any)?.summary_border_color || (isDark ? "rgba(255, 255, 255, 0.11)" : "rgba(15, 23, 42, 0.07)")
+        : (theme as any)?.cart_border_color || (isDark ? "rgba(255, 255, 255, 0.11)" : "rgba(15, 23, 42, 0.07)"));
 
     if (!isDark) {
       const shellBg =
         panel_color ||
         background_color ||
-        (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_bg) ||
-        "#ffffff";
+        (isCheckoutSummary
+          ? (theme as any)?.summary_bg || "#ffffff"
+          : (theme as any)?.cart_bg || "#ffffff");
       const panelBg =
         panel_color ||
-        (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_panel_bg) ||
-        mixHex(shellBg, "#000000", 0.03);
+        (isCheckoutSummary
+          ? (theme as any)?.summary_bg || mixHex(shellBg, "#000000", 0.03)
+          : (theme as any)?.cart_panel_bg || mixHex(shellBg, "#000000", 0.03));
       const cardBg =
         card_color ||
-        (isCheckoutSummary ? (theme as any)?.summary_card_bg : (theme as any)?.cart_card_bg) ||
-        "#ffffff";
+        (isCheckoutSummary
+          ? (theme as any)?.summary_card_bg || "#ffffff"
+          : (theme as any)?.cart_card_bg || "#ffffff");
 
       const cardText = getContrastingText(
         cardBg,
         text_color ||
-          (isCheckoutSummary ? (theme as any)?.summary_text_color : (theme as any)?.cart_text_color) ||
-          theme?.text_color ||
-          "#0f172a"
+          (isCheckoutSummary
+            ? (theme as any)?.summary_text_color || theme?.text_color || "#0f172a"
+            : (theme as any)?.cart_text_color || theme?.text_color || "#0f172a")
       );
 
       const isCardDark = isColorDarkHex(cardBg);
@@ -735,23 +746,30 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const shellBg =
       panel_color ||
       background_color ||
-      (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_panel_bg || (theme as any)?.cart_bg) ||
-      theme?.primary_bg ||
-      theme?.card_bg ||
-      (isDark ? "#121316" : "#ffffff");
+      (isCheckoutSummary
+        ? (theme as any)?.summary_bg || theme?.primary_bg || "#121316"
+        : (theme as any)?.cart_panel_bg || (theme as any)?.cart_bg || theme?.primary_bg || "#121316");
     const panelBg =
       panel_color ||
-      (isCheckoutSummary ? (theme as any)?.summary_bg : (theme as any)?.cart_panel_bg) ||
-      mixHex(shellBg, "#ffffff", 0.05);
+      (isCheckoutSummary
+        ? (theme as any)?.summary_bg || mixHex(shellBg, "#ffffff", 0.05)
+        : (theme as any)?.cart_panel_bg || mixHex(shellBg, "#ffffff", 0.05));
     const cardBg =
       card_color ||
-      (isCheckoutSummary ? (theme as any)?.summary_card_bg : (theme as any)?.cart_card_bg) ||
-      mixHex(shellBg, "#ffffff", 0.07);
+      (isCheckoutSummary
+        ? (theme as any)?.summary_card_bg || mixHex(shellBg, "#ffffff", 0.07)
+        : (theme as any)?.cart_card_bg || mixHex(shellBg, "#ffffff", 0.07));
     const mutedBg = mixHex(cardBg, "#000000", 0.15);
     const inputBg = card_color || mixHex(cardBg, "#000000", 0.12);
     const quantityBg = mixHex(cardBg, "#ffffff", 0.07);
 
-    const cardText = getContrastingText(cardBg, (theme as any)?.cart_text_color || text_color || theme?.text_color || "#ffffff");
+    const cardText = getContrastingText(
+      cardBg,
+      text_color ||
+        (isCheckoutSummary
+          ? (theme as any)?.summary_text_color || theme?.text_color || "#ffffff"
+          : (theme as any)?.cart_text_color || theme?.text_color || "#ffffff")
+    );
 
     return {
       pageBg,
@@ -1118,7 +1136,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
       </h4>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {show_promo !== false && (
+        {isPromoVisible && (
           <div style={{ marginBottom: "6px" }}>
             <PromoCodeInput
               siteId={siteId || slug || ""}
@@ -1133,6 +1151,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
               cardBg={palette.cardBg}
               inputBg={palette.inputBg}
               borderColor={palette.cardBorder}
+              placeholder={promoPlaceholder}
+              buttonLabel={promoButtonLabel}
             />
           </div>
         )}
@@ -1242,7 +1262,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             }}
           >
             <span style={{ display: "inline-flex", alignItems: "center" }}>
-              GST (Included in price)
+              {tax_label || "GST (Included in price)"}
               <ChargeInfoTooltip
                 text="Statutory GST is already included in item prices and will be itemized on your legal tax invoice."
                 palette={palette}

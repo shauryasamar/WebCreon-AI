@@ -40,108 +40,105 @@ function PageBlocksTreeView({
   const location = useLocation();
   const currentPath = location.pathname;
 
-  const resolvePageBlocks = useCallback((pageBlocks: any[] = [], defaultBodyBlocks: any[] = []) => {
-    const rawBlocks = Array.isArray(pageBlocks) && pageBlocks.length > 0 ? pageBlocks : defaultBodyBlocks;
+  const resolvePageBlocks = useCallback(
+    (pageBlocks: any[] = [], defaultBodyBlocks: any[] = []) => {
+      const rawBlocks = Array.isArray(pageBlocks) && pageBlocks.length > 0 ? pageBlocks : defaultBodyBlocks;
 
-    const mappedBlocks = rawBlocks.map((b: any) => {
-      const bType = String(b.type || "").toLowerCase();
-      const bId = String(b.id || "").toLowerCase();
-      let displayName = "Section";
+      // Filter out global navbar and footer because they are only placed explicitly on Home
+      const nonGlobalBlocks = rawBlocks.filter((b: any) => {
+        const bType = String(b?.type || "").toLowerCase();
+        const bId = String(b?.id || "").toLowerCase();
+        return bType !== "navbar" && bType !== "header" && bId !== "navbar" && bType !== "footer" && bId !== "footer";
+      });
 
-      if (bType === "navbar" || bType === "header" || bId === "navbar") {
-        displayName = "Navbar";
-      } else if (
-        bType === "hero_banner" ||
-        bType === "herobanner" ||
-        bType === "hero" ||
-        bType === "banner" ||
-        bId.includes("hero")
-      ) {
-        displayName = "Hero Banner";
-      } else if (
-        bType === "product_grid" ||
-        bType === "productgrid" ||
-        bId === "product_grid" ||
-        bId.includes("product_grid")
-      ) {
-        displayName = "Product Grid";
-      } else if (bType === "footer" || bId === "footer") {
-        displayName = "Footer";
-      } else if (
-        bType === "product_carousel" ||
-        bType === "productcarousel" ||
-        bType === "products_carousel"
-      ) {
-        displayName = b.props?.title || b.name || "Product Carousel";
-      } else if (
-        bType === "section_group_carousel" ||
-        bType === "sectiongroupcarousel"
-      ) {
-        displayName = b.props?.title || b.name || "Category Carousel";
-      } else if (bType === "category_grid" || bType === "categorygrid") {
-        displayName = b.props?.title || b.name || "Category Grid";
-      } else if (bType === "category_strip") {
-        displayName = b.props?.title || b.name || "Category Strip";
-      } else if (bType === "trust_badges") {
-        displayName = "Trust Badges";
-      } else if (bType === "product_detail" || bId === "product_detail") {
-        displayName = "Product Detail";
-      } else if (bType === "cart_view" || bType === "cart" || bId === "cart_view") {
-        displayName = "Cart View";
-      } else if (bType === "profile_details" || bType === "profile" || bId === "profile_details") {
-        displayName = "Profile Details";
-      } else if (bType === "customer_orders" || bId === "customer_orders") {
-        displayName = "Customer Orders & Tracking";
-      } else if (bType === "signin_form" || bId === "signin_form") {
-        displayName = "Sign In Form";
-      } else if (bType === "signup_form" || bId === "signup_form") {
-        displayName = "Sign Up Form";
-      } else if (bType === "customer_support" || bId === "customer_support") {
-        displayName = "Help & Support Desk";
-      } else {
-        displayName = b.name || b.props?.title || b.type;
-      }
+      const mappedBlocks = nonGlobalBlocks.map((b: any) => {
+        const bType = String(b.type || "").toLowerCase();
+        const bId = String(b.id || "").toLowerCase();
+        let displayName = "Section";
 
-      return {
-        id: b.id || b.type,
-        type: b.type,
-        name: displayName,
-      };
-    });
+        if (
+          bType === "hero_banner" ||
+          bType === "herobanner" ||
+          bType === "hero" ||
+          bType === "banner" ||
+          bId.includes("hero")
+        ) {
+          displayName = "Hero Banner";
+        } else if (
+          bType === "product_grid" ||
+          bType === "productgrid" ||
+          bId === "product_grid" ||
+          bId.includes("product_grid")
+        ) {
+          displayName = "Product Grid";
+        } else if (
+          bType === "product_carousel" ||
+          bType === "productcarousel" ||
+          bType === "products_carousel"
+        ) {
+          displayName = b.props?.title || b.name || "Product Carousel";
+        } else if (
+          bType === "section_group_carousel" ||
+          bType === "sectiongroupcarousel"
+        ) {
+          displayName = b.props?.title || b.name || "Category Carousel";
+        } else if (bType === "category_grid" || bType === "categorygrid") {
+          displayName = b.props?.title || b.name || "Category Grid";
+        } else if (bType === "category_strip") {
+          displayName = b.props?.title || b.name || "Category Strip";
+        } else if (bType === "trust_badges") {
+          displayName = "Trust Badges";
+        } else if (
+          bType === "cart_view" ||
+          bType === "cart" ||
+          bId === "cart_view" ||
+          bType === "cart_sidebar" ||
+          bType === "cart_items" ||
+          bId === "cart_items"
+        ) {
+          displayName = "Cart Items";
+        } else if (bType === "profile_details" || bType === "profile" || bId === "profile_details") {
+          displayName = "Profile Details";
+        } else if (bType === "customer_orders" || bId === "customer_orders" || bType === "orders") {
+          displayName = "Customer Orders & Tracking";
+        } else if (bType === "customer_support" || bId === "customer_support" || bType === "support") {
+          displayName = "Help & Support Desk";
+        } else if (bType === "signin_form" || bId === "signin_form" || bType === "login") {
+          displayName = "Sign In Form";
+        } else if (bType === "signup_form" || bId === "signup_form" || bType === "signup") {
+          displayName = "Sign Up Form";
+        } else if (bType === "delivery_form" || bType === "deliveryform" || bType === "delivery_address_form") {
+          displayName = "Delivery Address Form";
+        } else if (bType === "payment_methods" || bType === "paymentmethods") {
+          displayName = "Payment Methods";
+        } else if (bType === "place_order_cta" || bType === "placeordercta" || bType === "checkout_review") {
+          displayName = "Review & Pay";
+        } else if (bType === "checkout_steps" || bType === "checkoutsteps") {
+          displayName = "Checkout Steps";
+        } else {
+          displayName = b.name || b.props?.title || b.type;
+        }
 
-    const hasNavbar = mappedBlocks.some((b) => {
-      const t = String(b.type || "").toLowerCase();
-      const id = String(b.id || "").toLowerCase();
-      return t === "navbar" || t === "header" || id === "navbar";
-    });
+        return {
+          id: b.id || b.type,
+          type: b.type,
+          name: displayName,
+        };
+      });
 
-    const hasFooter = mappedBlocks.some((b) => {
-      const t = String(b.type || "").toLowerCase();
-      const id = String(b.id || "").toLowerCase();
-      return t === "footer" || id === "footer";
-    });
-
-    const result = [...mappedBlocks];
-    if (!hasNavbar) {
-      result.unshift({ id: "navbar", type: "navbar", name: "Navbar" });
-    }
-    if (!hasFooter) {
-      result.push({ id: "footer", type: "footer", name: "Footer" });
-    }
-
-    return result;
-  }, []);
+      return mappedBlocks;
+    },
+    []
+  );
 
   const storefrontPages = useMemo(() => {
     const homePage = _siteDefinition?.pages?.find((p: any) => p.id === "home" || p.route === "/");
-    const prodPage = _siteDefinition?.pages?.find((p: any) => p.route?.includes("/products/") || p.id === "product_detail");
-    const cartPage = _siteDefinition?.pages?.find((p: any) => p.route === "/cart" || p.id === "cart");
     const checkoutPage = _siteDefinition?.pages?.find((p: any) => p.route === "/checkout" || p.id === "checkout");
     const profilePage = _siteDefinition?.pages?.find((p: any) => p.route === "/profile" || p.id === "profile");
     const ordersPage = _siteDefinition?.pages?.find((p: any) => p.route === "/orders" || p.id === "orders");
+    const supportPage = _siteDefinition?.pages?.find((p: any) => p.route === "/support" || p.id === "support");
     const loginPage = _siteDefinition?.pages?.find((p: any) => p.route === "/login" || p.id === "login");
     const signupPage = _siteDefinition?.pages?.find((p: any) => p.route === "/signup" || p.id === "signup");
-    const supportPage = _siteDefinition?.pages?.find((p: any) => p.route === "/support" || p.id === "support");
 
     const defaultHomeBody = [
       { id: "hero_banner", type: "hero_banner", name: "Hero Banner" },
@@ -149,40 +146,47 @@ function PageBlocksTreeView({
       { id: "product_grid", type: "product_grid", name: "Product Grid" },
     ];
 
+    // Navbar and Footer placed directly in Home page
+    const homeBlocks = [
+      { id: "navbar", type: "navbar", name: "Navbar" },
+      ...resolvePageBlocks(homePage?.blocks, defaultHomeBody),
+      { id: "footer", type: "footer", name: "Footer" },
+    ];
+
     return [
       {
         id: "home",
         name: "Home",
         route: "/",
-        blocks: resolvePageBlocks(homePage?.blocks, defaultHomeBody),
+        blocks: homeBlocks,
       },
       {
         id: "product_detail",
         name: "Product Detail",
         route: "/products/:slug",
-        blocks: resolvePageBlocks(prodPage?.blocks, [
+        blocks: [
           { id: "product_detail", type: "product_detail", name: "Product Detail" },
-        ]),
+        ],
       },
       {
         id: "cart",
         name: "Cart",
         route: "/cart",
-        blocks: resolvePageBlocks(cartPage?.blocks, [
-          { id: "cart_view", type: "cart_view", name: "Cart View" },
-        ]),
+        blocks: [
+          { id: "cart_items", type: "cart_items", name: "Cart Items" },
+        ],
       },
       {
         id: "checkout",
         name: "Checkout",
         route: "/checkout",
-        blocks: resolvePageBlocks(checkoutPage?.blocks, [
+        blocks: [
           { id: "checkout_steps", type: "checkout_steps", name: "Checkout Steps" },
-          { id: "delivery_form", type: "delivery_form", name: "Delivery Form" },
-          { id: "delivery_address_form", type: "delivery_address_form", name: "Add / Edit Address Form" },
+          { id: "delivery_form", type: "delivery_form", name: "Delivery Address Form" },
           { id: "payment_methods", type: "payment_methods", name: "Payment Methods" },
+          { id: "checkout_order_summary", type: "checkout_order_summary", name: "Order Summary" },
           { id: "place_order_cta", type: "place_order_cta", name: "Review & Pay" },
-        ]),
+        ],
       },
       {
         id: "profile",
@@ -201,6 +205,14 @@ function PageBlocksTreeView({
         ]),
       },
       {
+        id: "support",
+        name: "Help & Support",
+        route: "/support",
+        blocks: resolvePageBlocks(supportPage?.blocks, [
+          { id: "customer_support", type: "customer_support", name: "Help & Support Desk" },
+        ]),
+      },
+      {
         id: "login",
         name: "Customer Sign In",
         route: "/login",
@@ -216,14 +228,6 @@ function PageBlocksTreeView({
           { id: "signup_form", type: "signup_form", name: "Sign Up Form" },
         ]),
       },
-      {
-        id: "support",
-        name: "Help & Support",
-        route: "/support",
-        blocks: resolvePageBlocks(supportPage?.blocks, [
-          { id: "customer_support", type: "customer_support", name: "Help & Support Desk" },
-        ]),
-      },
     ];
   }, [_siteDefinition, resolvePageBlocks]);
 
@@ -235,9 +239,9 @@ function PageBlocksTreeView({
         !currentPath.includes("/checkout") &&
         !currentPath.includes("/profile") &&
         !currentPath.includes("/orders") &&
+        !currentPath.includes("/support") &&
         !currentPath.includes("/login") &&
-        !currentPath.includes("/signup") &&
-        !currentPath.includes("/support")
+        !currentPath.includes("/signup")
       );
     }
     if (route.includes("products")) return currentPath.includes("/products/");
@@ -261,8 +265,8 @@ function PageBlocksTreeView({
         lineHeight: "1.6",
       }}
     >
-      {/* Root Node */}
-      <div style={{ fontWeight: 700, color: tokens.textPrimary, marginBottom: "6px", fontSize: "11.5px" }}>
+      {/* Root Title */}
+      <div style={{ fontWeight: 700, color: tokens.textPrimary, marginBottom: "8px", fontSize: "11.5px" }}>
         Storefront Pages & Components
       </div>
 
@@ -275,109 +279,121 @@ function PageBlocksTreeView({
 
           return (
             <div key={p.id} style={{ display: "grid", marginBottom: "2px" }}>
-                {/* Page Line */}
-                <div
-                  onClick={() => {
-                    if (onSelectPage) onSelectPage(p.route);
-                    if (p.id === "profile") {
-                      if (onSelectBlock) onSelectBlock("profile_details");
-                    } else if (p.id === "login") {
-                      if (onSelectBlock) onSelectBlock("signin_form");
-                    } else if (p.id === "signup") {
-                      if (onSelectBlock) onSelectBlock("signup_form");
-                    } else if (p.id === "orders") {
-                      if (onSelectBlock) onSelectBlock("customer_orders");
-                    } else if (p.id === "cart") {
-                      if (onSelectBlock) onSelectBlock("cart_view");
-                    } else if (p.id === "product_detail") {
-                      if (onSelectBlock) onSelectBlock("product_detail");
-                    } else if (p.id === "support") {
-                      if (onSelectBlock) onSelectBlock("customer_support");
-                    } else {
-                      if (onSelectBlock) onSelectBlock(null);
-                    }
+              {/* Page Line */}
+              <div
+                onClick={() => {
+                  // Clicking page title navigates to page in preview and ensures tree accordion is open
+                  // Does NOT call onSelectBlock, so the side editbar drawer is NOT opened!
+                  if (onSelectPage) onSelectPage(p.route);
+                  if (!isOpen) {
                     setManualToggled((prev) => ({
                       ...prev,
-                      [p.id]: !isOpen,
+                      [p.id]: true,
                     }));
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "3px 4px",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: isCurrent ? 700 : 500,
-                    color: isCurrent ? tokens.accent : (isDark ? tokens.textPrimary : "#334155"),
-                    background: isCurrent ? (isDark ? "rgba(59,130,246,0.15)" : "rgba(37,99,235,0.06)") : "transparent",
-                    transition: "all 0.1s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isCurrent) e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#f1f5f9";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isCurrent) e.currentTarget.style.background = "transparent";
-                  }}
-                >
-                  <span style={{ display: "flex", alignItems: "center" }}>
-                    <span style={{ color: tokens.textMuted, marginRight: "6px", fontFamily: "monospace" }}>{isLastPage ? "└──" : "├──"}</span>
-                    <span style={{ color: isOpen ? tokens.accent : tokens.textMuted, fontSize: "9px", marginRight: "4px", display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s ease" }}>▶</span>
-                    <span>{p.name}</span>
-                    <span style={{ color: tokens.textMuted, fontSize: "10px", marginLeft: "4px" }}>({p.route})</span>
+                  }
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "3px 4px",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: isCurrent ? 700 : 500,
+                  color: isCurrent ? tokens.accent : (isDark ? tokens.textPrimary : "#334155"),
+                  background: isCurrent ? (isDark ? "rgba(59,130,246,0.15)" : "rgba(37,99,235,0.06)") : "transparent",
+                  transition: "all 0.1s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isCurrent) e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#f1f5f9";
+                }}
+                onMouseLeave={(e) => {
+                  if (!isCurrent) e.currentTarget.style.background = "transparent";
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center" }}>
+                  <span style={{ color: tokens.textMuted, marginRight: "6px", fontFamily: "monospace" }}>
+                    {isLastPage ? "└──" : "├──"}
                   </span>
-                  {isCurrent && (
-                    <span style={{ fontSize: "8.5px", color: tokens.accent, fontWeight: 700 }}>Active</span>
-                  )}
-                </div>
-
-                {/* Page Block Components - Accordion: only shown when page is opened */}
-                {isOpen && (
-                  <div style={{ marginLeft: "16px", borderLeft: isLastPage ? "none" : `1px solid ${tokens.border}`, paddingLeft: isLastPage ? "1px" : "0", display: "grid", marginTop: "1px" }}>
-                    {p.blocks.map((b, bIdx) => {
-                      const isLastBlock = bIdx === p.blocks.length - 1;
-                      return (
-                        <div
-                          key={b.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onSelectPage && !isCurrent) onSelectPage(p.route);
-                            if (onSelectBlock) onSelectBlock(b.id || b.type);
-                          }}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            padding: "2px 4px",
-                            borderRadius: "3px",
-                            cursor: "pointer",
-                            color: isDark ? tokens.textSecondary : "#475569",
-                            fontSize: "10.5px",
-                            transition: "all 0.1s ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#f1f5f9";
-                            e.currentTarget.style.color = tokens.accent;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "transparent";
-                            e.currentTarget.style.color = isDark ? tokens.textSecondary : "#475569";
-                          }}
-                        >
-                          <span>
-                            <span style={{ color: tokens.textMuted, marginRight: "6px" }}>{isLastBlock ? "└──" : "├──"}</span>
-                            {b.name}
-                          </span>
-                          <span style={{ fontSize: "9px", color: tokens.textMuted }}>Edit</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {/* Arrow Toggle Button - ISOLATED CLICK HANDLER: only toggles accordion */}
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setManualToggled((prev) => ({
+                        ...prev,
+                        [p.id]: !isOpen,
+                      }));
+                    }}
+                    style={{
+                      color: isOpen ? tokens.accent : tokens.textMuted,
+                      fontSize: "9px",
+                      marginRight: "4px",
+                      padding: "2px 4px",
+                      cursor: "pointer",
+                      display: "inline-block",
+                      transform: isOpen ? "rotate(90deg)" : "none",
+                      transition: "transform 0.15s ease",
+                    }}
+                    title={isOpen ? "Collapse page components" : "Expand page components"}
+                  >
+                    ▶
+                  </span>
+                  <span>{p.name}</span>
+                  <span style={{ color: tokens.textMuted, fontSize: "10px", marginLeft: "4px" }}>({p.route})</span>
+                </span>
+                {isCurrent && (
+                  <span style={{ fontSize: "8.5px", color: tokens.accent, fontWeight: 700 }}>Active</span>
                 )}
               </div>
-            );
-          })}
-        </div>
+
+              {/* Page Block Components - Accordion: only shown when page is opened */}
+              {isOpen && (
+                <div style={{ marginLeft: "16px", borderLeft: isLastPage ? "none" : `1px solid ${tokens.border}`, paddingLeft: isLastPage ? "1px" : "0", display: "grid", marginTop: "1px" }}>
+                  {p.blocks.map((b, bIdx) => {
+                    const isLastBlock = bIdx === p.blocks.length - 1;
+                    return (
+                      <div
+                        key={b.id}
+                        onClick={(e) => {
+                          // Clicking on the component in the tree opens the side editbar drawer
+                          e.stopPropagation();
+                          if (onSelectPage && !isCurrent) onSelectPage(p.route);
+                          if (onSelectBlock) onSelectBlock(b.id || b.type);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "2px 4px",
+                          borderRadius: "3px",
+                          cursor: "pointer",
+                          color: isDark ? tokens.textSecondary : "#475569",
+                          fontSize: "10.5px",
+                          transition: "all 0.1s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = isDark ? tokens.surfaceBg : "#f1f5f9";
+                          e.currentTarget.style.color = tokens.accent;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.color = isDark ? tokens.textSecondary : "#475569";
+                        }}
+                      >
+                        <span>
+                          <span style={{ color: tokens.textMuted, marginRight: "6px" }}>{isLastBlock ? "└──" : "├──"}</span>
+                          {b.name}
+                        </span>
+                        <span style={{ fontSize: "9px", color: tokens.textMuted }}>Edit</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
       </div>
     );
   }
@@ -5220,6 +5236,10 @@ function CartEditor({
       nextDef.theme = { ...(nextDef.theme || {}), cart_border_color: patch.cart_border_color || patch.border_color };
     }
 
+    if (patch.show_promo !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), show_promo: patch.show_promo };
+    }
+
     const cartTypes = new Set([
       "cart",
       "cart_view",
@@ -5228,8 +5248,6 @@ function CartEditor({
       "cartsidebar",
       "cart_items",
       "cartitems",
-      "order_summary",
-      "ordersummary",
     ]);
 
     let updated = false;
@@ -5242,14 +5260,17 @@ function CartEditor({
           page.route === "/cart" ||
           page.route === "cart";
 
-        const hasMatchingBlock = (page.blocks ?? []).some(
-          (b: any) =>
-            b.id === selectedBlock.id ||
-            b.type === selectedBlock.type ||
-            cartTypes.has(String(b.type || "").toLowerCase())
-        );
+        const isCheckoutP =
+          page.role === "checkout" ||
+          page.page_type === "checkout" ||
+          page.slug === "checkout" ||
+          page.route === "/checkout" ||
+          page.route === "checkout" ||
+          page.id === "checkout" ||
+          page.id === "page-checkout";
 
-        if (hasMatchingBlock || isCartP) {
+        // ONLY modify full block patch if this page is the Cart page!
+        if (isCartP) {
           const blocks = (page.blocks ?? []).map((block: any) => {
             if (
               block.id === selectedBlock.id ||
@@ -5267,8 +5288,7 @@ function CartEditor({
             }
             return block;
           });
-
-          if (!updated && isCartP) {
+          if (!updated) {
             updated = true;
             blocks.push({
               id: selectedBlock.id || "cart_view",
@@ -5279,6 +5299,26 @@ function CartEditor({
 
           return { ...page, blocks };
         }
+
+        // If show_promo changed, synchronize it directly to checkout order summary blocks too!
+        if (isCheckoutP && patch.show_promo !== undefined) {
+          const blocks = (page.blocks ?? []).map((block: any) => {
+            const bt = String(block.type || "").toLowerCase();
+            const bid = String(block.id || "").toLowerCase();
+            if (bt.includes("summary") || bid.includes("summary")) {
+              return {
+                ...block,
+                props: {
+                  ...(block.props ?? {}),
+                  show_promo: patch.show_promo,
+                },
+              };
+            }
+            return block;
+          });
+          return { ...page, blocks };
+        }
+
         return page;
       });
     }
@@ -5454,7 +5494,12 @@ function CartEditor({
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
               {(() => {
-                const isChecked = p.show_promo !== undefined ? Boolean(p.show_promo) : true;
+                const isChecked =
+                  p.show_promo !== undefined
+                    ? Boolean(p.show_promo)
+                    : siteDefinition.theme?.show_promo !== undefined
+                    ? Boolean(siteDefinition.theme.show_promo)
+                    : true;
                 return (
                   <div
                     onClick={() => updateProps({ show_promo: !isChecked })}
@@ -5465,15 +5510,24 @@ function CartEditor({
                       gap: "6px",
                       padding: "6px 8px",
                       borderRadius: "4px",
-                      border: `1px solid ${tokens.border}`,
-                      background: isChecked ? "rgba(37,99,235,0.04)" : "#ffffff",
+                      border: `1px solid ${isChecked ? (isDark ? "rgba(59,130,246,0.35)" : "rgba(37,99,235,0.2)") : tokens.border}`,
+                      background: isChecked
+                        ? (isDark ? "rgba(59,130,246,0.14)" : "rgba(37,99,235,0.05)")
+                        : (isDark ? tokens.elevatedSurfaceBg || "rgba(255,255,255,0.03)" : "transparent"),
                       cursor: "pointer",
                       userSelect: "none",
                       boxSizing: "border-box",
                       width: "100%",
+                      transition: "all 0.15s ease",
                     }}
                   >
-                    <span style={{ fontSize: "11px", fontWeight: 600, color: isChecked ? "#0f172a" : "#475569" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        color: isChecked ? (isDark ? "#ffffff" : "#0f172a") : (isDark ? "#94a3b8" : "#64748b"),
+                      }}
+                    >
                       Show Promo Code Input
                     </span>
                     <div
@@ -5495,7 +5549,7 @@ function CartEditor({
                           width: "10px",
                           height: "10px",
                           borderRadius: "50%",
-              background: "#ffffff",
+                          background: "#ffffff",
                           transition: "left 0.15s ease",
                           boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
                         }}
@@ -6470,7 +6524,21 @@ function isCheckoutSummaryBlock(block?: any): boolean {
     rawId === "checkout_order_summary" ||
     rawType === "checkout_order_summary" ||
     rawId === "checkoutordersummary" ||
-    rawType === "checkoutordersummary"
+    rawType === "checkoutordersummary" ||
+    rawId === "order_summary" ||
+    rawType === "order_summary" ||
+    rawId === "ordersummary" ||
+    rawType === "ordersummary" ||
+    rawId === "checkout_summary" ||
+    rawType === "checkout_summary" ||
+    rawId === "checkoutsummary" ||
+    rawType === "checkoutsummary" ||
+    rawId.includes("order_summary") ||
+    rawType.includes("order_summary") ||
+    rawId.includes("checkout_order_summary") ||
+    rawType.includes("checkout_order_summary") ||
+    (rawId.includes("summary") && !rawId.includes("cart")) ||
+    (rawType.includes("summary") && !rawType.includes("cart"))
   );
 }
 
@@ -9759,93 +9827,549 @@ function PlaceOrderEditor({
   );
 }
 
-function CheckoutOrderSummaryNotice({
+function CheckoutOrderSummaryEditor({
+  selectedBlock,
   isLightMode,
-  onSelectPage,
-  onSelectBlock,
+  textColor: _textColor,
+  accentColor: _accentColor,
+  onSiteDefinitionChange,
+  siteDefinition,
 }: {
+  selectedBlock: any;
   isLightMode: boolean;
-  onSelectPage?: (pageId: string) => void;
-  onSelectBlock?: (blockId: string | null) => void;
+  textColor: string;
+  accentColor: string;
+  onSiteDefinitionChange: (next: EditorSiteDefinition) => void;
+  siteDefinition: EditorSiteDefinition;
 }) {
   const { isDark, tokens } = useAdminTheme();
+  const [activeTab, setActiveTab] = useState<"layout" | "content" | "colors">("layout");
+  const p = selectedBlock?.props ?? {};
+
+  const updateProps = (patch: Record<string, any>) => {
+    const nextDef = JSON.parse(JSON.stringify(siteDefinition));
+    const checkoutSummaryTypes = new Set([
+      "checkout_order_summary",
+      "checkoutordersummary",
+      "order_summary",
+      "ordersummary",
+      "checkout_summary",
+      "checkoutsummary",
+    ]);
+
+    // Mirror checkout summary colors to theme.summary_* (independent from cart colors!)
+    if (patch.background_color || patch.panel_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), summary_bg: patch.background_color || patch.panel_color };
+    }
+    if (patch.card_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), summary_card_bg: patch.card_color };
+    }
+    if (patch.border_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), summary_border_color: patch.border_color };
+    }
+    if (patch.text_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), summary_text_color: patch.text_color };
+    }
+    if (patch.accent_color) {
+      nextDef.theme = { ...(nextDef.theme || {}), summary_accent_color: patch.accent_color };
+    }
+
+    if (patch.show_promo !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), show_promo: patch.show_promo };
+    }
+
+    let updated = false;
+    if (Array.isArray(nextDef.pages)) {
+      nextDef.pages = nextDef.pages.map((page: any) => {
+        const isCheckoutP =
+          page.role === "checkout" ||
+          page.page_type === "checkout" ||
+          page.slug === "checkout" ||
+          page.route === "/checkout" ||
+          page.route === "checkout" ||
+          page.id === "checkout" ||
+          page.id === "page-checkout";
+
+        const isCartP =
+          page.role === "cart" ||
+          page.page_type === "cart" ||
+          page.slug === "cart" ||
+          page.route === "/cart" ||
+          page.route === "cart";
+
+        if (isCheckoutP) {
+          let found = false;
+          const blocks = (page.blocks ?? []).map((block: any) => {
+            if (
+              block.id === "checkout_order_summary" ||
+              block.type === "checkout_order_summary" ||
+              block.type === "checkoutordersummary" ||
+              block.id === "order_summary" ||
+              block.type === "order_summary" ||
+              block.id === selectedBlock.id ||
+              block.type === selectedBlock.type ||
+              checkoutSummaryTypes.has(String(block.type || "").toLowerCase()) ||
+              String(block.id || "").toLowerCase().includes("summary")
+            ) {
+              found = true;
+              updated = true;
+              return {
+                ...block,
+                props: {
+                  ...(block.props ?? {}),
+                  ...patch,
+                },
+              };
+            }
+            return block;
+          });
+
+          if (!found) {
+            updated = true;
+            blocks.push({
+              id: "checkout_order_summary",
+              type: "checkout_order_summary",
+              props: { ...(selectedBlock.props ?? {}), ...patch },
+            });
+          }
+
+          return { ...page, blocks };
+        }
+
+        // If show_promo changed, synchronize it directly to cart blocks too!
+        if (isCartP && patch.show_promo !== undefined) {
+          const blocks = (page.blocks ?? []).map((block: any) => {
+            const bt = String(block.type || "").toLowerCase();
+            const bid = String(block.id || "").toLowerCase();
+            if (bt.includes("cart") || bid.includes("cart")) {
+              return {
+                ...block,
+                props: {
+                  ...(block.props ?? {}),
+                  show_promo: patch.show_promo,
+                },
+              };
+            }
+            return block;
+          });
+          return { ...page, blocks };
+        }
+
+        return page;
+      });
+    }
+
+    if (!updated) {
+      if (!Array.isArray(nextDef.pages)) nextDef.pages = [];
+      nextDef.pages.push({
+        id: "page-checkout",
+        name: "Checkout",
+        route: "/checkout",
+        role: "checkout",
+        page_type: "checkout",
+        show_in_nav: false,
+        blocks: [
+          {
+            id: "checkout_order_summary",
+            type: "checkout_order_summary",
+            props: { ...(selectedBlock.props ?? {}), ...patch },
+          },
+        ],
+      });
+    }
+
+    onSiteDefinitionChange(nextDef);
+  };
+
+  const parseNumProp = (val: any, fallback: number) => {
+    if (val === undefined || val === null || val === "") return fallback;
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+  };
+
+  const getStr = (key: string, fallback: string) => {
+    const val = p[key];
+    if (val !== undefined && val !== null && String(val).trim() !== "") {
+      return String(val);
+    }
+    return fallback;
+  };
+
+  const parsedBorderRadius = parseNumProp(p.border_radius, 16);
+  const parsedCardRadius = parseNumProp(p.card_radius, 12);
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    height: "28px",
+    padding: "0 8px",
+    fontSize: "11px",
+    fontWeight: 600,
+    borderRadius: "4px",
+    border: `1px solid ${tokens.border}`,
+    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+    color: tokens.textPrimary,
+    boxSizing: "border-box",
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: "9px",
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+  };
+
   return (
-    <div style={{ display: "grid", gap: "10px", width: "100%", boxSizing: "border-box" }}>
-      <section
+    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {/* 3 Modern Clean Navigation Tabs */}
+      <div
         style={{
-          ...sectionCardStyle(isLightMode),
-          padding: "14px 12px",
-          background: isDark ? tokens.elevatedSurfaceBg : "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
-          border: `1px solid ${tokens.border}`,
-          borderRadius: "8px",
-          boxShadow: isDark ? "none" : "0 2px 8px rgba(0,0,0,0.04)",
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "2px",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+          padding: "2px",
+          borderRadius: "6px",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          minWidth: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-          <div
-            style={{
-              width: "28px",
-              height: "28px",
-              borderRadius: "6px",
-              background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.1)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: tokens.accent,
-              flexShrink: 0,
-            }}
-          >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="16" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12.01" y2="8" />
-            </svg>
-          </div>
-          <div>
-            <div style={{ fontSize: "12px", fontWeight: 800, color: tokens.textPrimary }}>
-              Order Summary
+        {[
+          { id: "layout", label: "Layout" },
+          { id: "content", label: "Content" },
+          { id: "colors", label: "Colors" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: "5px 1px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
+                fontWeight: isActive ? 800 : 600,
+                fontSize: "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 1. LAYOUT & FEATURES TAB */}
+      {activeTab === "layout" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Radii */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Border & Corner Radii
             </div>
-            <span style={{ fontSize: "9px", fontWeight: 700, padding: "1px 5px", borderRadius: "3px", background: isDark ? "rgba(59,130,246,0.18)" : "#e0f2fe", color: isDark ? "#93c5fd" : "#0369a1" }}>
-              SHARED WITH CART
-            </span>
-          </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              <NumberStepperField
+                label="Outer Radius"
+                value={parsedBorderRadius}
+                min={0}
+                max={40}
+                step={2}
+                unit="px"
+                onChange={(val) => updateProps({ border_radius: Math.max(0, Math.min(40, val)) })}
+              />
+              <NumberStepperField
+                label="Card Radius"
+                value={parsedCardRadius}
+                min={0}
+                max={32}
+                step={2}
+                unit="px"
+                onChange={(val) => updateProps({ card_radius: Math.max(0, Math.min(32, val)) })}
+              />
+            </div>
+          </section>
+
+          {/* Feature Toggles */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Feature Toggles
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              {(() => {
+                const isPromoChecked =
+                  p.show_promo !== undefined
+                    ? Boolean(p.show_promo)
+                    : siteDefinition.theme?.show_promo !== undefined
+                    ? Boolean(siteDefinition.theme.show_promo)
+                    : true;
+                return (
+                  <div
+                    onClick={() => updateProps({ show_promo: !isPromoChecked })}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "6px",
+                      padding: "6px 8px",
+                      borderRadius: "4px",
+                      border: `1px solid ${isPromoChecked ? (isDark ? "rgba(59,130,246,0.35)" : "rgba(37,99,235,0.2)") : tokens.border}`,
+                      background: isPromoChecked
+                        ? (isDark ? "rgba(59,130,246,0.14)" : "rgba(37,99,235,0.05)")
+                        : (isDark ? tokens.elevatedSurfaceBg || "rgba(255,255,255,0.03)" : "transparent"),
+                      cursor: "pointer",
+                      userSelect: "none",
+                      boxSizing: "border-box",
+                      width: "100%",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        color: isPromoChecked ? (isDark ? "#ffffff" : "#0f172a") : (isDark ? "#94a3b8" : "#64748b"),
+                      }}
+                    >
+                      Show Promo Code Input
+                    </span>
+                    <div
+                      style={{
+                        position: "relative",
+                        width: "24px",
+                        height: "14px",
+                        borderRadius: "999px",
+                        background: isPromoChecked ? tokens.accent : (isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"),
+                        transition: "background 0.15s ease",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "2px",
+                          left: isPromoChecked ? "12px" : "2px",
+                          width: "10px",
+                          height: "10px",
+                          borderRadius: "50%",
+                          background: "#ffffff",
+                          transition: "left 0.15s ease",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </section>
         </div>
+      )}
 
-        <p style={{ margin: "0 0 10px", fontSize: "11px", color: tokens.textSecondary, lineHeight: 1.6 }}>
-          This block is shared with your <strong>Shopping Cart</strong> — keeping pricing, promo logic, and labels perfectly in sync across the cart and every checkout step.
-        </p>
+      {/* 2. CONTENT TAB */}
+      {activeTab === "content" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Header & Pricing Labels */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Order Summary Header & Labels
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Card Title</label>
+                <input
+                  type="text"
+                  value={getStr("title", getStr("summary_title", "Order summary"))}
+                  placeholder="Order summary"
+                  onChange={(e) => updateProps({ title: e.target.value, summary_title: e.target.value })}
+                  style={inputStyle}
+                />
+              </div>
 
-        <p style={{ margin: "0 0 14px", fontSize: "10.5px", color: tokens.textMuted, lineHeight: 1.5 }}>
-          To adjust text labels, promo code input, border styles, or colors, head to the <strong>Cart</strong> page and edit the component there.
-        </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Subtotal Label</label>
+                  <input
+                    type="text"
+                    value={getStr("subtotal_label", "Subtotal")}
+                    placeholder="Subtotal"
+                    onChange={(e) => updateProps({ subtotal_label: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (onSelectPage) onSelectPage("/cart");
-            if (onSelectBlock) onSelectBlock("cart_sidebar");
-          }}
-          style={{
-            width: "100%",
-            height: "32px",
-            borderRadius: "6px",
-            border: "none",
-            background: tokens.accent,
-            color: "#ffffff",
-            fontSize: "11px",
-            fontWeight: 700,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "6px",
-            boxShadow: "0 1px 3px rgba(37,99,235,0.3)",
-            transition: "all 0.15s ease",
-          }}
-        >
-          Edit on Cart Page →
-        </button>
-      </section>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Total Label</label>
+                  <input
+                    type="text"
+                    value={getStr("total_label", "Total")}
+                    placeholder="Total"
+                    onChange={(e) => updateProps({ total_label: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Shipping Label</label>
+                  <input
+                    type="text"
+                    value={getStr("shipping_label", "Shipping")}
+                    placeholder="Shipping"
+                    onChange={(e) => updateProps({ shipping_label: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Tax Label</label>
+                  <input
+                    type="text"
+                    value={getStr("tax_label", "Tax")}
+                    placeholder="Tax"
+                    onChange={(e) => updateProps({ tax_label: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Security / Trust Note</label>
+                <input
+                  type="text"
+                  value={getStr("note", "")}
+                  placeholder="e.g. 100% Safe & Secure Checkout"
+                  onChange={(e) => updateProps({ note: e.target.value })}
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Promo Box & Actions */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Promo Box & Coupons
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={fieldLabelStyle}>Promo Box Title</label>
+                <input
+                  type="text"
+                  value={getStr("promo_title", "")}
+                  placeholder="e.g. Apply Promo Code"
+                  onChange={(e) => updateProps({ promo_title: e.target.value })}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Promo Placeholder</label>
+                  <input
+                    type="text"
+                    value={getStr("promo_placeholder", "Enter promo code")}
+                    placeholder="Enter promo code"
+                    onChange={(e) => updateProps({ promo_placeholder: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={fieldLabelStyle}>Apply Button Text</label>
+                  <input
+                    type="text"
+                    value={getStr("promo_button_label", "Apply")}
+                    placeholder="Apply"
+                    onChange={(e) => updateProps({ promo_button_label: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* 3. COLORS TAB */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Order Summary Colors & Surfaces
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Card Background"
+                value={
+                  p.card_color ||
+                  siteDefinition.theme?.summary_card_bg ||
+                  (siteDefinition.theme?.mode === "dark" ? "#1e293b" : "#ffffff")
+                }
+                onChange={(val) => updateProps({ card_color: val })}
+              />
+
+              <CompactColorRow
+                label="Container Background"
+                value={
+                  p.panel_color ||
+                  p.background_color ||
+                  siteDefinition.theme?.summary_bg ||
+                  (siteDefinition.theme?.mode === "dark" ? "#121316" : "#f8fafc")
+                }
+                onChange={(val) => updateProps({ panel_color: val, background_color: val })}
+              />
+
+              <CompactColorRow
+                label="Border Color"
+                value={
+                  p.border_color ||
+                  siteDefinition.theme?.summary_border_color ||
+                  (siteDefinition.theme?.mode === "dark" ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.08)")
+                }
+                onChange={(val) => updateProps({ border_color: val })}
+              />
+
+              <CompactColorRow
+                label="Text Color"
+                value={
+                  p.text_color ||
+                  siteDefinition.theme?.summary_text_color ||
+                  (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")
+                }
+                onChange={(val) => updateProps({ text_color: val })}
+              />
+
+              <CompactColorRow
+                label="Muted Text Color"
+                value={
+                  p.muted_text_color ||
+                  (siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b")
+                }
+                onChange={(val) => updateProps({ muted_text_color: val })}
+              />
+
+              <CompactColorRow
+                label="Accent & Button"
+                value={
+                  p.accent_color ||
+                  siteDefinition.theme?.summary_accent_color ||
+                  siteDefinition.theme?.accent_color ||
+                  ADMIN_BLUE
+                }
+                onChange={(val) => updateProps({ accent_color: val })}
+              />
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -12359,7 +12883,7 @@ export default function EditorSidebar({
   const selectedBlock =
     (selectedBlockId === "checkout_steps" || selectedBlockId === "checkoutsteps" || selectedBlockId === "checkout_stepper")
       ? (_rawSelectedBlock || { id: "checkout_steps", type: "checkout_steps", props: {} })
-      : (selectedBlockId === "checkout_order_summary")
+      : (selectedBlockId === "checkout_order_summary" || selectedBlockId === "order_summary" || selectedBlockId === "ordersummary")
         ? { id: "checkout_order_summary", type: "checkout_order_summary", props: _rawSelectedBlock?.props ?? {} }
       : (selectedBlockId === "place_order_cta" || selectedBlockId === "checkout_review")
         ? (_rawSelectedBlock || { id: "place_order_cta", type: "place_order_cta", props: {} })
@@ -12373,6 +12897,8 @@ export default function EditorSidebar({
         ? (_rawSelectedBlock || { id: "customer_orders", type: "customer_orders", props: {} })
       : (selectedBlockId === "customer_support" || selectedBlockId === "support" || selectedBlockId === "customersupport" || selectedBlockId === "support_desk" || selectedBlockId === "helpdesk")
         ? (_rawSelectedBlock || { id: "customer_support", type: "customer_support", props: {} })
+      : (selectedBlockId === "cart_items" || selectedBlockId === "cart" || selectedBlockId === "cart_view" || selectedBlockId === "cart_sidebar" || selectedBlockId === "cartitems" || selectedBlockId === "cartsidebar")
+        ? (_rawSelectedBlock || { id: "cart_items", type: "cart_items", props: {} })
       : (selectedBlockId === "navbar" || selectedBlockId === "header")
         ? (_rawSelectedBlock || { id: "navbar", type: "navbar", props: {} })
       : (selectedBlockId === "footer")
@@ -12401,12 +12927,14 @@ export default function EditorSidebar({
       t === "footer" ||
       t === "cart" || t === "cart_view" || t === "cartview" ||
       t === "cart_sidebar" || t === "cartsidebar" ||
+      t === "cart_items" || t === "cartitems" ||
       isCheckoutStepsBlock(selectedBlock) ||
       t === "checkout_steps" || t === "checkoutsteps" ||
       isPaymentMethodsBlock(selectedBlock) ||
       t === "payment_methods" || t === "paymentmethods" ||
       isCheckoutSummaryBlock(selectedBlock) ||
       t === "checkout_order_summary" || t === "checkoutordersummary" ||
+      t === "order_summary" || t === "ordersummary" ||
       isDeliveryBlock(selectedBlock) ||
       t === "delivery_form" || t === "deliveryform" ||
       t === "delivery_map_picker" || t === "delivery_address_form" ||
@@ -13386,6 +13914,22 @@ export default function EditorSidebar({
                         selectedBlockId === "customer_support" ||
                         selectedBlockId === "support"
                       ? "Help & Support Desk"
+                      : isCheckoutSummaryBlock(selectedBlock) ||
+                        selectedBlock.id === "checkout_order_summary" ||
+                        selectedBlock.type === "checkout_order_summary" ||
+                        selectedBlock.type === "checkoutordersummary" ||
+                        selectedBlock.id === "order_summary" ||
+                        selectedBlock.type === "order_summary" ||
+                        selectedBlock.id === "ordersummary" ||
+                        selectedBlock.type === "ordersummary" ||
+                        selectedBlock.id === "checkout_summary" ||
+                        selectedBlock.type === "checkout_summary" ||
+                        selectedBlockId === "checkout_order_summary" ||
+                        selectedBlockId === "order_summary" ||
+                        selectedBlockId === "ordersummary" ||
+                        selectedBlockId === "checkout_summary" ||
+                        (selectedBlockId && selectedBlockId.includes("summary"))
+                      ? "Order Summary"
                       : isDeliveryBlock(selectedBlock) || editableConfig?.displayName === "Delivery Form"
                       ? (selectedBlock.type === "delivery_map_picker"
                           ? "Map Location Picker"
@@ -13403,12 +13947,6 @@ export default function EditorSidebar({
                         selectedBlock.type === "checkout_steps" ||
                         selectedBlockId === "checkout_steps"
                       ? "Checkout Steps"
-                      : isCheckoutSummaryBlock(selectedBlock) ||
-                        selectedBlock.id === "checkout_order_summary" ||
-                        selectedBlock.type === "checkout_order_summary" ||
-                        selectedBlock.type === "checkoutordersummary" ||
-                        selectedBlockId === "checkout_order_summary"
-                      ? "Order Summary"
                       : editableConfig?.displayName ||
                         (selectedBlock.type === "product_grid" || selectedBlock.type === "productgrid"
                           ? "Product Grid"
@@ -13425,7 +13963,7 @@ export default function EditorSidebar({
                             selectedBlock.type === "cartsidebar" ||
                             selectedBlock.type === "cart_items" ||
                             selectedBlock.type === "cartitems"
-                          ? "Shopping Cart"
+                          ? "Cart Items"
                           : isProductDetailBlock(selectedBlock) ||
                             editableConfig?.displayName === "Product Detail"
                           ? "Product Detail"
@@ -13528,9 +14066,7 @@ export default function EditorSidebar({
                 selectedBlock.type === "cart_sidebar" ||
                 selectedBlock.type === "cartsidebar" ||
                 selectedBlock.type === "cart_items" ||
-                selectedBlock.type === "cartitems" ||
-                (selectedBlock.type === "order_summary" && !isCheckoutSummaryBlock(selectedBlock) && selectedBlock.id !== "checkout_order_summary") ||
-                (selectedBlock.type === "ordersummary" && !isCheckoutSummaryBlock(selectedBlock) && selectedBlock.id !== "checkout_order_summary") ? (
+                selectedBlock.type === "cartitems" ? (
                 <CartEditor
                   selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
@@ -13566,11 +14102,24 @@ export default function EditorSidebar({
                 selectedBlock.id === "checkout_order_summary" ||
                 selectedBlock.type === "checkout_order_summary" ||
                 selectedBlock.type === "checkoutordersummary" ||
-                selectedBlockId === "checkout_order_summary" ? (
-                <CheckoutOrderSummaryNotice
+                selectedBlock.id === "order_summary" ||
+                selectedBlock.type === "order_summary" ||
+                selectedBlock.id === "ordersummary" ||
+                selectedBlock.type === "ordersummary" ||
+                selectedBlock.id === "checkout_summary" ||
+                selectedBlock.type === "checkout_summary" ||
+                selectedBlockId === "checkout_order_summary" ||
+                selectedBlockId === "order_summary" ||
+                selectedBlockId === "ordersummary" ||
+                selectedBlockId === "checkout_summary" ||
+                (selectedBlockId && selectedBlockId.includes("summary")) ? (
+                <CheckoutOrderSummaryEditor
+                  selectedBlock={selectedBlock}
                   isLightMode={isLightMode}
-                  onSelectPage={onSelectPage}
-                  onSelectBlock={onSelectBlock}
+                  textColor={textColor}
+                  accentColor={accentColor}
+                  onSiteDefinitionChange={onSiteDefinitionChange}
+                  siteDefinition={siteDefinition}
                 />
               ) : isDeliveryBlock(selectedBlock) ||
                 editableConfig?.displayName === "Delivery Form" ||

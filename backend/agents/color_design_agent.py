@@ -26,10 +26,10 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1, request_timeout=20, max_r
 class PaletteOption(BaseModel):
     id: str = Field(description="Unique ID for palette option, e.g. palette_1, palette_2")
     name: str = Field(description="Crisp 2-3 word name, e.g. Rose Gold Velvet, Midnight Emerald")
-    description: str = Field(description="Strictly ultra-short 1-sentence design note (MAX 6-10 words, e.g. 'Warm organic yellows with fresh vibrant accents.'). NEVER write multi-sentence marketing paragraphs.")
+    description: str = Field(description="Evocative 1-sentence note explaining why this aesthetic and color combination suits the brand")
     visual_style: Optional[str] = Field(default="solid_clean", description="Visual style: 'solid_clean', 'elevated_luxury', 'warm_organic', 'cyber_glow', 'glassmorphic'")
     
-    primary_bg: str = Field(description="Main page background hex, e.g. #ffffff, #fafafa, or #0f172a")
+    primary_bg: str = Field(description="Main page background hex or CSS gradient. Can be an immersive colored canvas (e.g. rich burgundy #3b0712, deep emerald #064e3b), a soft tinted wash (e.g. #fff1f2), a clean light studio #ffffff, or midnight jewel-tone.")
     secondary_bg: str = Field(description="Secondary container/sidebar background hex")
     text_color: str = Field(description="Primary text hex code (must contrast well with primary_bg)")
     muted_text: str = Field(description="Muted/secondary text hex code")
@@ -56,6 +56,8 @@ class PaletteOption(BaseModel):
     hero_accent: str = Field(description="Hero CTA button accent hex")
     
     card_bg: str = Field(description="Product card background hex")
+    card_text_color: Optional[str] = Field(default=None, description="Product card text hex")
+    card_border_color: Optional[str] = Field(default=None, description="Product card border hex")
     card_shadow: str = Field(description="Product card shadow CSS string, e.g. 0 4px 16px rgba(0,0,0,0.06)")
     card_radius: Optional[int] = Field(default=20, description="Card corner radius in pixels (e.g. 16, 20, 24)")
 
@@ -188,9 +190,10 @@ def calculate_contrast_color(bg_val: str) -> str:
 
 def ensure_accessible_contrast(text_hex: Optional[str], bg_hex: str, min_ratio: float = 4.5) -> str:
     """
-    Guarantees WCAG AA readability with zero camouflage:
-    - If the provided text_hex passes the contrast threshold (>= min_ratio:1), keeps the rich designer shade (e.g. warm charcoal, rich slate, espresso).
-    - If it fails (< min_ratio:1), automatically selects a guaranteed high-contrast tone (#0f172a or #ffffff) to prevent any camouflage.
+    Guarantees WCAG AA readability (>= min_ratio:1) while preserving the original hue and saturation!
+    Instead of snapping directly to #0f172a or #ffffff, adjusts LIGHTNESS ONLY step-by-step
+    to maintain designer tones (champagne, warm ivory, soft charcoal, espresso, tinted blush).
+    Only falls back to #ffffff or #0f172a if no lightness adjustment satisfies the ratio.
     """
     if not text_hex or not isinstance(text_hex, str) or not text_hex.strip():
         return calculate_contrast_color(bg_hex)
@@ -198,16 +201,60 @@ def ensure_accessible_contrast(text_hex: Optional[str], bg_hex: str, min_ratio: 
     t_clean = text_hex.strip()
     b_clean = str(bg_hex or "").strip()
 
+    t_match = re.search(r"#[0-9a-fA-F]{3,6}", t_clean)
+    b_match = re.search(r"#[0-9a-fA-F]{3,6}", b_clean)
+    if not t_match or not b_match:
+        return calculate_contrast_color(bg_hex)
+
+    t_hex = t_match.group(0)
+    b_hex = b_match.group(0)
+
     try:
-        if re.search(r"#[0-9a-fA-F]{3,6}", t_clean) and re.search(r"#[0-9a-fA-F]{3,6}", b_clean):
-            t_hex = re.search(r"#[0-9a-fA-F]{3,6}", t_clean).group(0)
-            b_hex = re.search(r"#[0-9a-fA-F]{3,6}", b_clean).group(0)
-            ratio = calculate_contrast_ratio(t_hex, b_hex)
-            if ratio >= min_ratio:
-                return t_clean
+        if calculate_contrast_ratio(t_hex, b_hex) >= min_ratio:
+            return t_hex
     except Exception:
-        pass
-    return calculate_contrast_color(bg_hex)
+        return calculate_contrast_color(bg_hex)
+
+    try:
+        bg_is_dark = is_color_dark(b_hex)
+        h, s, _ = hex_to_hsl(t_hex)
+
+        # 1. Primary search direction based on background lightness
+        if bg_is_dark:
+            for l_cand in [0.82, 0.86, 0.90, 0.93, 0.96, 0.985]:
+                cand = hsl_to_hex(h, min(s, 0.40), l_cand)
+                if calculate_contrast_ratio(cand, b_hex) >= min_ratio:
+                    return cand
+            for s_subtle in [0.20, 0.10, 0.04]:
+                cand = hsl_to_hex(h, s_subtle, 0.99)
+                if calculate_contrast_ratio(cand, b_hex) >= min_ratio:
+                    return cand
+            # Secondary search downward if background was in the middle-luminance zone
+            for l_cand in [0.20, 0.14, 0.08, 0.04]:
+                cand = hsl_to_hex(h, min(s, 0.35), l_cand)
+                if calculate_contrast_ratio(cand, b_hex) >= min_ratio:
+                    return cand
+        else:
+            for l_cand in [0.26, 0.20, 0.16, 0.12, 0.08, 0.04]:
+                cand = hsl_to_hex(h, min(s, 0.35), l_cand)
+                if calculate_contrast_ratio(cand, b_hex) >= min_ratio:
+                    return cand
+            for s_subtle in [0.20, 0.10, 0.04]:
+                cand = hsl_to_hex(h, s_subtle, 0.04)
+                if calculate_contrast_ratio(cand, b_hex) >= min_ratio:
+                    return cand
+            # Secondary search upward if background was in the middle-luminance zone
+            for l_cand in [0.86, 0.92, 0.96, 0.99]:
+                cand = hsl_to_hex(h, min(s, 0.40), l_cand)
+                if calculate_contrast_ratio(cand, b_hex) >= min_ratio:
+                    return cand
+
+        # Decisive fallback: select whichever pure tone achieves maximum contrast
+        r_white = calculate_contrast_ratio("#ffffff", b_hex)
+        r_dark = calculate_contrast_ratio("#0f172a", b_hex)
+        return "#ffffff" if r_white >= r_dark else "#0f172a"
+    except Exception:
+        return calculate_contrast_color(bg_hex)
 
 
 def sanitize_accent_color(accent_hex: Optional[str], is_dark: bool = False) -> str:
@@ -230,6 +277,39 @@ def sanitize_accent_color(accent_hex: Optional[str], is_dark: bool = False) -> s
         pass
 
     return accent_hex.strip()
+
+
+def sanitize_border_color(border_hex: Optional[str], is_dark: bool = False, allow_poppy: bool = False) -> str:
+    """
+    Ensures border colors default to subtle, elegant neutral dividers unless the user
+    explicitly requested poppy/vibrant/neon borders.
+    """
+    default_neutral = "rgba(255, 255, 255, 0.12)" if is_dark else "#e2e8f0"
+    if not border_hex or not isinstance(border_hex, str) or not border_hex.strip():
+        return default_neutral
+
+    clean = border_hex.strip()
+    if allow_poppy:
+        return clean
+
+    # If it's already an rgba divider with low opacity, keep it
+    if clean.startswith("rgba") or clean.startswith("hsla"):
+        return clean
+
+    try:
+        hex_match = re.search(r"#[0-9a-fA-F]{3,6}", clean)
+        if hex_match:
+            r, g, b = hex_to_rgb(hex_match.group(0))
+            chroma = (max(r, g, b) - min(r, g, b)) / 255.0
+            # If chroma is > 0.22, it's a poppy/saturated color (e.g. bright yellow, red, blue, green)
+            if chroma > 0.22:
+                # Clamp to an elegant subtle neutral divider
+                return "rgba(255, 255, 255, 0.12)" if is_dark else "#e2e8f0"
+    except Exception:
+        pass
+
+    return clean
+
 
 
 def generate_tonal_harmony(base_hex: str, is_dark: bool = False) -> Dict[str, str]:
@@ -435,11 +515,223 @@ def generate_palettes_from_hex(base_hex: str, brand_name: str = "Store") -> List
 
 
 # ==========================================
-# 3. LLM COLOR GENERATOR FUNCTIONS
+# 3. HYBRID MATHEMATICAL COLOR ENGINE & LLM NAMING
 # ==========================================
 
-# High-creativity GPT-4o-mini for rich, diverse, fast and cost-effective color palette generation
+import os
+import secrets
+
+USE_ALGO_PALETTES = os.getenv("USE_ALGO_PALETTES", "true").lower() in ("true", "1", "yes")
+
+_sys_rng = secrets.SystemRandom()
+
+# High-creativity LLM specifically for expressive palette naming and storytelling
+naming_llm = ChatOpenAI(model="gpt-4o-mini", temperature=1.0, request_timeout=15, max_retries=1)
+# Legacy LLM preserved for feature flag fallback
 creative_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.85, request_timeout=20, max_retries=2)
+
+
+class PaletteNamingItem(BaseModel):
+    id: str = Field(description="The palette ID matching the input, e.g. palette_1")
+    name: str = Field(description="Evocative 2-3 word luxury/designer title, e.g. Velvet Crimson, Emerald Mist, Royal Navy & Amber")
+    description: str = Field(description="1-sentence aesthetic description highlighting the color harmony and mood")
+
+
+class PaletteNamingResponse(BaseModel):
+    palettes: List[PaletteNamingItem]
+
+
+HUE_KEYWORD_RANGES: List[Tuple[str, List[Tuple[float, float]]]] = [
+    # Red / Crimson / Wine / Ruby / Scarlet (Strictly 346.0 to 6.0 - NEVER ORANGE OR RUST!)
+    (r"\b(red|crimson|ruby|scarlet|cherry|blood|burgundy|maroon|wine|bordeaux)\b", [(346.0, 6.0)]),
+    # Orange / Terracotta / Rust / Amber / Copper / Peach
+    (r"\b(orange|terracotta|amber|rust|copper|tangerine|apricot|clay|peach)\b", [(15.0, 32.0)]),
+    # Yellow / Gold / Honey / Saffron / Canary
+    (r"\b(yellow|gold|golden|honey|canary|mustard|lemon|sun|saffron)\b", [(44.0, 54.0)]),
+    # Lime / Chartreuse
+    (r"\b(lime|chartreuse)\b", [(72.0, 88.0)]),
+    # Green / Emerald / Forest / Sage / Mint / Olive
+    (r"\b(green|emerald|forest|sage|olive|mint|jade|moss|pine)\b", [(110.0, 155.0)]),
+    # Teal / Cyan / Turquoise / Aquamarine
+    (r"\b(teal|cyan|turquoise|aqua|aquamarine)\b", [(168.0, 192.0)]),
+    # Blue / Navy / Cobalt / Sapphire / Ocean / Sky
+    (r"\b(blue|ocean|navy|cobalt|indigo|sapphire|azure|sky|cerulean)\b", [(210.0, 235.0)]),
+    # Purple / Violet / Lavender / Plum / Lilac / Amethyst
+    (r"\b(purple|violet|lavender|plum|lilac|amethyst|grape|mauve)\b", [(260.0, 285.0)]),
+    # Pink / Rose / Magenta / Fuchsia / Blush
+    (r"\b(pink|rose|magenta|fuchsia|blush|flamingo)\b", [(315.0, 340.0)]),
+    # Earthy / Sand / Beige / Brown / Tan / Khaki
+    (r"\b(earthy|earth|sand|beige|brown|neutral|tan|khaki|coffee|chocolate|latte)\b", [(20.0, 34.0)]),
+]
+
+
+def extract_hex_code_from_text(text: str) -> Optional[str]:
+    """
+    Extracts a 3-digit or 6-digit hex color code from a string.
+    Supports:
+    - Explicit hash: '#ac3039', '#AC3039', '#fff', '#3b82f6'
+    - Contextual keyword prefix without hash: 'color ac3039', 'hex ac3039', 'code ac3039', 'with ac3039'
+    """
+    if not text:
+        return None
+    # 1. Explicit hash hex match (# followed by 6 or 3 hex characters)
+    m = re.search(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b", text)
+    if m:
+        raw = m.group(1)
+        if len(raw) == 3:
+            raw = "".join([c * 2 for c in raw])
+        return f"#{raw.lower()}"
+    
+    # 2. Contextual keyword match without hash (avoid matching common words like 'coffee' or 'decade')
+    m_context = re.search(r"\b(?:hex|color|code|tone|shade|with)\s*(?:is|of|:)?\s*#?([0-9a-fA-F]{6})\b", text, re.IGNORECASE)
+    if m_context:
+        return f"#{m_context.group(1).lower()}"
+    
+    return None
+
+
+def get_color_family_from_hue(hue: float) -> str:
+    """Classifies a 0-360 hue angle into a standard designer color family."""
+    h = hue % 360.0
+    if h >= 346.0 or h <= 12.0:
+        return "crimson"
+    elif h <= 38.0:
+        return "terracotta"
+    elif h <= 65.0:
+        return "gold"
+    elif h <= 88.0:
+        return "lime"
+    elif h <= 165.0:
+        return "emerald"
+    elif h <= 198.0:
+        return "teal"
+    elif h <= 255.0:
+        return "sapphire"
+    elif h <= 295.0:
+        return "amethyst"
+    elif h <= 346.0:
+        return "rose"
+    return "dynamic"
+
+
+def extract_requested_hue_range(user_prompt: str, history_str: str = "") -> Tuple[float, float, str, Optional[str]]:
+    """
+    Extracts requested hue range, color family name, and optional exact hex code from user prompt or history.
+    Priority:
+    1. Exact hex code in current prompt (e.g. '#ac3039') -> tight hue range centered on exact hue + exact hex.
+    2. Color keyword in current prompt (e.g. 'red', 'crimson', 'blue') -> standard keyword range.
+    3. Exact hex code in conversation history -> follow-up with preserved hex code.
+    4. Color keyword in conversation history -> follow-up with preserved keyword range.
+    5. Fallback: dynamic 360-degree range.
+    """
+    p_str = str(user_prompt or "")
+    p_lower = p_str.lower()
+
+    # 1. Exact hex code in current prompt
+    hex_in_prompt = extract_hex_code_from_text(p_str)
+    if hex_in_prompt:
+        try:
+            h, s, l = hex_to_hsl(hex_in_prompt)
+            family = get_color_family_from_hue(h)
+            min_h = (h - 5.0) % 360.0
+            max_h = (h + 5.0) % 360.0
+            return min_h, max_h, family, hex_in_prompt
+        except Exception:
+            pass
+
+    # 2. Color keywords in current prompt
+    for pattern, ranges in HUE_KEYWORD_RANGES:
+        m = re.search(pattern, p_lower)
+        if m:
+            matched_word = m.group(1)
+            chosen_range = _sys_rng.choice(ranges)
+            return chosen_range[0], chosen_range[1], matched_word, None
+
+    # 3. Conversational memory: Check history for exact hex code
+    h_str = str(history_str or "")
+    h_lower = h_str.lower()
+    hex_in_hist = extract_hex_code_from_text(h_str)
+    if hex_in_hist:
+        try:
+            h, s, l = hex_to_hsl(hex_in_hist)
+            family = get_color_family_from_hue(h)
+            min_h = (h - 5.0) % 360.0
+            max_h = (h + 5.0) % 360.0
+            return min_h, max_h, family, hex_in_hist
+        except Exception:
+            pass
+
+    # 4. Conversational memory: Check history for color keywords
+    if h_lower:
+        for pattern, ranges in HUE_KEYWORD_RANGES:
+            m = re.search(pattern, h_lower)
+            if m:
+                matched_word = m.group(1)
+                chosen_range = _sys_rng.choice(ranges)
+                return chosen_range[0], chosen_range[1], matched_word, None
+
+    # 5. Default: completely dynamic 360-degree range
+    start = _sys_rng.uniform(0.0, 360.0)
+    return start, (start + 30.0) % 360.0, "dynamic", None
+
+
+def pick_random_hue(min_h: float, max_h: float) -> float:
+    """Samples a cryptographic random float hue within the designated range."""
+    if min_h <= max_h:
+        return _sys_rng.uniform(min_h, max_h)
+    else:
+        # Range wraps around 360 (e.g. 346 to 6)
+        span = (360.0 - min_h) + max_h
+        val = _sys_rng.uniform(0.0, span)
+        return (min_h + val) % 360.0
+
+
+def clamp_hue_in_range(hue: float, min_h: float, max_h: float) -> float:
+    """Clamps a hue strictly within a range, correctly handling 360-degree wrap-around."""
+    h = hue % 360.0
+    if min_h <= max_h:
+        return max(min_h, min(max_h, h))
+    else:
+        # Wrap-around range (e.g. 346.0 to 6.0)
+        if h >= min_h or h <= max_h:
+            return h
+        dist_min = (min_h - h) % 360.0
+        dist_max = (h - max_h) % 360.0
+        return min_h if dist_min < dist_max else max_h
+
+
+def generate_fallback_name_and_desc(
+    brand_name: str,
+    color_family: str,
+    harmony: str,
+    canvas_mode: str,
+    accent_hex: str,
+) -> Tuple[str, str]:
+    """Provides instant, high-quality designer naming if LLM naming fails or times out."""
+    family_cap = color_family.capitalize() if color_family != "dynamic" else "Modern"
+    
+    harmony_titles = {
+        "complementary": f"{family_cap} & Contrast Sage",
+        "split_complementary": f"{family_cap} Prismatic Harmony",
+        "triadic": f"{family_cap} Triadic Vibrance",
+        "analogous": f"{family_cap} & Soft Rosewood",
+        "mono_deep": f"Velvet {family_cap} Depth",
+        "warm_luxury": f"{family_cap} & Champagne Gold",
+    }
+    canvas_descs = {
+        "deep_immersive": f"Immersive, mood-rich {color_family} canvas with elevated container cards and luminous {accent_hex} highlights.",
+        "light_tint": f"Crisp luminous studio canvas with subtle {color_family} undertones and vibrant {accent_hex} action accents.",
+        "dark_tint": f"Atmospheric midnight slate canvas infused with {color_family} tones and striking interactive depth.",
+        "mid_tone": f"Warm organic editorial canvas balanced with refined {color_family} harmony and high-contrast typography.",
+    }
+    
+    title = f"{brand_name} {harmony_titles.get(harmony, f'{family_cap} Studio')}"
+    desc = canvas_descs.get(canvas_mode, f"Designer-crafted {color_family} palette tailored for {brand_name}.")
+    return title, desc
+
+
+# Session-level palette memory to guarantee non-repetitive archetypes on follow-ups
+_SESSION_PALETTE_HISTORY: Dict[str, List[str]] = {}
 
 
 async def generate_color_palettes(
@@ -448,101 +740,517 @@ async def generate_color_palettes(
     color_description: Optional[str] = None,
     session_id: Optional[str] = None,
     count: int = 3,
+    history_str: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Generates 3 (default) or more WCAG AA compliant, highly creative color palettes based on brand description and domain."""
-    from agents.token_tracker import TokenCostCallback
+    """
+    Industry-Standard Dynamic Color Generation Engine:
+    1. Cryptographically samples diverse, balanced color harmonies (secrets.SystemRandom).
+    2. Dynamically parses requested counts ("5 more", "3 palettes", "new one", etc.).
+    3. Retains color context from conversation history across turns without color drift.
+    4. Enforces non-repetitive archetypes across turns via session palette memory.
+    5. Calculates 24+ PaletteOption surface, border, and typography tokens with guaranteed WCAG AA (>= 4.5).
+    6. Explicitly records token & credit usage in terminal for full billing transparency.
+    7. Calls LLM once with temperature 1.0 to assign unique, evocative luxury naming.
+    """
+    from agents.token_tracker import TokenCostCallback, get_token_tracker
 
-    # Determine target count: default is 3 to save tokens; boost to 5 if user asks for more/all
     desc_lower = str(color_description or "").lower()
-    more_keywords = ["more", "5", "five", "all", "extra", "many", "refresh", "different options", "more options"]
-    target_count = 5 if any(k in desc_lower for k in more_keywords) else count
 
-    option_lines = [
-        "1. OPTION 1 (Light Studio Minimal): Crisp alabaster/white primary_bg (#ffffff, #fffbf7), floating navbar, vivid action accent buttons.",
-        "2. OPTION 2 (Deep Dark Luxury): Rich obsidian/midnight primary_bg (e.g. #0c0a14, #0f172a), elevated card_bg container, dark navbar.",
-        "3. OPTION 3 (Warm Tinted / Earthy Editorial): Soft organic linen/oat/blush primary_bg (e.g. #faf7f2, #fdf4f4), natural toned navbar.",
-    ]
-    if target_count > 3:
-        option_lines.append("4. OPTION 4 (Bold High-Contrast Neo-Modern): Striking contrast header with saturated CTA accents.")
-    if target_count > 4:
-        option_lines.append("5. OPTION 5 (Vibrant Gradient / Atmospheric): Dynamic gradient hero_bg and luminous accents.")
+    # 1. Dynamic Count Detection (supports "5 more", "give me 5", "new one", "3 more", etc.)
+    target_count = count
+    count_match = re.search(r"\b(\d+)\s*(?:more|palettes?|palletes?|pallettes?|themes?|options?|styles?)?\b", desc_lower)
+    if count_match:
+        try:
+            val = int(count_match.group(1))
+            if 1 <= val <= 6:
+                target_count = val
+        except Exception:
+            pass
+    elif re.search(r"\b(new\s*one|another(?:\s*one)?)\b", desc_lower):
+        target_count = 3  # Generate fresh batch of 3 when user asks for a new one/another
+    else:
+        word_map = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
+        for word, num in word_map.items():
+            if re.search(rf"\b{word}\s*(?:more|palettes?|palletes?|pallettes?|themes?|options?)?\b", desc_lower):
+                target_count = num
+                break
 
-    options_text = "\n  ".join(option_lines)
-
-    palette_prompt = ChatPromptTemplate.from_messages([
-        ("system", f"""You are a world-class color theory director for luxury, boutique, and modern e-commerce brands (inspired by Stripe, Apple, Aesop, Nike, Linear, and high-end design systems).
-Your job is to craft exactly {target_count} DISTINCT, SOPHISTICATED, and WCAG AA compliant color palettes tailored specifically to the user's brand name, niche/domain, and aesthetic preference.
-
-CREATIVE DESIGN & SHADE HARMONY GUIDELINES:
-- Generate exactly {target_count} diverse, distinct design directions:
-  {options_text}
-
-- TONAL SOPHISTICATION & RICH SHADES:
-  - Avoid crude stark #000000 or generic primary colors. Use refined, designer-grade tones (e.g. rich warm charcoals #1c1917, deep slate #0f172a, midnight navy #0a0f1d, espresso #1c1411, soft warm ivory #fdfbf7, crisp zinc #fafafa).
-  - Secondary containers & subtle borders: Use harmonizing tints (e.g. #f4f4f5, #f5f3ef, #18181b) that elevate product cards and give natural visual depth.
-  - Buttons & CTAs: Provide vibrant, premium action accents with coordinated hover states and crisp high-contrast text.
-  - ZERO CAMOUFLAGE: Ensure text_color, muted_text, navbar_text_color, footer_text_color, and card_text_color all maintain strong contrast (WCAG AA 4.5:1+) against their respective background surfaces.
-- PRODUCT CARDS: Always give `card_bg` an elevated, distinctive surface hex that harmonizes with the brand palette.
-- STRICT BREVITY: Every palette `description` MUST be strictly under 10 words (e.g. 'Warm earthy hues with fresh organic vibrancy.'). Never write lengthy multi-sentence marketing paragraphs."""),
-        ("user", "Brand: {brand_name}\nDomain/Niche: {domain}\nSpecific Vibe/Request: {color_description}\nTarget Count: {target_count}"),
-    ])
-
-    try:
-        structured_llm = palette_prompt | creative_llm.with_structured_output(PaletteResponse, method="function_calling")
-        res: PaletteResponse = await structured_llm.ainvoke(
-            {
-                "brand_name": brand_name,
-                "domain": domain,
-                "color_description": color_description or "Modern clean minimalist",
-                "target_count": target_count,
-            },
-            config={"callbacks": [TokenCostCallback("ColorAgent.PaletteGenerator", session_id=session_id)]}
+    # 2. Terminal Token & Credit Metering (Always visible in backend terminal when session is active)
+    if session_id:
+        token_tracker = get_token_tracker()
+        est_input_tokens = len(desc_lower.split()) * 15 + 260
+        est_output_tokens = target_count * 150
+        token_tracker.record_usage(
+            agent_name="ColorAgent.PaletteEngine",
+            model_name="gpt-4o-mini",
+            input_tokens=est_input_tokens,
+            output_tokens=est_output_tokens,
+            session_id=session_id,
         )
-        output_palettes = []
-        for p in res.palettes:
-            p_dict = p.model_dump()
-            is_dark_palette = is_color_dark(p_dict.get("primary_bg", "#ffffff"))
 
-            # Guard against black / stark dark neutrals becoming the interactive accent
-            p_dict["accent_color"] = sanitize_accent_color(p_dict.get("accent_color"), is_dark=is_dark_palette)
-            if not p_dict.get("accent_hover"):
-                try:
-                    ah, as_, al = hex_to_hsl(p_dict["accent_color"])
-                    p_dict["accent_hover"] = hsl_to_hex(ah, as_, max(0.2, al - 0.08 if not is_dark_palette else al + 0.08))
-                except Exception:
-                    p_dict["accent_hover"] = p_dict["accent_color"]
+    # 3. Border Intent Detection
+    wants_poppy_borders = bool(re.search(r"\b(poppy|vibrant|neon|bright|accent|colored|colourful|colorful)\s*borders?\b", desc_lower))
 
-            # Smart WCAG AA contrast preservation: keeps designer shades, eliminates camouflage
-            if "primary_bg" in p_dict:
-                p_dict["text_color"] = ensure_accessible_contrast(p_dict.get("text_color"), p_dict["primary_bg"], min_ratio=4.5)
-                if p_dict.get("muted_text"):
-                    p_dict["muted_text"] = ensure_accessible_contrast(p_dict.get("muted_text"), p_dict["primary_bg"], min_ratio=3.0)
-            if "navbar_bg" in p_dict:
-                p_dict["navbar_text_color"] = ensure_accessible_contrast(p_dict.get("navbar_text_color"), p_dict["navbar_bg"], min_ratio=4.5)
-                if not p_dict.get("navbar_outer_bg"):
-                    p_dict["navbar_outer_bg"] = p_dict["navbar_bg"]
-            if "footer_bg" in p_dict:
-                p_dict["footer_text_color"] = ensure_accessible_contrast(p_dict.get("footer_text_color"), p_dict["footer_bg"], min_ratio=4.5)
-                if p_dict.get("footer_muted_color"):
-                    p_dict["footer_muted_color"] = ensure_accessible_contrast(p_dict.get("footer_muted_color"), p_dict["footer_bg"], min_ratio=3.0)
-            if "hero_bg" in p_dict:
-                p_dict["hero_text_color"] = ensure_accessible_contrast(p_dict.get("hero_text_color"), p_dict["hero_bg"], min_ratio=4.5)
-            if "card_bg" in p_dict:
-                p_dict["card_text_color"] = ensure_accessible_contrast(p_dict.get("card_text_color"), p_dict["card_bg"], min_ratio=4.5)
-            if "accent_color" in p_dict:
-                p_dict["accent_text"] = ensure_accessible_contrast(p_dict.get("accent_text"), p_dict["accent_color"], min_ratio=4.5)
-            
-            # Ensure borders are never missing or invisible
-            if not p_dict.get("border_color"):
-                p_dict["border_color"] = "rgba(255, 255, 255, 0.14)" if is_dark_palette else "#e2e8f0"
-            if not p_dict.get("soft_border"):
-                p_dict["soft_border"] = "rgba(255, 255, 255, 0.08)" if is_dark_palette else "#f1f5f9"
+    # --- FEATURE FLAG: LEGACY LLM PATH ---
+    if not USE_ALGO_PALETTES:
+        border_instruction = (
+            "- USER EXPLICITLY REQUESTED POPPY/VIBRANT BORDERS: Generate vibrant accent borders."
+            if wants_poppy_borders else
+            "- DEFAULT BORDER RULE: Cards and section borders must be subtle neutral dividers."
+        )
+        palette_prompt = ChatPromptTemplate.from_messages([
+            ("system", f"""You are an elite color director for luxury e-commerce. Craft {target_count} distinct palettes. {border_instruction}"""),
+            ("user", "Brand: {brand_name}\nDomain: {domain}\nRequest: {color_description}\nTarget Count: {target_count}"),
+        ])
+        try:
+            structured_llm = palette_prompt | creative_llm.with_structured_output(PaletteResponse, method="function_calling")
+            res: PaletteResponse = await structured_llm.ainvoke(
+                {"brand_name": brand_name, "domain": domain, "color_description": color_description or "Modern clean", "target_count": target_count},
+                config={"callbacks": [TokenCostCallback("ColorAgent.PaletteGenerator", session_id=session_id)]}
+            )
+            return [p.model_dump() for p in res.palettes]
+        except Exception as e:
+            print("Error in legacy palette generation:", e)
+            return []
 
-            output_palettes.append(p_dict)
-        return output_palettes
-    except Exception as e:
-        print("Error generating palettes:", e)
-        return []
+    # --- HYBRID MATHEMATICAL ENGINE ---
+    # Extract requested hue range, inspecting both current query and conversation history
+    min_h, max_h, color_family, exact_user_hex = extract_requested_hue_range(desc_lower, history_str=history_str or "")
+
+    THEME_ARCHETYPES = [
+        "bold_header_clean_body",   # Pure white body + bold saturated brand navbar!
+        "soft_tinted_pastel",       # Delicate tinted blush/gelato wash + elevated white cards + punchy CTA!
+        "deep_velvet_luxury",       # Opulent velvet/jewel canvas + metallic champagne gold highlights!
+        "cyber_neon_noir",          # Midnight carbon slate + glowing electric neon CTA!
+        "artisan_earth_warmth",     # Warm organic linen sand + terracotta brick red & sage accents!
+        "minimal_pearl_duo",        # Clean modern pearl canvas + split-complementary focal points!
+    ]
+
+    # Session Memory: Filter out archetypes used in the previous turn so follow-ups ("give me 3 more", "new one") are 100% fresh
+    sess_key = session_id or "default_session"
+    recent_archetypes = _SESSION_PALETTE_HISTORY.get(sess_key, [])
+    fresh_archetypes = [a for a in THEME_ARCHETYPES if a not in recent_archetypes]
+
+    if len(fresh_archetypes) >= target_count:
+        sampled_archetypes = _sys_rng.sample(fresh_archetypes, target_count)
+    else:
+        sampled_archetypes = list(fresh_archetypes)
+        remaining = [a for a in THEME_ARCHETYPES if a not in sampled_archetypes]
+        needed = target_count - len(sampled_archetypes)
+        sampled_archetypes.extend(_sys_rng.sample(remaining, min(needed, len(remaining))))
+        while len(sampled_archetypes) < target_count:
+            sampled_archetypes.append(_sys_rng.choice(THEME_ARCHETYPES))
+
+    # Update session memory
+    _SESSION_PALETTE_HISTORY[sess_key] = list(sampled_archetypes)
+
+    raw_palettes: List[Dict[str, Any]] = []
+    has_specific_color = color_family != "dynamic"
+    family_cap = color_family.capitalize() if has_specific_color else "Modern"
+    color_label = f"{color_family} ({exact_user_hex})" if exact_user_hex else color_family
+
+    h_exact, s_exact, l_exact = hex_to_hsl(exact_user_hex) if exact_user_hex else (0.0, 0.0, 0.0)
+    contrast_text_exact = calculate_contrast_color(exact_user_hex) if exact_user_hex else "#ffffff"
+
+    for idx in range(target_count):
+        archetype = sampled_archetypes[idx]
+
+        # Base Palette Hue with strict range clamping when a specific color is requested
+        raw_hue = pick_random_hue(min_h, max_h)
+        if has_specific_color:
+            palette_base_hue = clamp_hue_in_range(raw_hue + _sys_rng.uniform(-3.5, 3.5), min_h, max_h)
+        else:
+            palette_base_hue = (raw_hue + _sys_rng.uniform(-8.0, 8.0)) % 360.0
+
+        is_yellow_orange = 34.0 <= palette_base_hue <= 72.0
+
+        # Archetype 1: Bold Header + Clean Studio Body
+        if archetype == "bold_header_clean_body":
+            primary_bg = hsl_to_hex(palette_base_hue, _sys_rng.uniform(0.01, 0.04), _sys_rng.uniform(0.985, 0.996))
+            secondary_bg = hsl_to_hex(palette_base_hue, _sys_rng.uniform(0.03, 0.06), _sys_rng.uniform(0.955, 0.970))
+            card_bg = "#ffffff"
+            card_shadow = "0 4px 20px rgba(0,0,0,0.06)"
+            card_radius = 20
+
+            # Bold brand navbar (e.g. rich scarlet red header with crisp white text)
+            nav_sat = _sys_rng.uniform(0.80, 0.94)
+            nav_light = _sys_rng.uniform(0.32, 0.38)
+            navbar_bg = hsl_to_hex(palette_base_hue, nav_sat, nav_light)
+            navbar_outer_bg = navbar_bg
+            navbar_text_color = "#ffffff"
+            navbar_border_color = hsl_to_hex(palette_base_hue, 0.70, 0.26)
+            navbar_variant = "solid"
+
+            accent_hue = palette_base_hue
+            acc_sat = _sys_rng.uniform(0.85, 0.98)
+            acc_light = _sys_rng.uniform(0.34, 0.40)
+            accent_color = hsl_to_hex(accent_hue, acc_sat, acc_light)
+            accent_text = "#ffffff"
+
+            if exact_user_hex:
+                navbar_bg = exact_user_hex
+                navbar_outer_bg = exact_user_hex
+                navbar_text_color = contrast_text_exact
+                navbar_border_color = hsl_to_hex(h_exact, 0.70, max(0.15, l_exact - 0.12))
+                accent_color = exact_user_hex
+                accent_text = contrast_text_exact
+
+            text_color = hsl_to_hex(palette_base_hue, 0.15, 0.10)
+            card_text_color = text_color
+            muted_text = hsl_to_hex(palette_base_hue, 0.12, 0.44)
+
+            soft_border = hsl_to_hex(palette_base_hue, 0.10, 0.90)
+            border_color = sanitize_border_color(soft_border, allow_poppy=wants_poppy_borders)
+            card_border_color = soft_border
+
+            footer_bg = _sys_rng.choice(["#0f172a", hsl_to_hex(palette_base_hue, 0.35, 0.08)])
+            footer_text_color = "#ffffff"
+
+            hero_bg = f"linear-gradient(180deg, {hsl_to_hex(palette_base_hue, 0.06, 0.97)} 0%, #ffffff 100%)"
+            hero_text_color = text_color
+            hero_accent = accent_color
+            visual_style = "solid_clean"
+            fallback_name = f"{family_cap} Bold Header & Studio"
+            fallback_desc = f"Crisp alabaster body anchored by an iconic bold {color_label} navigation header and vibrant action buttons."
+
+        # Archetype 2: Soft Tinted Pastel Wash (Blush Rose / Modern Gelato)
+        elif archetype == "soft_tinted_pastel":
+            # Delicate tinted canvas at 96.5-98.0% lightness (e.g. #fff1f2 for red, gentle rose/blush)
+            primary_bg = hsl_to_hex(palette_base_hue, _sys_rng.uniform(0.55, 0.80), _sys_rng.uniform(0.965, 0.980))
+            secondary_bg = hsl_to_hex(palette_base_hue, 0.45, 0.935)
+            card_bg = "#ffffff"
+            card_shadow = "0 4px 20px rgba(0,0,0,0.05)"
+            card_radius = 20
+
+            navbar_bg = primary_bg
+            navbar_outer_bg = primary_bg
+            # High-contrast dark ruby / espresso text
+            navbar_text_color = hsl_to_hex(palette_base_hue, 0.80, 0.14)
+            navbar_border_color = hsl_to_hex(palette_base_hue, 0.45, 0.88)
+            navbar_variant = "floating"
+
+            accent_hue = palette_base_hue
+            acc_sat = _sys_rng.uniform(0.85, 0.98)
+            acc_light = _sys_rng.uniform(0.35, 0.42)
+            accent_color = hsl_to_hex(accent_hue, acc_sat, acc_light)
+            accent_text = "#ffffff"
+
+            if exact_user_hex:
+                accent_color = exact_user_hex
+                accent_text = contrast_text_exact
+
+            text_color = hsl_to_hex(palette_base_hue, 0.70, 0.12)
+            card_text_color = text_color
+            muted_text = hsl_to_hex(palette_base_hue, 0.35, 0.42)
+
+            soft_border = hsl_to_hex(palette_base_hue, 0.45, 0.88)
+            card_border_color = soft_border
+            border_color = sanitize_border_color(soft_border, allow_poppy=wants_poppy_borders)
+
+            footer_bg = "#0f172a"
+            footer_text_color = "#ffffff"
+
+            hero_bg = f"linear-gradient(135deg, {primary_bg} 0%, {hsl_to_hex(palette_base_hue, 0.40, 0.93)} 100%)"
+            hero_text_color = text_color
+            hero_accent = accent_color
+            visual_style = "warm_organic"
+            fallback_name = f"Blush {family_cap} & Gelato Wash"
+            fallback_desc = f"Delicate pastel {color_label} tinted canvas paired with crisp elevated cards and vibrant action buttons."
+
+        # Archetype 3: Deep Royal Velvet & Champagne Gold Luxe
+        elif archetype == "deep_velvet_luxury":
+            primary_bg = hsl_to_hex(palette_base_hue, _sys_rng.uniform(0.70, 0.90), _sys_rng.uniform(0.065, 0.095))
+            secondary_bg = hsl_to_hex(palette_base_hue, 0.60, 0.13)
+            card_bg = hsl_to_hex(palette_base_hue, 0.55, 0.16)
+            card_shadow = "0 8px 30px rgba(0,0,0,0.35)"
+            card_radius = 20
+
+            navbar_bg = primary_bg
+            navbar_outer_bg = primary_bg
+            navbar_text_color = "#fef3c7"
+            navbar_variant = "soft"
+
+            if has_specific_color:
+                accent_hue = palette_base_hue
+                acc_sat = _sys_rng.uniform(0.85, 0.98)
+                acc_light = _sys_rng.uniform(0.38, 0.44)
+                accent_color = hsl_to_hex(accent_hue, acc_sat, acc_light)
+                accent_text = "#ffffff"
+                # Metallic champagne gold for borders and trims
+                gold_hex = hsl_to_hex(_sys_rng.uniform(42.0, 48.0), 0.95, 0.52)
+                soft_border = gold_hex
+                navbar_border_color = gold_hex
+            else:
+                accent_hue = _sys_rng.uniform(42.0, 50.0) if not is_yellow_orange else (palette_base_hue + 180.0) % 360.0
+                acc_sat = _sys_rng.uniform(0.90, 1.0)
+                acc_light = 0.50
+                accent_color = hsl_to_hex(accent_hue, acc_sat, acc_light)
+                accent_text = "#0f172a"
+                navbar_border_color = hsl_to_hex(accent_hue, 0.50, 0.28)
+                soft_border = hsl_to_hex(accent_hue, 0.45, 0.30)
+
+            if exact_user_hex:
+                accent_color = exact_user_hex
+                accent_text = contrast_text_exact
+
+            text_color = "#fdf8f6"
+            card_text_color = "#fdf8f6"
+            muted_text = "#f3e8e2"
+            card_border_color = soft_border
+            border_color = soft_border
+
+            footer_bg = hsl_to_hex(palette_base_hue, 0.50, 0.03)
+            footer_text_color = "#ffffff"
+
+            hero_bg = primary_bg
+            hero_text_color = "#ffffff"
+            hero_accent = accent_color
+            visual_style = "elevated_luxury"
+            fallback_name = f"{family_cap} & Champagne Gold Luxe"
+            fallback_desc = f"Opulent deep {color_label} velvet canvas accented by luminous champagne gold trims and glowing CTA buttons."
+
+        # Archetype 4: Cyber Neon Midnight Obsidian
+        elif archetype == "cyber_neon_noir":
+            primary_bg = hsl_to_hex(palette_base_hue, 0.20, _sys_rng.uniform(0.045, 0.065))
+            secondary_bg = hsl_to_hex(palette_base_hue, 0.18, 0.09)
+            card_bg = hsl_to_hex(palette_base_hue, 0.15, 0.12)
+            card_shadow = "0 8px 32px rgba(0,0,0,0.45)"
+            card_radius = 20
+
+            navbar_bg = hsl_to_hex(palette_base_hue, 0.15, 0.035)
+            navbar_outer_bg = navbar_bg
+            navbar_text_color = "#ffffff"
+            navbar_border_color = hsl_to_hex(palette_base_hue, 0.35, 0.20)
+            navbar_variant = "solid"
+
+            accent_hue = palette_base_hue
+            acc_sat = _sys_rng.uniform(0.94, 1.0)
+            acc_light = _sys_rng.uniform(0.42, 0.48)
+            accent_color = hsl_to_hex(accent_hue, acc_sat, acc_light)
+            accent_text = "#ffffff"
+
+            if exact_user_hex:
+                accent_color = exact_user_hex
+                accent_text = contrast_text_exact
+
+            text_color = "#f8fafc"
+            card_text_color = "#f8fafc"
+            muted_text = "#94a3b8"
+
+            soft_border = hsl_to_hex(palette_base_hue, 0.40, 0.22)
+            card_border_color = soft_border
+            border_color = soft_border
+
+            footer_bg = "#050304"
+            footer_text_color = "#ffffff"
+
+            hero_bg = primary_bg
+            hero_text_color = "#f8fafc"
+            hero_accent = accent_color
+            visual_style = "cyber_glow"
+            fallback_name = f"{family_cap} Neon Obsidian"
+            fallback_desc = f"Atmospheric carbon noir canvas electrified with high-impact, radiant glowing {color_label} action buttons."
+
+        # Archetype 5: Warm Organic Linen Sand & Artisan Earth
+        elif archetype == "artisan_earth_warmth":
+            primary_bg = hsl_to_hex(_sys_rng.uniform(28.0, 36.0), _sys_rng.uniform(0.20, 0.35), _sys_rng.uniform(0.965, 0.978))
+            secondary_bg = hsl_to_hex(30.0, 0.25, 0.93)
+            card_bg = "#ffffff"
+            card_shadow = "0 4px 18px rgba(0,0,0,0.06)"
+            card_radius = 20
+
+            navbar_bg = primary_bg
+            navbar_outer_bg = primary_bg
+            navbar_text_color = "#29150d"
+            navbar_border_color = hsl_to_hex(palette_base_hue, 0.25, 0.86)
+            navbar_variant = "floating"
+
+            accent_hue = palette_base_hue
+            acc_sat = _sys_rng.uniform(0.75, 0.92)
+            acc_light = _sys_rng.uniform(0.35, 0.42)
+            accent_color = hsl_to_hex(accent_hue, acc_sat, acc_light)
+            accent_text = "#ffffff"
+
+            if exact_user_hex:
+                accent_color = exact_user_hex
+                accent_text = contrast_text_exact
+
+            # Subtle complementary forest sage border accents
+            comp_hue = (palette_base_hue + 140.0) % 360.0
+            soft_border = hsl_to_hex(comp_hue, 0.25, 0.80)
+            card_border_color = soft_border
+            border_color = sanitize_border_color(soft_border, allow_poppy=wants_poppy_borders)
+
+            text_color = "#29150d"
+            card_text_color = text_color
+            muted_text = "#6b544b"
+
+            footer_bg = "#1c1410"
+            footer_text_color = "#ffffff"
+
+            hero_bg = f"linear-gradient(180deg, {primary_bg} 0%, {hsl_to_hex(30.0, 0.18, 0.93)} 100%)"
+            hero_text_color = text_color
+            hero_accent = accent_color
+            visual_style = "warm_organic"
+            fallback_name = f"Artisan {family_cap} & Linen Sand"
+            fallback_desc = f"Warm editorial linen backdrop balanced by rich {color_label} accents and organic earthy borders."
+
+        # Archetype 6: Modern Pearl & Minimal Focal Points
+        else:  # minimal_pearl_duo
+            primary_bg = hsl_to_hex(palette_base_hue, _sys_rng.uniform(0.01, 0.05), _sys_rng.uniform(0.975, 0.990))
+            secondary_bg = hsl_to_hex(palette_base_hue, _sys_rng.uniform(0.02, 0.06), _sys_rng.uniform(0.945, 0.965))
+            card_bg = "#ffffff"
+            card_shadow = "0 4px 16px rgba(0,0,0,0.06)"
+            card_radius = 20
+
+            navbar_bg = "#ffffff"
+            navbar_outer_bg = "#ffffff"
+            navbar_text_color = "#0f172a"
+            navbar_border_color = hsl_to_hex(palette_base_hue, 0.15, 0.88)
+            navbar_variant = "floating"
+
+            accent_hue = palette_base_hue
+            acc_sat = _sys_rng.uniform(0.85, 0.96)
+            acc_light = _sys_rng.uniform(0.34, 0.40)
+            accent_color = hsl_to_hex(accent_hue, acc_sat, acc_light)
+            accent_text = "#ffffff"
+
+            if exact_user_hex:
+                accent_color = exact_user_hex
+                accent_text = contrast_text_exact
+
+            text_color = "#0f172a"
+            card_text_color = text_color
+            muted_text = "#64748b"
+
+            soft_border = hsl_to_hex(palette_base_hue, 0.12, 0.88)
+            card_border_color = soft_border
+            border_color = sanitize_border_color(soft_border, allow_poppy=wants_poppy_borders)
+
+            footer_bg = "#0f172a"
+            footer_text_color = "#ffffff"
+
+            hero_bg = f"linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%)"
+            hero_text_color = text_color
+            hero_accent = accent_color
+            visual_style = "solid_clean"
+            fallback_name = f"Pearl Minimal {family_cap}"
+            fallback_desc = f"Streamlined luxury aesthetic with pearl surfaces and crisp {color_label} focal points."
+
+        # Post-Process Contrast Dead Zone & Accessibility Guarantees
+        if exact_user_hex and (calculate_contrast_ratio("#ffffff", exact_user_hex) >= 4.5 or calculate_contrast_ratio("#0f172a", exact_user_hex) >= 4.5):
+            accent_color = exact_user_hex
+            accent_text = calculate_contrast_color(exact_user_hex)
+            hover_l = min(0.90, l_exact + 0.08) if is_color_dark(primary_bg) else max(0.18, l_exact - 0.08)
+            accent_hover = hsl_to_hex(h_exact, min(1.0, s_exact * 1.1), hover_l)
+        else:
+            cand_accent = accent_color
+            while calculate_contrast_ratio("#ffffff", cand_accent) < 4.5 and calculate_contrast_ratio("#0f172a", cand_accent) < 4.5:
+                acc_light -= 0.015
+                cand_accent = hsl_to_hex(accent_hue, acc_sat, max(0.18, acc_light))
+            accent_color = sanitize_accent_color(cand_accent, is_dark=is_color_dark(primary_bg))
+
+            is_dark_canvas = is_color_dark(primary_bg)
+            hover_l = min(0.90, acc_light + 0.08) if is_dark_canvas else max(0.20, acc_light - 0.08)
+            accent_hover = hsl_to_hex(accent_hue, acc_sat, hover_l)
+
+        hero_accent = accent_color
+
+        # Accessibility contrast enforcement on all text/background pairs
+        accent_text = ensure_accessible_contrast(accent_text, accent_color, min_ratio=4.5)
+        text_color = ensure_accessible_contrast(text_color, primary_bg, min_ratio=4.5)
+        muted_text = ensure_accessible_contrast(muted_text, primary_bg, min_ratio=3.0)
+        navbar_text_color = ensure_accessible_contrast(navbar_text_color, navbar_bg, min_ratio=4.5)
+        card_text_color = ensure_accessible_contrast(card_text_color, card_bg, min_ratio=4.5)
+        footer_is_dark = is_color_dark(footer_bg)
+        footer_text_color = ensure_accessible_contrast("#ffffff" if footer_is_dark else text_color, footer_bg, min_ratio=4.5)
+        footer_muted_color = ensure_accessible_contrast("#94a3b8" if footer_is_dark else muted_text, footer_bg, min_ratio=3.0)
+
+        p_id = f"palette_{idx + 1}"
+
+        raw_palettes.append({
+            "id": p_id,
+            "name": fallback_name,
+            "description": fallback_desc,
+            "visual_style": visual_style,
+            "primary_bg": primary_bg,
+            "secondary_bg": secondary_bg,
+            "text_color": text_color,
+            "muted_text": muted_text,
+            "accent_color": accent_color,
+            "accent_hover": accent_hover,
+            "accent_text": accent_text,
+            "border_color": border_color,
+            "soft_border": soft_border,
+            "navbar_bg": navbar_bg,
+            "navbar_outer_bg": navbar_outer_bg,
+            "navbar_text_color": navbar_text_color,
+            "navbar_border_color": navbar_border_color,
+            "navbar_variant": navbar_variant,
+            "footer_bg": footer_bg,
+            "footer_text_color": footer_text_color,
+            "footer_muted_color": footer_muted_color,
+            "hero_bg": hero_bg,
+            "hero_text_color": hero_text_color,
+            "hero_accent": hero_accent,
+            "card_bg": card_bg,
+            "card_text_color": card_text_color,
+            "card_border_color": card_border_color,
+            "card_shadow": card_shadow,
+            "card_radius": card_radius,
+            "_meta_archetype": archetype,
+        })
+
+    # 4. LLM Naming Call (Temperature 1.0) with Resilient Fallback
+    if os.getenv("SKIP_PALETTE_LLM_NAMING", "false").lower() not in ("true", "1", "yes"):
+        try:
+            naming_summary = [
+                f"ID: {p['id']}, Archetype: {p['_meta_archetype']}, Nav: {p['navbar_bg']}, Canvas: {p['primary_bg']}, Accent: {p['accent_color']}"
+                for p in raw_palettes
+            ]
+            if has_specific_color:
+                color_desc_str = f"{color_family.upper()} ({exact_user_hex})" if exact_user_hex else color_family.upper()
+                naming_instructions = (
+                    f"CRITICAL REQUIREMENT: The user specifically requested a {color_desc_str} theme. "
+                    f"Every palette title and description MUST explicitly celebrate and feature {color_desc_str} "
+                    f"(e.g. 'Crimson Bold Header & Studio' for a bold red navbar with white body; 'Blush Rose Gelato' for a soft pastel wash; 'Velvet Merlot Luxe' for deep burgundy canvas with gold buttons). "
+                    f"Reflect each theme's unique layout and archetype clearly! DO NOT give them generic names."
+                )
+            else:
+                naming_instructions = "Invent original, evocative 2-3 word designer titles (e.g. 'Nordic Sage', 'Obsidian Rose', 'Velvet Bordeaux') and a 1-sentence design note highlighting its color harmony."
+
+            naming_prompt = ChatPromptTemplate.from_messages([
+                ("system", f"""You are an award-winning luxury branding copywriter.
+{naming_instructions}
+Return ONLY the name and description matching each palette ID."""),
+                ("user", "Brand: {brand_name}\nDomain: {domain}\nRequest: {color_description}\nPalettes:\n{palettes}"),
+            ])
+            structured_naming = naming_prompt | naming_llm.with_structured_output(PaletteNamingResponse, method="function_calling")
+            naming_res: PaletteNamingResponse = await structured_naming.ainvoke(
+                {
+                    "brand_name": brand_name,
+                    "domain": domain,
+                    "color_description": color_description or "Curated luxury",
+                    "palettes": "\n".join(naming_summary),
+                },
+                config={"callbacks": [TokenCostCallback("ColorAgent.PaletteNaming", session_id=session_id)]}
+            )
+            name_map = {item.id: item for item in naming_res.palettes}
+            for p in raw_palettes:
+                if p["id"] in name_map:
+                    p["name"] = name_map[p["id"]].name
+                    p["description"] = name_map[p["id"]].description
+        except Exception as e:
+            print("Palette LLM naming fallback activated:", e)
+
+    # Clean up internal metadata keys before returning
+    for p in raw_palettes:
+        p.pop("_meta_archetype", None)
+        p.pop("_meta_harmony", None)
+        p.pop("_meta_canvas", None)
+
+    return raw_palettes
+
 
 
 class DesignAction(BaseModel):
@@ -607,15 +1315,23 @@ COMPONENT_ALLOWED_KEYS = {
     "product_detail": {"product_detail_bg", "product_detail_text", "product_detail_btn_bg", "product_detail_btn_text", "product_detail_padding", "product_detail_radius", "border_color", "background_color", "text_color", "secondary_bg", "accent_color", "image_aspect_ratio", "image_fit"},
     "cart": {"cart_bg", "cart_text_color", "cart_card_bg", "cart_accent_color", "cart_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "accent_color", "cart_radius", "cart_padding"},
     "order_summary": {"summary_bg", "summary_card_bg", "summary_text_color", "summary_accent_color", "summary_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "accent_color", "summary_radius", "summary_padding"},
-    "delivery_form": {"delivery_form_bg", "delivery_form_text", "delivery_form_input_bg", "delivery_form_input_text", "delivery_form_border", "delivery_form_btn_bg", "delivery_form_btn_text", "delivery_form_radius", "delivery_form_padding", "border_color", "background_color", "text_color", "accent_color"},
-    "payment": {"payment_bg", "payment_card_bg", "payment_text_color", "payment_accent_color", "payment_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "accent_color", "payment_radius", "payment_padding"},
-    "place_order": {"place_order_bg", "place_order_btn_bg", "place_order_btn_text", "place_order_text", "border_color", "background_color", "text_color", "accent_color", "place_order_radius", "place_order_btn_height"},
+    "delivery_form": {"delivery_form_bg", "delivery_form_card_bg", "delivery_form_text", "delivery_form_input_bg", "delivery_form_input_text", "delivery_form_border", "delivery_form_btn_bg", "delivery_form_btn_text", "delivery_form_radius", "delivery_form_padding", "border_color", "background_color", "text_color", "card_bg", "card_color", "accent_color"},
+    "payment": {"payment_bg", "payment_card_bg", "payment_text_color", "payment_accent_color", "payment_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "card_color", "accent_color", "payment_radius", "payment_padding"},
+    "place_order": {"place_order_bg", "place_order_card_bg", "place_order_btn_bg", "place_order_btn_text", "place_order_text", "place_order_border", "border_color", "background_color", "text_color", "card_bg", "card_color", "accent_color", "place_order_radius", "place_order_btn_height", "title_color", "section_title_color"},
     "filter": {"filter_modal_bg", "filter_modal_text", "filter_btn_bg", "filter_btn_text", "filter_bg", "filter_card_bg", "filter_text_color", "filter_border_color", "filter_accent_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "accent_color", "filter_radius", "filter_padding"},
     "sort": {"sort_btn_bg", "sort_btn_text", "pagination_bg", "pagination_text_color", "border_color", "background_color", "text_color", "accent_color"},
     "sort_by": {"sort_btn_bg", "sort_btn_text", "border_color", "background_color", "text_color", "accent_color"},
     "pagination": {"pagination_bg", "pagination_text_color", "pagination_active_bg", "pagination_border_color", "pagination_radius", "pagination_padding", "background_color", "text_color", "border_color", "accent_color"},
     "order_history": {"order_history_bg", "order_history_card_bg", "order_history_text", "order_history_muted_text", "order_history_border", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "muted_text", "order_history_radius"},
-    "checkout": {"checkout_bg", "checkout_card_bg", "checkout_text_color", "checkout_accent_color", "delivery_form_bg", "delivery_form_text", "delivery_form_input_bg", "delivery_form_border", "delivery_form_btn_bg", "delivery_form_btn_text", "delivery_form_radius", "delivery_form_padding", "place_order_btn_bg", "place_order_btn_text", "place_order_radius", "place_order_btn_height", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "accent_color"},
+    "checkout": {
+        "checkout_bg", "checkout_card_bg", "checkout_text_color", "checkout_accent_color",
+        "checkout_steps_bg", "active_step_bg", "active_text_color", "active_step_text", "line_active_color",
+        "delivery_form_bg", "delivery_form_card_bg", "delivery_form_text", "delivery_form_input_bg", "delivery_form_input_text", "delivery_form_border", "delivery_form_btn_bg", "delivery_form_btn_text", "delivery_form_radius", "delivery_form_padding",
+        "payment_bg", "payment_card_bg", "payment_text_color", "payment_accent_color", "payment_border_color", "payment_radius", "payment_padding",
+        "place_order_bg", "place_order_card_bg", "place_order_text", "place_order_border", "place_order_btn_bg", "place_order_btn_text", "place_order_radius", "place_order_btn_height",
+        "summary_bg", "summary_card_bg", "summary_text_color", "summary_accent_color", "summary_border_color", "summary_radius",
+        "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "accent_color"
+    },
     "review": {"review_card_bg", "review_text_color", "review_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "review_card_radius", "review_padding"},
     "support": {"support_bg", "support_card_bg", "support_chat_bg", "support_accent_color", "support_customer_bubble_bg", "support_customer_bubble_text", "support_agent_bubble_bg", "support_agent_bubble_text", "support_text_color", "support_muted_text", "support_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "muted_text", "accent_color"},
     "customer_support": {"support_bg", "support_card_bg", "support_chat_bg", "support_accent_color", "support_customer_bubble_bg", "support_customer_bubble_text", "support_agent_bubble_bg", "support_agent_bubble_text", "support_text_color", "support_muted_text", "support_border_color", "border_color", "background_color", "text_color", "card_bg", "card_bg_color", "muted_text", "accent_color"},
@@ -713,20 +1429,59 @@ COMPONENT_ALIASES = {
     # Order Summary
     "order_summary": "order_summary", "order summary": "order_summary",
     "checkout summary": "order_summary", "cart summary": "order_summary",
+    "checkout order summary": "order_summary", "order summary theme": "order_summary",
+    "checkout order summary theme": "order_summary", "summary card": "order_summary",
+    "summary card theme": "order_summary", "summary theme": "order_summary",
     "bill card": "order_summary", "price breakdown": "order_summary",
 
-    # Delivery Form
+    # Delivery Form (with typo resilience e.g. delviery, delivry, delvery)
     "delivery_form": "delivery_form", "delivery form": "delivery_form",
+    "delviery form": "delivery_form", "delivry form": "delivery_form", "delvery form": "delivery_form",
+    "delivery": "delivery_form", "delviery": "delivery_form", "delivry": "delivery_form", "delvery": "delivery_form",
+    "delivery form theme": "delivery_form", "delviery form theme": "delivery_form",
+    "delivery theme": "delivery_form", "delviery theme": "delivery_form",
+    "delivery page": "delivery_form", "delviery page": "delivery_form",
+    "delivery step": "delivery_form", "delviery step": "delivery_form",
+    "delivery address": "delivery_form", "delviery address": "delivery_form",
+    "delivery address theme": "delivery_form", "delviery address theme": "delivery_form",
     "shipping form": "delivery_form", "shipping details": "delivery_form",
-    "delivery address": "delivery_form", "address form": "delivery_form",
+    "shipping": "delivery_form", "shipping theme": "delivery_form", "shipping page": "delivery_form",
+    "address form": "delivery_form", "address form theme": "delivery_form",
 
-    # Payment
-    "payment": "payment", "payment method": "payment", "payment methods": "payment",
+    # Payment (with typo resilience e.g. payemnt, payement)
+    "payment": "payment", "payemnt": "payment", "payement": "payment",
+    "payment method": "payment", "payment methods": "payment",
     "payment options": "payment", "payment pills": "payment", "payment selector": "payment",
+    "payment theme": "payment", "payemnt theme": "payment", "payment methods theme": "payment",
+    "payment page": "payment", "payment step": "payment", "payemnt page": "payment", "payemnt step": "payment",
 
-    # Place Order
+    # Place Order / Review & Pay (Step 3 of Checkout)
     "place_order": "place_order", "place order": "place_order",
     "place order button": "place_order", "checkout button": "place_order", "place order cta": "place_order",
+    "place order theme": "place_order", "place order page": "place_order", "place order step": "place_order",
+    "review & pay": "place_order", "review and pay": "place_order",
+    "review & pay page": "place_order", "review and pay page": "place_order",
+    "review & pay theme": "place_order", "review and pay theme": "place_order",
+    "review & pay step": "place_order", "review and pay step": "place_order",
+    "review & pay background": "place_order", "review and pay background": "place_order",
+    "review and pay button": "place_order", "review & pay button": "place_order",
+    "checkout review": "place_order", "checkout review page": "place_order",
+    "checkout review step": "place_order", "checkout review theme": "place_order",
+    "order review": "place_order", "order review page": "place_order", "review order": "place_order",
+
+    # Full Checkout Page / All Checkout Pages & Steps
+    "checkout": "checkout", "check out": "checkout", "chekout": "checkout", "checout": "checkout",
+    "checkout page": "checkout", "chekout page": "checkout", "check out page": "checkout",
+    "checkout pages": "checkout", "chekout pages": "checkout", "check out pages": "checkout",
+    "checkout theme": "checkout", "chekout theme": "checkout", "check out theme": "checkout",
+    "checkout all pages": "checkout", "chekout all pages": "checkout", "all checkout pages": "checkout",
+    "all chekout pages": "checkout", "all pages of checkout": "checkout", "checkout steps": "checkout",
+    "chekout steps": "checkout", "checkout wizard": "checkout", "checkout step": "checkout",
+
+    # Customer Reviews & Ratings
+    "review": "review", "reviews": "review", "product review": "review", "product reviews": "review",
+    "customer reviews": "review", "reviews section": "review", "reviews card": "review",
+    "reviews theme": "review", "review card": "review", "ratings": "review",
 
     # Filter
     "filter": "filter", "filters": "filter", "filter bar": "filter", "filter toolbar": "filter",
@@ -1257,6 +2012,17 @@ RULES:
       Target 'profile': emit actions setting BOTH card_bg and page_bg to [color], with contrasting title_color / text_color and border_color!
     - When user says "make the cart theme same as webpage theme", "make cart theme same as navbar theme", or "match cart to [navbar/webpage]":
       Target 'cart': inspect Current Theme and align ALL cart keys (cart_bg, cart_panel_bg, cart_text_color, cart_border_color) to match the referenced component (navbar or webpage).
+    - When user says "Review & Pay page theme change it to green please", "review and pay theme [color]", or "review & pay page theme [color]":
+      The user is targeting Step 3: Review & Pay of the checkout flow!
+      Target 'place_order': emit actions setting place_order_bg (e.g. green #008000), place_order_card_bg (green or harmonized surface), contrasting place_order_text (e.g. #FFFFFF for dark green, #0f172a for light), and place_order_btn_bg!
+      DO NOT change or touch 'order_summary' unless the user explicitly mentions the bill/order summary card!
+    - When user says "make chekout all pages theme to to red please", "checkout all pages theme [color]", or "all checkout pages [color]":
+      The user wants the entire checkout experience (all steps: Delivery Address, Payment, Review & Pay, and Checkout Steps) styled in that theme!
+      Target 'checkout': emit actions setting checkout_bg, delivery_form_bg, payment_bg, place_order_bg, checkout_steps_bg, and summary_bg to the requested color, with contrasting high-readability text and cards across all checkout components!
+    - When user says "delviery form theme [color]", "delivery address theme [color]", or "delivery form theme [color]":
+      Target 'delivery_form': emit actions setting delivery_form_bg to the requested color and delivery_form_text to high-contrast text!
+    - When user says "payment theme [color]", "payment methods theme [color]", or "payment page theme [color]":
+      Target 'payment': emit actions setting payment_bg, payment_card_bg, and payment_text_color!
 7. PRODUCT CARD BRAND COLOR & SELLING PRICE INTEGRITY:
    - The brand name on product cards ('brand_color') can carry the store's primary accent or brand color.
    - However, the selling price ('price_color') must NEVER be red, crimson, or warning tones, even if the brand accent or store theme is red! Red selling prices resemble penalties or financial debt in e-commerce. Selling price MUST be authoritative slate (#0f172a) on light cards or clean white (#ffffff) on dark cards.
@@ -1291,10 +2057,322 @@ async def generate_component_palette_suggestions(
     target_component: str,
     color_description: str,
     current_theme: Dict[str, Any],
+    session_id: Optional[str] = None,
+    history_str: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Generates component-specific palette suggestions."""
-    palettes = await generate_color_palettes(brand_name, domain, color_description)
+    palettes = await generate_color_palettes(
+        brand_name=brand_name,
+        domain=domain,
+        color_description=color_description,
+        session_id=session_id,
+        history_str=history_str,
+    )
     return palettes
+
+
+BASIC_COLOR_NAMES: Dict[str, str] = {
+    "red": "#ef4444",
+    "crimson": "#dc2626",
+    "ruby": "#be123c",
+    "blue": "#3b82f6",
+    "navy": "#0f172a",
+    "sky": "#0ea5e9",
+    "green": "#10b981",
+    "emerald": "#059669",
+    "forest": "#15803d",
+    "yellow": "#f59e0b",
+    "gold": "#d97706",
+    "golden": "#d97706",
+    "purple": "#8b5cf6",
+    "violet": "#7c3aed",
+    "pink": "#ec4899",
+    "rose": "#f43f5e",
+    "orange": "#f97316",
+    "black": "#09090b",
+    "white": "#ffffff",
+    "dark": "#0f172a",
+    "light": "#f8fafc",
+    "slate": "#1e293b",
+    "gray": "#64748b",
+    "grey": "#64748b",
+    "teal": "#14b8a6",
+    "cyan": "#06b6d4",
+}
+
+
+def try_generate_direct_recolor_plan(
+    user_message: str,
+    target_component: Optional[str],
+) -> Optional[DesignPlanOutput]:
+    """
+    Direct Deterministic Component Recolor Fast-Path:
+    Detects simple, explicit recolor commands (e.g. 'change navbar to #ac3039', 'make footer black', 'set background to white').
+    Bypasses the heavy ~3,200 token DesignPlan LLM call, reducing credits from ~8 to 0-1 and execution time from 3s to 10ms!
+    """
+    if not target_component or target_component in ("unsupported", "revert", "banner_create", "overall"):
+        return None
+
+    msg = user_message.lower().strip()
+
+    # Reject complex multi-instruction prompts (e.g. 'with rounded corners and make button glow')
+    complex_triggers = ["radius", "height", "padding", "round", "pill", "shadow", "glow", "glass", "frosted", "font-size", "and make", "and set"]
+    if any(ct in msg for ct in complex_triggers):
+        return None
+
+    # 1. Extract hex code or color keyword
+    target_color_hex = extract_hex_code_from_text(user_message)
+    color_label = target_color_hex
+    if not target_color_hex:
+        # Check basic color names
+        for cname, chex in BASIC_COLOR_NAMES.items():
+            if re.search(rf"\b{cname}\b", msg):
+                target_color_hex = chex
+                color_label = cname
+                break
+
+    if not target_color_hex:
+        return None
+
+    # Check if this is a direct recolor instruction
+    is_direct_cmd = any(bool(re.search(pat, msg)) for pat in [
+        r"\b(?:change|make|set|turn|update|style)\b",
+        r"\b(?:navbar|footer|header|card|background|canvas|hero|banner|cart)\b",
+    ])
+    if not is_direct_cmd:
+        return None
+
+    target_clean = target_component.lower().strip()
+    actions: List[DesignAction] = []
+
+    is_text_request = bool(re.search(r"\b(?:text|font|title|label|heading|words?|typography)\b", msg))
+    is_border_request = bool(re.search(r"\b(?:border|divider|stroke|outline)\b", msg))
+    is_button_request = bool(re.search(r"\b(?:button|btn|accent|cta)\b", msg))
+
+    if target_clean in ("navbar", "header"):
+        if is_text_request:
+            actions.append(DesignAction(
+                target_component="navbar",
+                target_element="text",
+                property_name="navbar_text_color",
+                value=target_color_hex,
+                reasoning=f"Directly updated navbar text color to {color_label}",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your navbar text color to {color_label}.",
+            )
+        elif is_border_request:
+            actions.append(DesignAction(
+                target_component="navbar",
+                target_element="border",
+                property_name="navbar_border_color",
+                value=target_color_hex,
+                reasoning=f"Directly updated navbar border to {color_label}",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your navbar border color to {color_label}.",
+            )
+        else:
+            actions.append(DesignAction(
+                target_component="navbar",
+                target_element="background",
+                property_name="navbar_bg",
+                value=target_color_hex,
+                reasoning=f"Directly updated navbar background to {color_label}",
+            ))
+            actions.append(DesignAction(
+                target_component="navbar",
+                target_element="background",
+                property_name="navbar_outer_bg",
+                value=target_color_hex,
+                reasoning="Synchronized navbar outer background",
+            ))
+            actions.append(DesignAction(
+                target_component="navbar",
+                target_element="text",
+                property_name="navbar_text_color",
+                value=calculate_contrast_color(target_color_hex),
+                reasoning="Ensured WCAG AA contrast text",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your navbar background to {color_label} with high-contrast text.",
+            )
+
+    elif target_clean == "footer":
+        if is_text_request:
+            actions.append(DesignAction(
+                target_component="footer",
+                target_element="text",
+                property_name="footer_text_color",
+                value=target_color_hex,
+                reasoning=f"Directly updated footer text to {color_label}",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your footer text color to {color_label}.",
+            )
+        elif is_border_request:
+            actions.append(DesignAction(
+                target_component="footer",
+                target_element="border",
+                property_name="footer_border_color",
+                value=target_color_hex,
+                reasoning=f"Directly updated footer border to {color_label}",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your footer border to {color_label}.",
+            )
+        else:
+            actions.append(DesignAction(
+                target_component="footer",
+                target_element="background",
+                property_name="footer_bg",
+                value=target_color_hex,
+                reasoning=f"Directly updated footer background to {color_label}",
+            ))
+            actions.append(DesignAction(
+                target_component="footer",
+                target_element="text",
+                property_name="footer_text_color",
+                value=calculate_contrast_color(target_color_hex),
+                reasoning="Ensured WCAG AA contrast text",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your footer background to {color_label}.",
+            )
+
+    elif target_clean in ("hero", "banner"):
+        if is_button_request:
+            actions.append(DesignAction(
+                target_component="hero",
+                target_element="button",
+                property_name="hero_accent",
+                value=target_color_hex,
+                reasoning=f"Directly updated hero button color to {color_label}",
+            ))
+            actions.append(DesignAction(
+                target_component="hero",
+                target_element="button",
+                property_name="accent_color",
+                value=target_color_hex,
+                reasoning=f"Synchronized store primary accent to {color_label}",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your hero banner button to {color_label}.",
+            )
+        elif is_text_request:
+            actions.append(DesignAction(
+                target_component="hero",
+                target_element="text",
+                property_name="hero_text_color",
+                value=target_color_hex,
+                reasoning=f"Directly updated hero text to {color_label}",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your hero banner text color to {color_label}.",
+            )
+        else:
+            actions.append(DesignAction(
+                target_component="hero",
+                target_element="background",
+                property_name="hero_bg",
+                value=target_color_hex,
+                reasoning=f"Directly updated hero background to {color_label}",
+            ))
+            actions.append(DesignAction(
+                target_component="hero",
+                target_element="text",
+                property_name="hero_text_color",
+                value=calculate_contrast_color(target_color_hex),
+                reasoning="Ensured WCAG AA contrast hero text",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your hero background to {color_label}.",
+            )
+
+    elif target_clean in ("background", "canvas"):
+        if is_text_request:
+            actions.append(DesignAction(
+                target_component="global",
+                target_element="text",
+                property_name="text_color",
+                value=target_color_hex,
+                reasoning=f"Directly updated body text to {color_label}",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your store text color to {color_label}.",
+            )
+        else:
+            actions.append(DesignAction(
+                target_component="global",
+                target_element="background",
+                property_name="primary_bg",
+                value=target_color_hex,
+                reasoning=f"Directly updated page background to {color_label}",
+            ))
+            actions.append(DesignAction(
+                target_component="global",
+                target_element="text",
+                property_name="text_color",
+                value=calculate_contrast_color(target_color_hex),
+                reasoning="Ensured WCAG AA contrast text",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your page background to {color_label}.",
+            )
+
+    elif target_clean in ("card", "product_card"):
+        if is_text_request:
+            actions.append(DesignAction(
+                target_component="card",
+                target_element="card_text",
+                property_name="card_text_color",
+                value=target_color_hex,
+                reasoning=f"Directly updated card text to {color_label}",
+            ))
+            actions.append(DesignAction(
+                target_component="card",
+                target_element="card_text",
+                property_name="product_name_color",
+                value=target_color_hex,
+                reasoning=f"Directly updated product title to {color_label}",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your card text color to {color_label}.",
+            )
+        else:
+            actions.append(DesignAction(
+                target_component="card",
+                target_element="card_background",
+                property_name="card_bg",
+                value=target_color_hex,
+                reasoning=f"Directly updated card background to {color_label}",
+            ))
+            actions.append(DesignAction(
+                target_component="card",
+                target_element="card_text",
+                property_name="card_text_color",
+                value=calculate_contrast_color(target_color_hex),
+                reasoning="Ensured WCAG AA contrast text",
+            ))
+            return DesignPlanOutput(
+                actions=actions,
+                summary=f"Updated your card background to {color_label}.",
+            )
+
+    return None
+
 
 
 ALL_COMPONENT_OVERRIDE_KEYS = {
@@ -1310,8 +2388,8 @@ ALL_COMPONENT_OVERRIDE_KEYS = {
     "summary_bg", "summary_card_bg", "summary_text_color", "summary_accent_color", "summary_border_color", "summary_radius", "summary_padding",
     # payment
     "payment_bg", "payment_card_bg", "payment_text_color", "payment_accent_color", "payment_border_color", "payment_radius", "payment_padding",
-    # place_order
-    "place_order_bg", "place_order_btn_bg", "place_order_btn_text", "place_order_text", "place_order_radius", "place_order_btn_height",
+    # place_order & checkout
+    "place_order_bg", "place_order_card_bg", "place_order_border", "place_order_btn_bg", "place_order_btn_text", "place_order_text", "place_order_radius", "place_order_btn_height", "checkout_steps_bg", "checkout_steps_border", "checkout_card_bg", "checkout_review_bg", "checkout_bg",
     # filter
     "filter_bg", "filter_card_bg", "filter_text_color", "filter_border_color", "filter_accent_color", "filter_radius", "filter_padding",
     # pagination
@@ -1346,8 +2424,8 @@ THEME_COMPONENT_OVERRIDE_KEYS = {
     "summary_bg", "summary_card_bg", "summary_text_color", "summary_accent_color", "summary_border_color", "summary_radius", "summary_padding",
     # payment
     "payment_bg", "payment_card_bg", "payment_text_color", "payment_accent_color", "payment_border_color", "payment_radius", "payment_padding",
-    # place_order
-    "place_order_bg", "place_order_btn_bg", "place_order_btn_text", "place_order_text", "place_order_radius", "place_order_btn_height",
+    # place_order & checkout
+    "place_order_bg", "place_order_card_bg", "place_order_border", "place_order_btn_bg", "place_order_btn_text", "place_order_text", "place_order_radius", "place_order_btn_height", "checkout_steps_bg", "checkout_steps_border", "checkout_card_bg", "checkout_review_bg", "checkout_bg",
     # filter
     "filter_bg", "filter_card_bg", "filter_text_color", "filter_border_color", "filter_accent_color", "filter_radius", "filter_padding", "filter_modal_bg", "filter_modal_text", "filter_btn_bg", "filter_btn_text",
     # pagination
@@ -1386,10 +2464,18 @@ COMPONENT_BLOCK_TARGETS: Dict[str, List[str]] = {
     "navbar": ["navbar", "header"],
     "footer": ["footer"],
     "cart": ["cart", "cartdrawer"],
-    "order_summary": ["ordersummary", "checkoutsummary"],
-    "delivery_form": ["deliveryform", "checkoutform", "addressform"],
-    "payment": ["payment", "paymentmethods"],
-    "place_order": ["placeorder"],
+    "order_summary": ["ordersummary", "checkoutsummary", "checkoutordersummary"],
+    "delivery_form": ["deliveryform", "checkoutform", "addressform", "deliveryaddressform", "delivery"],
+    "payment": ["payment", "paymentmethods", "paymentoptions"],
+    "place_order": ["placeorder", "placeordercta", "checkoutreview", "reviewandpay", "reviewpay"],
+    "checkout_steps": ["checkoutsteps", "checkoutstep", "checkoutwizard"],
+    "checkout": [
+        "deliveryform", "checkoutform", "addressform", "deliveryaddressform", "delivery",
+        "payment", "paymentmethods", "paymentoptions",
+        "placeorder", "placeordercta", "checkoutreview", "reviewandpay",
+        "ordersummary", "checkoutsummary", "checkoutordersummary",
+        "checkoutsteps"
+    ],
     "filter": ["filter", "filtertoolbar"],
     "pagination": ["pagination", "pager"],
     "review": ["review", "reviews", "ratings"],
@@ -1835,9 +2921,14 @@ CANONICAL_COMPONENT_PROPERTY_MAP: Dict[str, Dict[str, Union[str, List[str]]]] = 
         "payment_radius": "payment_radius",
     },
     "place_order": {
+        "theme": ["place_order_bg", "place_order_card_bg"],
         "background": "place_order_bg",
         "bg": "place_order_bg",
         "place_order_bg": "place_order_bg",
+        "card_bg": "place_order_card_bg",
+        "card": "place_order_card_bg",
+        "card_color": "place_order_card_bg",
+        "place_order_card_bg": "place_order_card_bg",
         "button_bg": "place_order_btn_bg",
         "btn_bg": "place_order_btn_bg",
         "button_color": "place_order_btn_bg",
@@ -1848,10 +2939,28 @@ CANONICAL_COMPONENT_PROPERTY_MAP: Dict[str, Dict[str, Union[str, List[str]]]] = 
         "place_order_btn_text": "place_order_btn_text",
         "text": "place_order_text",
         "text_color": "place_order_text",
+        "title_color": "place_order_text",
+        "section_title_color": "place_order_text",
         "place_order_text": "place_order_text",
+        "border": "place_order_border",
+        "border_color": "place_order_border",
+        "soft_border_color": "place_order_border",
+        "place_order_border": "place_order_border",
         "radius": "place_order_radius",
         "border_radius": "place_order_radius",
         "place_order_radius": "place_order_radius",
+    },
+    "checkout": {
+        "theme": ["checkout_bg", "delivery_form_bg", "payment_bg", "place_order_bg", "checkout_steps_bg", "summary_bg"],
+        "background": ["checkout_bg", "delivery_form_bg", "payment_bg", "place_order_bg", "checkout_steps_bg", "summary_bg"],
+        "bg": ["checkout_bg", "delivery_form_bg", "payment_bg", "place_order_bg", "checkout_steps_bg", "summary_bg"],
+        "checkout_bg": "checkout_bg",
+        "card_bg": ["checkout_card_bg", "delivery_form_card_bg", "payment_card_bg", "place_order_card_bg", "summary_card_bg"],
+        "text": ["delivery_form_text", "payment_text_color", "place_order_text", "summary_text_color"],
+        "text_color": ["delivery_form_text", "payment_text_color", "place_order_text", "summary_text_color"],
+        "accent": ["delivery_form_btn_bg", "payment_accent_color", "place_order_btn_bg", "summary_accent_color"],
+        "border": ["delivery_form_border", "payment_border_color", "place_order_border", "summary_border_color"],
+        "border_color": ["delivery_form_border", "payment_border_color", "place_order_border", "summary_border_color"],
     },
     "pagination": {
         "background": "pagination_bg",
@@ -2296,7 +3405,28 @@ def execute_design_actions(
                     applied_patch[p] = val
                     if p not in theme_keys_changed:
                         theme_keys_changed.append(p)
-                elif comp in ("cart", "order_summary"):
+                elif comp == "order_summary":
+                    if p in ("summary_bg", "panel_bg", "background", "bg", "background_color", "panel_color"):
+                        theme["summary_bg"] = val
+                        applied_patch["summary_bg"] = val
+                        theme_keys_changed.append("summary_bg")
+                    elif p in ("summary_card_bg", "card_bg", "card_bg_color", "card_color"):
+                        theme["summary_card_bg"] = val
+                        applied_patch["summary_card_bg"] = val
+                        theme_keys_changed.append("summary_card_bg")
+                    elif p in ("summary_text_color", "text_color", "text"):
+                        theme["summary_text_color"] = val
+                        applied_patch["summary_text_color"] = val
+                        theme_keys_changed.append("summary_text_color")
+                    elif p in ("summary_accent_color", "accent_color", "accent", "button_color"):
+                        theme["summary_accent_color"] = val
+                        applied_patch["summary_accent_color"] = val
+                        theme_keys_changed.append("summary_accent_color")
+                    elif p in ("summary_border_color", "border_color", "border"):
+                        theme["summary_border_color"] = val
+                        applied_patch["summary_border_color"] = val
+                        theme_keys_changed.append("summary_border_color")
+                elif comp == "cart":
                     if p in ("cart_bg", "cart_panel_bg", "panel_bg", "background", "bg", "background_color"):
                         theme["cart_bg"] = val
                         theme["cart_panel_bg"] = val
@@ -2319,6 +3449,117 @@ def execute_design_actions(
                         theme["cart_border_color"] = val
                         applied_patch["cart_border_color"] = val
                         theme_keys_changed.append("cart_border_color")
+                elif comp == "delivery_form":
+                    if p in ("delivery_form_bg", "bg", "background", "background_color", "panel_bg", "panel_color"):
+                        theme["delivery_form_bg"] = val
+                        applied_patch["delivery_form_bg"] = val
+                        theme_keys_changed.append("delivery_form_bg")
+                    elif p in ("delivery_form_card_bg", "card_bg", "card_color"):
+                        theme["delivery_form_card_bg"] = val
+                        applied_patch["delivery_form_card_bg"] = val
+                        theme_keys_changed.append("delivery_form_card_bg")
+                    elif p in ("delivery_form_input_bg", "input_bg", "input_color"):
+                        theme["delivery_form_input_bg"] = val
+                        applied_patch["delivery_form_input_bg"] = val
+                        theme_keys_changed.append("delivery_form_input_bg")
+                    elif p in ("delivery_form_text", "text", "text_color"):
+                        theme["delivery_form_text"] = val
+                        applied_patch["delivery_form_text"] = val
+                        theme_keys_changed.append("delivery_form_text")
+                    elif p in ("delivery_form_btn_bg", "btn_bg", "button_bg", "button_bg_color", "accent_color"):
+                        theme["delivery_form_btn_bg"] = val
+                        applied_patch["delivery_form_btn_bg"] = val
+                        theme_keys_changed.append("delivery_form_btn_bg")
+                    elif p in ("delivery_form_border", "border", "border_color"):
+                        theme["delivery_form_border"] = val
+                        applied_patch["delivery_form_border"] = val
+                        theme_keys_changed.append("delivery_form_border")
+                elif comp == "payment":
+                    if p in ("payment_bg", "bg", "background", "background_color"):
+                        theme["payment_bg"] = val
+                        applied_patch["payment_bg"] = val
+                        theme_keys_changed.append("payment_bg")
+                    elif p in ("payment_card_bg", "card_bg", "card_color", "panel_color"):
+                        theme["payment_card_bg"] = val
+                        applied_patch["payment_card_bg"] = val
+                        theme_keys_changed.append("payment_card_bg")
+                    elif p in ("payment_text_color", "text", "text_color"):
+                        theme["payment_text_color"] = val
+                        applied_patch["payment_text_color"] = val
+                        theme_keys_changed.append("payment_text_color")
+                    elif p in ("payment_accent_color", "accent", "accent_color", "button_bg"):
+                        theme["payment_accent_color"] = val
+                        applied_patch["payment_accent_color"] = val
+                        theme_keys_changed.append("payment_accent_color")
+                    elif p in ("payment_border_color", "border", "border_color"):
+                        theme["payment_border_color"] = val
+                        applied_patch["payment_border_color"] = val
+                        theme_keys_changed.append("payment_border_color")
+                elif comp in ("place_order", "checkout_review", "review_and_pay"):
+                    if p in ("place_order_bg", "bg", "background", "background_color", "panel_bg", "panel_color"):
+                        theme["place_order_bg"] = val
+                        applied_patch["place_order_bg"] = val
+                        theme_keys_changed.append("place_order_bg")
+                    elif p in ("place_order_card_bg", "card_bg", "card_color"):
+                        theme["place_order_card_bg"] = val
+                        applied_patch["place_order_card_bg"] = val
+                        theme_keys_changed.append("place_order_card_bg")
+                    elif p in ("place_order_text", "text", "text_color", "title_color"):
+                        theme["place_order_text"] = val
+                        applied_patch["place_order_text"] = val
+                        theme_keys_changed.append("place_order_text")
+                    elif p in ("place_order_btn_bg", "btn_bg", "button_bg", "button_bg_color", "accent_color"):
+                        theme["place_order_btn_bg"] = val
+                        applied_patch["place_order_btn_bg"] = val
+                        theme_keys_changed.append("place_order_btn_bg")
+                    elif p in ("place_order_border", "border", "border_color"):
+                        theme["place_order_border"] = val
+                        applied_patch["place_order_border"] = val
+                        theme_keys_changed.append("place_order_border")
+                elif comp == "checkout":
+                    if p in ("checkout_bg", "bg", "background", "background_color"):
+                        theme["checkout_bg"] = val
+                        theme["delivery_form_bg"] = val
+                        theme["payment_bg"] = val
+                        theme["place_order_bg"] = val
+                        theme["checkout_steps_bg"] = val
+                        theme["summary_bg"] = val
+                        applied_patch.update({
+                            "checkout_bg": val, "delivery_form_bg": val, "payment_bg": val,
+                            "place_order_bg": val, "checkout_steps_bg": val, "summary_bg": val
+                        })
+                        theme_keys_changed.extend(["checkout_bg", "delivery_form_bg", "payment_bg", "place_order_bg", "checkout_steps_bg", "summary_bg"])
+                    elif p in ("checkout_card_bg", "card_bg", "card_color"):
+                        theme["checkout_card_bg"] = val
+                        theme["delivery_form_card_bg"] = val
+                        theme["payment_card_bg"] = val
+                        theme["place_order_card_bg"] = val
+                        theme["summary_card_bg"] = val
+                        applied_patch.update({
+                            "checkout_card_bg": val, "delivery_form_card_bg": val,
+                            "payment_card_bg": val, "place_order_card_bg": val, "summary_card_bg": val
+                        })
+                        theme_keys_changed.extend(["checkout_card_bg", "delivery_form_card_bg", "payment_card_bg", "place_order_card_bg", "summary_card_bg"])
+                    elif p in ("text", "text_color"):
+                        theme["delivery_form_text"] = val
+                        theme["payment_text_color"] = val
+                        theme["place_order_text"] = val
+                        theme["summary_text_color"] = val
+                        applied_patch.update({
+                            "delivery_form_text": val, "payment_text_color": val,
+                            "place_order_text": val, "summary_text_color": val
+                        })
+                        theme_keys_changed.extend(["delivery_form_text", "payment_text_color", "place_order_text", "summary_text_color"])
+                    elif p in ("accent", "accent_color", "btn_bg", "button_bg"):
+                        theme["delivery_form_btn_bg"] = val
+                        theme["payment_accent_color"] = val
+                        theme["place_order_btn_bg"] = val
+                        theme["summary_accent_color"] = val
+                        applied_patch.update({
+                            "delivery_form_btn_bg": val, "payment_accent_color": val,
+                            "place_order_btn_bg": val, "summary_accent_color": val
+                        })
+                        theme_keys_changed.extend(["delivery_form_btn_bg", "payment_accent_color", "place_order_btn_bg", "summary_accent_color"])
 
             # Strictly scoped profile page mutation (never bleeds into root theme primary_bg or card_bg)
             if comp in ("profile", "profile_details", "customer_profile"):
@@ -2481,7 +3722,22 @@ def execute_design_actions(
                     elif p in ("outer_border", "navbar_outer_border"):
                         bprops["navbar_border_color"] = val
                         bprops["navbar_outer_bg"] = val
-                    elif "cart" in norm_btype or "summary" in norm_btype or comp in ("cart", "order_summary"):
+                    elif comp == "order_summary" or ("summary" in norm_btype and "cart" not in norm_btype):
+                        if p in ("summary_bg", "panel_bg", "bg", "background", "background_color", "panel_color"):
+                            bprops["background_color"] = val
+                            bprops["panel_color"] = val
+                        elif p in ("summary_card_bg", "card_bg", "card_bg_color", "card_color"):
+                            bprops["card_color"] = val
+                            bprops["card_bg"] = val
+                        elif p in ("summary_text_color", "text_color", "text", "font_color"):
+                            bprops["text_color"] = val
+                        elif p in ("summary_accent_color", "accent_color", "accent", "button_bg", "btn_bg"):
+                            bprops["accent_color"] = val
+                        elif p in ("summary_border_color", "border_color", "border"):
+                            bprops["border_color"] = val
+                        else:
+                            bprops[p] = val
+                    elif comp == "cart" or "cart" in norm_btype:
                         if p in ("cart_bg", "cart_panel_bg", "panel_bg", "bg", "background", "background_color", "panel_color"):
                             bprops["cart_bg"] = val
                             bprops["cart_panel_bg"] = val
@@ -2500,6 +3756,119 @@ def execute_design_actions(
                         elif p in ("cart_border_color", "border_color", "border"):
                             bprops["cart_border_color"] = val
                             bprops["border_color"] = val
+                    elif comp == "delivery_form" or any(k in norm_btype for k in ["deliveryform", "addressform", "deliveryaddressform"]):
+                        if p in ("delivery_form_bg", "bg", "background", "background_color", "panel_bg", "panel_color"):
+                            bprops["background_color"] = val
+                            bprops["delivery_form_bg"] = val
+                        elif p in ("delivery_form_card_bg", "card_bg", "card_color"):
+                            bprops["card_color"] = val
+                            bprops["delivery_form_card_bg"] = val
+                        elif p in ("delivery_form_input_bg", "input_bg", "input_color"):
+                            bprops["input_color"] = val
+                            bprops["delivery_form_input_bg"] = val
+                        elif p in ("delivery_form_text", "text", "text_color"):
+                            bprops["text_color"] = val
+                            bprops["delivery_form_text"] = val
+                        elif p in ("delivery_form_btn_bg", "btn_bg", "button_bg", "button_bg_color", "accent_color"):
+                            bprops["button_bg_color"] = val
+                            bprops["delivery_form_btn_bg"] = val
+                        elif p in ("delivery_form_border", "border", "border_color"):
+                            bprops["border_color"] = val
+                            bprops["delivery_form_border"] = val
+                        else:
+                            bprops[p] = val
+                    elif comp == "payment" or "payment" in norm_btype:
+                        if p in ("payment_bg", "bg", "background", "background_color"):
+                            bprops["background_color"] = val
+                            bprops["payment_bg"] = val
+                        elif p in ("payment_card_bg", "card_bg", "card_color", "panel_color"):
+                            bprops["card_color"] = val
+                            bprops["panel_color"] = val
+                            bprops["payment_card_bg"] = val
+                        elif p in ("payment_text_color", "text", "text_color"):
+                            bprops["text_color"] = val
+                            bprops["payment_text_color"] = val
+                        elif p in ("payment_accent_color", "accent", "accent_color", "button_bg"):
+                            bprops["accent_color"] = val
+                            bprops["button_bg_color"] = val
+                            bprops["payment_accent_color"] = val
+                        elif p in ("payment_border_color", "border", "border_color"):
+                            bprops["border_color"] = val
+                            bprops["payment_border_color"] = val
+                        else:
+                            bprops[p] = val
+                    elif comp in ("place_order", "checkout_review", "review_and_pay") or any(k in norm_btype for k in ["placeorder", "checkoutreview", "reviewandpay", "placeordercta"]):
+                        if p in ("place_order_bg", "bg", "background", "background_color", "panel_bg", "panel_color"):
+                            bprops["background_color"] = val
+                            bprops["place_order_bg"] = val
+                        elif p in ("place_order_card_bg", "card_bg", "card_color"):
+                            bprops["card_bg"] = val
+                            bprops["card_color"] = val
+                            bprops["place_order_card_bg"] = val
+                        elif p in ("place_order_text", "text", "text_color", "title_color"):
+                            bprops["text_color"] = val
+                            bprops["title_color"] = val
+                            bprops["section_title_color"] = val
+                            bprops["place_order_text"] = val
+                        elif p in ("place_order_btn_bg", "btn_bg", "button_bg", "button_bg_color", "accent_color"):
+                            bprops["button_bg_color"] = val
+                            bprops["accent_color"] = val
+                            bprops["place_order_btn_bg"] = val
+                        elif p in ("place_order_border", "border", "border_color"):
+                            bprops["border_color"] = val
+                            bprops["soft_border_color"] = val
+                            bprops["place_order_border"] = val
+                        else:
+                            bprops[p] = val
+                    elif comp in ("checkout_steps",) or "checkoutstep" in norm_btype:
+                        if p in ("checkout_steps_bg", "bg", "background", "background_color"):
+                            bprops["background_color"] = val
+                        elif p in ("active_step_bg", "accent_color"):
+                            bprops["active_step_bg"] = val
+                            bprops["line_active_color"] = val
+                        elif p in ("active_text_color", "active_step_text"):
+                            bprops["active_text_color"] = val
+                            bprops["active_step_text"] = val
+                        elif p in ("border_color", "border"):
+                            bprops["border_color"] = val
+                        else:
+                            bprops[p] = val
+                    elif comp == "checkout":
+                        if any(k in norm_btype for k in ["deliveryform", "addressform"]):
+                            if p in ("checkout_bg", "bg", "background", "background_color"):
+                                bprops["background_color"] = val
+                                bprops["delivery_form_bg"] = val
+                            elif p in ("checkout_card_bg", "card_bg", "card_color"):
+                                bprops["card_color"] = val
+                            elif p in ("text", "text_color"):
+                                bprops["text_color"] = val
+                        elif "payment" in norm_btype:
+                            if p in ("checkout_bg", "bg", "background", "background_color"):
+                                bprops["background_color"] = val
+                                bprops["payment_bg"] = val
+                            elif p in ("checkout_card_bg", "card_bg", "card_color"):
+                                bprops["card_color"] = val
+                            elif p in ("text", "text_color"):
+                                bprops["text_color"] = val
+                        elif any(k in norm_btype for k in ["placeorder", "checkoutreview", "reviewandpay"]):
+                            if p in ("checkout_bg", "bg", "background", "background_color"):
+                                bprops["background_color"] = val
+                                bprops["place_order_bg"] = val
+                            elif p in ("checkout_card_bg", "card_bg", "card_color"):
+                                bprops["card_bg"] = val
+                                bprops["card_color"] = val
+                            elif p in ("text", "text_color"):
+                                bprops["text_color"] = val
+                        elif "summary" in norm_btype and "cart" not in norm_btype:
+                            if p in ("checkout_bg", "bg", "background", "background_color"):
+                                bprops["background_color"] = val
+                                bprops["panel_color"] = val
+                            elif p in ("checkout_card_bg", "card_bg", "card_color"):
+                                bprops["card_color"] = val
+                            elif p in ("text", "text_color"):
+                                bprops["text_color"] = val
+                        elif "checkoutstep" in norm_btype:
+                            bprops["background_color"] = val
                         else:
                             bprops[p] = val
                     else:
@@ -2774,15 +4143,28 @@ async def handle_color_and_design_request(
                 "assistant_reply": f"Added a new **{new_slide.get('badge') or 'Promotional'}** banner to your homepage! ✨ Headline: *'{headline_text}'*.{coupon_text}",
             }
 
-    # 4. Palette Suggestions Handler
+    # 4. Palette Suggestions Handler & Conversational Follow-Up Resolution
+    hist_lower = str(history_str or "").lower()
+    has_palette_in_hist = any(h in hist_lower for h in ["palette", "palettes", "pallete", "palletes", "suggested themes", "theme", "themes", "designer-crafted themes"])
+    msg_is_followup = has_palette_in_hist and any(bool(re.search(pat, msg_lower)) for pat in [
+        r"\b(new\s*one|another(?:\s*one)?|different(?:\s*ones?|\s*options?)?|more\s*options?|other\s*options?)\b",
+        r"\b(?:[1-6]|\d+|few|some|couple)\s*more\b",
+        r"\b(give|show|generate|genrate|create|provide)\s*(?:me\s*)?(?:[1-6]|\d+|more|new|another)\b",
+        r"\b(didn'?t\s*like|don'?t\s*like|not\s*liking|none\s*of\s*(?:these|them|it|those))\b",
+        r"^\s*(?:[1-6]|\d+)\s*more\s*$",
+        r"^\s*more\s*$",
+        r"^\s*new\s*one\s*$",
+        r"^\s*give\s*me\s*(?:new\s*one|[1-6]|\d+)\s*$",
+    ])
     msg_suggests_palettes = bool(
-        re.search(r"\b(suggest|recommend|ideas?|options?)\b.*\b(theme|themes|tmplete|template|palette|palettes|colors?|colours?)\b", msg_lower)
-        or re.search(r"\b(theme|themes|tmplete|template|palette|palettes)\b.*\b(suggest|suggestion|suggestions|recommend|recommendation|recommendations|ideas?|options?)\b", msg_lower)
-        or re.search(r"\b(generate|genrate|give|show|create|provide|share)\b.*\b(few|some|a\s+few|several|couple|multiple|different|various)\b.*\b(theme|themes|tmplete|template|palette|palettes|colors?|colours?)\b", msg_lower)
-        or re.search(r"\b(give|show|generate|genrate|create|provide|share)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b", msg_lower)
-        or re.search(r"\b(few|some|several|couple)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b", msg_lower)
+        re.search(r"\b(suggest|recommend|ideas?|options?)\b.*\b(theme|themes|tmplete|template|palette|palettes|pallete|palletes|pallette|pallettes|colors?|colours?)\b", msg_lower)
+        or re.search(r"\b(theme|themes|tmplete|template|palette|palettes|pallete|palletes|pallette|pallettes)\b.*\b(suggest|suggestion|suggestions|recommend|recommendation|recommendations|ideas?|options?)\b", msg_lower)
+        or re.search(r"\b(generate|genrate|give|show|create|provide|share)\b.*\b(few|some|a\s+few|several|couple|multiple|different|various)\b.*\b(theme|themes|tmplete|template|palette|palettes|pallete|palletes|pallette|pallettes|colors?|colours?)\b", msg_lower)
+        or re.search(r"\b(give|show|generate|genrate|create|provide|share)\b.*\b(theme|themes|tmplete|template|palette|palettes|pallete|palletes|pallette|pallettes)\b", msg_lower)
+        or re.search(r"\b(few|some|several|couple|\d+)\b.*\b(theme|themes|tmplete|template|palette|palettes|pallete|palletes|pallette|pallettes)\b", msg_lower)
+        or (re.search(r"#[0-9a-fA-F]{3,6}", msg_lower) and any(w in msg_lower for w in ["theme", "themes", "palette", "palettes", "pallete", "palletes", "pallette", "pallettes"]))
     )
-    if wants_palette_suggestions or msg_suggests_palettes:
+    if wants_palette_suggestions or msg_suggests_palettes or msg_is_followup:
         if target_comp and target_comp != "overall":
             comp_palettes = await generate_component_palette_suggestions(
                 brand_name=brand_name,
@@ -2790,6 +4172,8 @@ async def handle_color_and_design_request(
                 target_component=target_comp,
                 color_description=user_message,
                 current_theme=theme,
+                session_id=session_id,
+                history_str=history_str,
             )
             data_cards.append({
                 "type": "component_palette_suggestions_card",
@@ -2802,6 +4186,8 @@ async def handle_color_and_design_request(
                 brand_name=brand_name,
                 domain=domain,
                 color_description=user_message,
+                session_id=session_id,
+                history_str=history_str,
             )
             data_cards.append({
                 "type": "palette_suggestions_card",
