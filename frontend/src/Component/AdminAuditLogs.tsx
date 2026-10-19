@@ -264,6 +264,18 @@ function getRoleBadge(role: string, isDark?: boolean) {
 // MAIN COMPONENT
 // ---------------------------------------------------------------------------
 
+// In-memory SWR cache for instant navigation without loading spinners
+type AuditLogsCache = {
+  logs: ActivityItem[];
+  totalCount: number;
+  totalPages: number;
+  availableUsers: FilterUser[];
+  availableSites: FilterSite[];
+  timestamp: number;
+};
+
+let adminAuditLogsMemoryCache: AuditLogsCache | null = null;
+
 export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string } = {}) {
   const { isDark, tokens } = useAdminTheme();
   const { isOwner, hasPermission, admin } = useAdminAuth();
@@ -272,11 +284,11 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
   const { siteId: routeSiteId } = useParams<{ siteId?: string }>();
   const effectiveSiteId = propSiteId || routeSiteId;
 
-  // Data states
-  const [logs, setLogs] = useState<ActivityItem[]>([]);
-  const [availableUsers, setAvailableUsers] = useState<FilterUser[]>([]);
-  const [availableSites, setAvailableSites] = useState<FilterSite[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Data states (Instant initial state from memory cache if available)
+  const [logs, setLogs] = useState<ActivityItem[]>(() => adminAuditLogsMemoryCache?.logs || []);
+  const [availableUsers, setAvailableUsers] = useState<FilterUser[]>(() => adminAuditLogsMemoryCache?.availableUsers || []);
+  const [availableSites, setAvailableSites] = useState<FilterSite[]>(() => adminAuditLogsMemoryCache?.availableSites || []);
+  const [loading, setLoading] = useState(() => !adminAuditLogsMemoryCache);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -311,11 +323,11 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
     };
   }, [isFilterOpen]);
 
-  // Pagination
+  // Pagination (Instant initial state from memory cache if available)
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(() => adminAuditLogsMemoryCache?.totalPages || 1);
+  const [totalCount, setTotalCount] = useState(() => adminAuditLogsMemoryCache?.totalCount || 0);
 
   // Accordion & Copy State
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -372,11 +384,12 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
     }
   }, [effectiveSiteId]);
 
-  // Fetch activity
+  // Fetch activity (Silent background revalidation when cached)
   const fetchActivity = async (targetPage = page, targetPageSize = pageSize, isManualRefresh = false) => {
     if (!canView) return;
+    const isSilent = !isManualRefresh && Boolean(adminAuditLogsMemoryCache) && targetPage === 1 && searchQuery.trim() === "" && selectedCategory === "all" && selectedSource === "all" && selectedStatus === "all" && selectedUser === "all";
     if (isManualRefresh) setRefreshing(true);
-    else setLoading(true);
+    else if (!isSilent) setLoading(true);
     setFetchError(null);
 
     try {
@@ -432,21 +445,41 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
       }
 
       const data = await res.json();
-      setLogs(data.logs || data.items || []);
-      setTotalPages(data.total_pages || 1);
-      setTotalCount(data.total || 0);
+      const loadedLogs = data.logs || data.items || [];
+      const loadedTotalPages = data.total_pages || 1;
+      const loadedTotalCount = data.total || 0;
+
+      setLogs(loadedLogs);
+      setTotalPages(loadedTotalPages);
+      setTotalCount(loadedTotalCount);
+
+      let loadedUsers = adminAuditLogsMemoryCache?.availableUsers || [];
+      let loadedSites = adminAuditLogsMemoryCache?.availableSites || [];
 
       if (Array.isArray(data.available_users) && data.available_users.length > 0) {
-        setAvailableUsers(data.available_users);
+        loadedUsers = data.available_users;
+        setAvailableUsers(loadedUsers);
       }
       if (Array.isArray(data.available_sites) && data.available_sites.length > 0) {
-        setAvailableSites(data.available_sites);
+        loadedSites = data.available_sites;
+        setAvailableSites(loadedSites);
+      }
+
+      if (targetPage === 1 && searchQuery.trim() === "" && selectedCategory === "all" && selectedSource === "all" && selectedStatus === "all" && selectedUser === "all") {
+        adminAuditLogsMemoryCache = {
+          logs: loadedLogs,
+          totalCount: loadedTotalCount,
+          totalPages: loadedTotalPages,
+          availableUsers: loadedUsers,
+          availableSites: loadedSites,
+          timestamp: Date.now(),
+        };
       }
     } catch (err: any) {
       console.error("Failed to load activity log", err);
       setFetchError(err.message || "Unable to fetch activity records.");
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
       setRefreshing(false);
     }
   };

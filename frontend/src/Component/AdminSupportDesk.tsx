@@ -16,6 +16,20 @@ import {
   MessageStatusTick,
 } from "./AdaptiveSupportMedia";
 
+// ─── Module-level RAM cache for site snapshots (replaces localStorage) ───────
+const wcSiteSnapshotRamCache = new Map<string, any>();
+
+function getRamSnapshot(key: string): any | null {
+  return wcSiteSnapshotRamCache.get(key) ?? null;
+}
+function setRamSnapshot(key: string, value: any) {
+  wcSiteSnapshotRamCache.set(key, value);
+}
+function removeRamSnapshot(key: string) {
+  wcSiteSnapshotRamCache.delete(key);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 type AdminMode = "tickets" | "agents";
 type TabKey = "all" | "unassigned" | "waiting_customer" | "resolved";
 
@@ -274,6 +288,16 @@ const SendIcon = () => (
   </svg>
 );
 
+// In-memory SWR cache for instant navigation without loading spinners
+type SupportDeskCache = {
+  tickets: TicketListItem[];
+  agents: SupportAgentItem[];
+  counts: { all: number; unassigned: number; waiting_customer: number; resolved: number };
+  totalPages: number;
+  timestamp: number;
+};
+let adminSupportDeskMemoryCache: Record<string, SupportDeskCache> = {};
+
 export const AdminSupportDesk: React.FC = () => {
   const { hasPermission, isOwner } = useAdminAuth();
   const { isDark, tokens } = useAdminTheme();
@@ -285,14 +309,14 @@ export const AdminSupportDesk: React.FC = () => {
 
   const [mode, setMode] = useState<AdminMode>("tickets");
   const [activeTab, setActiveTab] = useState<TabKey>("all");
-  const [tickets, setTickets] = useState<TicketListItem[]>([]);
-  const [agents, setAgents] = useState<SupportAgentItem[]>([]);
+  const [tickets, setTickets] = useState<TicketListItem[]>(() => (siteId && adminSupportDeskMemoryCache[siteId]?.tickets) || []);
+  const [agents, setAgents] = useState<SupportAgentItem[]>(() => (siteId && adminSupportDeskMemoryCache[siteId]?.agents) || []);
   const [loading, setLoading] = useState(false);
-  const [counts, setCounts] = useState({ all: 0, unassigned: 0, waiting_customer: 0, resolved: 0 });
+  const [counts, setCounts] = useState(() => (siteId && adminSupportDeskMemoryCache[siteId]?.counts) || { all: 0, unassigned: 0, waiting_customer: 0, resolved: 0 });
 
   // Pagination & Search
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalPages, setTotalPages] = useState(() => (siteId && adminSupportDeskMemoryCache[siteId]?.totalPages) || 1);
   const [searchQuery, setSearchQuery] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -354,13 +378,9 @@ export const AdminSupportDesk: React.FC = () => {
       const match = window.location.pathname.match(/\/store\/([^/]+)/);
       if (match && match[1]) return match[1];
       if (siteId) {
-        try {
-          const raw = localStorage.getItem(`wc_site_snapshot_${siteId}`);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed?.slug) return parsed.slug;
-          }
-        } catch (_) { }
+        // RAM-only: check module-level cache instead of localStorage
+        const cached = getRamSnapshot(`wc_site_snapshot_${siteId}`);
+        if (cached?.slug) return cached.slug;
       }
     }
     return siteId || "";
@@ -376,13 +396,11 @@ export const AdminSupportDesk: React.FC = () => {
           setSiteSlug(match[1]);
           return;
         }
-        const raw = localStorage.getItem(`wc_site_snapshot_${siteId}`);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed?.slug) {
-            setSiteSlug(parsed.slug);
-            return;
-          }
+        // RAM-only: check module-level cache instead of localStorage
+        const cached = getRamSnapshot(`wc_site_snapshot_${siteId}`);
+        if (cached?.slug) {
+          setSiteSlug(cached.slug);
+          return;
         }
         const res = await fetch(`${API_BASE_URL}/admin/sites`, { credentials: "include" });
         if (res.ok) {
@@ -446,21 +464,19 @@ export const AdminSupportDesk: React.FC = () => {
         setCrmEnabled(nextVal);
         setToastMessage(nextVal ? "CRM & Support services enabled" : "CRM & Support services disabled");
 
-        // 1. Invalidate and update local storage snapshots
+        // 1. Invalidate and update RAM snapshots (no localStorage)
         try {
           const keys = Array.from(new Set([siteId, siteSlug, returnedSiteId, returnedSlug])).filter(Boolean) as string[];
           keys.forEach((k) => {
-            const raw = localStorage.getItem(`wc_site_snapshot_${k}`);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (parsed && typeof parsed === "object") {
-                parsed.crm_enabled = nextVal;
-                if (parsed.site_definition) parsed.site_definition.crm_enabled = nextVal;
-                if (parsed.draft_definition) parsed.draft_definition.crm_enabled = nextVal;
-                localStorage.setItem(`wc_site_snapshot_${k}`, JSON.stringify(parsed));
-              }
+            const cached = getRamSnapshot(`wc_site_snapshot_${k}`);
+            if (cached && typeof cached === "object") {
+              cached.crm_enabled = nextVal;
+              if (cached.site_definition) cached.site_definition.crm_enabled = nextVal;
+              if (cached.draft_definition) cached.draft_definition.crm_enabled = nextVal;
+              setRamSnapshot(`wc_site_snapshot_${k}`, { ...cached });
             }
-            localStorage.removeItem(`wc_site_theme_${k}`);
+            // Remove stale theme key from RAM cache too
+            removeRamSnapshot(`wc_site_theme_${k}`);
           });
         } catch (_) { }
 
@@ -577,7 +593,19 @@ export const AdminSupportDesk: React.FC = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setAgents(data.agents || []);
+        const loadedAgents = data.agents || [];
+        setAgents(loadedAgents);
+        if (!adminSupportDeskMemoryCache[siteId]) {
+          adminSupportDeskMemoryCache[siteId] = {
+            tickets: [],
+            agents: loadedAgents,
+            counts: { all: 0, unassigned: 0, waiting_customer: 0, resolved: 0 },
+            totalPages: 1,
+            timestamp: Date.now(),
+          };
+        } else {
+          adminSupportDeskMemoryCache[siteId].agents = loadedAgents;
+        }
       }
     } catch (err) {
       console.error("Failed to load agents", err);
@@ -585,7 +613,7 @@ export const AdminSupportDesk: React.FC = () => {
   };
 
   // Load Tickets
-  const loadTickets = async (isSilent: boolean = false) => {
+  const loadTickets = async (isSilent: boolean = Boolean(siteId && adminSupportDeskMemoryCache[siteId]?.tickets?.length)) => {
     if (!siteId) return;
     if (!isSilent) setLoading(true);
     try {
@@ -603,9 +631,27 @@ export const AdminSupportDesk: React.FC = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setTickets(data.tickets || []);
-        if (data.pagination) setTotalPages(data.pagination.total_pages || 1);
-        if (data.counts) setCounts(data.counts);
+        const loadedTickets = data.tickets || [];
+        const loadedPages = data.pagination?.total_pages || 1;
+        const loadedCounts = data.counts || { all: 0, unassigned: 0, waiting_customer: 0, resolved: 0 };
+
+        setTickets(loadedTickets);
+        if (data.pagination) setTotalPages(loadedPages);
+        if (data.counts) setCounts(loadedCounts);
+
+        if (!adminSupportDeskMemoryCache[siteId]) {
+          adminSupportDeskMemoryCache[siteId] = {
+            tickets: loadedTickets,
+            agents: [],
+            counts: loadedCounts,
+            totalPages: loadedPages,
+            timestamp: Date.now(),
+          };
+        } else {
+          adminSupportDeskMemoryCache[siteId].tickets = loadedTickets;
+          adminSupportDeskMemoryCache[siteId].counts = loadedCounts;
+          adminSupportDeskMemoryCache[siteId].totalPages = loadedPages;
+        }
       }
     } catch (err) {
       console.error("Failed to load tickets", err);

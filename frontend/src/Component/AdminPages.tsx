@@ -218,6 +218,14 @@ const CopyIcon: React.FC = () => (
   </svg>
 );
 
+const adminPagesMemoryCache: Record<
+  string,
+  {
+    pages: StorePage[];
+    hasLoaded: boolean;
+  }
+> = {};
+
 export interface AdminPagesProps {
   siteId?: string;
   siteSlug?: string;
@@ -295,9 +303,20 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
     }
   }, [propSiteSlug]);
 
-  const [pages, setPages] = useState<StorePage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedPages = siteId ? adminPagesMemoryCache[siteId] : undefined;
+  const [pages, setPagesRaw] = useState<StorePage[]>(() => cachedPages?.pages || []);
+  const [loading, setLoading] = useState<boolean>(() => !Boolean(cachedPages?.hasLoaded));
   const [error, setError] = useState<string | null>(null);
+
+  const setPages = (updater: StorePage[] | ((prev: StorePage[]) => StorePage[])) => {
+    setPagesRaw((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (siteId) {
+        adminPagesMemoryCache[siteId] = { pages: next, hasLoaded: true };
+      }
+      return next;
+    });
+  };
 
   // Filter states
   const [activeTab, setActiveTab] = useState<"all" | "core" | "custom" | "drafts">("all");
@@ -371,7 +390,10 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
   // Load pages
   const loadPages = async () => {
     if (!siteId) return;
-    setLoading(true);
+    const isSilent = Boolean(adminPagesMemoryCache[siteId]?.hasLoaded);
+    if (!isSilent) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const res = await fetch(`${API_BASE_URL}/sites/${siteId}/pages`, {
@@ -382,11 +404,17 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
         throw new Error(err.detail || "Failed to load store pages");
       }
       const data = await res.json();
-      setPages(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setPages(list);
+      adminPagesMemoryCache[siteId] = { pages: list, hasLoaded: true };
     } catch (err: any) {
-      setError(err.message || "Failed to load pages");
+      if (!isSilent) {
+        setError(err.message || "Failed to load pages");
+      }
     } finally {
-      setLoading(false);
+      if (!isSilent) {
+        setLoading(false);
+      }
     }
   };
 

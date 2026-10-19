@@ -142,6 +142,18 @@ const PlusIcon = () => (
 // MAIN COMPONENT
 // ---------------------------------------------------------------------------
 
+// In-memory SWR cache for instant navigation without loading spinners
+type UsersAndRolesCache = {
+  users: TeamUser[];
+  roles: RoleItem[];
+  sites: SiteOption[];
+  permissionCatalog: PermissionCategory[];
+  activeSitePlan: string;
+  timestamp: number;
+};
+
+let usersAndRolesMemoryCache: UsersAndRolesCache | null = null;
+
 export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: string } = {}) {
   const { admin, hasPermission, isOwner } = useAdminAuth();
   const { isDark, tokens } = useAdminTheme();
@@ -150,13 +162,13 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
   const { siteId: routeSiteId } = useParams<{ siteId?: string }>();
   const effectiveSiteId = propSiteId || routeSiteId;
 
-  // Primary State
+  // Primary State (Instant initial state from memory cache if available)
   const [activeTab, setActiveTab] = useState<"users" | "roles">("users");
-  const [users, setUsers] = useState<TeamUser[]>([]);
-  const [roles, setRoles] = useState<RoleItem[]>([]);
-  const [sites, setSites] = useState<SiteOption[]>([]);
-  const [permissionCatalog, setPermissionCatalog] = useState<PermissionCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<TeamUser[]>(() => usersAndRolesMemoryCache?.users || []);
+  const [roles, setRoles] = useState<RoleItem[]>(() => usersAndRolesMemoryCache?.roles || []);
+  const [sites, setSites] = useState<SiteOption[]>(() => usersAndRolesMemoryCache?.sites || []);
+  const [permissionCatalog, setPermissionCatalog] = useState<PermissionCategory[]>(() => usersAndRolesMemoryCache?.permissionCatalog || []);
+  const [loading, setLoading] = useState(() => !usersAndRolesMemoryCache);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   // Search & Filter
@@ -207,15 +219,15 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
   }, []);
 
   // ---------------------------------------------------------------------------
-  // DATA FETCHING
+  // DATA FETCHING (Silent background revalidation when cached)
   // ---------------------------------------------------------------------------
 
-  const [activeSitePlan, setActiveSitePlan] = useState<string>("FREE");
-  const [planLoaded, setPlanLoaded] = useState<boolean>(false);
+  const [activeSitePlan, setActiveSitePlan] = useState<string>(() => usersAndRolesMemoryCache?.activeSitePlan || "FREE");
+  const [planLoaded, setPlanLoaded] = useState<boolean>(() => Boolean(usersAndRolesMemoryCache));
 
-  const fetchData = async () => {
+  const fetchData = async (isSilent: boolean = Boolean(usersAndRolesMemoryCache)) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const userUrl = `${API_BASE_URL}/users-roles/users`;
 
       const [usersRes, rolesRes, catalogRes, sitesRes, billingRes] = await Promise.all([
@@ -226,17 +238,25 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         fetch(`${API_BASE_URL}/api/billing/websites`, { credentials: "include" }).catch(() => null),
       ]);
 
+      let loadedUsers = usersAndRolesMemoryCache?.users || [];
+      let loadedRoles = usersAndRolesMemoryCache?.roles || [];
+      let loadedCatalog = usersAndRolesMemoryCache?.permissionCatalog || [];
+      let currentPlan = usersAndRolesMemoryCache?.activeSitePlan || "FREE";
+
       if (usersRes.ok) {
         const uData = await usersRes.json();
-        setUsers(uData.users || []);
+        loadedUsers = uData.users || [];
+        setUsers(loadedUsers);
       }
       if (rolesRes.ok) {
         const rData = await rolesRes.json();
-        setRoles(rData.roles || []);
+        loadedRoles = rData.roles || [];
+        setRoles(loadedRoles);
       }
       if (catalogRes.ok) {
         const cData = await catalogRes.json();
-        setPermissionCatalog(cData.catalog || []);
+        loadedCatalog = cData.catalog || [];
+        setPermissionCatalog(loadedCatalog);
       }
       const billingMap = new Map<string, { plan: string; is_pro: boolean }>();
       if (billingRes && billingRes.ok) {
@@ -245,14 +265,16 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
           (w: any) => String(w.website_id).toLowerCase() === String(effectiveSiteId).toLowerCase()
         );
         if (targetSite) {
-          setActiveSitePlan(String(targetSite.current_plan || "FREE").toUpperCase());
+          currentPlan = String(targetSite.current_plan || "FREE").toUpperCase();
+          setActiveSitePlan(currentPlan);
         } else if (bData.websites?.length > 0) {
           const hasPro = bData.websites.some((w: any) => {
             const p = String(w.current_plan || "").toUpperCase();
             const s = String(w.subscription_status || w.status || "ACTIVE").toUpperCase();
             return p === "PRO" && (s === "ACTIVE" || s === "GRACE_PERIOD");
           });
-          setActiveSitePlan(hasPro ? "PRO" : String(bData.websites[0].current_plan || "FREE").toUpperCase());
+          currentPlan = hasPro ? "PRO" : String(bData.websites[0].current_plan || "FREE").toUpperCase();
+          setActiveSitePlan(currentPlan);
         }
         (bData.websites || []).forEach((w: any) => {
           const p = String(w.current_plan || "FREE").toUpperCase();
@@ -273,9 +295,10 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
         });
       }
 
+      let mappedSites = usersAndRolesMemoryCache?.sites || [];
       if (sitesRes && sitesRes.ok) {
         const sData = await sitesRes.json();
-        const mapped = (sData || []).map((s: any) => {
+        mappedSites = (sData || []).map((s: any) => {
           const sId = strId(s.id);
           const bInfo =
             billingMap.get(sId.toLowerCase()) ||
@@ -288,14 +311,26 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
             is_pro: Boolean(bInfo?.is_pro),
           };
         });
-        setSites(mapped);
+        setSites(mappedSites);
       }
       setPlanLoaded(true);
+
+      // Save to memory cache for 0ms instant display on next visit
+      usersAndRolesMemoryCache = {
+        users: loadedUsers,
+        roles: loadedRoles,
+        sites: mappedSites,
+        permissionCatalog: loadedCatalog,
+        activeSitePlan: currentPlan,
+        timestamp: Date.now(),
+      };
     } catch (err: any) {
       console.error("Failed to load users & roles data", err);
-      setToast({ message: "Could not load users & roles data", type: "error" });
+      if (!isSilent) {
+        setToast({ message: "Could not load users & roles data", type: "error" });
+      }
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 

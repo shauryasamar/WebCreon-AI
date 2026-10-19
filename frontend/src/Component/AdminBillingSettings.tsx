@@ -355,6 +355,16 @@ function generateIdempotencyKey(): string {
 // MAIN COMPONENT
 // ---------------------------------------------------------------------------
 
+// In-memory SWR cache for instant navigation without loading spinners
+type BillingSettingsCache = {
+  websites: WebsiteBillingSummary[];
+  aiCredits: AICreditAccountSummary | null;
+  websiteDetails: Record<string, WebsitePlanDetails>;
+  timestamp: number;
+};
+
+let adminBillingMemoryCache: BillingSettingsCache | null = null;
+
 export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) => {
   const { isDark, tokens } = useAdminTheme();
   const { siteId: paramSiteId } = useParams<{ siteId?: string }>();
@@ -366,13 +376,21 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
   const canEdit = isOwner || hasPermission("billing:edit");
   const { openRazorpay } = useRazorpay();
 
-  // State
-  const [websites, setWebsites] = useState<WebsiteBillingSummary[]>([]);
-  const [aiCredits, setAiCredits] = useState<AICreditAccountSummary | null>(null);
+  // State (Instant initial state from memory cache if available)
+  const [websites, setWebsites] = useState<WebsiteBillingSummary[]>(() => adminBillingMemoryCache?.websites || []);
+  const [aiCredits, setAiCredits] = useState<AICreditAccountSummary | null>(() => adminBillingMemoryCache?.aiCredits || null);
   const [selectedWebsiteId, setSelectedWebsiteId] = useState<string | null>(effectiveSiteId || null);
-  const [selectedDetails, setSelectedDetails] = useState<WebsitePlanDetails | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [detailsLoading, setDetailsLoading] = useState<boolean>(false);
+  const [selectedDetails, setSelectedDetails] = useState<WebsitePlanDetails | null>(() => {
+    if (effectiveSiteId && adminBillingMemoryCache?.websiteDetails?.[effectiveSiteId]) {
+      return adminBillingMemoryCache.websiteDetails[effectiveSiteId];
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState<boolean>(() => !adminBillingMemoryCache);
+  const [detailsLoading, setDetailsLoading] = useState<boolean>(() => {
+    if (!effectiveSiteId) return false;
+    return !Boolean(adminBillingMemoryCache?.websiteDetails?.[effectiveSiteId]);
+  });
   const [mutationLoading, setMutationLoading] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [showBatchDrawer, setShowBatchDrawer] = useState<boolean>(false); // Billing Interval Toggle for Details View: monthly, 3months, yearly
@@ -393,45 +411,70 @@ export const AdminBillingSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
   const [downgradeModalOpen, setDowngradeModalOpen] = useState<boolean>(false);
   const [downgradeTargetPlan, setDowngradeTargetPlan] = useState<"FREE" | "STARTER">("FREE");
 
-  // Fetch overview data
-  const fetchOverview = useCallback(async () => {
-    setLoading(true);
+  // Fetch overview data (Silent background revalidation when cached)
+  const fetchOverview = useCallback(async (isSilent = Boolean(adminBillingMemoryCache)) => {
+    if (!isSilent) setLoading(true);
     try {
       const [webRes, aiRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/billing/websites`, { credentials: "include" }),
         fetch(`${API_BASE_URL}/api/billing/account/ai-credits`, { credentials: "include" }),
       ]);
 
+      let loadedWebsites = adminBillingMemoryCache?.websites || [];
+      let loadedAiCredits = adminBillingMemoryCache?.aiCredits || null;
+
       if (webRes.ok) {
         const data = await webRes.json();
-        setWebsites(data.websites || []);
+        loadedWebsites = data.websites || [];
+        setWebsites(loadedWebsites);
       }
       if (aiRes.ok) {
         const data = await aiRes.json();
-        setAiCredits(data);
+        loadedAiCredits = data;
+        setAiCredits(loadedAiCredits);
       }
+
+      adminBillingMemoryCache = {
+        websites: loadedWebsites,
+        aiCredits: loadedAiCredits,
+        websiteDetails: adminBillingMemoryCache?.websiteDetails || {},
+        timestamp: Date.now(),
+      };
     } catch {
-      setToast({ message: "Failed to load billing information. Please check your connection.", type: "error" });
+      if (!isSilent) {
+        setToast({ message: "Failed to load billing information. Please check your connection.", type: "error" });
+      }
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, []);
 
-  // Fetch details for selected website
-  const fetchWebsiteDetails = useCallback(async (wid: string) => {
-    setDetailsLoading(true);
+  // Fetch details for selected website (Silent background revalidation when cached)
+  const fetchWebsiteDetails = useCallback(async (wid: string, isSilent = Boolean(adminBillingMemoryCache?.websiteDetails?.[wid])) => {
+    if (!isSilent) setDetailsLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/billing/websites/${wid}/details`, { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         setSelectedDetails(data);
-      } else {
+        if (!adminBillingMemoryCache) {
+          adminBillingMemoryCache = {
+            websites: [],
+            aiCredits: null,
+            websiteDetails: {},
+            timestamp: Date.now(),
+          };
+        }
+        adminBillingMemoryCache.websiteDetails[wid] = data;
+      } else if (!isSilent) {
         setToast({ message: "Could not load website plan details.", type: "error" });
       }
     } catch {
-      setToast({ message: "Network error loading website plan details.", type: "error" });
+      if (!isSilent) {
+        setToast({ message: "Network error loading website plan details.", type: "error" });
+      }
     } finally {
-      setDetailsLoading(false);
+      if (!isSilent) setDetailsLoading(false);
     }
   }, []);
 

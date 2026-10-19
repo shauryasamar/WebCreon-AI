@@ -38,6 +38,15 @@ const XMarkIcon = () => (
   </svg>
 );
 
+const adminNotificationsMemoryCache: Record<
+  string,
+  {
+    settings: EmailSettings;
+    initialSnapshot: string;
+    hasLoaded: boolean;
+  }
+> = {};
+
 export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ siteId: propSiteId }) => {
   const { isDark, tokens } = useAdminTheme();
   const { siteId: paramSiteId } = useParams<{ siteId?: string }>();
@@ -89,7 +98,8 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
     cursor: "pointer",
   };
 
-  const [loading, setLoading] = useState(true);
+  const cached = activeSiteId ? adminNotificationsMemoryCache[activeSiteId] : undefined;
+  const [loading, setLoading] = useState(() => !Boolean(cached?.hasLoaded));
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
@@ -102,24 +112,27 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
     setToast({ type, message });
   };
 
-  const [settings, setSettings] = useState<EmailSettings>({
-    site_id: activeSiteId,
-    sender_name: "",
-    sender_email: "",
-    reply_to_email: "",
-    provider_type: "smtp",
-    smtp_host: "",
-    smtp_port: 587,
-    smtp_user: "",
-    smtp_password: "",
-    smtp_use_tls: true,
-    smtp_use_ssl: false,
-    verification_status: "not_configured",
-    has_smtp_password: false,
-    is_enabled: true,
+  const [settings, setSettings] = useState<EmailSettings>(() => {
+    if (cached?.settings) return cached.settings;
+    return {
+      site_id: activeSiteId,
+      sender_name: "",
+      sender_email: "",
+      reply_to_email: "",
+      provider_type: "smtp",
+      smtp_host: "",
+      smtp_port: 587,
+      smtp_user: "",
+      smtp_password: "",
+      smtp_use_tls: true,
+      smtp_use_ssl: false,
+      verification_status: "not_configured",
+      has_smtp_password: false,
+      is_enabled: true,
+    };
   });
   const [passwordEdited, setPasswordEdited] = useState(false);
-  const [initialSnapshot, setInitialSnapshot] = useState("");
+  const [initialSnapshot, setInitialSnapshot] = useState<string>(() => cached?.initialSnapshot || "");
 
   const getAdminToken = useCallback((): string | null => {
     return (
@@ -132,7 +145,10 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
 
   const loadSettings = useCallback(async () => {
     if (!activeSiteId) return;
-    setLoading(true);
+    const isSilent = Boolean(adminNotificationsMemoryCache[activeSiteId]?.hasLoaded);
+    if (!isSilent) {
+      setLoading(true);
+    }
     const token = getAdminToken();
 
     try {
@@ -172,26 +188,34 @@ export const AdminNotificationsSettings: React.FC<{ siteId?: string }> = ({ site
         };
         setSettings(loadedSettings);
         setPasswordEdited(false);
-        setInitialSnapshot(
-          JSON.stringify({
-            sender_name: loadedSettings.sender_name || "",
-            sender_email: loadedSettings.sender_email || "",
-            reply_to_email: loadedSettings.reply_to_email || "",
-            provider_type: loadedSettings.provider_type || "smtp",
-            smtp_host: loadedSettings.smtp_host || "",
-            smtp_port: loadedSettings.smtp_port || 587,
-            smtp_user: loadedSettings.smtp_user || "",
-            smtp_use_tls: loadedSettings.smtp_use_tls ?? true,
-            smtp_use_ssl: loadedSettings.smtp_use_ssl ?? false,
-            is_enabled: loadedSettings.is_enabled ?? true,
-            has_password_edit: false,
-          })
-        );
+        const snap = JSON.stringify({
+          sender_name: loadedSettings.sender_name || "",
+          sender_email: loadedSettings.sender_email || "",
+          reply_to_email: loadedSettings.reply_to_email || "",
+          provider_type: loadedSettings.provider_type || "smtp",
+          smtp_host: loadedSettings.smtp_host || "",
+          smtp_port: loadedSettings.smtp_port || 587,
+          smtp_user: loadedSettings.smtp_user || "",
+          smtp_use_tls: loadedSettings.smtp_use_tls ?? true,
+          smtp_use_ssl: loadedSettings.smtp_use_ssl ?? false,
+          is_enabled: loadedSettings.is_enabled ?? true,
+          has_password_edit: false,
+        });
+        setInitialSnapshot(snap);
+        if (activeSiteId) {
+          adminNotificationsMemoryCache[activeSiteId] = {
+            settings: loadedSettings,
+            initialSnapshot: snap,
+            hasLoaded: true,
+          };
+        }
       }
     } catch (err) {
       console.error("Failed to load settings:", err);
     } finally {
-      setLoading(false);
+      if (!isSilent) {
+        setLoading(false);
+      }
     }
   }, [activeSiteId, getAdminToken]);
 

@@ -153,6 +153,16 @@ const GlobeIcon = () => (
 // MAIN COMPONENT
 // ---------------------------------------------------------------------------
 
+// In-memory SWR cache for instant navigation without loading spinners
+type DomainSettingsCache = {
+  stores: SiteDomainOverviewItem[];
+  platformBaseDomain: string;
+  routingTarget: string;
+  timestamp: number;
+};
+
+let adminDomainMemoryCache: DomainSettingsCache | null = null;
+
 export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } = {}) {
   const { siteId: paramSiteId } = useParams<{ siteId?: string }>();
   const storedActiveSiteId = typeof window !== "undefined" ? (localStorage.getItem("last_active_site_id") || sessionStorage.getItem("last_active_site_id")) : null;
@@ -163,12 +173,12 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
   const canView = isOwner || hasPermission("domain_settings:view");
   const canEdit = isOwner || hasPermission("domain_settings:edit");
 
-  // Primary Data State
-  const [stores, setStores] = useState<SiteDomainOverviewItem[]>([]);
+  // Primary Data State (Instant initial state from memory cache if available)
+  const [stores, setStores] = useState<SiteDomainOverviewItem[]>(() => adminDomainMemoryCache?.stores || []);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(effectiveSiteId || null);
-  const [platformBaseDomain, setPlatformBaseDomain] = useState<string>("webcreon.in");
-  const [routingTarget, setRoutingTarget] = useState<string>("cname.webcreon.in");
-  const [loading, setLoading] = useState<boolean>(true);
+  const [platformBaseDomain, setPlatformBaseDomain] = useState<string>(() => adminDomainMemoryCache?.platformBaseDomain || "webcreon.in");
+  const [routingTarget, setRoutingTarget] = useState<string>(() => adminDomainMemoryCache?.routingTarget || "cname.webcreon.in");
+  const [loading, setLoading] = useState<boolean>(() => !adminDomainMemoryCache);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
@@ -204,8 +214,8 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
     return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
 
-  // Fetch Domain Overview Data
-  const fetchData = useCallback(async (isSilent = false) => {
+  // Fetch Domain Overview Data (Silent background revalidation when cached)
+  const fetchData = useCallback(async (isSilent = Boolean(adminDomainMemoryCache)) => {
     if (!isSilent) setLoading(true);
     else setRefreshing(true);
     try {
@@ -215,18 +225,31 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
       if (!res.ok) throw new Error("Failed to load domain records.");
       const data = await res.json();
       const loadedStores: SiteDomainOverviewItem[] = data.stores || [];
+      const loadedPlatform = data.platform_base_domain || "webcreon.in";
+      const loadedRouting = data.custom_domain_routing_target || "cname.webcreon.in";
+
       setStores(loadedStores);
-      if (data.platform_base_domain) setPlatformBaseDomain(data.platform_base_domain);
-      if (data.custom_domain_routing_target) setRoutingTarget(data.custom_domain_routing_target);
+      setPlatformBaseDomain(loadedPlatform);
+      setRoutingTarget(loadedRouting);
+
+      // Save to memory cache for 0ms instant display
+      adminDomainMemoryCache = {
+        stores: loadedStores,
+        platformBaseDomain: loadedPlatform,
+        routingTarget: loadedRouting,
+        timestamp: Date.now(),
+      };
 
       // Keep selected site in sync
       if (effectiveSiteId && loadedStores.some((s) => s.site_id === effectiveSiteId)) {
         setSelectedSiteId(effectiveSiteId);
       }
     } catch (err: any) {
-      setToast({ message: err.message || "Failed to load domains", type: "error" });
+      if (!isSilent) {
+        setToast({ message: err.message || "Failed to load domains", type: "error" });
+      }
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
       setRefreshing(false);
     }
   }, [effectiveSiteId]);

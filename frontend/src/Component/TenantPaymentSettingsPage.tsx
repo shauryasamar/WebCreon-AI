@@ -26,14 +26,12 @@ type BankSettingsData = {
   updated_at?: string | null;
 };
 
+// RAM-only cache for bank/payout settings (replaces localStorage)
+const bankSettingsRamCache = new Map<string, BankSettingsData>();
+
 const getCachedBankSettings = (id?: string): BankSettingsData | null => {
-  if (!id || typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(`wc_admin_bank_settings_${id}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  if (!id) return null;
+  return bankSettingsRamCache.get(id) ?? null;
 };
 
 export default function TenantPaymentSettingsPage({ siteId: propSiteId }: { siteId?: string } = {}) {
@@ -91,7 +89,8 @@ export default function TenantPaymentSettingsPage({ siteId: propSiteId }: { site
           if (isMounted) {
             setSettings(data);
             try {
-              localStorage.setItem(`wc_admin_bank_settings_${siteId}`, JSON.stringify(data));
+              // RAM-only: store in module-level Map
+              bankSettingsRamCache.set(siteId, data);
             } catch (_) {}
             const h = data.account_holder_name || "";
             const i = data.ifsc_code || "";

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+﻿import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAdminTheme } from "../context/ThemeContext";
 import { useParams, Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
@@ -316,15 +316,15 @@ function EscrowReleaseIconButton({
   );
 }
 
+// RAM-only cache for earnings (replaces localStorage)
+const earningsRamCache = new Map<string, EarningsSummaryData>();
+
 const getCachedEarnings = (id?: string): EarningsSummaryData | null => {
-  if (!id || typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(`wc_admin_earnings_${id}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  if (!id) return null;
+  return earningsRamCache.get(id) ?? null;
 };
+
+
 
 export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: string } = {}) {
   const { isDark, tokens } = useAdminTheme();
@@ -405,7 +405,8 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
         setData(json);
         if (page === 1 && date === "last_30_days" && status === "all" && !search.trim()) {
           try {
-            localStorage.setItem(`wc_admin_earnings_${siteId}`, JSON.stringify(json));
+            // RAM-only: store in module-level Map
+            earningsRamCache.set(siteId, json);
           } catch (_) {}
         }
       }
@@ -1709,3 +1710,4 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
     </div>
   );
 }
+

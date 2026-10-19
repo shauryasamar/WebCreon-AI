@@ -175,25 +175,21 @@ const ToggleSwitch = ({
   );
 };
 
+// ─── RAM-only caches for delivery data (replaces localStorage) ────────────────
+const deliverySettingsRamCache = new Map<string, DeliverySettingsData>();
+const deliveryAgentsRamCache = new Map<string, Agent[]>();
+const wcSiteSnapshotRamCache = new Map<string, any>();
+
 const getCachedDeliverySettings = (id?: string): DeliverySettingsData | null => {
-  if (!id || typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(`wc_admin_delivery_settings_${id}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  if (!id) return null;
+  return deliverySettingsRamCache.get(id) ?? null;
 };
 
 const getCachedAgents = (id?: string): Agent[] => {
-  if (!id || typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(`wc_admin_agents_${id}`);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  if (!id) return [];
+  return deliveryAgentsRamCache.get(id) ?? [];
 };
+
 
 export default function DeliverySettingsPage() {
   const { isDark, tokens } = useAdminTheme();
@@ -247,13 +243,9 @@ export default function DeliverySettingsPage() {
       const match = window.location.pathname.match(/\/store\/([^/]+)/);
       if (match && match[1]) return match[1];
       if (siteId) {
-        try {
-          const raw = localStorage.getItem(`wc_site_snapshot_${siteId}`);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed?.slug) return parsed.slug;
-          }
-        } catch (_) {}
+        // RAM-only: check module-level cache
+        const cached = wcSiteSnapshotRamCache.get(`wc_site_snapshot_${siteId}`);
+        if (cached?.slug) return cached.slug;
       }
     }
     return siteId || "";
@@ -268,13 +260,11 @@ export default function DeliverySettingsPage() {
           setSiteSlug(match[1]);
           return;
         }
-        const raw = localStorage.getItem(`wc_site_snapshot_${siteId}`);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed?.slug) {
-            setSiteSlug(parsed.slug);
-            return;
-          }
+        // RAM-only: check module-level cache
+        const cached = wcSiteSnapshotRamCache.get(`wc_site_snapshot_${siteId}`);
+        if (cached?.slug) {
+          setSiteSlug(cached.slug);
+          return;
         }
         const res = await fetch(`${API_BASE_URL}/admin/sites`, { credentials: "include" });
         if (res.ok) {
@@ -343,7 +333,8 @@ export default function DeliverySettingsPage() {
         setSettings(data);
         setInitialSnapshot(JSON.stringify({ settings: data, srPassword: "" }));
         try {
-          localStorage.setItem(`wc_admin_delivery_settings_${siteId}`, JSON.stringify(data));
+          // RAM-only: store in module-level Map
+          deliverySettingsRamCache.set(siteId, data);
         } catch (_) {}
       }
     } catch (err) {
@@ -365,7 +356,8 @@ export default function DeliverySettingsPage() {
         const validAgents = Array.isArray(data) ? data : [];
         setAgents(validAgents);
         try {
-          localStorage.setItem(`wc_admin_agents_${siteId}`, JSON.stringify(validAgents));
+          // RAM-only: store in module-level Map
+          deliveryAgentsRamCache.set(siteId, validAgents);
         } catch (_) {}
       }
     } catch (err) {

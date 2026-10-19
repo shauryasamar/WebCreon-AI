@@ -798,25 +798,22 @@ type DeliverySettingsSummary = {
 
 const matchesReturnTab = (item: AdminReturnListItem, tab: ReturnTabKey) => item.status === tab;
 
-const getCachedOrders = (id?: string): AdminOrderListItem[] => {
-  if (!id || typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(`wc_admin_orders_${id}`);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-};
+interface AdminOrdersMemoryCacheItem {
+  orders: AdminOrderListItem[];
+  returns: AdminReturnListItem[];
+  serverTotalOrders: number;
+  serverTotalPages: number;
+  serverTabCounts: Record<string, number>;
+  serverTotalReturns: number;
+  serverTotalReturnPages: number;
+  serverReturnTabCounts: Record<string, number>;
+  deliveryAgents: DeliveryAgentItem[];
+  deliverySettings: DeliverySettingsSummary | null;
+  hasLoadedOrders: boolean;
+  hasLoadedReturns: boolean;
+}
 
-const getCachedReturns = (id?: string): AdminReturnListItem[] => {
-  if (!id || typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(`wc_admin_returns_${id}`);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-};
+const adminOrdersMemoryCache: Record<string, AdminOrdersMemoryCacheItem> = {};
 
 type AdminOrdersProps = {
   siteId?: string;
@@ -838,10 +835,14 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
   const params = useParams<{ siteId?: string; id?: string }>();
   const siteId = propSiteId || params.siteId || params.id || "";
+  const cachedOrdersState = siteId ? adminOrdersMemoryCache[siteId] : undefined;
+
   const [searchParams, setSearchParams] = useSearchParams();
   const [mode, setMode] = useState<"orders" | "returns">("orders");
   const [activeTab, setActiveTab] = useState<TabKey>("new");
-  const [orders, setOrders] = useState<AdminOrderListItem[]>(initialOrders);
+  const [orders, setOrders] = useState<AdminOrderListItem[]>(() =>
+    initialOrders.length > 0 ? initialOrders : (cachedOrdersState?.orders || [])
+  );
   const [detailsMap, setDetailsMap] = useState<Record<string, AdminOrderDetail>>({});
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [selectedAgentMap, setSelectedAgentMap] = useState<Record<string, string>>({});
@@ -851,8 +852,12 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   const [reassigningOrderIdMap, setReassigningOrderIdMap] = useState<Record<string, boolean>>({});
   const [reassignAgentIdMap, setReassignAgentIdMap] = useState<Record<string, string>>({});
 
-  const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgentItem[]>([]);
-  const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsSummary | null>(null);
+  const [deliveryAgents, setDeliveryAgents] = useState<DeliveryAgentItem[]>(() =>
+    cachedOrdersState?.deliveryAgents || []
+  );
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsSummary | null>(() =>
+    cachedOrdersState?.deliverySettings || null
+  );
 
   const [shipmentDrafts, setShipmentDrafts] = useState<Record<string, ShipmentDraft>>({});
 
@@ -939,7 +944,9 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   const [reassigningReturnIdMap, setReassigningReturnIdMap] = useState<Record<string, boolean>>({});
   const [reassignReturnAgentIdMap, setReassignReturnAgentIdMap] = useState<Record<string, string>>({});
 
-  const [adminReturns, setAdminReturns] = useState<AdminReturnListItem[]>(initialReturns);
+  const [adminReturns, setAdminReturns] = useState<AdminReturnListItem[]>(() =>
+    initialReturns.length > 0 ? initialReturns : (cachedOrdersState?.returns || [])
+  );
   const [returnDetailsMap, setReturnDetailsMap] = useState<Record<string, AdminReturnDetail>>({});
   const [expandedReturnId, setExpandedReturnId] = useState<string | null>(null);
   const [activeReturnTab, setActiveReturnTab] = useState<ReturnTabKey>("requested");
@@ -960,15 +967,30 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [serverTotalOrders, setServerTotalOrders] = useState<number>(initialOrders.length);
-  const [serverTotalPages, setServerTotalPages] = useState<number>(1);
-  const [serverTabCounts, setServerTabCounts] = useState<Record<string, number>>({});
+  const [serverTotalOrders, setServerTotalOrders] = useState<number>(() =>
+    cachedOrdersState?.serverTotalOrders ?? initialOrders.length
+  );
+  const [serverTotalPages, setServerTotalPages] = useState<number>(() =>
+    cachedOrdersState?.serverTotalPages ?? 1
+  );
+  const [serverTabCounts, setServerTabCounts] = useState<Record<string, number>>(() =>
+    cachedOrdersState?.serverTabCounts || {}
+  );
 
-  const [serverTotalReturns, setServerTotalReturns] = useState<number>(initialReturns.length);
-  const [serverTotalReturnPages, setServerTotalReturnPages] = useState<number>(1);
-  const [serverReturnTabCounts, setServerReturnTabCounts] = useState<Record<string, number>>({});
+  const [serverTotalReturns, setServerTotalReturns] = useState<number>(() =>
+    cachedOrdersState?.serverTotalReturns ?? initialReturns.length
+  );
+  const [serverTotalReturnPages, setServerTotalReturnPages] = useState<number>(() =>
+    cachedOrdersState?.serverTotalReturnPages ?? 1
+  );
+  const [serverReturnTabCounts, setServerReturnTabCounts] = useState<Record<string, number>>(() =>
+    cachedOrdersState?.serverReturnTabCounts || {}
+  );
 
-  const [loading, setLoading] = useState<boolean>(initialOrders.length === 0);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (initialOrders.length > 0) return false;
+    return !Boolean(cachedOrdersState?.hasLoadedOrders);
+  });
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
 
@@ -1109,15 +1131,46 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
         setServerTotalOrders(res.total ?? res.orders.length);
         setServerTotalPages(res.total_pages ?? 1);
         if (res.tab_counts) setServerTabCounts(res.tab_counts);
-        if (page === 1) {
-          try {
-            localStorage.setItem(`wc_admin_orders_${siteId}`, JSON.stringify(res.orders));
-          } catch (_) {}
+        if (siteId) {
+          adminOrdersMemoryCache[siteId] = {
+            ...(adminOrdersMemoryCache[siteId] || {
+              returns: [],
+              serverTotalReturns: 0,
+              serverTotalReturnPages: 1,
+              serverReturnTabCounts: {},
+              deliveryAgents: [],
+              deliverySettings: null,
+              hasLoadedReturns: false,
+            }),
+            orders: res.orders,
+            serverTotalOrders: res.total ?? res.orders.length,
+            serverTotalPages: res.total_pages ?? 1,
+            serverTabCounts: res.tab_counts || adminOrdersMemoryCache[siteId]?.serverTabCounts || {},
+            hasLoadedOrders: true,
+          };
         }
       } else if (Array.isArray(res)) {
         setOrders(res);
         setServerTotalOrders(res.length);
         setServerTotalPages(Math.max(1, Math.ceil(res.length / size)));
+        if (siteId) {
+          adminOrdersMemoryCache[siteId] = {
+            ...(adminOrdersMemoryCache[siteId] || {
+              returns: [],
+              serverTotalReturns: 0,
+              serverTotalReturnPages: 1,
+              serverReturnTabCounts: {},
+              deliveryAgents: [],
+              deliverySettings: null,
+              hasLoadedReturns: false,
+            }),
+            orders: res,
+            serverTotalOrders: res.length,
+            serverTotalPages: Math.max(1, Math.ceil(res.length / size)),
+            serverTabCounts: adminOrdersMemoryCache[siteId]?.serverTabCounts || {},
+            hasLoadedOrders: true,
+          };
+        }
       }
     } catch (err) {
       console.error("Failed to load orders", err);
@@ -1146,15 +1199,46 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
         setServerTotalReturns(res.total ?? res.returns.length);
         setServerTotalReturnPages(res.total_pages ?? 1);
         if (res.tab_counts) setServerReturnTabCounts(res.tab_counts);
-        if (page === 1) {
-          try {
-            localStorage.setItem(`wc_admin_returns_${siteId}`, JSON.stringify(res.returns));
-          } catch (_) {}
+        if (siteId) {
+          adminOrdersMemoryCache[siteId] = {
+            ...(adminOrdersMemoryCache[siteId] || {
+              orders: [],
+              serverTotalOrders: 0,
+              serverTotalPages: 1,
+              serverTabCounts: {},
+              deliveryAgents: [],
+              deliverySettings: null,
+              hasLoadedOrders: false,
+            }),
+            returns: res.returns,
+            serverTotalReturns: res.total ?? res.returns.length,
+            serverTotalReturnPages: res.total_pages ?? 1,
+            serverReturnTabCounts: res.tab_counts || adminOrdersMemoryCache[siteId]?.serverReturnTabCounts || {},
+            hasLoadedReturns: true,
+          };
         }
       } else if (Array.isArray(res)) {
         setAdminReturns(res);
         setServerTotalReturns(res.length);
         setServerTotalReturnPages(Math.max(1, Math.ceil(res.length / size)));
+        if (siteId) {
+          adminOrdersMemoryCache[siteId] = {
+            ...(adminOrdersMemoryCache[siteId] || {
+              orders: [],
+              serverTotalOrders: 0,
+              serverTotalPages: 1,
+              serverTabCounts: {},
+              deliveryAgents: [],
+              deliverySettings: null,
+              hasLoadedOrders: false,
+            }),
+            returns: res,
+            serverTotalReturns: res.length,
+            serverTotalReturnPages: Math.max(1, Math.ceil(res.length / size)),
+            serverReturnTabCounts: adminOrdersMemoryCache[siteId]?.serverReturnTabCounts || {},
+            hasLoadedReturns: true,
+          };
+        }
       }
     } catch (err) {
       console.error("Failed to load returns", err);
@@ -1172,11 +1256,18 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
       ]);
       if (agentsRes.ok) {
         const agentsData = await agentsRes.json();
-        setDeliveryAgents(Array.isArray(agentsData) ? agentsData : []);
+        const list = Array.isArray(agentsData) ? agentsData : [];
+        setDeliveryAgents(list);
+        if (siteId && adminOrdersMemoryCache[siteId]) {
+          adminOrdersMemoryCache[siteId].deliveryAgents = list;
+        }
       }
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
         setDeliverySettings(settingsData);
+        if (siteId && adminOrdersMemoryCache[siteId]) {
+          adminOrdersMemoryCache[siteId].deliverySettings = settingsData;
+        }
       }
     } catch {
       // ignore
@@ -1428,7 +1519,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
 
     const loadByMode = async () => {
       setError("");
-      setLoading(true);
+      const isSilent = mode === "orders"
+        ? Boolean(adminOrdersMemoryCache[siteId]?.hasLoadedOrders)
+        : Boolean(adminOrdersMemoryCache[siteId]?.hasLoadedReturns);
+
+      if (!isSilent) {
+        setLoading(true);
+      }
       try {
         if (mode === "orders") {
           await loadOrdersForSite(
@@ -1456,13 +1553,17 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
         }
       } catch (err: any) {
         setError(err.message || `Failed to load ${mode}`);
-        if (mode === "orders") {
-          setOrders([]);
-        } else {
-          setAdminReturns([]);
+        if (!isSilent) {
+          if (mode === "orders") {
+            setOrders([]);
+          } else {
+            setAdminReturns([]);
+          }
         }
       } finally {
-        setLoading(false);
+        if (!isSilent) {
+          setLoading(false);
+        }
       }
     };
 

@@ -51,20 +51,8 @@ const adminCouponsMemoryCache = new Map<string, AdminCouponsCacheEntry>();
 
 function getStoredCouponsCache(siteId: string): AdminCouponsCacheEntry | null {
   if (!siteId) return null;
-  const mem = adminCouponsMemoryCache.get(siteId);
-  if (mem) return mem;
-
-  try {
-    const raw = sessionStorage.getItem(`webcreon_admin_coupons_cache:${siteId}`) || localStorage.getItem(`webcreon_admin_coupons_cache:${siteId}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.coupons)) {
-        adminCouponsMemoryCache.set(siteId, parsed);
-        return parsed;
-      }
-    }
-  } catch {}
-  return null;
+  // RAM-only: read from module-level Map
+  return adminCouponsMemoryCache.get(siteId) ?? null;
 }
 
 function setStoredCouponsCache(siteId: string, coupons: CouponItem[], stats: CouponStats) {
@@ -74,12 +62,8 @@ function setStoredCouponsCache(siteId: string, coupons: CouponItem[], stats: Cou
     stats,
     timestamp: Date.now(),
   };
+  // RAM-only: store in module-level Map, never write to localStorage/sessionStorage
   adminCouponsMemoryCache.set(siteId, entry);
-  try {
-    const serialized = JSON.stringify(entry);
-    sessionStorage.setItem(`webcreon_admin_coupons_cache:${siteId}`, serialized);
-    localStorage.setItem(`webcreon_admin_coupons_cache:${siteId}`, serialized);
-  } catch {}
 }
 
 // Icons

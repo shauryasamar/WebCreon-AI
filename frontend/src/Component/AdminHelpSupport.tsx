@@ -182,6 +182,9 @@ const SUPPORT_CATEGORIES = [
 // MAIN HELP & SUPPORT COMPONENT
 // ---------------------------------------------------------------------------
 
+// In-memory SWR cache for instant navigation without loading spinners
+let adminHelpSupportFaqsMemoryCache: FAQItem[] | null = null;
+
 export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overview" | "faq" }> = ({ siteId, initialView }) => {
   const { isDark, tokens } = useAdminTheme();
   const navigate = useNavigate();
@@ -194,9 +197,9 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
   // In-place view switching between Main Support view, Full FAQ browser, and Legal Compliance Directive
   const [viewMode, setViewMode] = useState<"overview" | "faq" | "legal">(initialView || "overview");
 
-  // State
-  const [faqs, setFaqs] = useState<FAQItem[]>([]);
-  const [faqsLoading, setFaqsLoading] = useState<boolean>(true);
+  // State (Instant initial state from memory cache if available)
+  const [faqs, setFaqs] = useState<FAQItem[]>(() => adminHelpSupportFaqsMemoryCache || []);
+  const [faqsLoading, setFaqsLoading] = useState<boolean>(() => !adminHelpSupportFaqsMemoryCache);
   const [expandedFaqId, setExpandedFaqId] = useState<string | null>(null);
 
   // Contact Support Form State
@@ -269,21 +272,23 @@ export const AdminHelpSupport: React.FC<{ siteId?: string; initialView?: "overvi
     }
   }, []);
 
-  // Fetch Featured FAQs
-  const fetchFeaturedFaqs = useCallback(async () => {
-    setFaqsLoading(true);
+  // Fetch Featured FAQs (Silent background revalidation when cached)
+  const fetchFeaturedFaqs = useCallback(async (isSilent = Boolean(adminHelpSupportFaqsMemoryCache)) => {
+    if (!isSilent) setFaqsLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/help/faqs?featured_only=true`, { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         const items = data.items || [];
         setFaqs(items);
-        // All FAQ items start collapsed by default
+        adminHelpSupportFaqsMemoryCache = items;
       }
     } catch {
-      setToast({ message: "Could not load FAQs. Please check your network.", type: "error" });
+      if (!isSilent) {
+        setToast({ message: "Could not load FAQs. Please check your network.", type: "error" });
+      }
     } finally {
-      setFaqsLoading(false);
+      if (!isSilent) setFaqsLoading(false);
     }
   }, []);
 

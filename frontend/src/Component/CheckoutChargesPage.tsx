@@ -326,14 +326,17 @@ const getShortTabLabel = (label: string) => {
   return map[label] ?? label;
 };
 
-const getCachedCheckoutSettings = (id?: string): CheckoutSettingsResponse | null => {
-  if (!id || typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(`wc_admin_checkout_settings_${id}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
+const adminCheckoutChargesMemoryCache: Record<
+  string,
+  {
+    settings: CheckoutSettingsResponse;
+    hasLoaded: boolean;
   }
+> = {};
+
+const getCachedCheckoutSettings = (id?: string): CheckoutSettingsResponse | null => {
+  if (!id) return null;
+  return adminCheckoutChargesMemoryCache[id]?.hasLoaded ? adminCheckoutChargesMemoryCache[id].settings : null;
 };
 
 const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId }) => {
@@ -456,8 +459,10 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
         return;
       }
 
+      const hasCached = Boolean((siteId && adminCheckoutChargesMemoryCache[siteId]?.hasLoaded) || cachedSettings);
+
       try {
-        if (!cachedSettings) {
+        if (!hasCached) {
           setLoading(true);
         }
 
@@ -478,9 +483,9 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
         setTaxSettings(normalized.taxSettings);
         setCharges(normalized.charges);
         setInitialSnapshot(JSON.stringify(normalized));
-        try {
-          localStorage.setItem(`wc_admin_checkout_settings_${siteId}`, JSON.stringify(normalized));
-        } catch (_) {}
+        if (siteId) {
+          adminCheckoutChargesMemoryCache[siteId] = { settings: normalized, hasLoaded: true };
+        }
 
         const firstStandard = normalized.charges.find((charge) => charge.code !== "custom");
         const firstCustom = normalized.charges.find((charge) => charge.code === "custom");
@@ -489,9 +494,13 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
         setActiveCustomTab(firstCustom?.id ?? null);
       } catch (error: any) {
         console.error("Error loading checkout settings:", error);
-        showToast("error", error?.message || "Failed to load checkout settings.");
+        if (!hasCached) {
+          showToast("error", error?.message || "Failed to load checkout settings.");
+        }
       } finally {
-        setLoading(false);
+        if (!hasCached) {
+          setLoading(false);
+        }
       }
     };
 
@@ -608,6 +617,9 @@ const CheckoutChargesPage: React.FC<{ siteId?: string }> = ({ siteId: propSiteId
       setTaxSettings(normalized.taxSettings);
       setCharges(normalized.charges);
       setInitialSnapshot(JSON.stringify(normalized));
+      if (siteId) {
+        adminCheckoutChargesMemoryCache[siteId] = { settings: normalized, hasLoaded: true };
+      }
       showToast("success", "Taxes & surcharges saved successfully.");
     } catch (error: any) {
       console.error("Error saving checkout settings:", error);

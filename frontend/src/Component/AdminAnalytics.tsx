@@ -140,16 +140,28 @@ interface AdminAnalyticsProps {
   siteName?: string;
 }
 
+const adminAnalyticsMemoryCache: Record<
+  string,
+  {
+    byRange: Record<string, AnalyticsData>;
+    lastRange: DateRangeKey;
+  }
+> = {};
+
 export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSiteId, siteName = "Store" }) => {
   const params = useParams<{ siteId?: string }>();
   const navigate = useNavigate();
   const siteId = propSiteId || params.siteId || "";
   const { isDark, tokens } = useAdminTheme();
 
-  const [dateRange, setDateRange] = useState<DateRangeKey>("30d");
+  const cachedSite = siteId ? adminAnalyticsMemoryCache[siteId] : undefined;
+  const initialRange = cachedSite?.lastRange || "30d";
+  const initialData = cachedSite?.byRange[initialRange] || null;
+
+  const [dateRange, setDateRange] = useState<DateRangeKey>(() => initialRange);
   const [metricTab, setMetricTab] = useState<"revenue" | "orders">("revenue");
-  const [data, setData] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [data, setData] = useState<AnalyticsData | null>(() => initialData);
+  const [loading, setLoading] = useState<boolean>(() => !Boolean(initialData));
   const [error, setError] = useState<string | null>(null);
 
   // Dropdowns
@@ -186,16 +198,31 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
   }, []);
 
   const loadData = async (range: DateRangeKey, sDate?: string, eDate?: string) => {
-    setLoading(true);
+    const rangeKey = range === "custom" ? `custom_${sDate}_${eDate}` : range;
+    const hasCached = Boolean(siteId && adminAnalyticsMemoryCache[siteId]?.byRange[rangeKey]);
+    if (!hasCached) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const res = await fetchStoreAnalytics(siteId, range, sDate, eDate);
       setData(res);
+      if (siteId) {
+        if (!adminAnalyticsMemoryCache[siteId]) {
+          adminAnalyticsMemoryCache[siteId] = { byRange: {}, lastRange: range };
+        }
+        adminAnalyticsMemoryCache[siteId].byRange[rangeKey] = res;
+        adminAnalyticsMemoryCache[siteId].lastRange = range;
+      }
     } catch (err: any) {
       setError(err?.message || "Failed to load analytics data");
-      setData(getBlankAnalyticsData(range));
+      if (!hasCached) {
+        setData(getBlankAnalyticsData(range));
+      }
     } finally {
-      setLoading(false);
+      if (!hasCached) {
+        setLoading(false);
+      }
     }
   };
 
@@ -211,6 +238,11 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
       setCustomRangeModalOpen(true);
     } else {
       setDateRange(key);
+      const cachedForRange = siteId ? adminAnalyticsMemoryCache[siteId]?.byRange[key] : null;
+      if (cachedForRange) {
+        setData(cachedForRange);
+        setLoading(false);
+      }
     }
   };
 
@@ -221,6 +253,12 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
     }
     setDateRange("custom");
     setCustomRangeModalOpen(false);
+    const rangeKey = `custom_${customStartDate}_${customEndDate}`;
+    const cachedForRange = siteId ? adminAnalyticsMemoryCache[siteId]?.byRange[rangeKey] : null;
+    if (cachedForRange) {
+      setData(cachedForRange);
+      setLoading(false);
+    }
     loadData("custom", customStartDate, customEndDate);
   };
 

@@ -284,6 +284,23 @@ const ToggleSwitch = ({
   );
 };
 
+// RAM-only snapshot cache (replaces wc_site_snapshot_* localStorage keys)
+const wcSiteSnapshotRamCache = new Map<string, any>();
+function getRamSnapshot(key: string): any | null { return wcSiteSnapshotRamCache.get(key) ?? null; }
+function setRamSnapshot(key: string, value: any) { wcSiteSnapshotRamCache.set(key, value); }
+
+const adminHomeSectionsMemoryCache: Record<
+  string,
+  {
+    sections: HomeSectionItem[];
+    siteSlug: string;
+    collections: CollectionOption[];
+    allProducts: any[];
+    heroBannerActive: boolean;
+    hasLoaded: boolean;
+  }
+> = {};
+
 export const AdminHomeSections: React.FC = () => {
   const { hasPermission, isOwner } = useAdminAuth();
   const { isDark, tokens } = useAdminTheme();
@@ -291,14 +308,15 @@ export const AdminHomeSections: React.FC = () => {
   const canEdit = isOwner || hasPermission("home_sections:edit");
 
   const { siteId } = useParams();
+  const cached = siteId ? adminHomeSectionsMemoryCache[siteId] : undefined;
   const { products: cartProducts } = useCart();
-  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [allProducts, setAllProducts] = useState<any[]>(() => cached?.allProducts || []);
 
-  const [sections, setSections] = useState<HomeSectionItem[]>([]);
-  const [siteSlug, setSiteSlug] = useState<string>("");
-  const [collections, setCollections] = useState<CollectionOption[]>([]);
-  const [heroBannerActive, setHeroBannerActive] = useState<boolean>(true);
-  const [loading, setLoading] = useState(true);
+  const [sections, setSections] = useState<HomeSectionItem[]>(() => cached?.sections || []);
+  const [siteSlug, setSiteSlug] = useState<string>(() => cached?.siteSlug || "");
+  const [collections, setCollections] = useState<CollectionOption[]>(() => cached?.collections || []);
+  const [heroBannerActive, setHeroBannerActive] = useState<boolean>(() => (cached ? cached.heroBannerActive : true));
+  const [loading, setLoading] = useState(() => !Boolean(cached?.hasLoaded));
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -368,8 +386,16 @@ export const AdminHomeSections: React.FC = () => {
     if (!siteId) return;
 
     const fetchInitialData = async () => {
-      setLoading(true);
+      const isSilent = Boolean(adminHomeSectionsMemoryCache[siteId]?.hasLoaded);
+      if (!isSilent) {
+        setLoading(true);
+      }
       try {
+        let fetchedProducts = adminHomeSectionsMemoryCache[siteId]?.allProducts || [];
+        let fetchedCollections = adminHomeSectionsMemoryCache[siteId]?.collections || [];
+        let currentSiteSlug = adminHomeSectionsMemoryCache[siteId]?.siteSlug || "";
+        let currentHeroActive = adminHomeSectionsMemoryCache[siteId]?.heroBannerActive ?? true;
+
         // 1. Fetch Products
         try {
           const prodRes = await fetch(
@@ -383,6 +409,7 @@ export const AdminHomeSections: React.FC = () => {
               ? prodData.items
               : [];
             if (rawList.length > 0) {
+              fetchedProducts = rawList;
               setAllProducts(rawList);
             }
           }
@@ -395,7 +422,8 @@ export const AdminHomeSections: React.FC = () => {
           });
           if (colRes.ok) {
             const cols = await colRes.json();
-            setCollections(Array.isArray(cols) ? cols : cols.collections || []);
+            fetchedCollections = Array.isArray(cols) ? cols : cols.collections || [];
+            setCollections(fetchedCollections);
           }
         } catch (_) {}
 
@@ -407,20 +435,24 @@ export const AdminHomeSections: React.FC = () => {
           });
           if (siteRes.ok) {
             const siteData = await siteRes.json();
-            if (siteData.slug) setSiteSlug(siteData.slug);
+            if (siteData.slug) {
+              currentSiteSlug = siteData.slug;
+              setSiteSlug(siteData.slug);
+            }
             siteDef = siteData.draft_definition || siteData.site_definition;
           }
         } catch (_) {}
 
-        // Fallback to local snapshot if backend fetch fails
+        // Fallback to RAM snapshot if backend fetch fails
         if (!siteDef) {
-          const savedDraft =
-            localStorage.getItem(`wc_site_snapshot_${siteId}`) ||
-            sessionStorage.getItem(`wc_site_snapshot_${siteId}`);
+          const savedDraft = getRamSnapshot(`wc_site_snapshot_${siteId}`);
           if (savedDraft) {
             try {
-              const parsed = JSON.parse(savedDraft);
-              if (parsed.slug) setSiteSlug(parsed.slug);
+              const parsed = typeof savedDraft === "string" ? JSON.parse(savedDraft) : savedDraft;
+              if (parsed.slug) {
+                currentSiteSlug = parsed.slug;
+                setSiteSlug(parsed.slug);
+              }
               siteDef = parsed.draft_definition || parsed.site_definition || parsed;
             } catch (_) {}
           }
@@ -446,12 +478,12 @@ export const AdminHomeSections: React.FC = () => {
                 b.type === "banner"
             );
             if (heroBlock) {
-              setHeroBannerActive(
+              currentHeroActive =
                 heroBlock.props?.isActive !== false &&
                 heroBlock.isActive !== false &&
                 heroBlock.hidden !== true &&
-                heroBlock.props?.hidden !== true
-              );
+                heroBlock.props?.hidden !== true;
+              setHeroBannerActive(currentHeroActive);
             }
 
             const dynamicBlocks = homePage.blocks.filter(
@@ -494,10 +526,20 @@ export const AdminHomeSections: React.FC = () => {
         }
 
         setSections(loadedSections);
+        adminHomeSectionsMemoryCache[siteId] = {
+          sections: loadedSections,
+          siteSlug: currentSiteSlug,
+          collections: fetchedCollections,
+          allProducts: fetchedProducts,
+          heroBannerActive: currentHeroActive,
+          hasLoaded: true,
+        };
       } catch (err) {
         console.error("Error loading home sections:", err);
       } finally {
-        setLoading(false);
+        if (!isSilent) {
+          setLoading(false);
+        }
       }
     };
 
@@ -685,12 +727,13 @@ export const AdminHomeSections: React.FC = () => {
     setSaving(true);
     try {
       let currentSlug = siteSlug;
+      // Read snapshot from RAM cache only
       const snapshotKey = `wc_site_snapshot_${siteId}`;
-      const rawSnapshot = localStorage.getItem(snapshotKey) || sessionStorage.getItem(snapshotKey);
+      const rawSnapshot = getRamSnapshot(snapshotKey);
       let snapshot: any = null;
       if (rawSnapshot) {
         try {
-          const parsed = JSON.parse(rawSnapshot);
+          const parsed = typeof rawSnapshot === "string" ? JSON.parse(rawSnapshot) : rawSnapshot;
           if (parsed && typeof parsed === "object") {
             snapshot = parsed;
             if (parsed.slug && !currentSlug) {
@@ -698,10 +741,7 @@ export const AdminHomeSections: React.FC = () => {
               setSiteSlug(parsed.slug);
             }
           }
-        } catch (_) {
-          try { localStorage.removeItem(snapshotKey); } catch (_) {}
-          try { sessionStorage.removeItem(snapshotKey); } catch (_) {}
-        }
+        } catch (_) {}
       }
 
       // If snapshot is missing or currentSlug is missing, fetch fresh from API
@@ -835,10 +875,11 @@ export const AdminHomeSections: React.FC = () => {
       snapshot.site_definition = siteDef;
       snapshot.updated_at = new Date().toISOString();
 
+      // Write snapshot to RAM cache only (no localStorage)
       try {
-        localStorage.setItem(`wc_site_snapshot_${siteId}`, JSON.stringify(snapshot));
+        setRamSnapshot(`wc_site_snapshot_${siteId}`, snapshot);
         if (currentSlug) {
-          localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(snapshot));
+          setRamSnapshot(`wc_site_snapshot_${currentSlug}`, snapshot);
         }
       } catch (_) {}
 
@@ -873,6 +914,20 @@ export const AdminHomeSections: React.FC = () => {
       setToastMessage("Home sections updated successfully!");
       setToastType("success");
       setSections(updatedList);
+      if (siteId) {
+        adminHomeSectionsMemoryCache[siteId] = {
+          ...(adminHomeSectionsMemoryCache[siteId] || {
+            allProducts: [],
+            collections: [],
+            siteSlug: currentSlug || "",
+            hasLoaded: true,
+          }),
+          sections: updatedList,
+          heroBannerActive: heroActive,
+          siteSlug: currentSlug || adminHomeSectionsMemoryCache[siteId]?.siteSlug || "",
+          hasLoaded: true,
+        };
+      }
     } catch (err: any) {
       console.error("Failed to save sections:", err);
       setToastMessage(err?.message || "Failed to save sections. Please try again.");

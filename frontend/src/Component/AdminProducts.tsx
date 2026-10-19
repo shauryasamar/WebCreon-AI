@@ -505,35 +505,27 @@ const PlusIcon = () => (
   </svg>
 );
 
+// ─── RAM-only caches for products, categories, collections (replaces localStorage) ─
+// These live in module scope so they survive panel switches within a session.
+const adminProductsRamCache = new Map<string, Product[]>();
+const adminCategoriesRamCache = new Map<string, Category[]>();
+const adminCollectionsRamCache = new Map<string, Collection[]>();
+
 const getCachedProducts = (id?: string): Product[] => {
-  if (!id || typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(`wc_admin_products_${id}`);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  if (!id) return [];
+  return adminProductsRamCache.get(id) ?? [];
 };
 
 const getCachedCategories = (id?: string): Category[] => {
-  if (!id || typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(`wc_admin_categories_${id}`);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  if (!id) return [];
+  return adminCategoriesRamCache.get(id) ?? [];
 };
 
 const getCachedCollections = (id?: string): Collection[] => {
-  if (!id || typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(`wc_admin_collections_${id}`);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  if (!id) return [];
+  return adminCollectionsRamCache.get(id) ?? [];
 };
+
 
 type AdminProductsCacheEntry = {
   products: Product[];
@@ -1483,7 +1475,8 @@ const AdminProducts = () => {
 
           try {
             if (page === 1 && status === "all" && !search && !catId) {
-              localStorage.setItem(`wc_admin_products_${siteId}`, JSON.stringify(norm.slice(0, 25)));
+              // RAM-only: store in module-level Map instead of localStorage
+              adminProductsRamCache.set(siteId, norm.slice(0, 25));
             }
           } catch (_) {}
 
@@ -1520,7 +1513,8 @@ const AdminProducts = () => {
 
           try {
             if (page === 1 && status === "all" && !search && !catId) {
-              localStorage.setItem(`wc_admin_products_${siteId}`, JSON.stringify(norm.slice(0, 25)));
+              // RAM-only: store in module-level Map instead of localStorage
+              adminProductsRamCache.set(siteId, norm.slice(0, 25));
             }
           } catch (_) {}
 
@@ -1579,14 +1573,16 @@ const AdminProducts = () => {
           const catData = await catRes.json();
           setCategories(catData);
           try {
-            localStorage.setItem(`wc_admin_categories_${siteId}`, JSON.stringify(catData));
+            // RAM-only: store in module-level Map
+            adminCategoriesRamCache.set(siteId, catData);
           } catch (_) {}
         }
         if (colRes.ok) {
           const colData = await colRes.json();
           setCollections(colData);
           try {
-            localStorage.setItem(`wc_admin_collections_${siteId}`, JSON.stringify(colData));
+            // RAM-only: store in module-level Map
+            adminCollectionsRamCache.set(siteId, colData);
           } catch (_) {}
         }
         if (siteRes.ok) {
@@ -2472,7 +2468,8 @@ const AdminProducts = () => {
         if (res.ok) {
           invalidateAdminProductsCache(siteId);
           try {
-            localStorage.removeItem(`wc_admin_products_${siteId}`);
+            // RAM-only: evict stale products from module-level Map
+            adminProductsRamCache.delete(siteId);
           } catch (_) {}
           await loadProducts();
           setShowForm(false);
@@ -2494,7 +2491,8 @@ const AdminProducts = () => {
         if (res.ok) {
           invalidateAdminProductsCache(siteId);
           try {
-            localStorage.removeItem(`wc_admin_products_${siteId}`);
+            // RAM-only: evict stale products from module-level Map
+            adminProductsRamCache.delete(siteId);
           } catch (_) {}
           await loadProducts();
           setShowForm(false);

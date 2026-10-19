@@ -86,6 +86,29 @@ export const formatINR = (val: number | undefined | null) => {
   });
 };
 
+const adminTaxKycMemoryCache: Record<
+  string,
+  {
+    profile: TaxProfile | null;
+    sec194O: Section194OProgress | null;
+    initialSnapshot: string;
+    form: {
+      formLegalName: string;
+      formTradeName: string;
+      formEntityType: string;
+      formRegType: string;
+      formPan: string;
+      formGstin: string;
+      formStateCode: string;
+      formCity: string;
+      formPincode: string;
+      formIsComposition: boolean;
+      formDefaultHsn: string;
+    };
+    hasLoaded: boolean;
+  }
+> = {};
+
 export const AdminTaxComplianceDesk: React.FC<{
   siteId?: string;
   onDirtyChange?: (isDirty: boolean) => void;
@@ -99,24 +122,26 @@ export const AdminTaxComplianceDesk: React.FC<{
   const [activeTab, setActiveTab] = useState<"kyc" | "gstr8" | "form26q">("kyc");
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
-  // Tab 1: KYC State
-  const [loadingKYC, setLoadingKYC] = useState(false);
-  const [savingKYC, setSavingKYC] = useState(false);
-  const [taxProfile, setTaxProfile] = useState<TaxProfile | null>(null);
-  const [sec194O, setSec194O] = useState<Section194OProgress | null>(null);
-  const [initialSnapshot, setInitialSnapshot] = useState<string>("");
+  const cachedKYC = siteId ? adminTaxKycMemoryCache[siteId] : undefined;
 
-  const [formLegalName, setFormLegalName] = useState("");
-  const [formTradeName, setFormTradeName] = useState("");
-  const [formEntityType, setFormEntityType] = useState("proprietorship");
-  const [formRegType, setFormRegType] = useState("regular");
-  const [formPan, setFormPan] = useState("");
-  const [formGstin, setFormGstin] = useState("");
-  const [formStateCode, setFormStateCode] = useState("27");
-  const [formCity, setFormCity] = useState("");
-  const [formPincode, setFormPincode] = useState("");
-  const [formIsComposition, setFormIsComposition] = useState(false);
-  const [formDefaultHsn, setFormDefaultHsn] = useState("");
+  // Tab 1: KYC State
+  const [loadingKYC, setLoadingKYC] = useState(() => !Boolean(cachedKYC?.hasLoaded));
+  const [savingKYC, setSavingKYC] = useState(false);
+  const [taxProfile, setTaxProfile] = useState<TaxProfile | null>(() => cachedKYC?.profile || null);
+  const [sec194O, setSec194O] = useState<Section194OProgress | null>(() => cachedKYC?.sec194O || null);
+  const [initialSnapshot, setInitialSnapshot] = useState<string>(() => cachedKYC?.initialSnapshot || "");
+
+  const [formLegalName, setFormLegalName] = useState(() => cachedKYC?.form.formLegalName || "");
+  const [formTradeName, setFormTradeName] = useState(() => cachedKYC?.form.formTradeName || "");
+  const [formEntityType, setFormEntityType] = useState(() => cachedKYC?.form.formEntityType || "proprietorship");
+  const [formRegType, setFormRegType] = useState(() => cachedKYC?.form.formRegType || "regular");
+  const [formPan, setFormPan] = useState(() => cachedKYC?.form.formPan || "");
+  const [formGstin, setFormGstin] = useState(() => cachedKYC?.form.formGstin || "");
+  const [formStateCode, setFormStateCode] = useState(() => cachedKYC?.form.formStateCode || "27");
+  const [formCity, setFormCity] = useState(() => cachedKYC?.form.formCity || "");
+  const [formPincode, setFormPincode] = useState(() => cachedKYC?.form.formPincode || "");
+  const [formIsComposition, setFormIsComposition] = useState(() => cachedKYC?.form.formIsComposition ?? false);
+  const [formDefaultHsn, setFormDefaultHsn] = useState(() => cachedKYC?.form.formDefaultHsn || "");
 
   const currentSnapshot = React.useMemo(() => {
     return JSON.stringify({
@@ -199,7 +224,10 @@ export const AdminTaxComplianceDesk: React.FC<{
   // Load KYC Profile
   const fetchKYCProfile = async () => {
     if (!siteId) return;
-    setLoadingKYC(true);
+    const isSilent = Boolean(adminTaxKycMemoryCache[siteId]?.hasLoaded);
+    if (!isSilent) {
+      setLoadingKYC(true);
+    }
     try {
       const res = await fetch(`${API_BASE_URL}/compliance/tax-kyc/${siteId}`, {
         credentials: "include",
@@ -234,6 +262,28 @@ export const AdminTaxComplianceDesk: React.FC<{
             formDefaultHsn: (data.profile.default_hsn_code || "").trim(),
           });
           setInitialSnapshot(snap);
+
+          if (siteId) {
+            adminTaxKycMemoryCache[siteId] = {
+              profile: data.profile,
+              sec194O: data.section_194o || null,
+              initialSnapshot: snap,
+              form: {
+                formLegalName: data.profile.legal_business_name || "",
+                formTradeName: data.profile.trade_name || "",
+                formEntityType: data.profile.entity_type || "proprietorship",
+                formRegType: data.profile.registration_type || "regular",
+                formPan: data.profile.pan_number || "",
+                formGstin: data.profile.gstin || "",
+                formStateCode: data.profile.state_code || "27",
+                formCity: data.profile.city || "",
+                formPincode: data.profile.pincode || "",
+                formIsComposition: data.profile.is_composition_dealer || false,
+                formDefaultHsn: data.profile.default_hsn_code || "",
+              },
+              hasLoaded: true,
+            };
+          }
         } else {
           setTaxProfile(null);
           setFormLegalName("");
@@ -262,6 +312,28 @@ export const AdminTaxComplianceDesk: React.FC<{
             formDefaultHsn: "",
           });
           setInitialSnapshot(snap);
+
+          if (siteId) {
+            adminTaxKycMemoryCache[siteId] = {
+              profile: null,
+              sec194O: data.section_194o || null,
+              initialSnapshot: snap,
+              form: {
+                formLegalName: "",
+                formTradeName: "",
+                formEntityType: "proprietorship",
+                formRegType: "regular",
+                formPan: "",
+                formGstin: "",
+                formStateCode: "27",
+                formCity: "",
+                formPincode: "",
+                formIsComposition: false,
+                formDefaultHsn: "",
+              },
+              hasLoaded: true,
+            };
+          }
         }
         if (data.section_194o) {
           setSec194O(data.section_194o);
@@ -270,7 +342,9 @@ export const AdminTaxComplianceDesk: React.FC<{
     } catch (err) {
       console.error("Failed to load tax KYC profile:", err);
     } finally {
-      setLoadingKYC(false);
+      if (!isSilent) {
+        setLoadingKYC(false);
+      }
     }
   };
 
