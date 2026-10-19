@@ -1,6 +1,4 @@
 import { API_BASE_URL } from "../config/api";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 
 export type DateRangeKey = "today" | "7d" | "30d" | "90d" | "year" | "custom";
 
@@ -216,9 +214,14 @@ export function exportAnalyticsCSV(data: AnalyticsData, siteName: string = "Stor
 }
 
 /**
- * Export clean PDF report using jsPDF & autoTable
+ * Export clean PDF report using dynamic on-demand jsPDF & autoTable
  */
-export function exportAnalyticsPDF(data: AnalyticsData, siteName: string = "Store"): void {
+export async function exportAnalyticsPDF(data: AnalyticsData, siteName: string = "Store"): Promise<void> {
+  const [{ jsPDF }, autoTableModule] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
+  const autoTable = (autoTableModule as any).default || autoTableModule;
   const doc = new jsPDF();
 
   // Header Title

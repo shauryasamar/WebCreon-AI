@@ -224,7 +224,7 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
     loadData("custom", customStartDate, customEndDate);
   };
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, _type?: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
@@ -236,11 +236,16 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
     showToast("CSV export downloaded successfully");
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!data) return;
     setExportDropdownOpen(false);
-    exportAnalyticsPDF(data, siteName);
-    showToast("PDF report generated and downloaded");
+    try {
+      await exportAnalyticsPDF(data, siteName);
+      showToast("PDF report generated and downloaded");
+    } catch (e) {
+      console.error("PDF export failed:", e);
+      showToast("Failed to generate PDF report");
+    }
   };
 
 

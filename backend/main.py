@@ -380,6 +380,10 @@ app = FastAPI(title="AI Website Builder Backend", lifespan=lifespan)
 _cors_raw = os.getenv("CORS_ORIGINS", "*").strip()
 _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
 
+# Performance: GZip compression for large JSON payloads (>1KB), reducing payload transfer sizes by 80-90%
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
