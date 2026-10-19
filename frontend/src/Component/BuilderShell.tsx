@@ -272,6 +272,13 @@ export default function BuilderShell({
         .builder-preview-scroll,
         .builder-preview-stage {
           overscroll-behavior: contain !important;
+          -webkit-overflow-scrolling: touch !important;
+        }
+
+        @media (pointer: coarse) {
+          button, a, input, select, textarea, [role="button"] {
+            touch-action: manipulation;
+          }
         }
 
         .builder-preview-scroll,

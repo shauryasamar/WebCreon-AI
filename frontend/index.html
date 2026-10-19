@@ -3,12 +3,86 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="viewport" id="wc-viewport-meta" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="color-scheme" content="light dark" />
     <title>WebCreon</title>
     <script>
       (function() {
         try {
+          // --- TABLET / IPAD DESKTOP VIEWPORT CONTROLLER (OPTION 1) ---
+          function isTabletDevice() {
+            var ua = navigator.userAgent || "";
+            // Apple iPad (iOS 13+ reports Macintosh with maxTouchPoints > 1)
+            var isIPad = /iPad/i.test(ua) || (navigator.maxTouchPoints > 1 && (/Macintosh/i.test(ua) || navigator.platform === "MacIntel"));
+            // Android tablet (Android without Mobile in UA)
+            var isAndroidTablet = /Android/i.test(ua) && !/Mobile/i.test(ua);
+            // Universal touch device with tablet-class screen dimensions (e.g., Chrome DevTools tablet presets, iPad Mini 768px, Air 820px)
+            var screenMin = Math.min(window.screen.width || 0, window.screen.height || 0);
+            var screenMax = Math.max(window.screen.width || 0, window.screen.height || 0);
+            var isTabletScreen = (navigator.maxTouchPoints > 0) && (screenMin >= 600 && screenMin <= 1024) && (screenMax >= 900);
+
+            return isIPad || isAndroidTablet || isTabletScreen;
+          }
+
+          function updateTabletViewport() {
+            var meta = document.getElementById("wc-viewport-meta") || document.querySelector('meta[name="viewport"]');
+            if (!meta) return;
+
+            var pathname = window.location.pathname || "";
+            var isStoreRoute = pathname.indexOf("/store/") !== -1 || pathname.indexOf("/site/") !== -1;
+
+            // Customer storefronts always retain standard responsive mobile/tablet viewport
+            if (isStoreRoute) {
+              meta.setAttribute("content", "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content");
+              return;
+            }
+
+            if (isTabletDevice()) {
+              var targetWidth = 1200;
+              var isLandscape = (typeof window.orientation !== "undefined" && Math.abs(window.orientation) === 90) ||
+                                (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
+              var screenMin = Math.min(window.screen.width || 768, window.screen.height || 1024);
+              var screenMax = Math.max(window.screen.width || 768, window.screen.height || 1024);
+              var currentWidth = isLandscape ? screenMax : screenMin;
+
+              var scale = Math.min(1.0, Number((currentWidth / targetWidth).toFixed(3)));
+              meta.setAttribute("content", "width=" + targetWidth + ", initial-scale=" + scale + ", minimum-scale=0.25, maximum-scale=3.0, user-scalable=yes, viewport-fit=cover");
+            } else {
+              meta.setAttribute("content", "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content");
+            }
+          }
+
+          // Run immediately before page rendering
+          updateTabletViewport();
+          window.__wcUpdateViewport = updateTabletViewport;
+
+          // Re-scale on orientation change or screen resize
+          window.addEventListener("orientationchange", function() {
+            setTimeout(updateTabletViewport, 120);
+          });
+          window.addEventListener("resize", function() {
+            clearTimeout(window.__wcResizeTimer);
+            window.__wcResizeTimer = setTimeout(updateTabletViewport, 150);
+          });
+
+          // Intercept SPA navigation so route changes dynamically switch viewports
+          var origPush = history.pushState;
+          if (origPush) {
+            history.pushState = function() {
+              origPush.apply(this, arguments);
+              updateTabletViewport();
+            };
+          }
+          var origReplace = history.replaceState;
+          if (origReplace) {
+            history.replaceState = function() {
+              origReplace.apply(this, arguments);
+              updateTabletViewport();
+            };
+          }
+          window.addEventListener("popstate", updateTabletViewport);
+
+          // --- THEME INITIALIZATION ---
           var pathname = window.location.pathname || "";
           var isStoreRoute = pathname.indexOf("/store/") !== -1 || pathname.indexOf("/site/") !== -1;
           var isDark = false;

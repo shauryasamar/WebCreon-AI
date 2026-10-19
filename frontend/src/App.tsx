@@ -1824,6 +1824,12 @@ function ScrollToTop() {
     });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
+
+    try {
+      if (typeof (window as any).__wcUpdateViewport === "function") {
+        (window as any).__wcUpdateViewport();
+      }
+    } catch {}
   }, [pathname, search, hash]);
 
   return null;
