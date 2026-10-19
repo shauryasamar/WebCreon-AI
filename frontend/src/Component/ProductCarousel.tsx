@@ -1050,6 +1050,8 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               <img
                 src={product.normalizedImage}
                 alt={product.name}
+                loading="lazy"
+                decoding="async"
                 style={{
                   width: "100%",
                   height: "100%",
@@ -1204,6 +1206,8 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               <img
                 src={product.normalizedImage}
                 alt={product.name}
+                loading="lazy"
+                decoding="async"
                 style={{
                   width: "100%",
                   height: "100%",
@@ -1387,6 +1391,8 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               <img
                 src={product.normalizedImage}
                 alt={product.name}
+                loading="lazy"
+                decoding="async"
                 style={{
                   width: "100%",
                   height: "100%",
@@ -1538,6 +1544,8 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               <img
                 src={product.normalizedImage}
                 alt={product.name}
+                loading="lazy"
+                decoding="async"
                 style={{
                   width: "100%",
                   height: "100%",
@@ -1759,6 +1767,8 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
             <img
               src={product.normalizedImage}
               alt={product.name}
+              loading="lazy"
+              decoding="async"
               style={{
                 width: "100%",
                 height: "100%",

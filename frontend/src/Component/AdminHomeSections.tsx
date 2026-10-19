@@ -399,7 +399,7 @@ export const AdminHomeSections: React.FC = () => {
         // 1. Fetch Products
         try {
           const prodRes = await fetch(
-            `${API_BASE_URL}/sites/${siteId}/products/public?page=1&page_size=1000`
+            `${API_BASE_URL}/sites/${siteId}/products/public?page=1&page_size=100`
           );
           if (prodRes.ok) {
             const prodData = await prodRes.json();

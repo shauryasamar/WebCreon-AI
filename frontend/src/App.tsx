@@ -17,17 +17,14 @@ import { API_BASE_URL } from "./config/api";
 import BuilderShell from "./Component/BuilderShell";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
-import BuilderDrawerPanel, { SettingsNavKey } from "./Component/BuilderDrawerPanel";
-import AdminProfileSettings from "./Component/AdminProfileSettings";
-import AdminUsersAndRoles from "./Component/AdminUsersAndRoles";
-import AdminAuditLogs from "./Component/AdminAuditLogs";
-import {
-  AdminGeneralSettings,
-  AdminDomainSettings,
-  AdminBillingSettings,
-  AdminIntegrationsSettings,
-} from "./Component/AdminSettingsViews";
-import { AdminHelpSupport } from "./Component/AdminHelpSupport";
+import type { SettingsNavKey } from "./Component/BuilderDrawerPanel";
+const BuilderDrawerPanel = React.lazy(() => import("./Component/BuilderDrawerPanel"));
+const AdminProfileSettings = React.lazy(() => import("./Component/AdminProfileSettings"));
+const AdminUsersAndRoles = React.lazy(() => import("./Component/AdminUsersAndRoles"));
+const AdminAuditLogs = React.lazy(() => import("./Component/AdminAuditLogs"));
+const AdminDomainSettings = React.lazy(() => import("./Component/AdminSettingsViews").then((m) => ({ default: m.AdminDomainSettings })));
+const AdminBillingSettings = React.lazy(() => import("./Component/AdminSettingsViews").then((m) => ({ default: m.AdminBillingSettings })));
+const AdminHelpSupport = React.lazy(() => import("./Component/AdminHelpSupport").then((m) => ({ default: m.AdminHelpSupport })));
 import { AiWebpageGeneratingAnimation } from "./Component/AiWebpageGeneratingAnimation";
 import { AiAvatar } from "./Component/AiAvatar";
 import { UserAvatar } from "./Component/UserAvatar";
@@ -871,27 +868,29 @@ function AdminSitesPage() {
   );
 
   const drawerNode = activeDrawer ? (
-    <BuilderDrawerPanel
-      activeDrawer={activeDrawer}
-      onClose={() => {
-        setActiveDrawer(null);
-        try {
-          sessionStorage.removeItem("wc_active_builder_drawer");
-        } catch (_) {}
-      }}
-      savedSites={savedSites}
-      onSelectSite={(targetSiteId) => {
-        try {
-          sessionStorage.setItem("wc_active_builder_drawer", "saved-sites");
-        } catch (_) {}
-        openSite(targetSiteId);
-      }}
-      onDeleteSite={handleDeleteSite}
-      activeSettingsNavKey={activeSettingsNavKey}
-      onSelectSettingsNav={(key) => {
-        setActiveSettingsNavKey(key);
-      }}
-    />
+    <Suspense fallback={null}>
+      <BuilderDrawerPanel
+        activeDrawer={activeDrawer}
+        onClose={() => {
+          setActiveDrawer(null);
+          try {
+            sessionStorage.removeItem("wc_active_builder_drawer");
+          } catch (_) {}
+        }}
+        savedSites={savedSites}
+        onSelectSite={(targetSiteId) => {
+          try {
+            sessionStorage.setItem("wc_active_builder_drawer", "saved-sites");
+          } catch (_) {}
+          openSite(targetSiteId);
+        }}
+        onDeleteSite={handleDeleteSite}
+        activeSettingsNavKey={activeSettingsNavKey}
+        onSelectSettingsNav={(key) => {
+          setActiveSettingsNavKey(key);
+        }}
+      />
+    </Suspense>
   ) : null;
 
   return (
@@ -902,30 +901,40 @@ function AdminSitesPage() {
       isResizableDrawer={activeDrawer === "chat"}
       plainCenter={true}
     >
-      {activeSettingsNavKey === "profile" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
-          <AdminProfileSettings />
-        </div>
-      ) : activeSettingsNavKey === "users-roles" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
-          <AdminUsersAndRoles />
-        </div>
-      ) : activeSettingsNavKey === "domain" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
-          <AdminDomainSettings />
-        </div>
-      ) : activeSettingsNavKey === "billing" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
-          <AdminBillingSettings />
-        </div>
-      ) : activeSettingsNavKey === "audit-logs" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
-          <AdminAuditLogs />
-        </div>
-      ) : activeSettingsNavKey === "help-support" ? (
-        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
-          <AdminHelpSupport />
-        </div>
+      {activeSettingsNavKey ? (
+        <Suspense
+          fallback={
+            <div style={{ height: "100%", display: "grid", placeItems: "center", color: "#64748b", fontSize: "13px" }}>
+              Loading settings...
+            </div>
+          }
+        >
+          {activeSettingsNavKey === "profile" ? (
+            <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+              <AdminProfileSettings />
+            </div>
+          ) : activeSettingsNavKey === "users-roles" ? (
+            <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+              <AdminUsersAndRoles />
+            </div>
+          ) : activeSettingsNavKey === "domain" ? (
+            <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+              <AdminDomainSettings />
+            </div>
+          ) : activeSettingsNavKey === "billing" ? (
+            <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+              <AdminBillingSettings />
+            </div>
+          ) : activeSettingsNavKey === "audit-logs" ? (
+            <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+              <AdminAuditLogs />
+            </div>
+          ) : activeSettingsNavKey === "help-support" ? (
+            <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+              <AdminHelpSupport />
+            </div>
+          ) : null}
+        </Suspense>
       ) : !isOwner ? (
         <div
           style={{

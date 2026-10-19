@@ -1688,7 +1688,7 @@ def list_products_public(
     clean_dym = did_you_mean_term if (did_you_mean_term and search and did_you_mean_term.strip().lower() != search.strip().lower()) else None
 
     res = {
-        "items": to_product_responses_batch(products, session),
+        "items": to_product_responses_batch(products, session, include_reviews=False, include_siblings=False),
         "total": total_count,
         "page": effective_page,
         "page_size": effective_page_size,

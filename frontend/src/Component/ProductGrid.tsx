@@ -1087,6 +1087,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                       <img
                         src={product.normalizedImage}
                         alt={product.name}
+                        loading="lazy"
+                        decoding="async"
                         style={{
                           width: "100%",
                           height: "100%",
@@ -1234,6 +1236,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                       <img
                         src={product.normalizedImage}
                         alt={product.name}
+                        loading="lazy"
+                        decoding="async"
                         style={{
                           width: "100%",
                           height: "100%",
@@ -1410,6 +1414,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                       <img
                         src={product.normalizedImage}
                         alt={product.name}
+                        loading="lazy"
+                        decoding="async"
                         style={{
                           width: "100%",
                           height: "100%",
@@ -1551,6 +1557,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                       <img
                         src={product.normalizedImage}
                         alt={product.name}
+                        loading="lazy"
+                        decoding="async"
                         style={{
                           width: "100%",
                           height: "100%",
@@ -1765,6 +1773,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                     <img
                       src={product.normalizedImage}
                       alt={product.name}
+                      loading="lazy"
+                      decoding="async"
                       style={{
                         width: "100%",
                         height: "100%",

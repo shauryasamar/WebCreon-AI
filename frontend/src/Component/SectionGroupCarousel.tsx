@@ -583,6 +583,8 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                       <img
                         src={optimizedImg}
                         alt={tile.title}
+                        loading="lazy"
+                        decoding="async"
                         style={{
                           width: "100%",
                           height: "100%",
@@ -711,6 +713,8 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                 <img
                   src={optimizedImg}
                   alt={tile.title}
+                  loading="lazy"
+                  decoding="async"
                   style={{
                     position: "absolute",
                     inset: 0,

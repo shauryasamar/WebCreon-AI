@@ -9,6 +9,7 @@ import { API_BASE_URL } from "./config/api";
 import { ThemeProvider, resolveThemeTokens } from "./context/ThemeContext";
 import { normalizeStorefrontProduct } from "./utils/productNormalizer";
 import { getThumbnailUrl } from "./utils/imageOptimizer";
+import { ensureStoreFontLoaded } from "./utils/fontLoader";
 import { ValidatedCoupon } from "./Component/PromoCodeInput";
 import FestiveBackgroundOverlay from "./Component/FestiveBackgroundOverlay";
 import {
@@ -365,6 +366,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const [isServerLoading, setIsServerLoading] = useState<boolean>(false);
   const [isCompactCheckout, setIsCompactCheckout] = useState(false);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const targetFont = theme?.fontFamily || (theme as any)?.heading_font || (theme as any)?.font;
+    if (targetFont) {
+      ensureStoreFontLoaded(targetFont);
+    }
+  }, [theme]);
 
   useEffect(() => {
     setCurrentPage(1);
