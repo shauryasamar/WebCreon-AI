@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useState } from "react";
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useCustomerAuth } from "../context/CustomerAuthContext";
 import { isColorDarkHex } from "../context/ThemeContext";
@@ -53,6 +53,181 @@ const SAMPLE_PREVIEW_USER = {
   avatarUrl: "",
   hasPassword: true,
   authProvider: "email",
+};
+
+const CustomerGenderSelect: React.FC<{
+  value: string;
+  onChange: (val: string) => void;
+  inputRadius: string | number;
+  inputBorder: string;
+  inputBg: string;
+  inputTextColor: string;
+  accentColor: string;
+  isDarkCard: boolean;
+}> = ({ value, onChange, inputRadius, inputBorder, inputBg, inputTextColor, accentColor, isDarkCard }) => {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const options = [
+    { value: "", label: "Select Gender" },
+    { value: "Male", label: "Male" },
+    { value: "Female", label: "Female" },
+    { value: "Other", label: "Other" },
+  ];
+
+  const currentLabel = options.find((o) => o.value === value)?.label || "Select Gender";
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", width: "100%", userSelect: "none" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        style={{
+          width: "100%",
+          height: "44px",
+          boxSizing: "border-box",
+          padding: "0 14px",
+          paddingRight: "36px",
+          borderRadius: inputRadius,
+          border: open ? `1px solid ${accentColor}` : inputBorder,
+          background: inputBg,
+          color: value ? inputTextColor : (isDarkCard ? "rgba(255, 255, 255, 0.45)" : "rgba(15, 23, 42, 0.45)"),
+          fontSize: "14px",
+          fontWeight: 500,
+          outline: "none",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          textAlign: "left",
+          position: "relative",
+          boxShadow: open ? `0 0 0 3px ${accentColor}25` : "none",
+          transition: "all 0.15s ease",
+        }}
+      >
+        <span>{currentLabel}</span>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{
+            position: "absolute",
+            right: "12px",
+            top: "50%",
+            transform: `translateY(-50%) rotate(${open ? "180deg" : "0deg"})`,
+            width: "14px",
+            height: "14px",
+            opacity: 0.7,
+            transition: "transform 0.18s ease",
+            pointerEvents: "none",
+          }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 5px)",
+            left: 0,
+            width: "100%",
+            background: isDarkCard ? "rgba(30, 41, 59, 0.98)" : "rgba(255, 255, 255, 0.98)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            borderRadius: inputRadius,
+            border: isDarkCard ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid rgba(15, 23, 42, 0.10)",
+            boxShadow: isDarkCard
+              ? "0 18px 40px -4px rgba(0, 0, 0, 0.75)"
+              : "0 18px 40px -4px rgba(15, 23, 42, 0.14)",
+            padding: "5px",
+            zIndex: 100,
+            boxSizing: "border-box",
+            animation: "fadeIn 0.12s ease",
+          }}
+        >
+          {options.map((opt) => {
+            const isSelected = opt.value === value;
+            return (
+              <div
+                key={opt.value}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "9px 12px",
+                  borderRadius: "7px",
+                  fontSize: "13.5px",
+                  fontWeight: isSelected ? 700 : 500,
+                  color: isSelected
+                    ? accentColor
+                    : (opt.value === ""
+                        ? (isDarkCard ? "rgba(255, 255, 255, 0.5)" : "rgba(15, 23, 42, 0.5)")
+                        : inputTextColor),
+                  background: isSelected ? `${accentColor}16` : "transparent",
+                  cursor: "pointer",
+                  transition: "background 0.12s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = isDarkCard
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(15, 23, 42, 0.05)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = "transparent";
+                  }
+                }}
+              >
+                <span>{opt.label}</span>
+                {isSelected && opt.value !== "" && (
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke={accentColor}
+                    strokeWidth="2.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ width: "13px", height: "13px" }}
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default function CustomerProfilePage({
@@ -927,30 +1102,16 @@ export default function CustomerProfilePage({
                   >
                     Gender
                   </label>
-                  <select
+                  <CustomerGenderSelect
                     value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                    className="wc-profile-input"
-                    style={{
-                      width: "100%",
-                      height: "44px",
-                      boxSizing: "border-box",
-                      padding: "0 14px",
-                      borderRadius: inputRadius,
-                      border: inputBorder,
-                      background: inputBg,
-                      color: inputTextColor,
-                      colorScheme: isInputDark ? "dark" : "light",
-                      fontSize: "14px",
-                      outline: "none",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <option value="" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Select Gender</option>
-                    <option value="Male" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Male</option>
-                    <option value="Female" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Female</option>
-                    <option value="Other" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Other</option>
-                  </select>
+                    onChange={(val) => setGender(val)}
+                    inputRadius={inputRadius}
+                    inputBorder={inputBorder}
+                    inputBg={inputBg}
+                    inputTextColor={inputTextColor}
+                    accentColor={accentColor}
+                    isDarkCard={isDarkCard}
+                  />
                 </div>
               )}
 

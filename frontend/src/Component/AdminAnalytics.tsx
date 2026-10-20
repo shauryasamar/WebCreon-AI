@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAdminTheme } from "../context/ThemeContext";
+import { AdminSelect } from "./AdminSelect";
 import {
   AnalyticsData,
   DATE_RANGE_OPTIONS,
@@ -518,90 +519,27 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
           </button>
 
           {/* Date Selector Dropdown */}
-          <div style={{ position: "relative" }} ref={dateDropdownRef}>
-            <button
-              type="button"
-              onClick={() => setDateDropdownOpen((prev) => !prev)}
+          <div style={{ minWidth: "165px" }}>
+            <AdminSelect
+              value={dateRange}
+              onChange={(e) => handleSelectDateRange(e.target.value as DateRangeKey)}
               style={{
                 height: "36px",
-                padding: "0 12px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "7px",
-                borderRadius: "7px",
-                border: `1px solid ${tokens.border}`,
-                background: tokens.surfaceBg,
+                minWidth: "165px",
                 fontSize: "13px",
-                fontWeight: 600,
-                color: tokens.textSecondary,
-                cursor: "pointer",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-                whiteSpace: "nowrap",
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = tokens.elevatedSurfaceBg;
-                e.currentTarget.style.borderColor = "#94a3b8";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = tokens.surfaceBg;
-                e.currentTarget.style.borderColor = tokens.border;
               }}
             >
-              <IconCalendar />
-              <span>{selectedDateLabel}</span>
-              <IconChevronDown />
-            </button>
-
-            {dateDropdownOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 4px)",
-                  right: 0,
-                  width: "175px",
-                  background: tokens.surfaceBg,
-                  borderRadius: "8px",
-                  border: `1px solid ${tokens.border}`,
-                  boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
-                  zIndex: 100,
-                  overflow: "hidden",
-                  padding: "4px",
-                }}
-              >
-                {DATE_RANGE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => handleSelectDateRange(opt.key)}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "7px 11px",
-                      borderRadius: "5px",
-                      border: "none",
-                      background: dateRange === opt.key ? "#eff6ff" : "transparent",
-                      color: dateRange === opt.key ? "#2563eb" : tokens.textPrimary,
-                      fontSize: "12.5px",
-                      fontWeight: dateRange === opt.key ? 600 : 500,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (dateRange !== opt.key) e.currentTarget.style.background = tokens.elevatedSurfaceBg;
-                    }}
-                    onMouseLeave={(e) => {
-                      if (dateRange !== opt.key) e.currentTarget.style.background = "transparent";
-                    }}
-                  >
-                    <span>{opt.label}</span>
-                    {dateRange === opt.key && <span style={{ color: "#2563eb", fontSize: "11px" }}>✓</span>}
-                  </button>
-                ))}
-              </div>
-            )}
+              {DATE_RANGE_OPTIONS.map((opt) => (
+                <option key={opt.key} value={opt.key}>
+                  {opt.label}
+                </option>
+              ))}
+              {dateRange === "custom" && customStartDate && (
+                <option value="custom">
+                  {customStartDate} to {customEndDate}
+                </option>
+              )}
+            </AdminSelect>
           </div>
 
           {/* Export Dropdown */}
@@ -615,24 +553,32 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "7px",
-                borderRadius: "7px",
-                border: `1px solid ${tokens.border}`,
-                background: tokens.surfaceBg,
+                borderRadius: "9px",
+                border: exportDropdownOpen
+                  ? `1px solid ${tokens.accent || "#3b82f6"}`
+                  : isDark
+                  ? "1px solid rgba(255, 255, 255, 0.12)"
+                  : "1px solid var(--admin-border, rgba(15, 23, 42, 0.14))",
+                background: isDark ? tokens.elevatedSurfaceBg || "#1e293b" : "#ffffff",
                 fontSize: "13px",
                 fontWeight: 600,
-                color: tokens.textSecondary,
+                color: tokens.textPrimary,
                 cursor: "pointer",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                boxShadow: exportDropdownOpen
+                  ? `0 0 0 3px ${isDark ? "rgba(59, 130, 246, 0.25)" : "rgba(59, 130, 246, 0.15)"}`
+                  : "0 1px 2px rgba(0,0,0,0.03)",
                 whiteSpace: "nowrap",
                 transition: "all 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = tokens.elevatedSurfaceBg;
-                e.currentTarget.style.borderColor = "#94a3b8";
+                if (!exportDropdownOpen) {
+                  e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.22)" : "rgba(15,23,42,0.25)";
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = tokens.surfaceBg;
-                e.currentTarget.style.borderColor = tokens.border;
+                if (!exportDropdownOpen) {
+                  e.currentTarget.style.borderColor = isDark ? "rgba(255, 255, 255, 0.12)" : "var(--admin-border, rgba(15, 23, 42, 0.14))";
+                }
               }}
             >
               <IconDownload />
@@ -644,16 +590,20 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
               <div
                 style={{
                   position: "absolute",
-                  top: "calc(100% + 4px)",
+                  top: "calc(100% + 5px)",
                   right: 0,
                   width: "195px",
-                  background: tokens.surfaceBg,
-                  borderRadius: "8px",
-                  border: `1px solid ${tokens.border}`,
-                  boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
+                  background: isDark ? "rgba(24, 24, 27, 0.98)" : "rgba(255, 255, 255, 0.98)",
+                  backdropFilter: "blur(12px)",
+                  WebkitBackdropFilter: "blur(12px)",
+                  borderRadius: "12px",
+                  border: isDark ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid rgba(15, 23, 42, 0.10)",
+                  boxShadow: isDark
+                    ? "0 18px 45px -4px rgba(0, 0, 0, 0.85), 0 4px 14px -2px rgba(0, 0, 0, 0.5)"
+                    : "0 18px 45px -4px rgba(15, 23, 42, 0.16), 0 4px 14px -2px rgba(15, 23, 42, 0.08)",
                   zIndex: 100,
                   overflow: "hidden",
-                  padding: "4px",
+                  padding: "5px",
                 }}
               >
                 <button
@@ -662,18 +612,20 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   style={{
                     width: "100%",
                     textAlign: "left",
-                    padding: "8px 10px",
-                    borderRadius: "5px",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
                     border: "none",
                     background: "transparent",
                     color: tokens.textPrimary,
-                    fontSize: "12.5px",
+                    fontSize: "13px",
+                    fontWeight: 500,
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
+                    transition: "all 0.12s ease",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = tokens.elevatedSurfaceBg)}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.07)" : "rgba(15, 23, 42, 0.05)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <IconFileText />
@@ -686,18 +638,20 @@ export const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ siteId: propSite
                   style={{
                     width: "100%",
                     textAlign: "left",
-                    padding: "8px 10px",
-                    borderRadius: "5px",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
                     border: "none",
                     background: "transparent",
                     color: tokens.textPrimary,
-                    fontSize: "12.5px",
+                    fontSize: "13px",
+                    fontWeight: 500,
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
+                    transition: "all 0.12s ease",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = tokens.elevatedSurfaceBg)}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.07)" : "rgba(15, 23, 42, 0.05)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <IconFilePdf />
