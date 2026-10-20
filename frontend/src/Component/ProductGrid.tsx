@@ -1,9 +1,52 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
-import { useCart, Product } from "../CartContext";
+import { useCart, Product, isProductPreorderActive } from "../CartContext";
 import FilterSidebar from "./FilterSidebar";
 import { Pagination } from "./Pagination";
-import { resolveThemeTokens } from "../context/ThemeContext";
+import { resolveThemeTokens, getAccessibleBrandColor, getSafePriceColor } from "../context/ThemeContext";
+import { useDeviceMode } from "../context/DeviceModeContext";
+import { optimizeImageUrl } from "../utils/imageOptimizer";
+
+function resolveFontFamily(fontKey?: string): string | undefined {
+  if (!fontKey || fontKey === "default" || fontKey === "inherit") return undefined;
+  switch (fontKey) {
+    case "sans_modern":
+    case "modern_sans":
+    case "inter":
+      return "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    case "roboto_sans":
+    case "roboto":
+      return "'Roboto', sans-serif";
+    case "outfit_tech":
+    case "outfit":
+      return "'Outfit', sans-serif";
+    case "plus_jakarta":
+      return "'Plus Jakarta Sans', sans-serif";
+    case "space_grotesk":
+      return "'Space Grotesk', sans-serif";
+    case "playfair_serif":
+    case "playfair":
+      return "'Playfair Display', Georgia, serif";
+    case "cinzel_display":
+    case "cinzel":
+      return "'Cinzel', serif";
+    case "cormorant_serif":
+    case "cormorant":
+      return "'Cormorant Garamond', Georgia, serif";
+    case "montserrat_bold":
+    case "montserrat":
+      return "'Montserrat', sans-serif";
+    case "poppins_rounded":
+    case "poppins":
+      return "'Poppins', sans-serif";
+    case "serif":
+      return "Georgia, 'Times New Roman', serif";
+    case "mono":
+      return "monospace, 'Courier New'";
+    default:
+      return fontKey.includes(" ") || fontKey.includes(",") ? fontKey : `'${fontKey}', sans-serif`;
+  }
+}
 
 type ProductGridProps = {
   siteId: string;
@@ -21,11 +64,15 @@ type ProductGridProps = {
   totalPages?: number;
   onPageChange?: (page: number) => void;
   pageSize?: number;
+  onPageSizeChange?: (size: number) => void;
   totalProducts?: number;
 
   // Layout & Spacing
   grid_gap?: string | number;
+  gap?: string | number;
   max_width?: string;
+  padding_y?: string | number;
+  padding_x?: string | number;
 
   // Card Container & Background
   outer_bg_color?: string;
@@ -38,19 +85,37 @@ type ProductGridProps = {
   image_aspect_ratio?: string;
   image_fit?: "cover" | "contain";
   image_bg?: string;
+  image_radius?: string | number;
+  image_corner_radius?: string | number;
 
   // Typography & Colors
   title_color?: string;
+  product_name_color?: string;
+  product_title_color?: string;
+  product_name_font_family?: string;
+  product_title_font_family?: string;
+  product_name_font_size?: string | number;
+  product_title_font_size?: string | number;
+  product_name_font_weight?: string | number;
+  product_title_font_weight?: string | number;
+  product_name_font_style?: "normal" | "italic";
+  product_title_font_style?: "normal" | "italic";
   brand_color?: string;
   price_color?: string;
   original_price_color?: string;
   rating_star_color?: string;
+  accent_color?: string;
 
   // Visibility Toggles
   show_discount_badge?: boolean;
   show_stock_badge?: boolean;
   show_ratings?: boolean;
   show_original_price?: boolean;
+  show_filter_button?: boolean;
+  showFilterButton?: boolean;
+  hideFilterButton?: boolean;
+  hide_filter_sidebar?: boolean;
+  hideFilterSidebar?: boolean;
   card_style?: string;
   cardStyle?: string;
   show_brand_name?: boolean;
@@ -77,6 +142,21 @@ type NormalizedProduct = Product & {
   normalizedDiscountPercent: number;
 };
 
+function formatAspectRatio(ratio?: string): string {
+  if (!ratio) return "3 / 4";
+  const trimmed = String(ratio).trim();
+  if (trimmed === "auto" || trimmed === "natural") return "auto";
+  if (trimmed.includes(":")) {
+    const [w, h] = trimmed.split(":").map((s) => s.trim());
+    if (w && h) return `${w} / ${h}`;
+  }
+  if (trimmed.includes("/") && !trimmed.includes(" / ")) {
+    const [w, h] = trimmed.split("/").map((s) => s.trim());
+    if (w && h) return `${w} / ${h}`;
+  }
+  return trimmed;
+}
+
 const ProductGrid: React.FC<ProductGridProps> = ({
   siteId,
   products: productsProp,
@@ -91,9 +171,13 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   totalPages,
   onPageChange,
   pageSize,
+  onPageSizeChange,
   totalProducts,
   grid_gap,
+  gap,
   max_width,
+  padding_y,
+  padding_x,
   outer_bg_color,
   card_bg_color,
   card_radius,
@@ -104,22 +188,63 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   image_aspect_ratio,
   image_fit,
   image_bg,
+  image_radius,
+  image_corner_radius,
   title_color,
+  product_name_color,
+  product_title_color,
+  product_name_font_family,
+  product_title_font_family,
+  product_name_font_size,
+  product_title_font_size,
+  product_name_font_weight,
+  product_title_font_weight,
+  product_name_font_style,
+  product_title_font_style,
   brand_color,
   price_color,
   original_price_color,
   rating_star_color,
+  accent_color,
   show_discount_badge = true,
   show_stock_badge = true,
   show_ratings = true,
   show_original_price = true,
+  show_filter_button,
+  showFilterButton,
+  hideFilterButton,
+  hide_filter_sidebar,
+  hideFilterSidebar,
   show_brand_name = true,
   theme,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { slug: siteSlug } = useParams();
-  const { products: cartProducts } = useCart();
+  const { products: cartProducts, isProductsLoading = false } = useCart();
+
+  const isDedicatedFilteredView = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return Boolean(
+      params.get("section_title") ||
+      params.get("section") ||
+      params.get("section_id") ||
+      params.get("collection") ||
+      params.get("category") ||
+      params.get("brand") ||
+      params.get("product_type") ||
+      params.get("product_ids")
+    );
+  }, [location.search]);
+
+  const effectiveShowFilterButton =
+    showFilterButton !== undefined
+      ? showFilterButton
+      : show_filter_button !== undefined
+        ? show_filter_button
+        : hideFilterButton !== undefined
+          ? !hideFilterButton
+          : !isDedicatedFilteredView;
 
   const products = productsProp ?? cartProducts;
   const isStoreRoute = location.pathname.startsWith("/store/");
@@ -130,23 +255,89 @@ const ProductGrid: React.FC<ProductGridProps> = ({
       : "/store"
     : `/builder/${siteId}`;
 
-function isColorDarkHex(colorHex?: string): boolean {
-  if (!colorHex || typeof colorHex !== "string") return false;
-  const hex = colorHex.replace("#", "").trim();
-  if (hex.length === 3) {
-    const r = parseInt(hex[0] + hex[0], 16);
-    const g = parseInt(hex[1] + hex[1], 16);
-    const b = parseInt(hex[2] + hex[2], 16);
-    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+  const [screenSize, setScreenSize] = useState<{
+    isMobile: boolean;
+    isTablet: boolean;
+    isLargePhone: boolean;
+  }>(() => {
+    if (typeof window === "undefined") return { isMobile: false, isTablet: false, isLargePhone: false };
+    const w = window.innerWidth;
+    const isTouch = typeof navigator !== "undefined" && (navigator.maxTouchPoints > 0 || "ontouchstart" in window);
+    const isIPadOrTablet =
+      typeof navigator !== "undefined" &&
+      (/iPad|Android(?!.*Mobile)|Tablet|PlayBook|Silk/i.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
+        (/Macintosh/i.test(navigator.userAgent) && isTouch));
+    const isTab = (w > 640 && w <= 1040) || (isIPadOrTablet && w <= 1400) || (isTouch && w <= 1400 && w > 640);
+    return {
+      isMobile: w <= 640,
+      isLargePhone: w > 480 && w <= 640,
+      isTablet: isTab,
+    };
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let timeoutId: any = null;
+    const checkBreakpoints = () => {
+      const w = window.innerWidth;
+      const isTouch = typeof navigator !== "undefined" && (navigator.maxTouchPoints > 0 || "ontouchstart" in window);
+      const isIPadOrTablet =
+        typeof navigator !== "undefined" &&
+        (/iPad|Android(?!.*Mobile)|Tablet|PlayBook|Silk/i.test(navigator.userAgent) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
+          (/Macintosh/i.test(navigator.userAgent) && isTouch));
+      const nextMobile = w <= 640;
+      const nextLargePhone = w > 480 && w <= 640;
+      const nextTablet = (w > 640 && w <= 1040) || (isIPadOrTablet && w <= 1400) || (isTouch && w <= 1400 && w > 640);
+      setScreenSize((prev) => {
+        if (
+          prev.isMobile === nextMobile &&
+          prev.isLargePhone === nextLargePhone &&
+          prev.isTablet === nextTablet
+        ) {
+          return prev;
+        }
+        return { isMobile: nextMobile, isLargePhone: nextLargePhone, isTablet: nextTablet };
+      });
+    };
+
+    const debouncedResize = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(checkBreakpoints, 100);
+    };
+
+    window.addEventListener("resize", debouncedResize, { passive: true });
+    window.addEventListener("orientationchange", debouncedResize, { passive: true });
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener("resize", debouncedResize);
+      window.removeEventListener("orientationchange", debouncedResize);
+    };
+  }, []);
+
+  const deviceMode = useDeviceMode();
+  const isMobile = deviceMode === "mobile" || screenSize.isMobile;
+  const isTablet = deviceMode === "mobile" ? false : screenSize.isTablet;
+  const isLargePhone = deviceMode === "mobile" ? false : screenSize.isLargePhone;
+
+  function isColorDarkHex(colorHex?: string): boolean {
+    if (!colorHex || typeof colorHex !== "string") return false;
+    const hex = colorHex.replace("#", "").trim();
+    if (hex.length === 3) {
+      const r = parseInt(hex[0] + hex[0], 16);
+      const g = parseInt(hex[1] + hex[1], 16);
+      const b = parseInt(hex[2] + hex[2], 16);
+      return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+    }
+    if (hex.length >= 6) {
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
+    }
+    return false;
   }
-  if (hex.length >= 6) {
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
-  }
-  return false;
-}
 
   const {
     isDark,
@@ -160,31 +351,56 @@ function isColorDarkHex(colorHex?: string): boolean {
   } = resolveThemeTokens(theme);
   const isLight = !isDark;
 
-  const cardStyleKey = card_style || cardStyle || theme?.card_style || "fashion";
+  // Active Card Style Key: inherits from store theme when set to "default", "inherit", "theme", or omitted
+  const rawCardStyle = String(card_style || cardStyle || "").toLowerCase().trim();
+  const cardStyleKey =
+    rawCardStyle &&
+      rawCardStyle !== "default" &&
+      rawCardStyle !== "inherit" &&
+      rawCardStyle !== "theme" &&
+      rawCardStyle !== "auto"
+      ? rawCardStyle
+      : (theme?.card_style || "fashion").toLowerCase().trim();
+
   const cardBg = card_bg_color || defaultCardBg;
   const isCardDark = isColorDarkHex(cardBg);
 
-  const preferredTextColor = title_color || (theme as any)?.card_text_color || defaultTextColor;
-  const isPreferredDark = isColorDarkHex(preferredTextColor);
-  const pageText = preferredTextColor && (isPreferredDark !== isCardDark)
-    ? preferredTextColor
-    : (isCardDark ? "#ffffff" : "#0f172a");
+  const resolvedAccentColor = accent_color || (theme as any)?.accent_color || accentColor || "#3b82f6";
 
-  const mutedText =
-    original_price_color ||
-    (defaultMutedText && isColorDarkHex(defaultMutedText) !== isCardDark
-      ? defaultMutedText
-      : isCardDark
-      ? "rgba(248, 250, 252, 0.72)"
-      : "rgba(15, 23, 42, 0.65)");
+  const rawPreferredTextColor =
+    product_name_color ||
+    product_title_color ||
+    title_color ||
+    (theme as any)?.product_name_color ||
+    (theme as any)?.card_text_color;
 
-  const faintText =
+  // Zero-Camouflage Contrast Guardrail: Guarantee text is always readable
+  let pageText = rawPreferredTextColor || defaultTextColor || (isCardDark ? "#ffffff" : "#0f172a");
+  if (isCardDark && isColorDarkHex(pageText)) {
+    pageText = "#ffffff";
+  } else if (!isCardDark && !isColorDarkHex(pageText)) {
+    pageText = "#0f172a";
+  }
+
+  let mutedText = original_price_color || (theme as any)?.original_price_color || (theme as any)?.muted_text_color;
+  if (!mutedText || (isCardDark && isColorDarkHex(mutedText)) || (!isCardDark && !isColorDarkHex(mutedText))) {
+    mutedText = isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)";
+  }
+
+  const resolvedBrandCandidate =
     brand_color ||
-    (defaultFaintText && isColorDarkHex(defaultFaintText) !== isCardDark
-      ? defaultFaintText
-      : isCardDark
-      ? "rgba(248, 250, 252, 0.50)"
-      : "rgba(15, 23, 42, 0.45)");
+    (theme as any)?.brand_color ||
+    (theme as any)?.card_brand_color ||
+    (theme as any)?.brandNameColor ||
+    (theme as any)?.accent_color ||
+    resolvedAccentColor;
+
+  const activeBrandColor = getAccessibleBrandColor(resolvedBrandCandidate, cardBg, isCardDark);
+
+  let faintText = activeBrandColor || (theme as any)?.muted_text_color || (theme as any)?.muted_text || defaultMutedText;
+  if (!faintText || (isCardDark && isColorDarkHex(faintText)) || (!isCardDark && !isColorDarkHex(faintText))) {
+    faintText = isCardDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.60)";
+  }
   const starColor = rating_star_color || "#d97706";
 
   const subtleBorder = `1px solid ${resolvedBorderColor}`;
@@ -193,7 +409,23 @@ function isColorDarkHex(colorHex?: string): boolean {
     ? "0 10px 28px rgba(15,23,42,0.055)"
     : "0 12px 28px rgba(0,0,0,0.3)";
 
-  let computedRadius = card_radius !== undefined && card_radius !== "" ? `${card_radius}px` : "20px";
+  const parsedCardRadiusNum =
+    card_radius !== undefined && card_radius !== null && String(card_radius).trim() !== ""
+      ? typeof card_radius === "number"
+        ? card_radius
+        : parseInt(String(card_radius), 10)
+      : NaN;
+
+  let computedRadius = !isNaN(parsedCardRadiusNum) && parsedCardRadiusNum >= 0
+    ? `${parsedCardRadiusNum}px`
+    : cardStyleKey === "electronics"
+      ? "18px"
+      : cardStyleKey === "beauty"
+        ? "22px"
+        : cardStyleKey === "grocery" || cardStyleKey === "books"
+          ? "20px"
+          : "20px";
+
   let computedCardBg = cardBg;
   let computedBorder = card_border_color ? `1px solid ${card_border_color}` : subtleBorder;
 
@@ -203,26 +435,51 @@ function isColorDarkHex(colorHex?: string): boolean {
   else if (card_shadow === "soft") computedShadow = softShadow;
   else if (card_shadow === "elevated") computedShadow = isLight ? "0 20px 40px rgba(0,0,0,0.12)" : "0 20px 40px rgba(0,0,0,0.36)";
 
+  const isCardBgRgba = typeof cardBg === "string" && cardBg.startsWith("rgba");
+  const isExplicitCardBg = Boolean(card_bg_color || (theme as any)?.card_bg);
   const isGlass =
-    (theme as any)?.surface_materiality === "full_glass" ||
-    (theme as any)?.surface_materiality === "glassmorphism" ||
-    (theme as any)?.visual_style === "glassmorphic" ||
-    (theme as any)?.name?.toLowerCase()?.includes("glass") ||
-    (typeof cardBg === "string" && cardBg.startsWith("rgba"));
+    isCardBgRgba ||
+    (!isExplicitCardBg && (
+      (theme as any)?.surface_materiality === "full_glass" ||
+      (theme as any)?.surface_materiality === "glassmorphism" ||
+      (theme as any)?.visual_style === "glassmorphic" ||
+      (theme as any)?.name?.toLowerCase()?.includes("glass")
+    ));
 
-  if (isGlass) {
-    computedCardBg = card_bg_color || (isLight ? "rgba(255, 255, 255, 0.70)" : "rgba(15, 23, 42, 0.70)");
+  if (isGlass && !isExplicitCardBg) {
+    computedCardBg = isLight ? "rgba(255, 255, 255, 0.70)" : "rgba(15, 23, 42, 0.70)";
     computedBorder = card_border_color ? `1px solid ${card_border_color}` : (isLight ? "1px solid rgba(255, 255, 255, 0.55)" : "1px solid rgba(255, 255, 255, 0.14)");
     computedShadow = isLight
       ? "0 8px 32px rgba(31, 38, 135, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.75)"
       : "0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.16)";
   }
 
-  if (card_radius === undefined || card_radius === "") {
-    if (cardStyleKey === "electronics") computedRadius = "18px";
-    else if (cardStyleKey === "beauty") computedRadius = "22px";
-    else if (cardStyleKey === "grocery" || cardStyleKey === "books") computedRadius = "16px";
-  }
+  const rawImgRadius = image_radius ?? image_corner_radius;
+  const parsedImgRadiusNum =
+    rawImgRadius !== undefined && rawImgRadius !== null && String(rawImgRadius).trim() !== ""
+      ? typeof rawImgRadius === "number"
+        ? rawImgRadius
+        : parseInt(String(rawImgRadius), 10)
+      : NaN;
+
+  const resolvedImageRadius = !isNaN(parsedImgRadiusNum) && parsedImgRadiusNum >= 0
+    ? `${parsedImgRadiusNum}px`
+    : isMobile
+      ? "10px"
+      : "14px";
+
+  const resolvedFontFamily = resolveFontFamily(product_name_font_family || product_title_font_family);
+  const parsedProductNameSizeNum =
+    product_name_font_size || product_title_font_size
+      ? parseInt(String(product_name_font_size || product_title_font_size), 10)
+      : NaN;
+  const resolvedProductNameSize =
+    !isNaN(parsedProductNameSizeNum) && parsedProductNameSizeNum > 0
+      ? `${parsedProductNameSizeNum}px`
+      : isMobile ? "13px" : "15px";
+
+  const resolvedProductNameWeight = (product_name_font_weight || product_title_font_weight || 700) as any;
+  const resolvedProductNameStyle = product_name_font_style || product_title_font_style || "normal";
 
   const normalizedProducts: NormalizedProduct[] = useMemo(() => {
     return (products ?? []).map((product) => {
@@ -232,49 +489,71 @@ function isColorDarkHex(colorHex?: string): boolean {
           ? firstVariant.price
           : product.price;
 
+      const rawComparePrice =
+        (firstVariant as any)?.comparePrice != null
+          ? Number((firstVariant as any).comparePrice)
+          : (firstVariant as any)?.compare_price != null
+          ? Number((firstVariant as any).compare_price)
+          : (firstVariant as any)?.original_price != null
+          ? Number((firstVariant as any).original_price)
+          : (firstVariant as any)?.originalPrice != null
+          ? Number((firstVariant as any).originalPrice)
+          : (product as any)?.compare_price != null
+          ? Number((product as any).compare_price)
+          : (product as any)?.comparePrice != null
+          ? Number((product as any).comparePrice)
+          : (product as any)?.original_price != null
+          ? Number((product as any).original_price)
+          : (product as any)?.originalPrice != null
+          ? Number((product as any).originalPrice)
+          : null;
+
       const normalizedOriginalPrice =
-        typeof (firstVariant as any)?.comparePrice === "number" &&
-        (firstVariant as any).comparePrice > normalizedDisplayPrice
-          ? (firstVariant as any).comparePrice
-          : typeof product.originalPrice === "number" && product.originalPrice > normalizedDisplayPrice
-          ? product.originalPrice
-          : typeof product.compare_price === "number" && product.compare_price > normalizedDisplayPrice
-          ? product.compare_price
+        rawComparePrice != null && !isNaN(rawComparePrice) && rawComparePrice > normalizedDisplayPrice
+          ? rawComparePrice
           : undefined;
 
-      const normalizedInStock =
-        product.variant_option?.optionValues?.length
-          ? product.variant_option.optionValues.some(
-              (variant) =>
-                variant.inStock !== false &&
-                (variant.stockQty == null || Number(variant.stockQty) > 0)
-            )
-          : typeof product.inStock === "boolean"
-          ? product.inStock
-          : true;
+      const variantList: any[] = product.variant_option?.optionValues || (product as any).variants || [];
+      const hasVariants = Array.isArray(variantList) && variantList.length > 0;
+      const anyVariantInStock = hasVariants && variantList.some((v: any) => {
+        const isVInStock = v.inStock !== false && v.in_stock !== false && (v as any).isInStock !== false;
+        if (!isVInStock) return false;
+        const hasQty = (v.stockQty != null && String(v.stockQty).trim() !== "") || v.inventory_quantity != null || v.stock != null;
+        if (hasQty) {
+          const qty = Number(v.stockQty ?? v.inventory_quantity ?? v.stock);
+          return !Number.isNaN(qty) && qty > 0;
+        }
+        return true;
+      });
 
-      const discountPercentVal = product.discountPercent ?? product.discount_percent;
+      const baseStock = typeof product.stock === "number"
+        ? product.stock
+        : typeof (product as any).stockQty === "number"
+        ? (product as any).stockQty
+        : typeof (product as any).inventory_quantity === "number"
+        ? (product as any).inventory_quantity
+        : null;
+
+      const baseInStock = typeof product.inStock === "boolean"
+        ? product.inStock
+        : typeof product.in_stock === "boolean"
+        ? product.in_stock
+        : typeof (product as any).is_in_stock === "boolean"
+        ? (product as any).is_in_stock
+        : (baseStock !== null ? baseStock > 0 : true);
+
+      const normalizedInStock = hasVariants
+        ? anyVariantInStock
+        : (baseStock !== null ? (baseStock > 0 && baseInStock) : baseInStock);
+
       const normalizedDiscountPercent =
-        typeof discountPercentVal === "number" && discountPercentVal > 0
-          ? discountPercentVal
-          : normalizedOriginalPrice && normalizedOriginalPrice > normalizedDisplayPrice
-          ? Math.round(
-              ((normalizedOriginalPrice - normalizedDisplayPrice) /
-                normalizedOriginalPrice) *
-                100
-            )
+        normalizedOriginalPrice && normalizedOriginalPrice > normalizedDisplayPrice
+          ? Math.round(((normalizedOriginalPrice - normalizedDisplayPrice) / normalizedOriginalPrice) * 100)
           : 0;
-
-      const normalizedImage =
-        product.image_url ||
-        product.imageUrl ||
-        product.image ||
-        (Array.isArray(product.images) && product.images[0]) ||
-        "";
 
       return {
         ...product,
-        normalizedImage,
+        normalizedImage: optimizeImageUrl(product.image || product.images?.[0] || ""),
         normalizedOriginalPrice,
         normalizedDisplayPrice,
         normalizedInStock,
@@ -289,363 +568,1274 @@ function isColorDarkHex(colorHex?: string): boolean {
     navigate(`${appBase}/products/${targetSlug}`);
   };
 
-  const resolvedMaxWidth = max_width === "full" ? "100%" : max_width ? `${max_width}px` : "1120px";
+  const resolvedMaxWidth =
+    max_width === "full" || !max_width
+      ? "100%"
+      : String(max_width).endsWith("px") || String(max_width).endsWith("%")
+        ? String(max_width)
+        : `${max_width}px`;
 
-  const parsedGap = Number(grid_gap);
-  const resolvedGridGap =
-    grid_gap !== undefined && grid_gap !== "" && !isNaN(parsedGap) && parsedGap >= 0
-      ? `${parsedGap}px`
-      : "16px";
+  const rawGapVal = gap !== undefined && gap !== "" ? gap : grid_gap;
+  const parsedGapNum =
+    rawGapVal !== undefined && rawGapVal !== null && String(rawGapVal).trim() !== ""
+      ? typeof rawGapVal === "number"
+        ? rawGapVal
+        : parseInt(String(rawGapVal), 10)
+      : NaN;
+
+  const resolvedGridGap = !isNaN(parsedGapNum) && parsedGapNum >= 0
+    ? `${parsedGapNum}px`
+    : isMobile
+      ? isLargePhone ? "10px" : "8px"
+      : "12px";
+
+  const parsedPaddingYNum =
+    padding_y !== undefined && padding_y !== null && String(padding_y).trim() !== ""
+      ? typeof padding_y === "number"
+        ? padding_y
+        : parseInt(String(padding_y), 10)
+      : NaN;
+  const resolvedPaddingY = !isNaN(parsedPaddingYNum) && parsedPaddingYNum >= 0
+    ? `${parsedPaddingYNum}px`
+    : isMobile ? "8px" : "16px";
+
+  const parsedPaddingXNum =
+    padding_x !== undefined && padding_x !== null && String(padding_x).trim() !== ""
+      ? typeof padding_x === "number"
+        ? padding_x
+        : parseInt(String(padding_x), 10)
+      : NaN;
+  const resolvedPaddingX = !isNaN(parsedPaddingXNum) && parsedPaddingXNum >= 0
+    ? `${parsedPaddingXNum}px`
+    : isMobile ? "8px" : "16px";
 
   const resolvedColumns =
     cardStyleKey === "grocery"
-      ? "repeat(auto-fill, minmax(310px, 1fr))"
-      : "repeat(auto-fill, minmax(240px, 1fr))";
+      ? isMobile
+        ? "repeat(1, 1fr)"
+        : isTablet
+          ? "repeat(auto-fill, minmax(290px, 1fr))"
+          : "repeat(auto-fill, minmax(320px, 1fr))"
+      : isMobile
+        ? "repeat(2, minmax(0, 1fr))"
+        : isTablet
+          ? "repeat(auto-fill, minmax(190px, 1fr))"
+          : "repeat(auto-fill, minmax(230px, 1fr))";
 
   const resolvedImageFit = image_fit || "cover";
-  const resolvedImageBg = image_bg || (isLight ? "#f8fafc" : "rgba(255,255,255,0.04)");
+  const resolvedImageBg = image_bg || (isCardDark ? "rgba(255,255,255,0.04)" : "#f8fafc");
 
   return (
     <section
       className="product-grid"
       style={{
+        position: "relative",
+        width: "100%",
         maxWidth: resolvedMaxWidth,
         margin: "0 auto",
-        padding: "24px 16px 44px",
+        boxSizing: "border-box",
+        padding: `${resolvedPaddingY} ${resolvedPaddingX} ${isMobile ? "16px" : "24px"}`,
         background: outer_bg_color || "transparent",
         borderRadius: outer_bg_color ? "16px" : undefined,
         transition: "all 0.2s ease",
       }}
     >
+      <style>{`
+        .product-grid .product-card {
+          transition: border-color 0.1s ease !important;
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .product-grid .product-card:hover {
+            border-color: ${resolvedAccentColor} !important;
+          }
+        }
+      `}</style>
       {/* Header & Filter Toolbar */}
-      <FilterSidebar
-        title={title}
-        subtitle={subtitle}
-        itemCount={itemCount ?? normalizedProducts.length}
-        activeFilterCount={activeFilterCount}
-        sortBy={sortBy}
-        onSortChange={onSortChange}
-        onFilterClick={onFilterClick}
-        theme={theme}
-      />
+      {!hideFilterSidebar && !hide_filter_sidebar && (
+        <FilterSidebar
+          title={title}
+          subtitle={subtitle}
+          itemCount={itemCount ?? normalizedProducts.length}
+          activeFilterCount={activeFilterCount}
+          sortBy={sortBy}
+          onSortChange={onSortChange}
+          onFilterClick={onFilterClick}
+          showFilterButton={effectiveShowFilterButton}
+          theme={theme}
+        />
+      )}
 
-      <div
-        className="product-grid__items"
-        style={{
-          display: "grid",
-          gridTemplateColumns: resolvedColumns,
-          gap: resolvedGridGap,
-        }}
-      >
-        {normalizedProducts.map((product) => {
-          const showOriginal =
-            show_original_price &&
-            typeof product.normalizedOriginalPrice === "number" &&
-            product.normalizedOriginalPrice > product.normalizedDisplayPrice;
-
-          const showDiscount =
-            show_discount_badge &&
-            product.normalizedDiscountPercent > 0 &&
-            product.normalizedInStock;
-
-          const isDisabled = !product.normalizedInStock;
-          const ratingValue = Number(product.average_rating ?? 3.0);
-          const ratingText = ratingValue > 0 ? ratingValue.toFixed(1) : "3.0";
-          const reviewCount = Number(product.review_count ?? 3);
-
-          const brandText = product.brand || product.category || "Collection";
-          const activePriceColor = price_color || (cardStyleKey === "beauty" ? "#dc2626" : pageText);
-
-          const renderDiscountBadge = () => (
-            showDiscount ? (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "10px",
-                  left: "10px",
-                  zIndex: 2,
-                  padding: "4px 8px",
-                  borderRadius: "999px",
-                  background: "#166534",
-                  color: "#ffffff",
-                  fontSize: "10px",
-                  fontWeight: 800,
-                  letterSpacing: "0.04em",
-                  boxShadow: "0 4px 12px rgba(22,101,52,0.25)",
-                }}
-              >
-                {product.normalizedDiscountPercent}% OFF
-              </div>
-            ) : null
-          );
-
-          const renderInStockBadge = (centered = false) => (
-            show_stock_badge ? (
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: product.normalizedInStock ? "#16a34a" : "#dc2626",
-                  background: product.normalizedInStock ? "rgba(22,163,74,0.06)" : "rgba(220,38,38,0.06)",
-                  padding: "3px 10px",
-                  borderRadius: "999px",
-                  border: product.normalizedInStock ? "1px solid #16a34a" : "1px solid #dc2626",
-                  display: "inline-block",
-                  textAlign: "center",
-                  margin: centered ? "8px auto 0" : undefined,
-                  flexShrink: 0,
-                }}
-              >
-                {product.normalizedInStock ? "In stock" : "Out of stock"}
-              </span>
-            ) : null
-          );
-
-          const targetSlug = product.slug || product.id;
-
-          const commonArticleProps = {
-            className: "product-card",
-            onClick: isDisabled ? undefined : () => handleProductClick(product),
-            onKeyDown: (e: React.KeyboardEvent) => {
-              if (isDisabled) return;
-              if ((e.key === "Enter" || e.key === " ") && targetSlug) {
-                e.preventDefault();
-                handleProductClick(product);
-              }
-            },
-            role: isDisabled ? "article" : "button",
-            tabIndex: isDisabled || !targetSlug ? -1 : 0,
-            "aria-disabled": isDisabled,
-          };
-
-          const cardBaseStyle: React.CSSProperties = {
-            cursor: isDisabled ? "not-allowed" : targetSlug ? "pointer" : "default",
-            border: computedBorder,
-            borderRadius: computedRadius,
-            padding: "10px",
-            background: isDisabled
-              ? isLight
-                ? "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(241,245,249,0.96) 100%)"
-                : "linear-gradient(180deg, rgba(30,41,59,0.82) 0%, rgba(15,23,42,0.78) 100%)"
-              : computedCardBg,
-            backdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
-            WebkitBackdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
-            boxShadow: computedShadow,
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-            minHeight: "100%",
-            boxSizing: "border-box",
-            opacity: isDisabled ? 0.72 : 1,
-            transition: "transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
-          };
-
-          const resolvedImageBg = image_bg || (isLight ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.2)");
-
-          // Aspect ratio evaluation
-          const getImgContainerStyle = (defaultAspect: string): React.CSSProperties => ({
-            position: "relative",
-            borderRadius: "14px",
-            overflow: "hidden",
-            background: resolvedImageBg,
-            aspectRatio: image_aspect_ratio || defaultAspect,
-          });
-
-          // 1. Fashion / Apparel (Default layout)
-          if (cardStyleKey === "fashion") {
+      {isProductsLoading && normalizedProducts.length === 0 ? (
+        <div
+          className="product-grid__items product-grid__skeleton"
+          style={{
+            display: "grid",
+            gridTemplateColumns: resolvedColumns,
+            gap: resolvedGridGap,
+          }}
+        >
+          <style>{`
+            @keyframes gridShimmer {
+              0% { background-position: 200% 0; }
+              100% { background-position: -200% 0; }
+            }
+          `}</style>
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => {
+            const skeletonBg = isDark
+              ? "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)"
+              : "linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)";
+            const skStyle: React.CSSProperties = {
+              backgroundImage: skeletonBg,
+              backgroundSize: "200% 100%",
+              animation: "gridShimmer 1.5s infinite linear",
+              willChange: "background-position",
+              transform: "translateZ(0)",
+            };
             return (
-              <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
-                <div style={getImgContainerStyle("1 / 1.25")}>
-                  {renderDiscountBadge()}
-                  {product.normalizedImage ? (
-                    <img src={product.normalizedImage} alt={product.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
-                  ) : (
-                    <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
-                  )}
+              <div
+                key={i}
+                style={{
+                  borderRadius: isMobile ? "14px" : computedRadius,
+                  background: computedCardBg,
+                  border: computedBorder,
+                  boxShadow: computedShadow,
+                  padding: isMobile ? "8px" : "14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: isMobile ? "6px" : "12px",
+                }}
+              >
+                <div
+                  style={{
+                    ...skStyle,
+                    width: "100%",
+                    aspectRatio: image_aspect_ratio || "1/1",
+                    borderRadius: "12px",
+                  }}
+                />
+                <div style={{ display: "grid", gap: "8px", flex: 1 }}>
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "40%",
+                      height: "12px",
+                      borderRadius: "4px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "85%",
+                      height: "16px",
+                      borderRadius: "6px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      ...skStyle,
+                      width: "50%",
+                      height: "20px",
+                      borderRadius: "6px",
+                      marginTop: "4px",
+                    }}
+                  />
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "4px 2px", flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div
+                  style={{
+                    ...skStyle,
+                    width: "100%",
+                    height: "34px",
+                    borderRadius: "10px",
+                    marginTop: "auto",
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : normalizedProducts.length === 0 ? (
+        <div
+          style={{
+            padding: "48px 16px",
+            textAlign: "center",
+            color: mutedText,
+            borderRadius: computedRadius,
+            background: computedCardBg,
+            border: computedBorder,
+            boxShadow: computedShadow,
+            margin: "12px 0",
+          }}
+        >
+          <div style={{ fontSize: "32px", marginBottom: "8px" }}>🛍️</div>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: pageText }}>No Products Found</div>
+          <div style={{ fontSize: "13px", marginTop: "4px", color: faintText }}>Try adjusting your search or filters to find what you're looking for.</div>
+        </div>
+      ) : (
+        <div
+          className="product-grid__items"
+          style={{
+            display: "grid",
+            gridTemplateColumns: resolvedColumns,
+            gap: resolvedGridGap,
+            paddingTop: "4px",
+            paddingBottom: "8px",
+          }}
+        >
+          {normalizedProducts.map((product, cardIndex) => {
+            const showOriginal =
+              show_original_price &&
+              typeof product.normalizedOriginalPrice === "number" &&
+              product.normalizedOriginalPrice > product.normalizedDisplayPrice;
+
+            const showDiscount =
+              show_discount_badge &&
+              product.normalizedDiscountPercent > 0 &&
+              product.normalizedInStock;
+
+            const isDisabled = !product.normalizedInStock;
+            const ratingValue = Number(product.average_rating ?? 0);
+            const reviewCount = Number(product.review_count ?? 0);
+            const hasReviews = reviewCount > 0 && ratingValue > 0;
+            const ratingDisplay = hasReviews
+              ? `${ratingValue.toFixed(1)} (${reviewCount})`
+              : "New";
+
+            const brandText = product.brand || product.category || "Collection";
+            const rawPriceCandidate =
+              price_color ||
+              (theme as any)?.price_color ||
+              (theme as any)?.card_price_color;
+
+            let activePriceColor = getSafePriceColor(rawPriceCandidate, pageText, isCardDark, cardBg);
+            // Selling price should NEVER be red, and should NOT be the exact same color as the brand label
+            if (activePriceColor && activeBrandColor && activePriceColor.toLowerCase() === activeBrandColor.toLowerCase()) {
+              activePriceColor = pageText;
+            }
+
+            const badgeCollections = (product.collections || []).filter((c: any) => c && c.is_badge);
+
+            const renderCollectionBadges = (isCompact = false) => {
+              if (!badgeCollections || badgeCollections.length === 0) return null;
+
+              return (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: isCompact ? "6px" : "10px",
+                    left: isCompact ? "6px" : "10px",
+                    zIndex: 3,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "3px",
+                    alignItems: "flex-start",
+                    maxWidth: isCompact ? "60px" : "110px",
+                  }}
+                >
+                  {badgeCollections.slice(0, isCompact ? 1 : 2).map((col: any) => (
+                    <div
+                      key={col.id || col.name}
+                      style={{
+                        padding: isCompact ? "2px 5px" : "3px 8px",
+                        borderRadius: "6px",
+                        background: col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
+                        color: "#ffffff",
+                        fontSize: isCompact ? "8px" : "9px",
+                        fontWeight: 800,
+                        letterSpacing: "0.04em",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
+                        textTransform: "uppercase",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        maxWidth: "100%",
+                      }}
+                    >
+                      {col.name}
+                    </div>
+                  ))}
+                </div>
+              );
+            };
+
+            const festTheme = (theme as any)?.festival_theme;
+            const isPreorder = isProductPreorderActive(product);
+
+            const renderDiscountBadge = (isFrosted = true, badgePos: "top-right" | "top-left" = "top-right") => {
+              if (!show_discount_badge || product.normalizedDiscountPercent <= 0) return null;
+              return (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: isMobile ? "6px" : "10px",
+                    ...(badgePos === "top-left"
+                      ? { left: isMobile ? "6px" : "10px" }
+                      : { right: isMobile ? "6px" : "10px" }),
+                    zIndex: 3,
+                    padding: isMobile ? "3px 7px" : "4px 9px",
+                    borderRadius: "6px",
+                    background: "linear-gradient(135deg, #16a34a, #15803d)",
+                    color: "#ffffff",
+                    fontSize: isMobile ? "9px" : "10px",
+                    fontWeight: 800,
+                    letterSpacing: "0.03em",
+                    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.18)",
+                    userSelect: "none",
+                  }}
+                >
+                  {product.normalizedDiscountPercent}% OFF
+                </div>
+              );
+            };
+
+            const renderInStockBadge = (centered = false) => {
+              if (isPreorder) {
+                const releaseDateObj = product?.preorder_release_date ? new Date(product.preorder_release_date) : null;
+                const formattedDate = releaseDateObj && !isNaN(releaseDateObj.getTime())
+                  ? releaseDateObj.toLocaleString(undefined, {
+                      day: "numeric",
+                      month: "short",
+                      hour: "numeric",
+                      minute: "2-digit",
+                      hour12: true,
+                    })
+                  : null;
+
+                return (
+                  <div style={{ display: "inline-flex", flexDirection: "column", alignItems: centered ? "center" : "flex-end", gap: "1px", flexShrink: 0 }}>
+                    <span
+                      style={{
+                        fontSize: isMobile ? "9px" : "11px",
+                        fontWeight: 700,
+                        color: "#d97706",
+                        background: "rgba(217,119,6,0.08)",
+                        padding: isMobile ? "2px 6px" : "3px 10px",
+                        borderRadius: "999px",
+                        border: "1px solid #d97706",
+                        display: "inline-block",
+                        textAlign: "center",
+                        margin: centered ? (isMobile ? "4px auto 0" : "8px auto 0") : undefined,
+                        flexShrink: 0,
+                      }}
+                    >
+                      Pre-Order
+                    </span>
+                    {formattedDate && (
+                      <span
+                        style={{
+                          fontSize: isMobile ? "8.5px" : "9.5px",
+                          fontWeight: 600,
+                          color: "#b45309",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Till {formattedDate}
+                      </span>
+                    )}
+                  </div>
+                );
+              }
+              const stockQty = Number(product.stock ?? 0);
+              const isLowStock = product.normalizedInStock && stockQty > 0 && stockQty <= 5;
+              return show_stock_badge ? (
+                <span
+                  style={{
+                    fontSize: isMobile ? "9px" : "11px",
+                    fontWeight: 700,
+                    color: isLowStock ? "#d97706" : product.normalizedInStock ? "#16a34a" : "#dc2626",
+                    background: isLowStock ? "rgba(217,119,6,0.08)" : product.normalizedInStock ? "rgba(22,163,74,0.06)" : "rgba(220,38,38,0.06)",
+                    padding: isMobile ? "2px 6px" : "3px 10px",
+                    borderRadius: "999px",
+                    border: isLowStock ? "1px solid rgba(217,119,6,0.3)" : product.normalizedInStock ? "1px solid #16a34a" : "1px solid #dc2626",
+                    display: "inline-block",
+                    textAlign: "center",
+                    margin: centered ? (isMobile ? "4px auto 0" : "8px auto 0") : undefined,
+                    flexShrink: 0,
+                  }}
+                >
+                  {isLowStock ? `Only ${stockQty} left in stock` : product.normalizedInStock ? "In stock" : "Out of stock"}
+                </span>
+              ) : null;
+            };
+
+            const targetSlug = product.slug || product.id;
+
+            const commonArticleProps = {
+              className: "product-card",
+              onClick: isDisabled ? undefined : () => handleProductClick(product),
+              onKeyDown: (e: React.KeyboardEvent) => {
+                if (isDisabled) return;
+                if ((e.key === "Enter" || e.key === " ") && targetSlug) {
+                  e.preventDefault();
+                  handleProductClick(product);
+                }
+              },
+              role: "button",
+              tabIndex: isDisabled ? -1 : 0,
+              "aria-label": `View details for ${product.name}`,
+              "aria-disabled": isDisabled,
+            };
+
+            const cardBaseStyle: React.CSSProperties = {
+              cursor: isDisabled ? "not-allowed" : targetSlug ? "pointer" : "default",
+              border: computedBorder,
+              borderRadius: !isNaN(parsedCardRadiusNum) && parsedCardRadiusNum >= 0
+                ? `${Math.min(parsedCardRadiusNum, isMobile ? 24 : 48)}px`
+                : isMobile ? "14px" : computedRadius,
+              padding: isMobile ? "6px" : "8px",
+              background: computedCardBg,
+              backdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
+              WebkitBackdropFilter: isGlass ? "blur(18px) saturate(180%)" : undefined,
+              boxShadow: isMobile
+                ? (isLight ? "0 2px 8px rgba(15,23,42,0.04)" : "0 2px 8px rgba(0,0,0,0.25)")
+                : computedShadow,
+              display: "flex",
+              flexDirection: "column",
+              gap: isMobile ? "4px" : "6px",
+              minHeight: "100%",
+              boxSizing: "border-box",
+              overflow: "hidden",
+              transition: "border-color 150ms ease, box-shadow 150ms ease",
+            };
+
+            const resolvedImageRadius = (() => {
+              const raw = image_radius !== undefined && image_radius !== null && String(image_radius).trim() !== ""
+                ? image_radius
+                : image_corner_radius !== undefined && image_corner_radius !== null && String(image_corner_radius).trim() !== ""
+                ? image_corner_radius
+                : undefined;
+              if (raw !== undefined) {
+                const num = typeof raw === "number" ? raw : parseInt(String(raw), 10);
+                if (!isNaN(num) && num >= 0) return `${num}px`;
+              }
+              return isMobile ? "10px" : "12px";
+            })();
+
+            const getImgContainerStyle = (defaultAspect: string): React.CSSProperties => {
+              const chosenAspect = image_aspect_ratio && image_aspect_ratio !== "auto" && image_aspect_ratio !== "natural"
+                ? formatAspectRatio(image_aspect_ratio)
+                : formatAspectRatio(defaultAspect);
+
+              return {
+                position: "relative",
+                width: "100%",
+                borderRadius: resolvedImageRadius,
+                overflow: "hidden",
+                background: resolvedImageBg,
+                aspectRatio: chosenAspect,
+              };
+            };
+
+
+            if (cardStyleKey === "fashion") {
+              const fashionCardStyle: React.CSSProperties = {
+                ...cardBaseStyle,
+                padding: 0,
+                gap: 0,
+                opacity: 1,
+              };
+
+              const fashionImgAspect = image_aspect_ratio && image_aspect_ratio !== "auto" && image_aspect_ratio !== "natural"
+                ? formatAspectRatio(image_aspect_ratio)
+                : "3 / 4";
+
+              return (
+                <article key={product.id} {...commonArticleProps} style={fashionCardStyle}>
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      aspectRatio: fashionImgAspect,
+                      borderTopLeftRadius: cardBaseStyle.borderRadius,
+                      borderTopRightRadius: cardBaseStyle.borderRadius,
+                      borderBottomLeftRadius: 0,
+                      borderBottomRightRadius: 0,
+                      overflow: "hidden",
+                      background: resolvedImageBg,
+                      borderBottom: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(15,23,42,0.08)",
+                    }}
+                  >
+                    {renderDiscountBadge(true)}
+                    {renderCollectionBadges(isMobile)}
+                    {!product.normalizedInStock && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          zIndex: 4,
+                          background: "rgba(220, 38, 38, 0.92)",
+                          backdropFilter: "blur(4px)",
+                          WebkitBackdropFilter: "blur(4px)",
+                          color: "#ffffff",
+                          fontSize: isMobile ? "11px" : "13.5px",
+                          fontWeight: 800,
+                          padding: isMobile ? "4px 14px" : "6px 20px",
+                          borderRadius: "6px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                          border: "1px solid rgba(255, 255, 255, 0.25)",
+                          whiteSpace: "nowrap",
+                          letterSpacing: "0.03em",
+                          textAlign: "center",
+                          userSelect: "none",
+                        }}
+                      >
+                        Sold Out
+                      </div>
+                    )}
+                    {product.normalizedImage ? (
+                      <img
+                        src={product.normalizedImage}
+                        alt={product.name}
+                        loading="lazy"
+                        decoding="async"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: resolvedImageFit,
+                          display: "block",
+                          borderTopLeftRadius: "inherit",
+                          borderTopRightRadius: "inherit",
+                          borderBottomLeftRadius: 0,
+                          borderBottomRightRadius: 0,
+                          filter: !product.normalizedInStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                          opacity: !product.normalizedInStock ? 0.85 : 1,
+                        }}
+                      />
+                    ) : (
+                      <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                      padding: isMobile ? "6px 7px 7px" : "8px 10px 9px",
+                      flex: 1,
+                    }}
+                  >
                     {show_brand_name && (
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                      <span
+                        style={{
+                          fontSize: isMobile ? "8px" : "9.5px",
+                          fontWeight: 600,
+                          color: activeBrandColor,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                          lineHeight: 1.2,
+                        }}
+                      >
                         {brandText}
                       </span>
                     )}
+                    <h3
+                      style={{
+                        margin: "1px 0 3px 0",
+                        fontFamily: resolvedFontFamily,
+                        fontSize: resolvedProductNameSize,
+                        fontWeight: resolvedProductNameWeight,
+                        fontStyle: resolvedProductNameStyle,
+                        lineHeight: isMobile ? "1.25" : "1.3",
+                        color: pageText,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {product.name}
+                    </h3>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginTop: "auto",
+                        paddingTop: "1px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: isMobile ? "13px" : "15.5px", fontWeight: 800, color: activePriceColor }}>
+                          ₹{product.normalizedDisplayPrice}
+                        </span>
+                        {showOriginal && (
+                          <span
+                            style={{
+                              fontSize: isMobile ? "9.5px" : "11.5px",
+                              color: mutedText,
+                              textDecoration: "line-through",
+                              fontWeight: 500,
+                              opacity: 0.82,
+                            }}
+                          >
+                            ₹{product.normalizedOriginalPrice}
+                          </span>
+                        )}
+                      </div>
+                      {show_ratings && (
+                        <div
+                          style={{
+                            fontSize: isMobile ? "9px" : "11px",
+                            fontWeight: 600,
+                            color: faintText,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "3px",
+                          }}
+                        >
+                          <span style={{ color: starColor }}>★</span>
+                          <span>{ratingDisplay}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            }
+
+            if (cardStyleKey === "electronics") {
+              return (
+                <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
+                  <div
+                    style={{
+                      ...getImgContainerStyle("4 / 3"),
+                      borderRadius: resolvedImageRadius || (isMobile ? "10px" : "12px"),
+                      border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(15,23,42,0.06)",
+                    }}
+                  >
+                    {renderDiscountBadge(true)}
+                    {renderCollectionBadges(isMobile)}
+                    {!product.normalizedInStock && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          zIndex: 4,
+                          background: "rgba(220, 38, 38, 0.92)",
+                          backdropFilter: "blur(4px)",
+                          WebkitBackdropFilter: "blur(4px)",
+                          color: "#ffffff",
+                          fontSize: isMobile ? "11px" : "13.5px",
+                          fontWeight: 800,
+                          padding: isMobile ? "4px 14px" : "6px 20px",
+                          borderRadius: "6px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                          border: "1px solid rgba(255, 255, 255, 0.25)",
+                          whiteSpace: "nowrap",
+                          letterSpacing: "0.03em",
+                          textAlign: "center",
+                          userSelect: "none",
+                        }}
+                      >
+                        Sold Out
+                      </div>
+                    )}
+                    {product.normalizedImage ? (
+                      <img
+                        src={product.normalizedImage}
+                        alt={product.name}
+                        loading="lazy"
+                        decoding="async"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: resolvedImageFit,
+                          borderRadius: "inherit",
+                          display: "block",
+                          filter: !product.normalizedInStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                          opacity: !product.normalizedInStock ? 0.85 : 1,
+                        }}
+                      />
+                    ) : (
+                      <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                      padding: isMobile ? "5px 3px 2px" : "6px 4px 2px",
+                      flex: 1,
+                    }}
+                  >
+                    {show_brand_name && (
+                      <span
+                        style={{
+                          fontSize: isMobile ? "8px" : "9.5px",
+                          fontWeight: 600,
+                          color: activeBrandColor,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                          lineHeight: 1.2,
+                          borderBottom: `1px solid ${activeBrandColor}`,
+                          paddingBottom: "1px",
+                          display: "inline-block",
+                          alignSelf: "flex-start",
+                        }}
+                      >
+                        {brandText}
+                      </span>
+                    )}
+                    <h3
+                      style={{
+                        margin: "1px 0 3px 0",
+                        fontFamily: resolvedFontFamily,
+                        fontSize: resolvedProductNameSize,
+                        fontWeight: resolvedProductNameWeight,
+                        fontStyle: resolvedProductNameStyle,
+                        lineHeight: isMobile ? "1.25" : "1.3",
+                        color: pageText,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {product.name}
+                    </h3>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginTop: "auto",
+                        paddingTop: "1px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: isMobile ? "13px" : "15.5px", fontWeight: 800, color: activePriceColor }}>
+                          ₹{product.normalizedDisplayPrice}
+                        </span>
+                        {showOriginal && (
+                          <span
+                            style={{
+                              fontSize: isMobile ? "9.5px" : "11.5px",
+                              color: mutedText,
+                              textDecoration: "line-through",
+                              fontWeight: 500,
+                              opacity: 0.82,
+                            }}
+                          >
+                            ₹{product.normalizedOriginalPrice}
+                          </span>
+                        )}
+                      </div>
+                      {show_ratings && (
+                        <div
+                          style={{
+                            fontSize: isMobile ? "9px" : "11px",
+                            fontWeight: 600,
+                            color: faintText,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "3px",
+                          }}
+                        >
+                          <span style={{ color: starColor }}>★</span>
+                          <span>{ratingDisplay}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            }
+
+            if (cardStyleKey === "beauty") {
+              return (
+                <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
+                  <div
+                    style={{
+                      ...getImgContainerStyle("3 / 4"),
+                      borderRadius: resolvedImageRadius || (isMobile ? "10px" : "12px"),
+                      border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(15,23,42,0.06)",
+                    }}
+                  >
+                    {renderDiscountBadge(true)}
+                    {renderCollectionBadges(isMobile)}
+                    {!product.normalizedInStock && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          zIndex: 4,
+                          background: "rgba(220, 38, 38, 0.92)",
+                          backdropFilter: "blur(4px)",
+                          WebkitBackdropFilter: "blur(4px)",
+                          color: "#ffffff",
+                          fontSize: isMobile ? "11px" : "13.5px",
+                          fontWeight: 800,
+                          padding: isMobile ? "4px 14px" : "6px 20px",
+                          borderRadius: "6px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                          border: "1px solid rgba(255, 255, 255, 0.25)",
+                          whiteSpace: "nowrap",
+                          letterSpacing: "0.03em",
+                          textAlign: "center",
+                          userSelect: "none",
+                        }}
+                      >
+                        Sold Out
+                      </div>
+                    )}
+                    {/* Star Rating Badge on Bottom-Right of Image */}
                     {show_ratings && (
-                      <div style={{ fontSize: "10px", fontWeight: 600, color: faintText }}>
-                        <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: isMobile ? "6px" : "8px",
+                          right: isMobile ? "6px" : "8px",
+                          zIndex: 3,
+                          color: isDark ? "#ffffff" : "#0f172a",
+                          fontSize: isMobile ? "9px" : "10px",
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "3.5px",
+                          userSelect: "none",
+                          background: isDark ? "rgba(15, 23, 42, 0.88)" : "rgba(255, 255, 255, 0.92)",
+                          backdropFilter: "blur(6px)",
+                          WebkitBackdropFilter: "blur(6px)",
+                          padding: isMobile ? "2.5px 6.5px" : "3.5px 8px",
+                          borderRadius: "999px",
+                          border: isDark ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid rgba(15, 23, 42, 0.09)",
+                          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
+                        }}
+                      >
+                        <span style={{ color: starColor }}>★</span>
+                        <span>{ratingDisplay}</span>
+                      </div>
+                    )}
+                    {product.normalizedImage ? (
+                      <img
+                        src={product.normalizedImage}
+                        alt={product.name}
+                        loading="lazy"
+                        decoding="async"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: resolvedImageFit,
+                          borderRadius: "inherit",
+                          display: "block",
+                          filter: !product.normalizedInStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                          opacity: !product.normalizedInStock ? 0.85 : 1,
+                        }}
+                      />
+                    ) : (
+                      <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      textAlign: "center",
+                      gap: "2px",
+                      padding: isMobile ? "4px 2px 2px" : "6px 4px 2px",
+                      flex: 1,
+                    }}
+                  >
+                    {show_brand_name && (
+                      <span
+                        style={{
+                          fontSize: isMobile ? "8px" : "9.5px",
+                          fontWeight: 600,
+                          color: activeBrandColor,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.12em",
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {brandText}
+                      </span>
+                    )}
+                    <h3
+                      style={{
+                        margin: "1px 0 2px",
+                        fontFamily: resolvedFontFamily,
+                        fontSize: resolvedProductNameSize,
+                        fontWeight: resolvedProductNameWeight,
+                        fontStyle: resolvedProductNameStyle,
+                        lineHeight: isMobile ? "1.25" : "1.3",
+                        color: pageText,
+                        textAlign: "center",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {product.name}
+                    </h3>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginTop: "auto",
+                        paddingTop: "2px",
+                      }}
+                    >
+                      <span style={{ fontSize: isMobile ? "14px" : "16px", fontWeight: 800, color: activePriceColor }}>
+                        ₹{product.normalizedDisplayPrice}
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              );
+            }
+
+            if (cardStyleKey === "grocery") {
+              const groceryCardStyle: React.CSSProperties = {
+                ...cardBaseStyle,
+                flexDirection: "row",
+                alignItems: "stretch",
+                padding: 0,
+                gap: 0,
+                overflow: "hidden",
+                height: isMobile ? "96px" : "104px",
+                minHeight: isMobile ? "96px" : "104px",
+                maxHeight: isMobile ? "96px" : "104px",
+                boxSizing: "border-box",
+              };
+
+              return (
+                <article key={product.id} {...commonArticleProps} style={groceryCardStyle}>
+                  {/* Left: Wide landscape image container matching mockup */}
+                  <div
+                    style={{
+                      position: "relative",
+                      height: "100%",
+                      aspectRatio: image_aspect_ratio && image_aspect_ratio !== "auto" ? formatAspectRatio(image_aspect_ratio) : "1 / 1",
+                      borderTopLeftRadius: cardBaseStyle.borderRadius,
+                      borderBottomLeftRadius: cardBaseStyle.borderRadius,
+                      borderTopRightRadius: 0,
+                      borderBottomRightRadius: 0,
+                      overflow: "hidden",
+                      background: resolvedImageBg,
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {!product.normalizedInStock && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          zIndex: 4,
+                          background: "rgba(220, 38, 38, 0.92)",
+                          backdropFilter: "blur(4px)",
+                          WebkitBackdropFilter: "blur(4px)",
+                          color: "#ffffff",
+                          fontSize: isMobile ? "9.5px" : "11px",
+                          fontWeight: 800,
+                          padding: isMobile ? "3px 8px" : "4px 11px",
+                          borderRadius: "5px",
+                          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                          border: "1px solid rgba(255, 255, 255, 0.25)",
+                          whiteSpace: "nowrap",
+                          letterSpacing: "0.02em",
+                          textAlign: "center",
+                          userSelect: "none",
+                        }}
+                      >
+                        Sold Out
+                      </div>
+                    )}
+                    {product.normalizedImage ? (
+                      <img
+                        src={product.normalizedImage}
+                        alt={product.name}
+                        loading="lazy"
+                        decoding="async"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: resolvedImageFit,
+                          display: "block",
+                          filter: !product.normalizedInStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                          opacity: !product.normalizedInStock ? 0.85 : 1,
+                        }}
+                      />
+                    ) : (
+                      <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "12px" }}>No image</div>
+                    )}
+                  </div>
+
+                  {/* Right: Info container with Brand & Top-Right Badges, Title, Price, Rating */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      gap: "2px",
+                      padding: isMobile ? "6px 10px 6px 8px" : "8px 12px 8px 10px",
+                      flex: "1 1 0",
+                      minWidth: 0,
+                      overflow: "hidden",
+                    }}
+                  >
+                    {/* Top Row: Brand on left + Badges & % OFF on right */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "4px",
+                        width: "100%",
+                        minWidth: 0,
+                      }}
+                    >
+                      {show_brand_name ? (
+                        <span
+                          style={{
+                            fontSize: isMobile ? "8px" : "9px",
+                            fontWeight: 600,
+                            color: activeBrandColor,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.08em",
+                            lineHeight: 1.2,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            flex: "1 1 auto",
+                            minWidth: 0,
+                          }}
+                        >
+                          {brandText}
+                        </span>
+                      ) : (
+                        <div style={{ flex: 1 }} />
+                      )}
+
+                      {/* Right Corner Badges */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "3px", flexShrink: 0 }}>
+                        {badgeCollections.slice(0, 1).map((col: any) => (
+                          <span
+                            key={col.id || col.name}
+                            style={{
+                              padding: isMobile ? "1.5px 4px" : "2px 5px",
+                              borderRadius: "3px",
+                              background: col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
+                              color: "#ffffff",
+                              fontSize: isMobile ? "7px" : "8px",
+                              fontWeight: 700,
+                              letterSpacing: "0.02em",
+                              textTransform: "uppercase",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {col.name}
+                          </span>
+                        ))}
+                        {show_discount_badge && product.normalizedDiscountPercent > 0 && (
+                          <span
+                            style={{
+                              padding: isMobile ? "1.5px 4px" : "2px 5.5px",
+                              borderRadius: "3px",
+                              background: "linear-gradient(135deg, #16a34a, #15803d)",
+                              color: "#ffffff",
+                              fontSize: isMobile ? "7.5px" : "8.5px",
+                              fontWeight: 800,
+                              letterSpacing: "0.02em",
+                              textTransform: "uppercase",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {product.normalizedDiscountPercent}% OFF
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Product Name */}
+                    <h3
+                      style={{
+                        margin: "1px 0 2px",
+                        fontFamily: resolvedFontFamily,
+                        fontSize: resolvedProductNameSize,
+                        fontWeight: resolvedProductNameWeight,
+                        fontStyle: resolvedProductNameStyle,
+                        lineHeight: "1.25",
+                        color: pageText,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {product.name}
+                    </h3>
+
+                    {/* Bottom Row: Price & Star Rating */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "4px",
+                        marginTop: "auto",
+                        paddingTop: "1px",
+                        minWidth: 0,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "5px", flexShrink: 0 }}>
+                        <span style={{ fontSize: isMobile ? "13.5px" : "15.5px", fontWeight: 800, color: activePriceColor }}>
+                          ₹{product.normalizedDisplayPrice}
+                        </span>
+                        {showOriginal && (
+                          <span
+                            style={{
+                              fontSize: isMobile ? "9.5px" : "11px",
+                              color: mutedText,
+                              textDecoration: "line-through",
+                              fontWeight: 500,
+                              opacity: 0.82,
+                            }}
+                          >
+                            ₹{product.normalizedOriginalPrice}
+                          </span>
+                        )}
+                      </div>
+                      {show_ratings && (
+                        <div
+                          style={{
+                            fontSize: isMobile ? "8.5px" : "10.5px",
+                            fontWeight: 600,
+                            color: faintText,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <span style={{ color: starColor }}>★</span>
+                          <span>{ratingDisplay}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            }
+
+            return (
+              <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
+                <div
+                  style={{
+                    ...getImgContainerStyle(cardStyleKey === "books" ? "3 / 4" : "1 / 1"),
+                    borderRadius: resolvedImageRadius || (isMobile ? "10px" : "12px"),
+                    border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(15,23,42,0.06)",
+                  }}
+                >
+                  {renderDiscountBadge()}
+                  {renderCollectionBadges(isMobile)}
+                  {!product.normalizedInStock && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
+                        zIndex: 4,
+                        background: "rgba(220, 38, 38, 0.92)",
+                        backdropFilter: "blur(4px)",
+                        WebkitBackdropFilter: "blur(4px)",
+                        color: "#ffffff",
+                        fontSize: isMobile ? "11px" : "13.5px",
+                        fontWeight: 800,
+                        padding: isMobile ? "4px 14px" : "6px 20px",
+                        borderRadius: "6px",
+                        boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
+                        border: "1px solid rgba(255, 255, 255, 0.25)",
+                        whiteSpace: "nowrap",
+                        letterSpacing: "0.03em",
+                        textAlign: "center",
+                        userSelect: "none",
+                      }}
+                    >
+                      Sold Out
+                    </div>
+                  )}
+                  {product.normalizedImage ? (
+                    <img
+                      src={product.normalizedImage}
+                      alt={product.name}
+                      loading="lazy"
+                      decoding="async"
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: resolvedImageFit,
+                        borderRadius: "inherit",
+                        display: "block",
+                        filter: !product.normalizedInStock ? "grayscale(15%) brightness(0.92)" : undefined,
+                        opacity: !product.normalizedInStock ? 0.85 : 1,
+                      }}
+                    />
+                  ) : (
+                    <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
+                  )}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px", padding: "2px", flex: 1 }}>
+                  {show_brand_name && (
+                    <span style={{ fontSize: isMobile ? "8.5px" : "9.5px", fontWeight: 600, color: activeBrandColor, textTransform: "uppercase", letterSpacing: "0.08em", lineHeight: 1.2 }}>
+                      {brandText}
+                    </span>
+                  )}
+                  <h3 style={{ margin: "1px 0 2px", fontFamily: resolvedFontFamily, fontSize: resolvedProductNameSize, fontWeight: resolvedProductNameWeight, fontStyle: resolvedProductNameStyle, lineHeight: isMobile ? "1.25" : "1.3", color: pageText, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{product.name}</h3>
+                  <div style={{ borderTop: "1px solid rgba(148,163,184,0.15)", margin: "2px 0" }} />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: "1px" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? "4px" : "6px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: isMobile ? "14px" : "16px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
+                      {showOriginal && (
+                        <span
+                          style={{
+                            fontSize: isMobile ? "10px" : "12px",
+                            color: mutedText,
+                            textDecoration: "line-through",
+                            fontWeight: 500,
+                            opacity: 0.82,
+                          }}
+                        >
+                          ₹{product.normalizedOriginalPrice}
+                        </span>
+                      )}
+                    </div>
+                    {show_ratings && (
+                      <div style={{ fontSize: isMobile ? "9.5px" : "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "3px" }}>
+                        <span style={{ color: starColor }}>★</span> {ratingDisplay}
                       </div>
                     )}
                   </div>
-                  <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: pageText }}>{product.name}</h3>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: "4px" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                      <span style={{ fontSize: "20px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                      {showOriginal && <span style={{ fontSize: "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-                    </div>
-                    {renderInStockBadge()}
-                  </div>
                 </div>
               </article>
             );
-          }
+          })}
+        </div>
+      )}
 
-          // 2. Electronics
-          if (cardStyleKey === "electronics") {
-            return (
-              <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
-                <div style={getImgContainerStyle("1 / 0.95")}>
-                  {renderDiscountBadge()}
-                  {product.normalizedImage ? (
-                    <img src={product.normalizedImage} alt={product.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
-                  ) : (
-                    <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
-                  )}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "6px 2px 0", flex: 1 }}>
-                  {show_brand_name && (
-                    <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                      {brandText}
-                    </span>
-                  )}
-                  <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: pageText }}>{product.name}</h3>
-                  {show_ratings && (
-                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "4px", marginBottom: "4px" }}>
-                      <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
-                    </div>
-                  )}
-                  <div style={{ marginTop: "auto", background: isLight ? "#f4f4f6" : "rgba(255,255,255,0.05)", padding: "10px 12px", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                      <span style={{ fontSize: "20px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                      {showOriginal && <span style={{ fontSize: "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-                    </div>
-                    {renderInStockBadge()}
-                  </div>
-                </div>
-              </article>
-            );
-          }
-
-          // 3. Beauty & Cosmetics
-          if (cardStyleKey === "beauty") {
-            return (
-              <article key={product.id} {...commonArticleProps} style={{ ...cardBaseStyle, textAlign: "center" }}>
-                <div style={getImgContainerStyle("1 / 1")}>
-                  {renderDiscountBadge()}
-                  {product.normalizedImage ? (
-                    <img src={product.normalizedImage} alt={product.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
-                  ) : (
-                    <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
-                  )}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", padding: "4px 2px", flex: 1 }}>
-                  {show_brand_name && (
-                    <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                      {brandText}
-                    </span>
-                  )}
-                  <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: pageText, textAlign: "center" }}>{product.name}</h3>
-                  {show_ratings && (
-                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "4px" }}>
-                      <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
-                    </div>
-                  )}
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px", margin: "4px 0" }}>
-                    <span style={{ fontSize: "20px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                    {showOriginal && <span style={{ fontSize: "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-                  </div>
-                  <div style={{ marginTop: "auto", width: "100%", display: "flex", justifyContent: "center" }}>
-                    {renderInStockBadge(true)}
-                  </div>
-                </div>
-              </article>
-            );
-          }
-
-          // 4. Grocery
-          if (cardStyleKey === "grocery") {
-            return (
-              <article key={product.id} {...commonArticleProps} style={{ ...cardBaseStyle, flexDirection: "row", alignItems: "center" }}>
-                <div style={{ position: "relative", width: "120px", height: "120px", borderRadius: "14px", overflow: "hidden", background: resolvedImageBg, flexShrink: 0 }}>
-                  {renderDiscountBadge()}
-                  {product.normalizedImage ? (
-                    <img src={product.normalizedImage} alt={product.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
-                  ) : (
-                    <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "12px" }}>No image</div>
-                  )}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "3px", flex: 1, minWidth: 0, paddingLeft: "4px" }}>
-                  {show_brand_name && (
-                    <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                      {brandText}
-                    </span>
-                  )}
-                  <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: pageText, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {product.name}
-                  </h3>
-                  {show_ratings && (
-                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText, display: "flex", alignItems: "center", gap: "4px" }}>
-                      <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
-                    </div>
-                  )}
-                  <div style={{ borderTop: "1px solid rgba(148,163,184,0.2)", margin: "4px 0" }} />
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-                      <span style={{ fontSize: "18px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                      {showOriginal && <span style={{ fontSize: "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-                    </div>
-                    {renderInStockBadge()}
-                  </div>
-                </div>
-              </article>
-            );
-          }
-
-          // 5. Books & Stationery
-          return (
-            <article key={product.id} {...commonArticleProps} style={cardBaseStyle}>
-              <div style={getImgContainerStyle("1 / 1.35")}>
-                {renderDiscountBadge()}
-                {product.normalizedImage ? (
-                  <img src={product.normalizedImage} alt={product.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: resolvedImageFit, display: "block" }} />
-                ) : (
-                  <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: mutedText, fontSize: "13px" }}>No image</div>
-                )}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "3px", padding: "6px 2px 2px", flex: 1 }}>
-                {show_brand_name && (
-                  <span style={{ fontSize: "10px", fontWeight: 700, color: faintText, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                    {brandText}
-                  </span>
-                )}
-                <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: pageText }}>{product.name}</h3>
-                <div style={{ borderTop: "1px solid rgba(148,163,184,0.2)", margin: "4px 0" }} />
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                    <span style={{ fontSize: "18px", fontWeight: 800, color: activePriceColor }}>₹{product.normalizedDisplayPrice}</span>
-                    {showOriginal && <span style={{ fontSize: "11px", color: mutedText, textDecoration: "line-through" }}>₹{product.normalizedOriginalPrice}</span>}
-                  </div>
-                  {show_ratings && (
-                    <div style={{ fontSize: "11px", fontWeight: 600, color: faintText }}>
-                      <span style={{ color: starColor }}>★</span> {ratingText} ({reviewCount})
-                    </div>
-                  )}
-                </div>
-                <div style={{ marginTop: "auto", width: "100%", display: "flex", justifyContent: "center" }}>
-                  {renderInStockBadge(true)}
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-
-      {totalPages && totalPages > 1 ? (
+      {Boolean((totalPages && totalPages > 1) || (totalProducts && totalProducts > 0) || onPageSizeChange) ? (
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={onPageChange}
           totalItems={totalProducts || itemCount}
-          pageSize={pageSize}
+          pageSize={pageSize || 24}
+          pageSizeOptions={[24, 48, 96, 100]}
+          onPageSizeChange={onPageSizeChange}
           showRangeText={true}
           theme={theme}
           accentColor={accentColor}

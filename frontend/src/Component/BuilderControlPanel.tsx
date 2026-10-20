@@ -1,5 +1,5 @@
-import React from "react";
-
+import React, { useState } from "react";
+import { useAdminTheme } from "../context/ThemeContext";
 
 type ControlItemKey =
   | "saved-sites"
@@ -10,7 +10,6 @@ type ControlItemKey =
   | "settings"
   | "qr-link";
 
-
 type BuilderControlPanelProps = {
   activeKey?: ControlItemKey | null;
   onSelect: (key: ControlItemKey) => void;
@@ -18,7 +17,6 @@ type BuilderControlPanelProps = {
   /** Optional badge counts per key — shown as a red dot with number */
   badgeCounts?: Partial<Record<ControlItemKey, number>>;
 };
-
 
 const ITEMS: {
   key: ControlItemKey;
@@ -35,7 +33,6 @@ const ITEMS: {
   { key: "settings", label: "Settings", title: "Settings", icon: <IconGear />, bottom: true },
   { key: "qr-link", label: "QR & Link", title: "QR & Link", icon: <IconQr />, bottom: true },
 ];
-
 
 function IconShell({ children }: { children: React.ReactNode }) {
   return (
@@ -114,7 +111,6 @@ function IconQr() {
   );
 }
 
-
 function ControlButton({
   active,
   disabled,
@@ -128,12 +124,29 @@ function ControlButton({
   onSelect: (key: ControlItemKey) => void;
   badge?: number;
 }) {
+  const { tokens } = useAdminTheme();
+  const [hovered, setHovered] = useState(false);
+
+  const iconColor = active
+    ? tokens.accent
+    : hovered && !disabled
+    ? tokens.textPrimary
+    : tokens.textSecondary;
+
+  const labelColor = active
+    ? tokens.accentText
+    : hovered && !disabled
+    ? tokens.textPrimary
+    : tokens.textSecondary;
+
   return (
     <button
       type="button"
       title={disabled ? `${item.title} (Disabled)` : item.title}
       disabled={disabled}
       onClick={() => !disabled && onSelect(item.key)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         position: "relative",   /* anchor for the floating badge */
         width: "100%",
@@ -151,8 +164,9 @@ function ControlButton({
           flexDirection: "column",
           alignItems: "center",
           gap: 3,
-          padding: "7px 0",
-          color: active ? "#2563eb" : "#6b7280",
+          padding: "5px 0",
+          color: iconColor,
+          transition: "color 0.15s ease",
         }}
       >
         {/* Icon + badge as a unit */}
@@ -164,36 +178,45 @@ function ControlButton({
               borderRadius: 10,
               display: "grid",
               placeItems: "center",
-              background: active ? "rgba(37,99,235,0.09)" : "transparent",
+              background: active
+                ? tokens.accentBg
+                : hovered && !disabled
+                ? tokens.hoverBg
+                : "transparent",
               border: active
-                ? "1px solid rgba(37,99,235,0.16)"
+                ? `1px solid ${tokens.accentBorder}`
                 : "1px solid transparent",
+              transition: "all 0.15s ease",
             }}
           >
             {item.icon}
           </div>
 
-          {/* Badge crosses the top-right corner of the icon */}
+          {/* Badge docked cleanly on the top-right corner */}
           {badge != null && badge > 0 ? (
             <span
               style={{
                 position: "absolute",
-                top: -4,
-                right: -5,
-                minWidth: 14,
-                height: 14,
-                borderRadius: 99,
+                top: -2,
+                right: -2,
+                minWidth: 15,
+                height: 15,
+                borderRadius: 999,
                 background: "#ef4444",
-                color: "#fff",
-                fontSize: 8,
+                color: "#ffffff",
+                border: `1.5px solid ${tokens.surfaceBg}`,
+                fontSize: 8.5,
                 fontWeight: 800,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                padding: "0 2px",
+                padding: "0 3px",
                 lineHeight: 1,
                 pointerEvents: "none",
-                zIndex: 10,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                boxSizing: "border-box",
+                zIndex: 2,
+                transition: "border-color 0.2s ease",
               }}
             >
               {badge > 99 ? "99+" : badge}
@@ -209,8 +232,9 @@ function ControlButton({
             letterSpacing: "0.02em",
             textAlign: "center",
             width: 60,
-            color: active ? "#1d4ed8" : "#6b7280",
+            color: labelColor,
             textTransform: "uppercase",
+            transition: "color 0.15s ease",
           }}
         >
           {item.label}
@@ -220,33 +244,44 @@ function ControlButton({
   );
 }
 
-
 export default function BuilderControlPanel({
   activeKey,
   onSelect,
   disabledKeys = [],
   badgeCounts = {},
 }: BuilderControlPanelProps) {
+  const { tokens } = useAdminTheme();
   const topItems = ITEMS.filter((item) => !item.bottom);
   const bottomItems = ITEMS.filter((item) => item.bottom);
 
   return (
     <div
+      className="builder-control-panel-root"
       style={{
         height: "100%",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
         padding: "8px 0",
-        background: "#ffffff",
+        background: tokens.surfaceBg,
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        transition: "background 0.2s ease",
       }}
     >
+      <style>{`
+        .builder-control-panel-root,
+        .builder-control-panel-root button,
+        .builder-control-panel-root div,
+        .builder-control-panel-root span {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+      `}</style>
       <div
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 8,
+          gap: 5,
         }}
       >
         {topItems.map((item) => (
@@ -266,7 +301,7 @@ export default function BuilderControlPanel({
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 8,
+          gap: 5,
           paddingBottom: 4,
         }}
       >
@@ -274,10 +309,12 @@ export default function BuilderControlPanel({
           style={{
             width: 32,
             height: 1,
-            background: "rgba(15,23,42,0.12)",
+            background: tokens.divider,
             marginBottom: 4,
+            transition: "background 0.2s ease",
           }}
-        />
+        >
+        </div>
         {bottomItems.map((item) => (
           <ControlButton
             key={item.key}

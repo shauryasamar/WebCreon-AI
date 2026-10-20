@@ -7,8 +7,8 @@ from typing import Dict, Any, List
 
 WEBNIRMAAN_KNOWLEDGE_BASE: Dict[str, Any] = {
     "platform_overview": {
-        "name": "WebCreon AI",
-        "description": "An autonomous AI website builder & e-commerce operating platform that constructs custom, high-conversion online stores with full database integration, live editing, and admin management.",
+        "name": "WebCreon",
+        "description": "An autonomous website builder & e-commerce operating platform that constructs custom, high-conversion online stores with full database integration, live editing, and admin management.",
     },
     "customization_tools": {
         "visual_builder": {
@@ -107,7 +107,7 @@ def search_knowledge_base(query: str) -> str:
 
     # Default overview guidance
     return (
-        "WebCreon AI allows you to customize every aspect of your site live:\n"
+        "WebCreon allows you to customize every aspect of your site live:\n"
         "- **Live Visual Builder**: Edit colors, text, and block props in real time.\n"
         "- **Assets Drawer**: Apply pre-designed Navbar, Hero, Product Card, and Footer layouts.\n"
         "- **Admin Panel**: Manage products, orders, returns, and checkout settings.\n"

@@ -4,6 +4,8 @@ Master router using LangGraph StateGraph to coordinate specialized sub-agents.
 """
 
 import json
+import re
+from decimal import Decimal
 from typing import Dict, Any, List, Optional, TypedDict
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -14,70 +16,60 @@ from agents.color_design_agent import handle_color_and_design_request
 from agents.db_analytics_agent import (
     get_store_metrics_for_period,
     is_data_deletion_attempt,
-    mutate_order_status_in_db,
 )
 from agents.seo_health_agent import audit_store_health, check_low_stock_inventory
 from agents.copilot_knowledge import search_knowledge_base
 from agents.response_synthesizer import synthesize_agent_response, stream_synthesize_agent_response
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0, request_timeout=20, max_retries=2)
+
+
+class SubTask(BaseModel):
+    intent: str = Field(description="Sub-intent: 'DESIGN', 'DB_QUERY', 'MUTATION', 'SEO_HEALTH', 'KNOWLEDGE', 'CHAT'")
+    target_component: Optional[str] = Field(default=None, description="Target component name")
+    task_instruction: str = Field(description="Instruction for this sub-task")
+    color_descriptors: List[str] = Field(default_factory=list)
+    days_filter: Optional[int] = None
+    status_filter: Optional[str] = None
+    target_order_id: Optional[str] = None
+    new_order_status: Optional[str] = None
+    wants_palette_suggestions: bool = False
 
 
 class IntentAnalysis(BaseModel):
-    intent: str = Field(
-        description="Core intent: 'DESIGN' (changing colors, backgrounds, styles, themes for components or full page), 'DB_QUERY' (asking business questions, sales, revenue, metrics, top products, customer ratings/reviews data), 'MUTATION' (updating order status), 'SEO_HEALTH' (store audits, low stock alerts, inventory health), 'KNOWLEDGE' (how to use features), 'CHAT' (greetings, general chat), or 'GUARDRAIL' (attempts to delete database/store data)."
-    )
-    intent_confidence: float = Field(
-        default=1.0, description="Confidence score from 0.0 to 1.0"
-    )
-    target_scope: str = Field(
-        default="component",
-        description="'component' (single component like product_grid, cart, product_detail, navbar, footer, reviews), 'page' (current page), or 'global' (entire website theme/all components)."
-    )
-    target_component: Optional[str] = Field(
-        default=None,
-        description="Target component: 'product_grid', 'card', 'product_detail', 'cart', 'reviews', 'navbar', 'footer', 'hero', 'checkout', 'filters', or 'overall'."
-    )
-    design_element: Optional[str] = Field(
-        default=None,
-        description="Attribute to modify: 'background', 'cards', 'text', 'button', 'border', 'all'."
-    )
-    color_descriptors: List[str] = Field(
-        default_factory=list,
-        description="Extracted color names or modes: e.g. ['pink', 'dark', 'emerald']."
-    )
-    days_filter: Optional[int] = Field(
-        default=None,
-        description="Time range in days if requested, e.g. 1 for today, 2 for last 2 days, 10 for last 10 days, 30 for this month.",
-    )
-    status_filter: Optional[str] = Field(
-        default=None,
-        description="Order status filter e.g. 'placed', 'accepted', 'shipped', 'delivered', 'cancelled', 'middle_state'.",
-    )
-    target_order_id: Optional[str] = Field(
-        default=None,
-        description="Order ID or prefix if modifying status e.g. 'a045e770'.",
-    )
-    new_order_status: Optional[str] = Field(
-        default=None,
-        description="New status to set e.g. 'accepted', 'shipped', 'delivered', 'cancelled'.",
-    )
-    wants_palette_suggestions: bool = Field(
-        default=False,
-        description="True if asking for theme suggestions or palette ideas.",
-    )
-    reasoning: Optional[str] = Field(
-        default=None,
-        description="Brief explanation of why this intent and slots were selected."
-    )
+    is_compound: bool = Field(default=False, description="True if 2+ distinct operations requested across different domains")
+    tasks: List[SubTask] = Field(default_factory=list, description="Chronological list of sub-tasks if compound")
+    intent: str = Field(description="Core intent: 'DESIGN', 'DB_QUERY', 'MUTATION', 'SEO_HEALTH', 'KNOWLEDGE', 'CHAT', 'COMPOUND'")
+    is_visual_change_requested: bool = Field(default=False, description="True if modifying visual styling, colors, or themes")
+    sentiment_tone: Optional[str] = Field(default=None, description="Inferred sentiment or tone")
+    user_intent_summary: Optional[str] = Field(default=None, description="1-sentence semantic summary of request")
+    intent_confidence: float = Field(default=1.0, description="Confidence score 0.0-1.0")
+    target_scope: str = Field(default="component", description="'component', 'page', or 'global'")
+    target_component: Optional[str] = Field(default=None, description="Target component: 'navbar', 'footer', 'hero', 'product_grid', 'product_carousel', 'section_group_carousel', 'category_grid', 'card', 'product_detail', 'cart', 'order_summary', 'delivery_form', 'payment', 'place_order', 'filter', 'sort', 'pagination', 'order_history', 'support', 'notification', 'profile', 'background', 'banner_create', 'revert', 'overall', or 'unsupported'")
+    design_element: Optional[str] = Field(default=None, description="Attribute to modify: 'background', 'cards', 'text', 'button', 'border', 'banner', 'all'")
+    color_descriptors: List[str] = Field(default_factory=list, description="Extracted color names")
+    days_filter: Optional[int] = Field(default=None, description="Days filter (1=today, 7=week, 30=month)")
+    status_filter: Optional[str] = Field(default=None, description="Order status filter e.g. 'placed', 'accepted', 'shipped', 'delivered'")
+    target_order_id: Optional[str] = Field(default=None, description="Order ID or prefix if updating")
+    new_order_status: Optional[str] = Field(default=None, description="New status to set")
+    wants_palette_suggestions: bool = Field(default=False, description="True if requesting theme/palette suggestions")
+    reasoning: Optional[str] = Field(default=None, description="Brief explanation")
 
 
 class CoPilotGraphState(TypedDict):
     user_message: str
     site_id: str
+    actor_id: Optional[str]
+    actor_name: Optional[str]
+    actor_email: Optional[str]
+    actor_role: Optional[str]
     site_definition: Dict[str, Any]
+    previous_draft_definition: Optional[Dict[str, Any]]
+    snapshot_history: Optional[List[Dict[str, Any]]]
     history_str: str
     intent: str
+    is_compound: bool
+    compound_tasks: List[Dict[str, Any]]
     target_scope: Optional[str]
     target_component: Optional[str]
     design_element: Optional[str]
@@ -87,91 +79,187 @@ class CoPilotGraphState(TypedDict):
     target_order_id: Optional[str]
     new_order_status: Optional[str]
     wants_palette_suggestions: bool
+    user_intent_summary: Optional[str]
     active_agent: str
     agent_payload: Dict[str, Any]
     final_output: Dict[str, Any]
 
 
-# Node 1: Router Node (Two-Tier Semantic Intent Classification)
+# Node 1: Router Node (Two-Tier Semantic Intent Classification & Compound Decomposition)
 async def router_node(state: CoPilotGraphState) -> Dict[str, Any]:
     user_msg = state["user_message"]
-
-    # 1. Safety Guardrail check first (with typo tolerance)
-    if is_data_deletion_attempt(user_msg):
+    # 1. Safety Guardrail & SQL Injection Probe check
+    user_msg_clean = user_msg.lower().strip()
+    sql_injection_patterns = [
+        r"\bunion\s+(all\s+)?select\b",
+        r"\b(or|and)\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+['\"]?\b",
+        r";\s*(drop\s+(table|database|schema)|delete\s+from|truncate\s+table)\b",
+        r"\b(pg_shadow|pg_user|information_schema|pg_sleep)\b",
+        r"\b(drop|truncate)\s+table\b",
+        r"['\"]hacked['\"]",
+    ]
+    is_sql_injection_probe = any(
+        bool(re.search(pat, user_msg_clean)) for pat in sql_injection_patterns
+    )
+    if is_data_deletion_attempt(user_msg) or is_sql_injection_probe:
         return {
             "intent": "GUARDRAIL",
             "active_agent": "Safety Guardrail",
+            "is_compound": False,
+            "compound_tasks": [],
         }
 
-    # 2. Semantic Intent Router with Few-Shot Disambiguation
+    # 1B. Pure Revert / Undo check (ONLY if message is solely a short revert command without extra actions)
+    user_msg_clean = user_msg.lower().strip()
+    words = [w.strip(".,;:!?+-") for w in user_msg_clean.split() if w.strip(".,;:!?+-")]
+
+    revert_triggers = [
+        "undo", "revert", "restore previous", "go back", "take back", 
+        "revert back", "revert changes", "undo change", "can you revert", 
+        "revert it", "undo it", "rollback", "roll back", "put it back",
+        "change it back", "bring back the old", "bring back previous",
+        "discard changes", "cancel that change", "restore older version",
+        "make it like before", "how it was before", "revert last change",
+        "revert the last change", "undo last change", "undo the last change",
+        "revert that change", "undo that change", "revert change"
+    ]
+
+    # Non-pure indicators are words indicating a second separate action or entity
+    non_pure_indicators = [
+        "and", "then", "also", "plus", "show", "what", "list",
+        "paint", "color", "colour", "background", "bg",
+        "red", "blue", "green", "yellow", "black", "white", "pink", "purple", "orange",
+        "navbar", "header", "footer", "hero", "card", "button", "theme",
+        "orders", "sales", "products", "banner", "support", "ticket", "table", "details"
+    ]
+
+    has_clause_delimiters = any(punct in user_msg for punct in [",", ";", "+", "&"])
+    has_non_pure_words = any(w in non_pure_indicators for w in words)
+    has_revert_keyword = any(t in user_msg_clean for t in revert_triggers)
+
+    revert_pattern = r"^(can you\s+)?(please\s+)?(undo|revert|rollback|restore|go back|take back|discard)(\s+(back|it|the|that|last|previous|changes?|version|change))*(\s+like before|\s+to previous|\s+older version|\s+how it was before)?$"
+    default_theme_pattern = r"^(can you\s+)?(please\s+)?(apply|reset|restore|go back to|switch to|use)?\s*(the\s+)?(default|original|initial|first)\s+(theme|palette|colors?|styling|design)\s*$"
+    is_pure_revert = bool(re.search(revert_pattern, user_msg_clean)) or bool(re.search(default_theme_pattern, user_msg_clean)) or (
+        has_revert_keyword
+        and not has_clause_delimiters
+        and not has_non_pure_words
+        and len(words) <= 6
+    )
+    if is_pure_revert:
+        return {
+            "intent": "DESIGN",
+            "is_compound": False,
+            "compound_tasks": [],
+            "target_component": "revert",
+            "active_agent": "Color & Design Agent (Revert)",
+        }
+
+    from agents.color_design_agent import detect_target_component
+    detected_comp = detect_target_component(user_msg_clean)
+
+    # 1C. Banner Creation Fast-Path
+    if detected_comp == "banner_create":
+        return {
+            "intent": "DESIGN",
+            "is_compound": False,
+            "compound_tasks": [],
+            "target_component": "banner_create",
+            "wants_palette_suggestions": False,
+            "active_agent": "Color & Design Agent (Banner)",
+        }
+
+    # 1D. Direct Component Override Fast-Path (Bypasses redundant ~2,200 token Router LLM for instant direct styling)
+    design_style_signals = [
+        "change", "make", "set", "turn", "update", "style", "fix", "camouflage", "camofladge", "contrast",
+        "color", "colour", "bg", "background", "border", "borders", "radius", "padding",
+        "shadow", "text", "theme", "#", "font", "white", "black", "blue", "red", "green", "dark", "light"
+    ]
+    is_direct_styling = (
+        detected_comp not in ("unsupported", "revert", "banner_create", "overall", None)
+        and any(s in user_msg_clean for s in design_style_signals)
+        and not any(w in user_msg_clean for w in ["and show", "and check", "and list", "and tell", "and how", "how to", "where is", "suggest", "recommend", "options", "ideas"])
+    )
+    if is_direct_styling:
+        return {
+            "intent": "DESIGN",
+            "is_compound": False,
+            "compound_tasks": [],
+            "target_component": detected_comp,
+            "wants_palette_suggestions": False,
+            "active_agent": "Color & Design Agent (Direct)",
+        }
+
+    # 1E. Palette / Theme Suggestion fast-path check & Conversational Follow-Up Resolution
+    suggestion_patterns = [
+        r"\b(suggest|recommend|ideas?|options?)\b.*\b(theme|themes|tmplete|template|palette|palettes|colors?|colours?)\b",
+        r"\b(theme|themes|tmplete|template|palette|palettes)\b.*\b(suggest|suggestion|suggestions|recommend|recommendation|recommendations|ideas?|options?)\b",
+        r"\b(give|gve|ive|gimme|show|generate|genrate|create|provide|share|need|want)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b",
+        r"\b\d+\s+.*(theme|themes|palette|palettes)\b",
+        r"\b(few|some|several|couple|different|multiple)\b.*\b(theme|themes|tmplete|template|palette|palettes)\b",
+        r"\b(theme|themes|palette|palettes)\s+(suggestions?|options?|ideas?)\b",
+        r"\b(color|colour|theme|themes)\s+(palette|palettes)\b",
+        r"\b(palette|palettes)\b",
+        r"\b(?:[1-6]|one|two|three|four|five|six)\s+(?:more|different|new)\b",
+    ]
+    
+    # Check conversational follow-ups (e.g. "give me new one", "3 more", "5 more", "didn't like any")
+    history_str_clean = str(state.get("history_str") or "").lower()
+    has_palette_context = any(term in history_str_clean for term in ["palette", "theme", "suggested themes", "designer-crafted themes"])
+    followup_request_patterns = [
+        r"\b(new\s*one|another(?:\s*one)?|different(?:\s*ones?|\s*options?)?|more\s*options?|other\s*options?)\b",
+        r"\b(?:[1-6]|\d+|few|some|couple)\s*more\b",
+        r"\b(give|show|generate|genrate|create|provide)\s*(?:me\s*)?(?:[1-6]|\d+|more|new|another)\b",
+        r"\b(didn'?t\s*like|don'?t\s*like|not\s*liking|none\s*of\s*(?:these|them|it|those))\b",
+        r"^\s*(?:[1-6]|\d+)\s*more\s*$",
+        r"^\s*more\s*$",
+        r"^\s*new\s*one\s*$",
+        r"^\s*give\s*me\s*(?:new\s*one|[1-6]|\d+)\s*$",
+    ]
+    is_palette_followup = has_palette_context and any(bool(re.search(pat, user_msg_clean)) for pat in followup_request_patterns)
+    is_palette_suggestion_request = (
+        detected_comp in ("overall", None)
+        and (any(bool(re.search(pat, user_msg_clean)) for pat in suggestion_patterns) or is_palette_followup)
+    )
+    if is_palette_suggestion_request and not any(a in user_msg_clean for a in ["how to", "where is", "help with", "explain how", "documentation"]):
+        return {
+            "intent": "DESIGN",
+            "is_compound": False,
+            "compound_tasks": [],
+            "target_component": "overall",
+            "wants_palette_suggestions": True,
+            "active_agent": "Color & Design Agent (Palettes)",
+        }
+
+    # 2. Semantic Intent Router with Deep Sentiment, Context, & 100% Storefront Component Coverage
     router_prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are WebCreon AI's Master Store Co-Pilot Intent Router.
-Your job is to semantically analyze the user prompt and conversation history, and classify it into EXACTLY ONE primary intent with extracted slots.
+        ("system", """You are WebCreon AI's Store Co-Pilot Master Intent Router & Task Planner.
+Classify the user's semantic intent, conversational context, and target component with high accuracy.
 
-INTENTS:
-1. 'DESIGN': Any styling, color, theme, background, or visual appearance request.
-   - Even if the user mentions database nouns like "review component color", "product grid background", "orders table style", or "cart theme", if the action is modifying visual appearance / color / theme, it is ALWAYS 'DESIGN'!
-    - Extract `target_component`:
-      * "product grid background" / "product catalog section" -> target_component: "product_grid", design_element: "background"
-      * "product cards" / "catalog card color" -> target_component: "card", design_element: "cards"
-      * "delivery form" / "delivery address" / "shipping form" -> target_component: "delivery_form"
-      * "payment methods" / "payment options" / "payment pills" -> target_component: "payment"
-      * "place order button" / "checkout button" / "place order cta" -> target_component: "place_order"
-      * "order summary" / "checkout summary" / "pricing breakdown" -> target_component: "order_summary"
-      * "filter toolbar" / "filter modal" / "sort dropdown" -> target_component: "filter"
-      * "pagination" / "page numbers" / "pagination buttons" -> target_component: "pagination"
-      * "order history page" / "order cards" / "product history card" -> target_component: "order_history"
-      * "checkout flow" / "checkout page" -> target_component: "checkout"
-      * "product detail page" / "product page colors" -> target_component: "product_detail"
-      * "cart drawer" / "cart color" -> target_component: "cart"
-      * "review section" / "reviews color" -> target_component: "reviews"
-      * "navbar" / "header" -> target_component: "navbar"
-      * "footer" -> target_component: "footer"
-      * "hero banner" / "slider" -> target_component: "hero"
-      * "whole website" / "entire page" / "overall theme" -> target_component: "overall", target_scope: "global"
+CORE INTENTS:
+- 'DESIGN': Modifying visual appearance, styling, colors, backgrounds, borders, shadows, themes, banners, or revert/undo.
+- 'DB_QUERY': Business questions, sales, revenue, orders, top products, customers, stock/inventory metrics.
+- 'MUTATION': Explicit updates to database records (e.g. set order status to shipped/accepted). Never classify styling as MUTATION.
+- 'SEO_HEALTH': Store health audits, inventory checks, catalog completeness.
+- 'KNOWLEDGE': Questions on platform usage and documentation.
+- 'CHAT': Greetings and general chit-chat.
+- 'COMPOUND': User asks for 2+ distinct operations across different domains (e.g. "revert last change and show today's sales"). Break into sub-tasks in `tasks`.
 
-2. 'DB_QUERY': Business analytics, sales queries, revenue calculations, customer review analysis, order tracking, top products, or product catalog queries (e.g. asking for product description, price, stock, details).
-   - Examples: "what's the description for chocolate cake?", "what is the price of vanilla cupcake?", "how many reviews do we have for bananas?", "show top 5 selling products", "what is today's revenue?", "list placed orders".
+TARGET COMPONENTS (100% COVERAGE):
+navbar (top bar/header), footer (bottom bar/copyright), hero (top banner/slides styling, button colors, backgrounds, text), product_grid (catalog grid), product_carousel (product slider), section_group_carousel (category story carousel), category_grid (category boxes/tiles), card (product boxes/cards/item titles/prices), product_detail (item page), cart (cart drawer/bag), order_summary, delivery_form, payment, place_order, filter, sort, pagination, order_history, support, notification, profile (customer profile page/card/input fields/text/buttons), profile_dropdown (account dropdown popup in navbar), background (page canvas), banner_create (ONLY when adding/creating a NEW promotional banner slide), revert, overall (store-wide).
 
-3. 'MUTATION': Explicit administrative status updates on existing orders.
-   - Examples: "mark order a045e770 as shipped", "cancel order 123", "accept order 456".
-
-4. 'SEO_HEALTH': Store health audits, inventory restock checks, checking for missing product descriptions, or catalog completeness.
-   - Examples: "check low stock inventory", "audit store health", "check if any products have missing description", "any missing images?".
-
-5. 'KNOWLEDGE': Questions about how to use WebCreon platform features, or how to update products, descriptions, prices, and store settings.
-   - Examples: "can we update chocolate cake description?", "how do I add a new product?", "how to change payment gateway?".
-
-6. 'CHAT': Greetings ("hi", "hello"), pleasantries, or general conversations.
-
-7. 'GUARDRAIL': Malicious or destructive deletion requests ("delete all orders", "drop database").
-
-FEW-SHOT EXAMPLES:
-- User: "what's the description for chocolate cake?"
-  -> intent: "DB_QUERY"
-- User: "what is the price of vanilla cupcake?"
-  -> intent: "DB_QUERY"
-- User: "can you please check if we have any product with missing description?"
-  -> intent: "SEO_HEALTH"
-- User: "can we update Chocolate cake description?"
-  -> intent: "KNOWLEDGE"
-- User: "can you please update the review and theme component color to pink please"
-  -> intent: "DESIGN", target_component: "reviews", color_descriptors: ["pink"], design_element: "all"
-- User: "change product grid background to dark slate"
-  -> intent: "DESIGN", target_component: "product_grid", design_element: "background", color_descriptors: ["dark slate"]
-- User: "how many reviews were submitted this week?"
-  -> intent: "DB_QUERY", days_filter: 7
-- User: "make product cards white with a soft shadow"
-  -> intent: "DESIGN", target_component: "card", design_element: "cards", color_descriptors: ["white"]
-- User: "mark order 81b3b794 as delivered"
-  -> intent: "MUTATION", target_order_id: "81b3b794", new_order_status: "delivered"
-"""),
+RULES:
+1. 'banner_create' vs 'hero': Whenever the user asks to CREATE, ADD, GENERATE, or MAKE a promotional banner, slide, or hero banner (even if buttons, copy, discounts, or colors for that new banner are specified, e.g. "Create a promotional hero banner for 25% OFF with a Shop Now button"), ALWAYS classify as 'banner_create'! ONLY classify as 'hero' when the user asks to style, recolor, or adjust an ALREADY EXISTING banner without creating a new one (e.g. "make hero background darker", "change banner button to blue").
+2. Multi-target carousel/section styling: use 'multi:comp1,comp2' (e.g. 'multi:product_carousel,section_group_carousel').
+3. Pronoun & follow-up resolution: If user says "make it black" or "change it", check Conversation History for the previously discussed component.
+4. Single analytical questions asking for multiple metrics (e.g. "what are new orders and their stock") are a single 'DB_QUERY', NOT compound.
+5. 'wants_palette_suggestions': Set to TRUE whenever the user asks for suggestions, recommendations, multiple options, templates, or ideas of themes or color palettes (e.g. "suggest me some theme template in yellow", "generate few yellow colored themes", "give me some theme options"). NEVER classify requests to suggest or generate theme options as 'KNOWLEDGE' or direct styling mutations!
+6. 'KNOWLEDGE': STRICTLY for conceptual "how-to" questions asking about platform features, documentation, or settings navigation (e.g. "how do I add a product", "where is the billing tab"). NEVER route requests asking to generate or suggest themes, templates, palettes, or banners to KNOWLEDGE."""),
         ("user", "User Message: {user_message}\nConversation History: {history_str}"),
     ])
 
     try:
         from agents.token_tracker import TokenCostCallback
-        structured_llm = router_prompt | llm.with_structured_output(IntentAnalysis)
+        structured_llm = router_prompt | llm.with_structured_output(IntentAnalysis, method="function_calling")
         res: IntentAnalysis = await structured_llm.ainvoke(
             {
                 "user_message": user_msg,
@@ -181,12 +269,95 @@ FEW-SHOT EXAMPLES:
         )
 
         raw_intent = (res.intent or "CHAT").upper().strip()
-        
-        # Normalize target component
         target_comp = res.target_component.lower().strip() if res.target_component else None
+
+        # Format compound tasks list if compound
+        compound_tasks = [t.model_dump() for t in res.tasks] if res.is_compound and res.tasks else []
+
+        # Check for conversational pronoun follow-ups
+        history_str = state.get("history_str", "")
+        words = user_msg_clean.split()
+        is_pronoun_followup = any(w in words for w in ["it", "them", "that", "this", "those"]) or user_msg_clean.startswith("make it") or user_msg_clean.startswith("turn it")
+        
+        # If target was unresolved or generic 'overall', but history has a clear previous design component
+        if (not target_comp or target_comp == "overall") and is_pronoun_followup and history_str:
+            hist_lower = history_str.lower()
+            for comp_candidate in ["section_group_carousel", "product_carousel", "category_grid", "product_grid", "navbar", "footer", "hero", "cart", "card", "filter", "profile", "profile_dropdown"]:
+                if comp_candidate in hist_lower or comp_candidate.replace("_", " ") in hist_lower:
+                    if "carousel" in hist_lower and ("section" in hist_lower or "group" in hist_lower) and "product" in hist_lower:
+                        target_comp = "multi:product_carousel,section_group_carousel"
+                    else:
+                        target_comp = comp_candidate
+                    break
+
+        # Disambiguate banner_create:
+        is_explicit_existing_edit = any(w in user_msg_clean for w in [
+            "existing banner", "existing banners", "existing hero", "style the banner", "modify the banner",
+            "color of banner", "color of the banner", "banner to red", "banner to blue",
+            "hero background to", "banner background to", "hero radius", "banner radius",
+            "change the banner", "change banner color", "recolor the banner"
+        ])
+        has_banner_verb = bool(re.search(
+            r"\b(create|add|insert|generate)\s+(a\s+|an\s+|the\s+)?([a-z0-9\-%]+\s+)*(banner|slide|hero\s+banner)\b",
+            user_msg_clean
+        ))
+        has_make_new_banner = bool(re.search(
+            r"\bmake\s+(a\s+|an\s+)?([a-z0-9\-%]+\s+)*(banner|slide)\b",
+            user_msg_clean
+        )) and not any(w in user_msg_clean for w in ["the banner", "the hero banner", "banner to", "banner into", "hero to"])
+        has_banner_creation = (has_banner_verb or has_make_new_banner) and not is_explicit_existing_edit
+
+        if has_banner_creation:
+            raw_intent = "DESIGN"
+            target_comp = "banner_create"
+
+        # Disambiguate revert / undo misclassifications:
+        # Reverting design changes is ALWAYS DESIGN with target_component='revert', never MUTATION
+        if any(w in user_msg_clean for w in ["revert", "undo", "rollback", "restore previous", "go back"]):
+            if raw_intent in ("MUTATION", "CHAT", "GUARDRAIL"):
+                raw_intent = "DESIGN"
+                target_comp = "revert"
+
+        # Disambiguate MUTATION misclassifications:
+        # If router flagged MUTATION but the prompt is actually styling a storefront component and has no DB write signals
+        storefront_styling_signals = [
+            "color", "colour", "background", "border", "borders", "radius", "padding", "shadow", "frosted", "glass",
+            "carousel", "grid", "card", "cards", "navbar", "footer", "hero", "cream", "violet", "peach"
+        ]
+        has_styling_signal = any(w in user_msg_clean for w in storefront_styling_signals)
+        db_write_signals = [
+            "accept order", "cancel order", "delete order", "create coupon", "delete coupon", "update stock", "set stock",
+            "out of stock", "set price to", "change price to", "refund", "return status", "deactivate coupon", "activate coupon"
+        ]
+        has_db_write = any(w in user_msg_clean for w in db_write_signals)
+
+        if raw_intent in ("MUTATION", "GUARDRAIL", "CHAT") and (res.is_visual_change_requested or has_styling_signal) and not has_db_write:
+            raw_intent = "DESIGN"
+            if not target_comp:
+                target_comp = "overall"
+
+        # Correct sub-tasks inside compound requests as well
+        if compound_tasks:
+            for t in compound_tasks:
+                t_instr = str(t.get("task_instruction", "")).lower()
+                if any(w in t_instr for w in storefront_styling_signals) and not any(w in t_instr for w in db_write_signals):
+                    if t.get("intent") in ("MUTATION", "GUARDRAIL", "CHAT", "KNOWLEDGE", "DB_QUERY"):
+                        t["intent"] = "DESIGN"
+
+            if all(t.get("intent") in ("MUTATION", "GUARDRAIL") for t in compound_tasks):
+                raw_intent = "MUTATION"
+                compound_tasks = []
+            elif any(t.get("intent") == "DESIGN" for t in compound_tasks) and len(compound_tasks) > 1:
+                raw_intent = "COMPOUND"
+            elif len(compound_tasks) == 1 and compound_tasks[0].get("intent") == "DESIGN":
+                raw_intent = "DESIGN"
+                target_comp = compound_tasks[0].get("target_component") or target_comp
+                compound_tasks = []
 
         return {
             "intent": raw_intent,
+            "is_compound": bool(raw_intent == "COMPOUND" and compound_tasks),
+            "compound_tasks": compound_tasks,
             "target_scope": res.target_scope,
             "target_component": target_comp,
             "design_element": res.design_element,
@@ -196,22 +367,77 @@ FEW-SHOT EXAMPLES:
             "target_order_id": res.target_order_id,
             "new_order_status": res.new_order_status,
             "wants_palette_suggestions": res.wants_palette_suggestions,
+            "user_intent_summary": res.user_intent_summary,
             "active_agent": f"{raw_intent} Agent",
         }
     except Exception as e:
         print("Router node error:", e)
-        return {"intent": "CHAT", "active_agent": "General Chat Agent"}
+        return {"intent": "CHAT", "active_agent": "General Chat Agent", "is_compound": False, "compound_tasks": []}
+
 
 
 # Node 2: Color & Design Agent Node
 async def color_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
+    user_msg = state["user_message"]
+    intent_summary = state.get("user_intent_summary")
+    words = user_msg.lower().split()
+    if intent_summary and any(w in words for w in ["it", "them", "that", "this", "those"]):
+        effective_msg = f"{user_msg}. ({intent_summary})"
+    else:
+        effective_msg = user_msg
+
     res = await handle_color_and_design_request(
-        user_message=state["user_message"],
+        user_message=effective_msg,
         site_definition=state["site_definition"],
         target_component=state.get("target_component"),
         wants_palette_suggestions=state.get("wants_palette_suggestions", False),
+        session_id=state.get("site_id"),
+        history_str=state.get("history_str"),
     )
     return {"agent_payload": res, "active_agent": "Color & Design Agent"}
+
+
+def deduplicate_data_cards(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Deduplicates data cards by type, title, and structure signature."""
+    if not cards:
+        return []
+    seen = set()
+    unique_cards = []
+    seen_table_cards: List[Dict[str, Any]] = []
+
+    for c in cards:
+        if not isinstance(c, dict):
+            continue
+        c_type = c.get("type", "")
+        if c_type == "table_card":
+            c_rows = c.get("rows", [])
+            c_cols = set(str(k).lower().strip() for k in c.get("columns", []))
+            is_dup_table = False
+            for prev_idx, prev_card in enumerate(seen_table_cards):
+                prev_cols = set(str(k).lower().strip() for k in prev_card.get("columns", []))
+                col_overlap = len(c_cols.intersection(prev_cols))
+                if col_overlap >= 2 or (len(c_rows) > 0 and len(c_rows) == len(prev_card.get("rows", []))):
+                    is_dup_table = True
+                    if len(c.get("columns", [])) > len(prev_card.get("columns", [])):
+                        unique_cards[unique_cards.index(prev_card)] = c
+                        seen_table_cards[prev_idx] = c
+                    break
+            if is_dup_table:
+                continue
+            seen_table_cards.append(c)
+            unique_cards.append(c)
+        elif c_type in ("palette_suggestions_card", "component_palette_suggestions_card"):
+            pal_names = tuple(p.get("name", "") for p in c.get("palettes", []))
+            sig = (c_type, pal_names)
+            if sig not in seen:
+                seen.add(sig)
+                unique_cards.append(c)
+        else:
+            sig = (c_type, str(c.get("title", "")).strip().lower())
+            if sig not in seen:
+                seen.add(sig)
+                unique_cards.append(c)
+    return unique_cards
 
 
 # Node 3: DB & Analytics Agent Node
@@ -220,25 +446,47 @@ async def db_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
     msg_lower = user_msg.lower()
     site_id = state["site_id"]
     intent = state["intent"]
+    actor_id = state.get("actor_id")
+    actor_name = state.get("actor_name")
+    actor_email = state.get("actor_email")
+    actor_role = state.get("actor_role")
 
-    # Handle Order Mutation
-    if intent == "MUTATION" or state.get("target_order_id"):
-        target_id = state.get("target_order_id")
-        target_status = state.get("new_order_status")
-        if target_id and target_status and site_id:
-            mut_res = mutate_order_status_in_db(site_id, target_id, target_status)
-            if mut_res.get("success"):
-                return {
-                    "agent_payload": {
-                        "mutation": mut_res,
-                        "data_cards": [{
-                            "type": "orders_card",
-                            "title": f"Order #{mut_res['order_id']} Status Updated! ✅",
-                            "orders": [mut_res],
-                        }],
-                    },
-                    "active_agent": "DB & Analytics Agent (Mutation)",
-                }
+    # 0. Strict Read-Only Guardrail for DB Operations
+    write_triggers = [
+        "accept order", "accept orders", "accept all", "accept these", "accept those", "accept placed", "accept new",
+        "cancel order", "cancel orders", "cancel all", "cancel these", "cancel those", "bulk cancel", "bulk accept",
+        "mark as", "mark order", "update order", "set status", "change status", "confirm order", "confirm accept", "confirm cancel",
+        "create coupon", "create promo", "new coupon", "new promo", "add coupon", "add promo", "make coupon", "make promo",
+        "deactivate coupon", "activate coupon", "disable coupon", "enable coupon", "disable promo", "enable promo", "delete coupon",
+        "set stock", "update stock", "change stock", "increase stock", "decrease stock", "out of stock", "set price", "change price", "update price",
+        "deactivate product", "activate product", "hide product", "unhide product",
+        "approve return", "reject return", "receive return", "inspect return", "refund return", "close return"
+    ]
+
+    is_write_attempt = (
+        intent == "MUTATION"
+        or any(w in msg_lower for w in write_triggers)
+        or any(w in msg_lower for w in ["stock to", "price to", "varint stock to", "variant stock to", "varient stock to", "quantity to", "qty to"])
+        or (("coupon" in msg_lower or "promo code" in msg_lower or "discount code" in msg_lower) and any(w in msg_lower for w in ["create", "add", "make", "generate", "set up", "insert", "delete", "remove", "deactivate", "activate"]) and not any(w in msg_lower for w in ["banner", "hero", "slide", "how many", "list", "show", "active", "what"]))
+    )
+
+    is_read_query = (
+        any(w in msg_lower for w in ["what are", "what is", "how many", "list", "show", "tell me", "display", "check", "find", "search", "get", "details", "breakdown", "analysis", "revenue", "sales", "metrics", "count"])
+        and not any(w in msg_lower for w in ["set", "change to", "update to", "mark as", "stock to", "price to", "accept", "cancel", "delete"])
+    )
+    if is_read_query or any(w in msg_lower for w in ["theme", "palette", "color theme", "colour theme", "color palette", "colour palette"]):
+        if not any(w in msg_lower for w in ["order", "coupon", "promo", "inventory", "stock", "refund", "return", "product status"]):
+            is_write_attempt = False
+
+    if is_write_attempt:
+        return {
+            "agent_payload": {
+                "read_only_restriction": True,
+                "attempted_action": user_msg,
+                "data_cards": [],
+            },
+            "active_agent": "DB & Analytics Agent (Read-Only)",
+        }
 
     # Extract days filter from message if router didn't catch it
     days_filter = state.get("days_filter")
@@ -266,6 +514,7 @@ async def db_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
             site_uuid,
             days_filter=days_filter,
             status_filter=state.get("status_filter"),
+            site_definition=state.get("site_definition"),
         )
 
     # Run Dynamic Safe Text-to-SQL for analytical & custom queries
@@ -276,81 +525,108 @@ async def db_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
                 user_query=user_msg,
                 site_id=site_id,
                 history_str=state.get("history_str", ""),
+                site_definition=state.get("site_definition"),
             )
         except Exception as e:
             print("Copilot dynamic SQL error:", e)
 
     data_cards = []
+    has_table_card = False
 
-    # 1. Dynamic Table Card from SQL execution if multi-row or multi-column data returned
+    # 1. Dynamic Table Card from SQL execution if multi-row tabular data returned
     if dynamic_sql_res.get("success") and dynamic_sql_res.get("rows"):
         rows = dynamic_sql_res.get("rows", [])
         cols = dynamic_sql_res.get("columns", [])
-        # Only render a table card if it's actual tabular data (not a single scalar count like [count: 2])
-        is_single_scalar = len(rows) == 1 and len(cols) == 1
-        if not is_single_scalar and len(rows) > 0:
+        # Only render a table card if it's actual tabular list data (not a 1-row summary scalar like total orders / stock count)
+        is_summary_scalar = len(rows) == 1 and (len(cols) <= 2 or all(isinstance(v, (int, float)) for v in rows[0].values()))
+        if not is_summary_scalar and len(rows) > 0:
             data_cards.append({
                 "type": "table_card",
                 "title": dynamic_sql_res.get("title") or "Database Query Results",
                 "columns": cols,
-                "rows": rows[:15],
-                "row_count": dynamic_sql_res.get("row_count", 0),
+                "rows": rows,
+                "row_count": len(rows),
             })
+            has_table_card = True
     
-    # 2. Generate UI data cards based on query focus
-    if any(w in msg_lower for w in ["returned", "return", "refund"]):
-        returns_list = [
-            {
-                "id": str(r.id)[:8],
-                "order_id": str(r.order_id)[:8] if getattr(r, "order_id", None) else "N/A",
-                "status": str(r.status or "requested").capitalize(),
-                "refund_status": str(r.refund_status or "pending").capitalize(),
-                "reason": r.request_note or r.admin_note or r.rejection_reason or "Customer return request",
-                "amount": float(r.final_refund_amount or r.suggested_refund_amount or 0),
-            }
-            for r in metrics.get("returns", [])[:12]
-        ]
-        if returns_list:
+    # 2. Generate UI data cards based on query focus ONLY if no table card is active
+    if not has_table_card:
+        if any(w in msg_lower for w in ["returned", "return", "refund"]):
+            returns_list = [
+                {
+                    "id": str(r.id)[:8],
+                    "order_id": str(r.order_id)[:8] if getattr(r, "order_id", None) else "N/A",
+                    "status": str(r.status or "requested").capitalize(),
+                    "refund_status": str(r.refund_status or "pending").capitalize(),
+                    "reason": r.request_note or r.admin_note or r.rejection_reason or "Customer return request",
+                    "amount": float(r.final_refund_amount or r.suggested_refund_amount or 0),
+                }
+                for r in metrics.get("returns", [])[:12]
+            ]
+            if returns_list:
+                data_cards.append({
+                    "type": "returns_card",
+                    "title": f"Return & Refund Requests ({metrics['total_returns_count']})",
+                    "returns": returns_list,
+                })
+        elif any(w in msg_lower for w in ["show orders", "list orders", "recent orders", "view orders", "orders list", "unfulfilled orders", "order history", "track orders", "all orders"]) and not any(w in msg_lower for w in ["stock", "inventory", "available", "variant", "how many", "count", "items in"]):
+            all_raw_orders = metrics.get("all_orders") or []
+            if any(w in msg_lower for w in ["new", "placed", "unfulfilled"]):
+                # Strictly placed orders (matches admin dashboard New Orders tab)
+                orders_source = [o for o in all_raw_orders if str(getattr(o, "status", "")).lower() == "placed"]
+                orders_title = f"New Placed Orders ({len(orders_source)})"
+            elif any(w in msg_lower for w in ["accepted", "confirmed", "yet to ship"]):
+                orders_source = [o for o in all_raw_orders if str(getattr(o, "status", "")).lower() in ("accepted", "confirmed")]
+                orders_title = f"Confirmed Orders ({len(orders_source)})"
+            elif any(w in msg_lower for w in ["shipped", "in transit", "yet to deliver", "out for delivery"]):
+                orders_source = [o for o in all_raw_orders if str(getattr(o, "status", "")).lower() in ("shipped", "in_transit", "out_for_delivery")]
+                orders_title = f"Shipped Orders ({len(orders_source)})"
+            elif any(w in msg_lower for w in ["delivered"]):
+                orders_source = [o for o in all_raw_orders if str(getattr(o, "status", "")).lower() == "delivered"]
+                orders_title = f"Delivered Orders ({len(orders_source)})"
+            elif any(w in msg_lower for w in ["cancelled", "canceled", "refunded"]):
+                orders_source = [o for o in all_raw_orders if str(getattr(o, "status", "")).lower() in ("cancelled", "refunded")]
+                orders_title = f"Cancelled Orders ({len(orders_source)})"
+            elif "pending" in msg_lower:
+                orders_source = [o for o in all_raw_orders if str(getattr(o, "status", "")).lower() == "pending"]
+                orders_title = f"Pending Draft Orders ({len(orders_source)})"
+            else:
+                orders_source = metrics.get("filtered_orders") or all_raw_orders
+                orders_title = f"Recent Orders ({len(orders_source)})"
+
+            orders_list = [
+                {
+                    "id": str(o.id)[:8],
+                    "items_summary": ", ".join([f"{it.get('quantity', 1)}x {it.get('product_name', it.get('name', 'Item'))}" for it in o.items if isinstance(it, dict)]) if isinstance(o.items, list) else "Order Item",
+                    "total": float(o.total or 0),
+                    "status": str(o.status or "placed").capitalize(),
+                    "date": o.created_at.strftime("%b %d, %I:%M %p") if getattr(o, "created_at", None) else "",
+                }
+                for o in orders_source[:15]
+            ]
+            if orders_list:
+                data_cards.append({
+                    "type": "orders_card",
+                    "title": orders_title,
+                    "orders": orders_list,
+                })
+        elif any(w in msg_lower for w in ["sales overview", "revenue summary", "store performance", "sales analytics"]) and not any(w in msg_lower for w in ["stock", "inventory", "variant", "product", "how many", "items in"]):
             data_cards.append({
-                "type": "returns_card",
-                "title": f"Return & Refund Requests ({metrics['total_returns_count']})",
-                "returns": returns_list,
+                "type": "analytics_card",
+                "title": f"Store Sales Analytics ({metrics['time_label']})",
+                "metrics": {
+                    "total_sales": f"₹{metrics['period_sales']:,.2f}",
+                    "orders_count": metrics["period_orders_count"],
+                    "average_rating": metrics["avg_rating"],
+                    "cancellation_rate": metrics["cancel_rate"],
+                },
             })
-    elif any(w in msg_lower for w in ["order", "orders", "middle", "yet to ship", "shipped", "accepted", "placed", "new", "pending", "delivered"]):
-        orders_source = metrics.get("filtered_orders") or metrics.get("all_orders") or []
-        orders_list = [
-            {
-                "id": str(o.id)[:8],
-                "items_summary": ", ".join([f"{it.get('quantity', 1)}x {it.get('product_name', it.get('name', 'Item'))}" for it in o.items if isinstance(it, dict)]) if isinstance(o.items, list) else "Order Item",
-                "total": float(o.total or 0),
-                "status": str(o.status or "placed").capitalize(),
-                "date": o.created_at.strftime("%b %d, %I:%M %p") if getattr(o, "created_at", None) else "",
-            }
-            for o in orders_source[:15]
-        ]
-        if orders_list and not dynamic_sql_res.get("rows"):
-            data_cards.append({
-                "type": "orders_card",
-                "title": f"Orders Overview ({len(orders_source)})",
-                "orders": orders_list,
-            })
-    elif any(w in msg_lower for w in ["sales", "revenue", "analytics", "performance"]) and not dynamic_sql_res.get("rows"):
-        data_cards.append({
-            "type": "analytics_card",
-            "title": f"Store Sales Analytics ({metrics['time_label']})",
-            "metrics": {
-                "total_sales": f"₹{metrics['period_sales']:,.2f}",
-                "orders_count": metrics["period_orders_count"],
-                "average_rating": metrics["avg_rating"],
-                "cancellation_rate": metrics["cancel_rate"],
-            },
-        })
 
     return {
         "agent_payload": {
             "metrics": metrics,
             "dynamic_query_result": dynamic_sql_res,
-            "data_cards": data_cards,
+            "data_cards": deduplicate_data_cards(data_cards),
             "days_filter": days_filter,
         },
         "active_agent": "DB & Analytics Agent",
@@ -400,8 +676,6 @@ async def knowledge_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
 
 
 # Node 6: General Chat Agent Node
-# Greetings and casual chat are handled by the synthesizer node directly.
-# This node simply passes the message context through for synthesis.
 async def chat_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
     return {
         "agent_payload": {"is_general_chat": True},
@@ -409,7 +683,156 @@ async def chat_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
     }
 
 
-# Node 7: Guardrail Node
+# Node 7: Compound Multi-Task Orchestrator Node
+async def compound_agent_node(state: CoPilotGraphState) -> Dict[str, Any]:
+    tasks = state.get("compound_tasks") or []
+    import copy
+    current_def = copy.deepcopy(state.get("site_definition") or {})
+    all_data_cards = []
+    has_subsequent_design = False
+    has_revert_task = False
+    compound_action_summaries = []
+    compound_patch = {}
+    last_dynamic_sql = None
+    last_metrics = None
+
+    for task in tasks:
+        t_intent = str(task.get("intent") or "CHAT").upper()
+        instruction = task.get("task_instruction") or state["user_message"]
+        t_comp = task.get("target_component")
+        inst_lower = instruction.lower()
+
+        if t_intent == "DESIGN":
+            if t_comp == "revert" or any(w in inst_lower for w in ["revert", "undo", "take back"]):
+                has_revert_task = True
+                prev_from_state = state.get("previous_draft_definition")
+                if not prev_from_state and state.get("snapshot_history") and len(state.get("snapshot_history", [])) > 0:
+                    prev_from_state = state["snapshot_history"][-1]
+
+                if prev_from_state:
+                    current_def = copy.deepcopy(prev_from_state)
+                else:
+                    site_id_str = state.get("site_id")
+                    if site_id_str:
+                        try:
+                            from services.site_revision_service import undo_site_revision
+                            from sqlmodel import Session
+                            from db.database import engine
+                            from uuid import UUID
+                            with Session(engine) as db_sess:
+                                ok, new_v, prev_def, err = undo_site_revision(
+                                    session=db_sess,
+                                    site_id=site_id_str,
+                                    actor_id=UUID(site_id_str) if site_id_str else UUID(int=0),
+                                )
+                                if ok and prev_def:
+                                    current_def = copy.deepcopy(prev_def)
+                        except Exception as e:
+                            print("Compound revert error:", e)
+                
+                compound_action_summaries.append("Reverted storefront design to previous snapshot")
+                continue
+
+            res = await handle_color_and_design_request(
+                user_message=instruction,
+                site_definition=current_def,
+                target_component=t_comp,
+                wants_palette_suggestions=task.get("wants_palette_suggestions", False),
+                session_id=state.get("site_id"),
+                history_str=state.get("history_str"),
+            )
+            if res.get("design_modified") and res.get("next_draft_definition"):
+                has_subsequent_design = True
+                current_def = res["next_draft_definition"]
+                if res.get("applied_patch"):
+                    compound_patch.update(res["applied_patch"])
+            if res.get("design_modified"):
+                compound_action_summaries.append(f"Applied design updates to {t_comp or 'storefront'}")
+            if res.get("data_cards"):
+                all_data_cards.extend(res["data_cards"])
+
+        elif t_intent == "MUTATION":
+            compound_action_summaries.append(f"Database write operations ('{instruction}') cannot be performed directly via chat; please make these updates in your Admin Dashboard")
+
+        elif t_intent == "DB_QUERY":
+            from uuid import UUID
+            site_uuid = UUID(state["site_id"]) if state.get("site_id") else None
+            from sqlmodel import Session
+            from agents.db_analytics_agent import engine, get_store_metrics_for_period
+            from agents.sql_agent_engine import run_dynamic_store_query
+
+            with Session(engine) as db:
+                metrics = get_store_metrics_for_period(
+                    db,
+                    site_uuid,
+                    days_filter=task.get("days_filter"),
+                    status_filter=task.get("status_filter"),
+                    site_definition=current_def,
+                )
+            last_metrics = metrics
+            dynamic_sql_res = {}
+            try:
+                dynamic_sql_res = await run_dynamic_store_query(
+                    user_query=instruction,
+                    site_id=state.get("site_id", ""),
+                    history_str=state.get("history_str", ""),
+                    site_definition=current_def,
+                )
+            except Exception:
+                pass
+            if dynamic_sql_res.get("success") and dynamic_sql_res.get("rows"):
+                last_dynamic_sql = dynamic_sql_res
+                rows = dynamic_sql_res.get("rows", [])
+                cols = dynamic_sql_res.get("columns", [])
+                is_summary_scalar = len(rows) == 1 and (len(cols) <= 2 or all(isinstance(v, (int, float)) for v in rows[0].values()))
+                if not is_summary_scalar and len(rows) > 0:
+                    all_data_cards.append({
+                        "type": "table_card",
+                        "title": dynamic_sql_res.get("title") or "Database Query Results",
+                        "columns": cols,
+                        "rows": rows,
+                        "row_count": len(rows),
+                    })
+            elif any(w in inst_lower for w in ["sales", "revenue", "performance", "analytics"]) and metrics:
+                all_data_cards.append({
+                    "type": "analytics_card",
+                    "title": f"Store Sales Analytics ({metrics.get('time_label', 'Period')})",
+                    "metrics": {
+                        "total_sales": f"₹{metrics.get('period_sales', 0.0):,.2f}",
+                        "orders_count": metrics.get("period_orders_count", 0),
+                        "average_rating": metrics.get("avg_rating", "N/A"),
+                        "cancellation_rate": metrics.get("cancel_rate", "0%"),
+                    },
+                })
+            compound_action_summaries.append("Queried store database records")
+
+        elif t_intent == "SEO_HEALTH":
+            audit_res = audit_store_health(state.get("site_id", ""), current_def)
+            all_data_cards.append({
+                "type": "store_audit_card",
+                "title": "Store Health Audit Report",
+                "audit": audit_res,
+            })
+            compound_action_summaries.append("Completed store health audit")
+
+    return {
+        "agent_payload": {
+            "compound_execution": True,
+            "compound_action_summaries": compound_action_summaries,
+            "design_modified": has_subsequent_design or has_revert_task,
+            "has_reverted_base": bool(has_revert_task and has_subsequent_design),
+            "action": "revert_snapshot" if (has_revert_task and not has_subsequent_design) else None,
+            "next_draft_definition": current_def if (has_subsequent_design or has_revert_task) else None,
+            "applied_patch": compound_patch,
+            "data_cards": deduplicate_data_cards(all_data_cards),
+            "dynamic_query_result": last_dynamic_sql if last_dynamic_sql else None,
+            "metrics": last_metrics if last_metrics else None,
+        },
+        "active_agent": "Compound Multi-Action Orchestrator",
+    }
+
+
+# Node 8: Guardrail Node
 async def guardrail_node(state: CoPilotGraphState) -> Dict[str, Any]:
     return {
         "agent_payload": {"is_guardrail": True},
@@ -417,12 +840,15 @@ async def guardrail_node(state: CoPilotGraphState) -> Dict[str, Any]:
     }
 
 
-# Node 8: Synthesizer Node
+# Node 9: Synthesizer Node
 async def synthesizer_node(state: CoPilotGraphState) -> Dict[str, Any]:
+    agent_payload = state.get("agent_payload", {})
+    if "site_definition" not in agent_payload and state.get("site_definition"):
+        agent_payload["site_definition"] = state.get("site_definition")
     res = await synthesize_agent_response(
         user_message=state["user_message"],
         active_agent=state.get("active_agent", "Co-Pilot Agent"),
-        agent_payload=state.get("agent_payload", {}),
+        agent_payload=agent_payload,
         history_str=state.get("history_str", ""),
     )
     return {"final_output": res}
@@ -430,9 +856,13 @@ async def synthesizer_node(state: CoPilotGraphState) -> Dict[str, Any]:
 
 # Conditional Edge Router Function
 def route_intent(state: CoPilotGraphState) -> str:
+    if state.get("wants_palette_suggestions"):
+        return "color_agent_node"
     intent = state.get("intent", "CHAT")
     if intent == "GUARDRAIL":
         return "guardrail_node"
+    elif intent == "COMPOUND":
+        return "compound_agent_node"
     elif intent == "DESIGN":
         return "color_agent_node"
     elif intent in ["DB_QUERY", "MUTATION"]:
@@ -449,6 +879,7 @@ def route_intent(state: CoPilotGraphState) -> str:
 workflow = StateGraph(CoPilotGraphState)
 
 workflow.add_node("router_node", router_node)
+workflow.add_node("compound_agent_node", compound_agent_node)
 workflow.add_node("color_agent_node", color_agent_node)
 workflow.add_node("db_agent_node", db_agent_node)
 workflow.add_node("seo_health_node", seo_health_node)
@@ -464,6 +895,7 @@ workflow.add_conditional_edges(
     route_intent,
     {
         "guardrail_node": "guardrail_node",
+        "compound_agent_node": "compound_agent_node",
         "color_agent_node": "color_agent_node",
         "db_agent_node": "db_agent_node",
         "seo_health_node": "seo_health_node",
@@ -472,6 +904,7 @@ workflow.add_conditional_edges(
     }
 )
 
+workflow.add_edge("compound_agent_node", "synthesizer_node")
 workflow.add_edge("color_agent_node", "synthesizer_node")
 workflow.add_edge("db_agent_node", "synthesizer_node")
 workflow.add_edge("seo_health_node", "synthesizer_node")
@@ -487,6 +920,7 @@ copilot_langgraph_app = workflow.compile()
 # Pre-synthesis workflow for streaming execution
 pre_workflow = StateGraph(CoPilotGraphState)
 pre_workflow.add_node("router_node", router_node)
+pre_workflow.add_node("compound_agent_node", compound_agent_node)
 pre_workflow.add_node("color_agent_node", color_agent_node)
 pre_workflow.add_node("db_agent_node", db_agent_node)
 pre_workflow.add_node("seo_health_node", seo_health_node)
@@ -500,6 +934,7 @@ pre_workflow.add_conditional_edges(
     route_intent,
     {
         "guardrail_node": "guardrail_node",
+        "compound_agent_node": "compound_agent_node",
         "color_agent_node": "color_agent_node",
         "db_agent_node": "db_agent_node",
         "seo_health_node": "seo_health_node",
@@ -507,6 +942,7 @@ pre_workflow.add_conditional_edges(
         "chat_agent_node": "chat_agent_node",
     }
 )
+pre_workflow.add_edge("compound_agent_node", END)
 pre_workflow.add_edge("color_agent_node", END)
 pre_workflow.add_edge("db_agent_node", END)
 pre_workflow.add_edge("seo_health_node", END)
@@ -515,3 +951,4 @@ pre_workflow.add_edge("chat_agent_node", END)
 pre_workflow.add_edge("guardrail_node", END)
 
 copilot_pre_synthesis_app = pre_workflow.compile()
+

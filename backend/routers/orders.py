@@ -1,38 +1,68 @@
 from __future__ import annotations
 
 import logging
+import math
 from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm.attributes import flag_modified
-from sqlmodel import Session, delete, func, select
+from sqlalchemy import cast, String
+from sqlmodel import Session, delete, func, or_, select
 
-from auth_middleware import authenticate_admin, authenticate_customer, enforce_site_ownership
+from auth_middleware import authenticate_admin, authenticate_customer, check_admin_has_permission, enforce_site_ownership
 from db.database import get_session
+from routers.audit_logs import log_activity
 
 logger = logging.getLogger(__name__)
 from models import (
     Cart,
     CartItem,
+    Category,
+    Collection,
+    Coupon,
+    CouponUsage,
     DeliveryAgent,
     DeliverySettings,
     InventoryMovement,
+    InvoiceSequence,
+    MerchantTaxProfile,
     Order,
     OrderItem,
     OrderStatusHistory,
+    PlatformTaxInvoice,
     Product,
+    ProductCollection,
     Shipment,
     Site,
+    TaxCreditNote,
+    TaxInvoice,
+    TaxMaster,
     TenantLedgerEntry,
     User,
     UserAddress,
 )
+import os
+from fastapi.responses import FileResponse
 from services.shiprocket import ShiprocketClient
+from services.notification_service import dispatch_customer_event
+from services.tax_engine import (
+    LineItemTaxInput,
+    LineItemTaxResult,
+    calculate_cart_taxes,
+    get_financial_year,
+    resolve_gst_state_code,
+)
+from services.pdf_invoice_service import (
+    issue_tax_invoice_for_order,
+    generate_rule46_invoice_pdf,
+    generate_platform_fee_invoice_pdf,
+)
+from services.settlement_tax_service import compute_live_fy_gross_sales
 
 router = APIRouter(
     prefix="/orders",
@@ -71,12 +101,12 @@ def get_effective_payment_status(order: Order) -> str:
     return status
 
 ALLOWED_STATUS_TRANSITIONS = {
-    "placed": {"confirmed", "cancelled"},
-    "confirmed": {"shipped", "out_for_delivery", "cancelled"},
-    "shipped": {"out_for_delivery", "cancelled", "rescheduled"},
-    "out_for_delivery": {"delivered", "rescheduled", "failed"},
+    "placed": {"confirmed", "shipped", "cancelled"},
+    "confirmed": {"shipped", "out_for_delivery", "delivered", "cancelled"},
+    "shipped": {"out_for_delivery", "delivered", "cancelled", "rescheduled"},
+    "out_for_delivery": {"delivered", "rescheduled", "failed", "cancelled"},
     "rescheduled": {"out_for_delivery", "shipped", "delivered", "failed", "cancelled"},
-    "failed": {"rescheduled", "shipped", "cancelled"},
+    "failed": {"rescheduled", "shipped", "delivered", "cancelled"},
     "delivered": set(),
     "partially_cancelled": set(),
     "cancelled": set(),
@@ -160,7 +190,81 @@ def serialize_address_snapshot(address: UserAddress) -> dict[str, Any]:
         "email": address.email,
         "addressType": address.address_type,
         "address_type": address.address_type,
+        "latitude": getattr(address, "latitude", None),
+        "longitude": getattr(address, "longitude", None),
+        "geoAccuracy": getattr(address, "geo_accuracy", None),
+        "geo_accuracy": getattr(address, "geo_accuracy", None),
     }
+
+
+def get_effective_shipping_address(order: Order, session: Optional[Session] = None) -> dict[str, Any]:
+    """Retrieve or self-heal the shipping address snapshot for an order."""
+    addr = order.shipping_address if isinstance(order.shipping_address, dict) else {}
+    has_full_address = bool(
+        (addr.get("addressLine1") or addr.get("address_line1") or addr.get("address") or addr.get("street") or addr.get("line1"))
+        and (addr.get("city") or addr.get("postalCode") or addr.get("pincode"))
+    )
+    if has_full_address:
+        return addr
+
+    if not session:
+        return addr
+
+    # 1. Fallback to order.shipping_address_id
+    if getattr(order, "shipping_address_id", None):
+        user_addr = session.get(UserAddress, order.shipping_address_id)
+        if user_addr:
+            snapshot = serialize_address_snapshot(user_addr)
+            merged = {**snapshot, **{k: v for k, v in addr.items() if v}}
+            order.shipping_address = merged
+            session.add(order)
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+            return merged
+
+    # 2. Fallback to customer's saved address in UserAddress
+    if getattr(order, "customer_id", None):
+        user_addr = session.exec(
+            select(UserAddress)
+            .where(UserAddress.user_id == order.customer_id)
+            .order_by(UserAddress.is_default.desc(), UserAddress.created_at.desc())
+        ).first()
+        if user_addr:
+            snapshot = serialize_address_snapshot(user_addr)
+            merged = {**snapshot, **{k: v for k, v in addr.items() if v}}
+            order.shipping_address = merged
+            session.add(order)
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+            return merged
+
+        # 3. Fallback to User profile
+        user = session.get(User, order.customer_id)
+        if user:
+            snapshot = {
+                "fullName": user.name or addr.get("fullName") or "Customer",
+                "full_name": user.name or addr.get("fullName") or "Customer",
+                "mobileNumber": user.phone or addr.get("mobileNumber") or "",
+                "mobile_number": user.phone or addr.get("mobileNumber") or "",
+                "email": user.email or addr.get("email") or "",
+                "addressLine1": addr.get("addressLine1") or "",
+                "city": addr.get("city") or "",
+                "postalCode": addr.get("postalCode") or "",
+            }
+            merged = {**snapshot, **{k: v for k, v in addr.items() if v}}
+            order.shipping_address = merged
+            session.add(order)
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+            return merged
+
+    return addr
 
 
 import secrets
@@ -180,7 +284,12 @@ def ensure_order_delivery_otp(order: Order, session: Optional[Session] = None) -
     return str(order.delivery_otp)
 
 
-def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str] = None, session: Optional[Session] = None) -> Optional[dict[str, Any]]:
+def serialize_shipment(
+    shipment: Optional[Shipment],
+    order_status: Optional[str] = None,
+    session: Optional[Session] = None,
+    is_admin: bool = False,
+) -> Optional[dict[str, Any]]:
     if not shipment:
         return None
     agent_id_str = str(shipment.agent_id) if getattr(shipment, "agent_id", None) else None
@@ -207,12 +316,23 @@ def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str]
                 delivery_partner_phone = agent.phone
             vehicle_type = getattr(agent, "vehicle_type", "bike")
 
-    is_shiprocket = getattr(shipment, "delivery_mode", None) == "shiprocket" or getattr(shipment, "mode", None) == "shiprocket"
+    mode_str = getattr(shipment, "delivery_mode", None) or getattr(shipment, "mode", None)
+    has_agent = bool(shipment.agent_id) or (bool(delivery_partner_name) and mode_str != "manual" and not getattr(shipment, "awb_number", None))
+
+    is_own_agent = bool(mode_str == "own_agent" or has_agent)
+    is_shiprocket = bool(
+        not is_own_agent and (
+            mode_str == "shiprocket"
+            or (bool(getattr(shipment, "awb_number", None)) and not delivery_partner_name)
+            or (bool(getattr(shipment, "courier_name", None)) and not delivery_partner_name)
+        )
+    )
+    is_manual = bool(not is_own_agent and not is_shiprocket)
 
     scans: list[dict[str, Any]] = []
     if is_shiprocket and getattr(shipment, "awb_number", None):
         dt_shipped = shipment.shipped_at.strftime("%d %b %Y, %I:%M %p") if shipment.shipped_at else None
-        courier_lbl = getattr(shipment, "courier_name", None) or "Delhivery Surface"
+        courier_lbl = getattr(shipment, "courier_name", None) or "Courier Partner"
         scans.append({
             "status": "Manifest Created",
             "activity": f"Courier AWB {shipment.awb_number} generated ({courier_lbl})",
@@ -241,24 +361,71 @@ def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str]
                 "location": "Destination City",
                 "date": dt_del,
             })
+    elif is_manual or (not is_shiprocket and not is_own_agent and (delivery_partner_name or delivery_partner_phone)):
+        dt_shipped = shipment.shipped_at.strftime("%d %b %Y, %I:%M %p") if shipment.shipped_at else None
+        partner_lbl = delivery_partner_name or getattr(shipment, "courier_name", None) or "Courier Partner"
+        tracking_lbl = f" (Tracking/Contact: {delivery_partner_phone or getattr(shipment, 'awb_number', None)})" if (delivery_partner_phone or getattr(shipment, "awb_number", None)) else ""
+        scans.append({
+            "status": "Dispatched",
+            "activity": f"Dispatched via {partner_lbl}{tracking_lbl}",
+            "location": "Origin Warehouse",
+            "date": dt_shipped,
+        })
+        if effective_status in ("out_for_delivery", "delivered"):
+            dt_ofd = (shipment.out_for_delivery_at or shipment.shipped_at).strftime("%d %b %Y, %I:%M %p") if (shipment.out_for_delivery_at or shipment.shipped_at) else None
+            scans.append({
+                "status": "In Transit / Out for Delivery",
+                "activity": f"In transit with {partner_lbl}",
+                "location": "Destination City",
+                "date": dt_ofd,
+            })
+        if effective_status == "delivered":
+            dt_del = (shipment.delivered_at or shipment.shipped_at).strftime("%d %b %Y, %I:%M %p") if (shipment.delivered_at or shipment.shipped_at) else None
+            scans.append({
+                "status": "Delivered",
+                "activity": "Package delivered to consignee",
+                "location": "Destination City",
+                "date": dt_del,
+            })
 
-    # Rider privacy: Only expose live direct rider name and phone when shipment is actively out for delivery
-    is_active_ofd = (effective_status == "out_for_delivery")
-    public_delivery_partner_name = delivery_partner_name if is_active_ofd else None
-    public_delivery_partner_phone = delivery_partner_phone if is_active_ofd else None
+    is_active_ofd = (effective_status in ("out_for_delivery", "in_transit", "shipped") or order_status in ("out_for_delivery", "in_transit", "shipped", "replacement_dispatched"))
+
+    if is_own_agent:
+        resolved_partner_name = delivery_partner_name
+        resolved_partner_phone = delivery_partner_phone
+        resolved_agent_id = agent_id_str
+        resolved_vehicle_type = vehicle_type
+    elif is_manual:
+        resolved_partner_name = shipment.delivery_partner_name or getattr(shipment, "courier_name", None)
+        resolved_partner_phone = shipment.delivery_partner_phone or getattr(shipment, "awb_number", None)
+        resolved_agent_id = None
+        resolved_vehicle_type = None
+    elif is_admin:
+        resolved_partner_name = delivery_partner_name
+        resolved_partner_phone = delivery_partner_phone
+        resolved_agent_id = agent_id_str
+        resolved_vehicle_type = vehicle_type
+    else:
+        # Manual Courier / Shiprocket
+        resolved_partner_name = delivery_partner_name or getattr(shipment, "courier_name", None)
+        resolved_partner_phone = delivery_partner_phone or getattr(shipment, "awb_number", None)
+        resolved_agent_id = None
+        resolved_vehicle_type = None
+
+    resolved_mode = "own_agent" if is_own_agent else ("shiprocket" if is_shiprocket else "manual")
 
     return {
         "id": str(shipment.id),
         "status": effective_status,
-        "mode": getattr(shipment, "delivery_mode", "manual"),
-        "delivery_mode": getattr(shipment, "delivery_mode", "manual"),
-        "agent_id": agent_id_str if is_active_ofd else None,
-        "agent_token": agent_token if is_active_ofd else None,
-        "delivery_partner_name": public_delivery_partner_name,
-        "delivery_partner_phone": public_delivery_partner_phone,
-        "vehicle_type": vehicle_type if is_active_ofd else None,
-        "courier_name": getattr(shipment, "courier_name", None),
-        "awb_number": getattr(shipment, "awb_number", None),
+        "mode": resolved_mode,
+        "delivery_mode": resolved_mode,
+        "agent_id": resolved_agent_id,
+        "agent_token": agent_token if (is_admin or is_active_ofd) else None,
+        "delivery_partner_name": resolved_partner_name,
+        "delivery_partner_phone": resolved_partner_phone,
+        "vehicle_type": resolved_vehicle_type,
+        "courier_name": getattr(shipment, "courier_name", None) or (resolved_partner_name if resolved_mode == "manual" else None),
+        "awb_number": getattr(shipment, "awb_number", None) or (resolved_partner_phone if resolved_mode == "manual" else None),
         "tracking_url": getattr(shipment, "tracking_url", None),
         "label_url": getattr(shipment, "label_url", None),
         "estimated_delivery_at": shipment.estimated_delivery_at.isoformat() if shipment.estimated_delivery_at else None,
@@ -267,7 +434,7 @@ def serialize_shipment(shipment: Optional[Shipment], order_status: Optional[str]
         "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
         "notes": getattr(shipment, "notes", None),
         "scans": scans,
-        "delivery_otp": None if is_shiprocket else getattr(shipment, "delivery_otp", None),
+        "delivery_otp": getattr(shipment, "delivery_otp", None),
     }
 
 
@@ -280,9 +447,9 @@ def can_transition_order_status(current_status: str, next_status: str) -> bool:
 def build_default_checkout_settings() -> dict[str, Any]:
     return {
         "taxSettings": {
-            "enabled": True,
+            "enabled": False,
             "label": "GST",
-            "rate": "5",
+            "rate": "0",
             "applyOnShipping": False,
         },
         "charges": [
@@ -293,6 +460,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": True,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "99",
                 "applyConditionType": "none",
@@ -308,6 +476,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "29",
                 "applyConditionType": "none",
@@ -323,6 +492,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": True,
                 "amountType": "fixed",
                 "amountValue": "19",
                 "applyConditionType": "none",
@@ -338,6 +508,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "15",
                 "applyConditionType": "none",
@@ -353,6 +524,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "9",
                 "applyConditionType": "none",
@@ -368,6 +540,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "49",
                 "applyConditionType": "subtotal_lt",
@@ -383,6 +556,7 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": False,
                 "customerSelectable": False,
+                "refundable": False,
                 "amountType": "fixed",
                 "amountValue": "39",
                 "applyConditionType": "payment_method",
@@ -398,13 +572,14 @@ def build_default_checkout_settings() -> dict[str, Any]:
                 "enabled": False,
                 "optional": True,
                 "customerSelectable": True,
+                "refundable": True,
                 "amountType": "fixed",
                 "amountValue": "49",
                 "applyConditionType": "none",
                 "applyConditionValue": "",
                 "waiveConditionType": "none",
                 "waiveConditionValue": "",
-                "description": "Optional checkout add-on selected by customer.",
+                "description": "",
             },
         ],
     }
@@ -448,11 +623,153 @@ def calculate_charge_amount(charge: dict[str, Any], base_amount: Decimal) -> Dec
 def evaluate_promo_discount(
     subtotal: Decimal,
     promo_code: Optional[str],
-) -> tuple[Optional[str], Decimal]:
-    normalized = str(promo_code or "").strip()
-    if normalized.lower() == "save10":
-        return normalized, money(subtotal * Decimal("0.10"))
-    return normalized or None, Decimal("0.00")
+    site_id: Optional[UUID] = None,
+    session: Optional[Session] = None,
+    customer_email: Optional[str] = None,
+    delivery_fee: Decimal = Decimal("0.00"),
+    cart_items: Optional[list[dict[str, Any]]] = None,
+) -> tuple[Optional[str], Decimal, Optional[Coupon]]:
+    normalized = str(promo_code or "").strip().upper()
+    if not normalized:
+        return None, Decimal("0.00"), None
+
+    if not site_id or not session:
+        if normalized.lower() == "save10":
+            return normalized, money(subtotal * Decimal("0.10")), None
+        return normalized or None, Decimal("0.00"), None
+
+    coupon = session.exec(
+        select(Coupon).where(
+            Coupon.site_id == site_id,
+            Coupon.code == normalized,
+            Coupon.is_active == True,
+        )
+    ).first()
+
+    if not coupon:
+        return None, Decimal("0.00"), None
+
+    now = datetime.now(timezone.utc)
+    if coupon.starts_at and now < coupon.starts_at:
+        return None, Decimal("0.00"), None
+    if coupon.expires_at and now > coupon.expires_at:
+        return None, Decimal("0.00"), None
+    if coupon.total_usage_limit is not None and coupon.times_used >= coupon.total_usage_limit:
+        return None, Decimal("0.00"), None
+    if subtotal < coupon.min_order_value:
+        return None, Decimal("0.00"), None
+
+    # Customer specific rules
+    if customer_email:
+        email_clean = customer_email.strip().lower()
+        if coupon.is_first_order_only:
+            past_order = session.exec(
+                select(Order)
+                .join(User, Order.customer_id == User.id)
+                .where(
+                    Order.site_id == site_id,
+                    User.email == email_clean,
+                    Order.status != "cancelled",
+                )
+            ).first()
+            if past_order:
+                return None, Decimal("0.00"), None
+
+        if coupon.per_customer_limit:
+            usage_count = session.exec(
+                select(func.count(CouponUsage.id)).where(
+                    CouponUsage.site_id == site_id,
+                    CouponUsage.coupon_id == coupon.id,
+                    CouponUsage.customer_email == email_clean,
+                )
+            ).one()
+            if usage_count >= coupon.per_customer_limit:
+                return None, Decimal("0.00"), None
+
+    # Evaluate targeting (collections / categories)
+    applies_to = getattr(coupon, "applies_to", "all") or "all"
+    col_ids = [str(c).strip() for c in (getattr(coupon, "collection_ids", []) or []) if str(c).strip()]
+    cat_ids = [str(c).strip() for c in (getattr(coupon, "category_ids", []) or []) if str(c).strip()]
+
+    qualifying_subtotal = subtotal
+
+    if (applies_to == "collections" and col_ids) or (applies_to == "categories" and cat_ids):
+        if not cart_items:
+            return None, Decimal("0.00"), None
+
+        item_product_map: list[tuple[UUID, Decimal]] = []
+        for itm in cart_items:
+            raw_pid = itm.get("product_id") or itm.get("productId") or itm.get("id")
+            if not raw_pid:
+                continue
+            try:
+                pid = UUID(str(raw_pid))
+                qty = Decimal(str(itm.get("quantity") or 1))
+                unit_price = Decimal(str(itm.get("price") or itm.get("unit_price") or 0))
+                line_total = Decimal(str(itm.get("line_total") or itm.get("subtotal") or (qty * unit_price)))
+                item_product_map.append((pid, line_total))
+            except Exception:
+                continue
+
+        prod_uuids = [p[0] for p in item_product_map]
+        if not prod_uuids:
+            return None, Decimal("0.00"), None
+
+        qualifying_pids = set()
+
+        if applies_to == "collections" and col_ids:
+            col_uuids = []
+            for c in col_ids:
+                try:
+                    col_uuids.append(UUID(c))
+                except Exception:
+                    pass
+            if col_uuids:
+                matching_rows = session.exec(
+                    select(ProductCollection.product_id).where(
+                        ProductCollection.product_id.in_(prod_uuids),
+                        ProductCollection.collection_id.in_(col_uuids),
+                    )
+                ).all()
+                qualifying_pids = set(matching_rows)
+
+        elif applies_to == "categories" and cat_ids:
+            cat_uuids = []
+            cat_names_raw = set()
+            for c in cat_ids:
+                try:
+                    cat_uuids.append(UUID(c))
+                except Exception:
+                    cat_names_raw.add(c.lower().strip())
+
+            matching_products = session.exec(
+                select(Product).where(Product.id.in_(prod_uuids))
+            ).all()
+
+            for p in matching_products:
+                if (p.category_id and p.category_id in cat_uuids) or (p.category and p.category.lower().strip() in cat_names_raw):
+                    qualifying_pids.add(p.id)
+
+        if not qualifying_pids:
+            return None, Decimal("0.00"), None
+
+        qualifying_subtotal = sum((line_total for pid, line_total in item_product_map if pid in qualifying_pids), Decimal("0.00"))
+        if qualifying_subtotal <= Decimal("0.00"):
+            return None, Decimal("0.00"), None
+
+    discount_amount = Decimal("0.00")
+    if coupon.discount_type == "percentage":
+        computed = (qualifying_subtotal * coupon.discount_value) / Decimal("100.00")
+        if coupon.max_discount_amount is not None and coupon.max_discount_amount > 0:
+            computed = min(computed, coupon.max_discount_amount)
+        discount_amount = min(computed, qualifying_subtotal)
+    elif coupon.discount_type == "fixed_amount":
+        discount_amount = min(coupon.discount_value, qualifying_subtotal)
+    elif coupon.discount_type == "free_shipping":
+        discount_amount = delivery_fee
+
+    discount_amount = money(discount_amount)
+    return coupon.code, discount_amount, coupon
 
 
 def extract_variant_details(
@@ -518,7 +835,29 @@ def decrement_product_stock(
     product: Product,
     quantity: int,
     selected_variant_value: Optional[str],
+    is_preorder: bool = False,
 ) -> None:
+    if is_preorder:
+        if product.preorder_limit is not None:
+            product.preorder_limit = max(0, product.preorder_limit - quantity)
+        if product.stock is not None and product.stock > 0:
+            product.stock = max(0, product.stock - quantity)
+            product.in_stock = product.stock > 0
+        if selected_variant_value and product.variant_option:
+            variant_option = deepcopy(product.variant_option or {})
+            option_values = variant_option.get("optionValues") or []
+            for option in option_values:
+                if option.get("value") == selected_variant_value:
+                    stock_qty = option.get("stockQty")
+                    if stock_qty is not None and int(stock_qty) > 0:
+                        new_stk = max(0, int(stock_qty) - quantity)
+                        option["stockQty"] = new_stk
+                        option["inStock"] = new_stk > 0
+                    break
+            product.variant_option = variant_option
+        product.updated_at = utc_now()
+        return
+
     if product.stock < quantity:
         raise HTTPException(status_code=409, detail=f"Insufficient stock for {product.name}")
 
@@ -633,9 +972,20 @@ def evaluate_pricing(
     payment_method: str,
     selected_optional_charge_ids: list[str],
     promo_code: Optional[str],
+    site_id: Optional[UUID] = None,
+    session: Optional[Session] = None,
+    customer_email: Optional[str] = None,
+    shipping_address: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     subtotal = sum((item["line_total"] for item in cart_items), Decimal("0.00"))
-    applied_promo_code, promo_discount = evaluate_promo_discount(subtotal, promo_code)
+    applied_promo_code, promo_discount, coupon_obj = evaluate_promo_discount(
+        subtotal=subtotal,
+        promo_code=promo_code,
+        site_id=site_id,
+        session=session,
+        customer_email=customer_email,
+        cart_items=cart_items,
+    )
     subtotal_after_discount = max(subtotal - promo_discount, Decimal("0.00"))
 
     charges = checkout_settings.get("charges") or []
@@ -655,6 +1005,7 @@ def evaluate_pricing(
 
     applied_charges: list[dict[str, Any]] = []
     waived_charges: list[dict[str, Any]] = []
+    shipping_charge = Decimal("0.00")
 
     for charge in [*auto_applied, *selected_optional]:
         if not matches_apply_condition(charge, subtotal_after_discount, payment_method):
@@ -674,6 +1025,7 @@ def evaluate_pricing(
             "finalAmount": float(final_amount),
             "applied": True,
             "waived": waived,
+            "refundable": bool(charge.get("refundable", True)),
             "applyConditionType": charge.get("applyConditionType"),
             "applyConditionValue": charge.get("applyConditionValue"),
             "waiveConditionType": charge.get("waiveConditionType"),
@@ -687,6 +1039,8 @@ def evaluate_pricing(
 
         if final_amount > 0:
             applied_charges.append(charge_snapshot)
+            if charge.get("code") == "shipping_fee":
+                shipping_charge += final_amount
 
     charges_total = sum(
         (Decimal(str(charge["finalAmount"])) for charge in applied_charges),
@@ -694,13 +1048,217 @@ def evaluate_pricing(
     )
 
     tax_settings = checkout_settings.get("taxSettings") or {}
-    tax_enabled = bool(tax_settings.get("enabled"))
-    tax_rate = to_number(tax_settings.get("rate"))
-    apply_on_shipping = bool(tax_settings.get("applyOnShipping"))
-    tax_base = subtotal_after_discount + charges_total if apply_on_shipping else subtotal_after_discount
-    tax_amount = money((tax_base * tax_rate) / Decimal("100")) if tax_enabled else Decimal("0.00")
+    tax_enabled = bool(tax_settings.get("enabled", False))
+    fallback_tax_rate = to_number(tax_settings.get("rate", 0.0))
+    apply_on_shipping = bool(tax_settings.get("applyOnShipping", True))
 
-    total = max(subtotal_after_discount + charges_total + tax_amount, Decimal("0.00"))
+    if session and site_id:
+        site = session.get(Site, site_id)
+        merchant_tax_profile = session.exec(
+            select(MerchantTaxProfile).where(MerchantTaxProfile.site_id == site_id)
+        ).first()
+
+        origin_state_code = "27"
+        is_composition = False
+        is_unregistered = False
+
+        if merchant_tax_profile:
+            origin_state_code = merchant_tax_profile.state_code or (
+                merchant_tax_profile.gstin[:2] if merchant_tax_profile.gstin else "27"
+            )
+            reg_type_str = str(getattr(merchant_tax_profile.registration_type, "value", merchant_tax_profile.registration_type) or "").lower()
+            is_composition = bool(merchant_tax_profile.is_composition_dealer or reg_type_str in ("composition", "composition_scheme"))
+            is_unregistered = bool(reg_type_str in ("unregistered", "enrolled_eco"))
+            allow_interstate = bool(getattr(merchant_tax_profile, "allow_interstate_sales", True))
+
+        dest_state_code = origin_state_code
+        if shipping_address:
+            dest_state_code = resolve_gst_state_code(
+                state_code=shipping_address.get("state_code") or shipping_address.get("stateCode"),
+                state_name=shipping_address.get("state") or shipping_address.get("state_name") or shipping_address.get("stateName"),
+                postal_code=shipping_address.get("postal_code") or shipping_address.get("postalCode"),
+                default=origin_state_code,
+            )
+
+        is_regular_gst = bool(
+            merchant_tax_profile
+            and not is_composition
+            and not is_unregistered
+            and bool(merchant_tax_profile.gstin)
+        )
+
+        if merchant_tax_profile and not is_regular_gst and (is_composition or is_unregistered or not allow_interstate):
+            if origin_state_code != dest_state_code:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Inter-state supply is restricted for unregistered or composition merchants under GST law (Notification 34/2023-CT). Please configure a Regular GSTIN to ship nationwide.",
+                )
+
+        store_default_hsn = (
+            getattr(merchant_tax_profile, "default_hsn_code", None)
+            or (getattr(site, "default_hsn_code", None) if site else None)
+        )
+        store_default_tax_rate = (
+            getattr(merchant_tax_profile, "default_tax_rate", None)
+            or (getattr(site, "default_tax_rate", None) if site else None)
+        )
+
+        line_tax_inputs: list[LineItemTaxInput] = []
+        for idx, item in enumerate(cart_items):
+            prod_id = item.get("product_id")
+            prod = session.get(Product, prod_id) if prod_id else None
+
+            hsn_code = (
+                getattr(prod, "hsn_code", None)
+                or store_default_hsn
+                or "999999"
+            )
+            gst_rate = Decimal(str(store_default_tax_rate)) if store_default_tax_rate is not None else fallback_tax_rate
+            is_inclusive = True
+
+            if prod:
+                is_inclusive = getattr(prod, "price_inclusive_of_gst", True)
+                if prod.tax_rate_override is not None:
+                    gst_rate = Decimal(str(prod.tax_rate_override))
+                elif prod.hsn_sac_id:
+                    tax_master = session.get(TaxMaster, prod.hsn_sac_id)
+                    if tax_master:
+                        hsn_code = tax_master.code
+                        gst_rate = Decimal(str(tax_master.gst_rate))
+                elif prod.hsn_code or store_default_hsn:
+                    effective_hsn = (prod.hsn_code or store_default_hsn).strip()
+                    hsn_code = effective_hsn
+                    tax_master = session.exec(
+                        select(TaxMaster).where(
+                            (TaxMaster.code == effective_hsn) | (TaxMaster.code.startswith(effective_hsn[:4]))
+                        )
+                    ).first()
+                    if tax_master:
+                        gst_rate = Decimal(str(tax_master.gst_rate))
+                    else:
+                        prefix4 = effective_hsn[:4]
+                        if prefix4 in ("8517", "8518", "8504", "8471", "8528", "8525", "8544", "8501", "8502"):
+                            gst_rate = Decimal("18.00")
+                        elif prefix4 in ("6109", "6203", "6204", "6104", "6105", "6205"):
+                            item_price_num = float(getattr(prod, "price", 0) or 0)
+                            gst_rate = Decimal("5.00") if item_price_num <= 1000 else Decimal("12.00")
+                        elif prefix4 in ("6403", "6404", "6402", "6401"):
+                            item_price_num = float(getattr(prod, "price", 0) or 0)
+                            gst_rate = Decimal("5.00") if item_price_num <= 1000 else Decimal("18.00")
+                        elif prefix4 in ("0801", "0802", "0806", "2106", "0902", "1905", "0402", "0405"):
+                            gst_rate = Decimal("5.00")
+                        elif prefix4 in ("0803", "0804", "0805", "0808", "0810", "0701", "0702", "0703", "0709", "0800"):
+                            gst_rate = Decimal("0.00")
+                        elif prefix4 in ("3304", "3305", "3307", "3401"):
+                            gst_rate = Decimal("18.00")
+                        elif store_default_tax_rate is not None:
+                            gst_rate = Decimal(str(store_default_tax_rate))
+
+            line_tot = Decimal(str(item.get("line_total", 0)))
+            item_discount = Decimal("0.00")
+            if subtotal > Decimal("0.00") and promo_discount > Decimal("0.00"):
+                item_discount = money(promo_discount * (line_tot / subtotal))
+
+            # If merchant is composition or unregistered, statutory GST collected is 0%
+            effective_item_gst_rate = Decimal("0.00") if (is_composition or is_unregistered) else gst_rate
+
+            line_tax_inputs.append(
+                LineItemTaxInput(
+                    item_id=str(item.get("cart_item_id") or prod_id or idx),
+                    product_name=str(item.get("product_name") or (prod.name if prod else "Product")),
+                    hsn_code=hsn_code,
+                    unit_price=Decimal(str(item.get("unit_price", 0))),
+                    quantity=int(item.get("quantity", 1)),
+                    is_inclusive=is_inclusive,
+                    gst_rate=effective_item_gst_rate,
+                    cess_rate=Decimal("0.00"),
+                    discount_amount=item_discount,
+                )
+            )
+
+        # Under Section 15(2)(c) and Section 8(a) of CGST Act, all incidental checkout charges (shipping, handling, packaging) form part of composite taxable supply
+        effective_ancillary_charges = charges_total
+        cart_tax_result = calculate_cart_taxes(
+            items=line_tax_inputs,
+            origin_state_code=origin_state_code,
+            destination_state_code=dest_state_code,
+            shipping_charge=effective_ancillary_charges,
+            shipping_inclusive=True,
+            is_composition=is_composition,
+            is_unregistered=is_unregistered,
+        )
+
+        tax_amount = cart_tax_result.total_tax_amount + cart_tax_result.shipping_total_tax
+        other_charges = Decimal("0.00")
+        total = max(cart_tax_result.grand_total + other_charges, Decimal("0.00"))
+
+        line_item_taxes = [
+            {
+                "itemId": r.item_id,
+                "productName": r.product_name,
+                "hsnCode": r.hsn_code,
+                "unitPrice": float(r.unit_price),
+                "quantity": r.quantity,
+                "grossLineTotal": float(r.gross_line_total),
+                "discountAmount": float(r.discount_amount),
+                "taxableAmount": float(r.taxable_amount),
+                "gstRate": float(r.gst_rate),
+                "cgstRate": float(r.cgst_rate),
+                "cgstAmount": float(r.cgst_amount),
+                "sgstRate": float(r.sgst_rate),
+                "sgstAmount": float(r.sgst_amount),
+                "igstRate": float(r.igst_rate),
+                "igstAmount": float(r.igst_amount),
+                "cessRate": float(r.cess_rate),
+                "cessAmount": float(r.cess_amount),
+                "totalTax": float(r.total_tax),
+                "finalLineTotal": float(r.final_line_total),
+                "isInterstate": r.is_interstate,
+            }
+            for r in cart_tax_result.line_items
+        ]
+
+        tax_payload = {
+            "enabled": tax_enabled,
+            "label": tax_settings.get("label") or "GST",
+            "rate": float(cart_tax_result.line_items[0].gst_rate if cart_tax_result.line_items else fallback_tax_rate),
+            "applyOnShipping": apply_on_shipping,
+            "amount": float(tax_amount),
+            "taxableAmount": float(cart_tax_result.taxable_subtotal + cart_tax_result.shipping_taxable),
+            "cgst": float(cart_tax_result.cgst_total + cart_tax_result.shipping_cgst),
+            "sgst": float(cart_tax_result.sgst_total + cart_tax_result.shipping_sgst),
+            "igst": float(cart_tax_result.igst_total + cart_tax_result.shipping_igst),
+            "cess": float(cart_tax_result.cess_total),
+            "originState": cart_tax_result.origin_state_code,
+            "destinationState": cart_tax_result.destination_state_code,
+            "isInterstate": cart_tax_result.is_interstate,
+            "isComposition": cart_tax_result.is_composition,
+            "isUnregistered": cart_tax_result.is_unregistered,
+            "warnings": cart_tax_result.warnings,
+        }
+    else:
+        tax_base = subtotal_after_discount + charges_total if apply_on_shipping else subtotal_after_discount
+        tax_amount = money((tax_base * fallback_tax_rate) / Decimal("100")) if tax_enabled else Decimal("0.00")
+        total = max(subtotal_after_discount + charges_total + tax_amount, Decimal("0.00"))
+        line_item_taxes = []
+        tax_payload = {
+            "enabled": tax_enabled,
+            "label": tax_settings.get("label") or "Tax",
+            "rate": float(fallback_tax_rate),
+            "applyOnShipping": apply_on_shipping,
+            "amount": float(tax_amount),
+            "taxableAmount": float(tax_base),
+            "cgst": float(money(tax_amount / Decimal("2.00"))),
+            "sgst": float(money(tax_amount - money(tax_amount / Decimal("2.00")))),
+            "igst": 0.0,
+            "cess": 0.0,
+            "originState": "27",
+            "destinationState": "27",
+            "isInterstate": False,
+            "isComposition": False,
+            "isUnregistered": False,
+            "warnings": [],
+        }
 
     return {
         "currency": "INR",
@@ -711,22 +1269,21 @@ def evaluate_pricing(
         "selectedOptionalChargeIds": selected_optional_charge_ids,
         "charges": applied_charges,
         "waivedCharges": waived_charges,
-        "tax": {
-            "enabled": tax_enabled,
-            "label": tax_settings.get("label") or "Tax",
-            "rate": float(tax_rate),
-            "applyOnShipping": apply_on_shipping,
-            "amount": float(tax_amount),
-        },
+        "tax": tax_payload,
+        "lineItemTaxes": line_item_taxes,
+        "taxableSubtotal": float(cart_tax_result.taxable_subtotal) if (session and site_id) else float(subtotal_after_discount),
         "discounts": (
             [{
                 "code": "promo_code",
                 "label": applied_promo_code,
                 "amount": float(promo_discount),
+                "couponId": str(coupon_obj.id) if coupon_obj else None,
             }]
             if promo_discount > 0 and applied_promo_code
             else []
         ),
+        "couponId": str(coupon_obj.id) if coupon_obj else None,
+        "discountAmount": float(promo_discount),
         "total": float(total),
         "paymentMethod": payment_method,
     }
@@ -737,6 +1294,8 @@ def build_order_item_pricing_snapshot(
     quantity: int,
     order_subtotal: Decimal,
     pricing_snapshot: dict[str, Any],
+    product_id: Optional[Any] = None,
+    cart_item_id: Optional[Any] = None,
 ) -> dict[str, Any]:
     ratio = Decimal("0.00")
     if order_subtotal > 0:
@@ -746,14 +1305,33 @@ def build_order_item_pricing_snapshot(
     tax_amount = money(Decimal(str(tax_dict.get("amount", 0))) * ratio)
     promo_discount = money(Decimal(str(pricing_snapshot.get("promoDiscount", 0))) * ratio)
 
+    line_taxes = pricing_snapshot.get("lineItemTaxes") or []
+    matching_line = None
+    target_ids = {str(x) for x in (cart_item_id, product_id) if x is not None}
+    for lt in line_taxes:
+        if str(lt.get("itemId")) in target_ids:
+            matching_line = lt
+            break
+
     shipping_allocated = Decimal("0.00")
     cod_fee_allocated = Decimal("0.00")
     other_charges_allocated = Decimal("0.00")
+    refundable_charges_allocated = Decimal("0.00")
+    non_refundable_charges_allocated = Decimal("0.00")
+    charges_breakdown: list[dict[str, Any]] = []
 
     for charge in pricing_snapshot.get("charges", []):
+        charge_id = charge.get("id")
         code = charge.get("code")
+        label = charge.get("label") or code or "Charge"
+        is_refundable = bool(charge.get("refundable", True))
         final_amount = money(charge.get("finalAmount") or 0)
         allocated = money(final_amount * ratio)
+
+        if is_refundable:
+            refundable_charges_allocated += allocated
+        else:
+            non_refundable_charges_allocated += allocated
 
         if code == "shipping_fee":
             shipping_allocated += allocated
@@ -762,28 +1340,85 @@ def build_order_item_pricing_snapshot(
         else:
             other_charges_allocated += allocated
 
+        charges_breakdown.append({
+            "id": charge_id,
+            "code": code,
+            "label": label,
+            "refundable": is_refundable,
+            "total_order_amount": float(final_amount),
+            "item_allocated_amount": float(allocated),
+        })
+
+    refundable_line_total = money(
+        line_total - promo_discount + tax_amount + refundable_charges_allocated
+    )
     final_paid_for_line = money(
-        line_total - promo_discount + tax_amount + shipping_allocated + cod_fee_allocated + other_charges_allocated
+        line_total - promo_discount + tax_amount + refundable_charges_allocated + non_refundable_charges_allocated
     )
 
-    return {
+    result = {
         "unit_price": float(money(line_total / quantity)),
         "quantity": quantity,
         "gross_line_total": float(line_total),
         "discount_allocated": float(promo_discount),
-        "tax_amount": float(tax_amount),
+        "tax_amount": float(matching_line["totalTax"]) if matching_line else float(tax_amount),
         "shipping_allocated": float(shipping_allocated),
         "cod_fee_allocated": float(cod_fee_allocated),
         "other_charges_allocated": float(other_charges_allocated),
+        "refundable_charges_allocated": float(refundable_charges_allocated),
+        "non_refundable_charges_allocated": float(non_refundable_charges_allocated),
+        "refundable_line_total": float(refundable_line_total),
         "final_paid_for_line": float(final_paid_for_line),
+        "charges_breakdown": charges_breakdown,
     }
+
+    if matching_line:
+        result.update({
+            "hsn_code": matching_line.get("hsnCode", "999999"),
+            "taxable_amount": matching_line.get("taxableAmount", float(line_total - promo_discount)),
+            "gst_rate": matching_line.get("gstRate", 18.0),
+            "cgst_rate": matching_line.get("cgstRate", 0.0),
+            "cgst_amount": matching_line.get("cgstAmount", 0.0),
+            "sgst_rate": matching_line.get("sgstRate", 0.0),
+            "sgst_amount": matching_line.get("sgstAmount", 0.0),
+            "igst_rate": matching_line.get("igstRate", 0.0),
+            "igst_amount": matching_line.get("igstAmount", 0.0),
+            "cess_rate": matching_line.get("cessRate", 0.0),
+            "cess_amount": matching_line.get("cessAmount", 0.0),
+            "total_tax": matching_line.get("totalTax", float(tax_amount)),
+            "is_interstate": matching_line.get("isInterstate", False),
+        })
+    else:
+        is_inter = bool(tax_dict.get("isInterstate", False))
+        result.update({
+            "hsn_code": "999999",
+            "taxable_amount": float(line_total - promo_discount),
+            "gst_rate": float(tax_dict.get("rate", 18.0)),
+            "cgst_rate": 0.0 if is_inter else float(tax_dict.get("rate", 18.0)) / 2.0,
+            "cgst_amount": 0.0 if is_inter else float(money(tax_amount / Decimal("2.00"))),
+            "sgst_rate": 0.0 if is_inter else float(tax_dict.get("rate", 18.0)) / 2.0,
+            "sgst_amount": 0.0 if is_inter else float(money(tax_amount - money(tax_amount / Decimal("2.00")))),
+            "igst_rate": float(tax_dict.get("rate", 18.0)) if is_inter else 0.0,
+            "igst_amount": float(tax_amount) if is_inter else 0.0,
+            "cess_rate": 0.0,
+            "cess_amount": 0.0,
+            "total_tax": float(tax_amount),
+            "is_interstate": is_inter,
+        })
+    return result
+
+
 
 
 def serialize_customer_order_item(item: OrderItem, order_status: Optional[str] = None) -> dict[str, Any]:
-    returnable_quantity = max(int(item.returnable_quantity if item.returnable_quantity is not None else (item.quantity if order_status == "delivered" else 0)), 0)
+    qty = int(item.quantity or 1)
+    returnable_quantity = max(int(item.returnable_quantity if item.returnable_quantity is not None else (qty if order_status == "delivered" else 0)), 0)
 
-    effective_status = item.status
-    if order_status == "delivered":
+    effective_status = item.status or "placed"
+    if order_status in ("confirmed", "shipped", "out_for_delivery"):
+        if effective_status not in ("cancelled", "returned", "delivered"):
+            effective_status = order_status
+    elif order_status == "delivered":
         if returnable_quantity > 0:
             effective_status = "delivered"
         elif returnable_quantity == 0 and item.status == "returned":
@@ -792,25 +1427,34 @@ def serialize_customer_order_item(item: OrderItem, order_status: Optional[str] =
             effective_status = "delivered"
     elif order_status == "returned":
         effective_status = "returned"
+    elif order_status == "cancelled" and item.status != "cancelled":
+        effective_status = "cancelled"
 
-    is_returnable = (order_status == "delivered" and returnable_quantity > 0)
+    item_return_days = getattr(item, "return_window_days", 7)
+    is_returnable = (order_status == "delivered" and returnable_quantity > 0 and item_return_days > 0)
+
+    unit_price = float(item.unit_price) if item.unit_price is not None else 0.0
+    line_total = float(item.line_total) if item.line_total is not None else (unit_price * qty)
 
     return {
         "id": str(item.id),
-        "product_id": str(item.product_id),
-        "product_name": item.product_name,
-        "product_slug": item.product_slug,
-        "product_image": item.product_image,
+        "product_id": str(item.product_id) if item.product_id else None,
+        "product_name": item.product_name or "Product",
+        "product_slug": item.product_slug or "",
+        "product_image": item.product_image or "",
         "selected_variant_label": item.selected_variant_label,
         "selected_variant_value": item.selected_variant_value,
-        "unit_price": float(item.unit_price),
+        "unit_price": unit_price,
         "compare_price": float(item.compare_price) if item.compare_price is not None else None,
-        "quantity": item.quantity,
-        "line_total": float(item.line_total),
+        "quantity": qty,
+        "line_total": line_total,
         "status": effective_status,
         "returnable_quantity": returnable_quantity,
+        "return_window_days": item_return_days,
         "is_returnable": is_returnable,
         "max_returnable_quantity": returnable_quantity,
+        "is_preorder": bool(getattr(item, "is_preorder", False)),
+        "preorder_release_date": item.preorder_release_date.isoformat() if getattr(item, "preorder_release_date", None) else None,
         "pricing_snapshot": item.pricing_snapshot,
     }
 
@@ -1010,6 +1654,9 @@ def get_admin_pending_counts(
     Returns the count of orders needing attention (placed) and
     returns needing attention (requested). Used for sidebar badge.
     """
+    if not check_admin_has_permission(admin["adminId"], "orders:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view orders")
+
     from models import ReturnRequest
 
     new_orders = session.exec(
@@ -1033,18 +1680,155 @@ def get_admin_pending_counts(
     }
 
 
+ORDER_TAB_STATUS_MAP = {
+    "new": ["placed"],
+    "preorders": ["placed", "confirmed"],
+    "yet_to_ship": ["confirmed", "accepted"],
+    "yet_to_deliver": ["shipped", "out_for_delivery", "rescheduled", "failed", "replacement_dispatched"],
+    "delivered": ["delivered", "returned"],
+    "cancelled": ["cancelled", "partially_cancelled", "refunded"],
+}
+
+
 @router.get("/admin/{site_id}")
 def get_admin_orders(
     site_id: UUID,
+    page: Optional[int] = Query(None, ge=1, description="Page number"),
+    page_size: Optional[int] = Query(None, ge=1, le=100, description="Items per page"),
+    tab: Optional[str] = Query(None, description="Filter by tab: new, preorders, yet_to_ship, yet_to_deliver, delivered, cancelled"),
+    status: Optional[str] = Query(None, description="Direct status filter"),
+    search: Optional[str] = Query(None, description="Search by order ID, customer name, phone, email"),
+    payment_method: Optional[str] = Query(None, description="Filter by payment method: all, upi, card, cod, etc."),
+    fulfillment: Optional[str] = Query(None, description="Filter by fulfillment mode: all, own_agent, shiprocket, manual, unassigned"),
+    date_filter: Optional[str] = Query(None, description="all, today, last_7_days, last_30_days, custom"),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None),
     admin=Depends(authenticate_admin),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
-    orders = session.exec(
-        select(Order)
-        .where(Order.site_id == site_id)
-        .order_by(Order.created_at.desc())
-    ).all()
+    if not check_admin_has_permission(admin["adminId"], "orders:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view orders")
+
+    base_query = select(Order).where(Order.site_id == site_id)
+
+    # 1. Filter by Tab or Status
+    if tab == "preorders":
+        base_query = base_query.where(
+            Order.contains_preorder == True,
+            Order.preorder_released == False,
+            Order.status.in_(ORDER_TAB_STATUS_MAP["preorders"]),
+        )
+    elif tab == "new":
+        base_query = base_query.where(
+            Order.status.in_(ORDER_TAB_STATUS_MAP["new"]),
+            or_(Order.contains_preorder == False, Order.preorder_released == True),
+        )
+    elif tab and tab in ORDER_TAB_STATUS_MAP:
+        base_query = base_query.where(Order.status.in_(ORDER_TAB_STATUS_MAP[tab]))
+    elif status and status != "all":
+        base_query = base_query.where(Order.status == status)
+
+    # 2. Payment Method Filter
+    if payment_method and payment_method != "all":
+        base_query = base_query.where(Order.payment_method.ilike(f"%{payment_method}%"))
+
+    # 3. Search Filter
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        base_query = base_query.where(
+            (cast(Order.id, String).ilike(term))
+            | (cast(Order.shipping_address, String).ilike(term))
+            | (Order.payment_method.ilike(term))
+        )
+
+    # 4. Date Filter
+    now = datetime.now(timezone.utc)
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if date_filter == "today":
+        base_query = base_query.where(Order.created_at >= start_of_today)
+    elif date_filter == "last_7_days":
+        from datetime import timedelta
+        base_query = base_query.where(Order.created_at >= now - timedelta(days=7))
+    elif date_filter == "last_30_days":
+        from datetime import timedelta
+        base_query = base_query.where(Order.created_at >= now - timedelta(days=30))
+    elif date_filter == "custom":
+        if from_date:
+            try:
+                dt_from = datetime.fromisoformat(from_date)
+                base_query = base_query.where(Order.created_at >= dt_from)
+            except Exception:
+                pass
+        if to_date:
+            try:
+                dt_to = datetime.fromisoformat(to_date)
+                base_query = base_query.where(Order.created_at <= dt_to)
+            except Exception:
+                pass
+
+    # Compute Tab Counts directly in PostgreSQL respecting active search and filters
+    tab_counts = {}
+    for t_key, statuses in ORDER_TAB_STATUS_MAP.items():
+        cnt_q = select(func.count()).select_from(Order).where(
+            Order.site_id == site_id,
+            Order.status.in_(statuses),
+        )
+        if t_key == "preorders":
+            cnt_q = cnt_q.where(Order.contains_preorder == True, Order.preorder_released == False)
+        elif t_key == "new":
+            cnt_q = cnt_q.where(or_(Order.contains_preorder == False, Order.preorder_released == True))
+
+        if payment_method and payment_method != "all":
+            cnt_q = cnt_q.where(Order.payment_method.ilike(f"%{payment_method}%"))
+        if search and search.strip():
+            term = f"%{search.strip()}%"
+            cnt_q = cnt_q.where(
+                (cast(Order.id, String).ilike(term))
+                | (cast(Order.shipping_address, String).ilike(term))
+                | (Order.payment_method.ilike(term))
+            )
+        if date_filter == "today":
+            cnt_q = cnt_q.where(Order.created_at >= start_of_today)
+        elif date_filter == "last_7_days":
+            from datetime import timedelta
+            cnt_q = cnt_q.where(Order.created_at >= now - timedelta(days=7))
+        elif date_filter == "last_30_days":
+            from datetime import timedelta
+            cnt_q = cnt_q.where(Order.created_at >= now - timedelta(days=30))
+        elif date_filter == "custom":
+            if from_date:
+                try:
+                    dt_from = datetime.fromisoformat(from_date)
+                    cnt_q = cnt_q.where(Order.created_at >= dt_from)
+                except Exception:
+                    pass
+            if to_date:
+                try:
+                    dt_to = datetime.fromisoformat(to_date)
+                    cnt_q = cnt_q.where(Order.created_at <= dt_to)
+                except Exception:
+                    pass
+        cnt = session.exec(cnt_q).one() or 0
+        tab_counts[t_key] = cnt
+
+    # Total Count for active query
+    total_count = session.exec(
+        select(func.count()).select_from(base_query.subquery())
+    ).one() or 0
+
+    # Paginate
+    if page is not None and page_size is not None:
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+        paginated_query = (
+            base_query.order_by(Order.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        orders = session.exec(paginated_query).all()
+    else:
+        orders = session.exec(base_query.order_by(Order.created_at.desc())).all()
+        total_pages = 1
 
     order_ids = [order.id for order in orders]
     shipment_map: dict[UUID, Shipment] = {}
@@ -1064,6 +1848,13 @@ def get_admin_orders(
         for item in order_items:
             order_items_map.setdefault(item.order_id, []).append(item)
 
+        prod_ids = [item.product_id for item in order_items if item.product_id]
+        prod_weights: dict[UUID, int] = {}
+        if prod_ids:
+            from models import Product
+            prods = session.exec(select(Product.id, Product.weight_grams).where(Product.id.in_(prod_ids))).all()
+            prod_weights = {p_id: (w if w and w > 0 else 500) for p_id, w in prods}
+
     has_admin_sync = False
     for order in orders:
         if _sync_order_return_status(order, session, order_items_map.get(order.id)):
@@ -1074,13 +1865,14 @@ def get_admin_orders(
         except Exception:
             session.rollback()
 
-    return [
+    serialized = [
         {
             "id": str(order.id),
             "customer_id": str(order.customer_id),
             "status": order.status,
             "payment_status": getattr(order, "payment_status", None),
             "total": float(order.total),
+            "total_weight_grams": sum(prod_weights.get(item.product_id, 500) * (item.quantity or 1) for item in order_items_map.get(order.id, [])),
             "payment_method": order.payment_method,
             "razorpay_payment_id": order.razorpay_payment_id,
             "razorpay_order_id": order.razorpay_order_id,
@@ -1090,12 +1882,16 @@ def get_admin_orders(
             "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
             "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
             "cancel_reason": order.cancel_reason,
+            "contains_preorder": bool(getattr(order, "contains_preorder", False)),
+            "preorder_release_date": order.preorder_release_date.isoformat() if getattr(order, "preorder_release_date", None) else None,
+            "preorder_released": bool(getattr(order, "preorder_released", False)),
+            "preorder_released_at": order.preorder_released_at.isoformat() if getattr(order, "preorder_released_at", None) else None,
             "customer_name": (order.shipping_address or {}).get("fullName"),
             "customer_phone": (order.shipping_address or {}).get("mobileNumber"),
             "customer_email": (order.shipping_address or {}).get("email"),
             "shipping_address": order.shipping_address,
             "delivery_otp": None if bool(shipment_map.get(order.id) and (getattr(shipment_map.get(order.id), "delivery_mode", None) == "shiprocket" or getattr(shipment_map.get(order.id), "mode", None) == "shiprocket" or shipment_map.get(order.id).courier_name or shipment_map.get(order.id).awb_number)) else ensure_order_delivery_otp(order, session),
-            "shipment": serialize_shipment(shipment_map.get(order.id)),
+            "shipment": serialize_shipment(shipment_map.get(order.id), order_status=order.status, session=session, is_admin=True),
             "items": [
                 {
                     "id": str(item.id),
@@ -1109,8 +1905,13 @@ def get_admin_orders(
                     "compare_price": float(item.compare_price) if item.compare_price is not None else None,
                     "quantity": item.quantity,
                     "line_total": float(item.line_total),
+                    "weight_grams": prod_weights.get(item.product_id, 500),
                     "status": item.status,
+                    "is_preorder": bool(getattr(item, "is_preorder", False)),
+                    "preorder_release_date": item.preorder_release_date.isoformat() if getattr(item, "preorder_release_date", None) else None,
                     "returnable_quantity": item.returnable_quantity,
+                    "return_window_days": getattr(item, "return_window_days", 7),
+                    "is_returnable": getattr(item, "return_window_days", 7) > 0,
                     "pricing_snapshot": item.pricing_snapshot,
                 }
                 for item in order_items_map.get(order.id, [])
@@ -1121,6 +1922,18 @@ def get_admin_orders(
         for order in orders
     ]
 
+    if page is not None and page_size is not None:
+        return {
+            "orders": serialized,
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "tab_counts": tab_counts,
+        }
+
+    return serialized
+
 
 @router.get("/admin/{site_id}/{order_id}")
 def get_admin_order_detail(
@@ -1130,6 +1943,9 @@ def get_admin_order_detail(
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if not check_admin_has_permission(admin["adminId"], "orders:view", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to view orders")
+
     order = session.get(Order, order_id)
     if not order or order.site_id != site_id:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -1156,6 +1972,13 @@ def get_admin_order_detail(
         .order_by(OrderStatusHistory.id.asc())
     ).all()
 
+    detail_prod_ids = [item.product_id for item in items if item.product_id]
+    detail_prod_weights: dict[UUID, int] = {}
+    if detail_prod_ids:
+        from models import Product
+        d_prods = session.exec(select(Product.id, Product.weight_grams).where(Product.id.in_(detail_prod_ids))).all()
+        detail_prod_weights = {p_id: (w if w and w > 0 else 500) for p_id, w in d_prods}
+
     return {
         "id": str(order.id),
         "customer_id": str(order.customer_id),
@@ -1165,11 +1988,16 @@ def get_admin_order_detail(
         "status": order.status,
         "payment_status": getattr(order, "payment_status", None),
         "total": float(order.total),
+        "total_weight_grams": sum(detail_prod_weights.get(item.product_id, 500) * (item.quantity or 1) for item in items),
         "payment_method": order.payment_method,
         "razorpay_payment_id": order.razorpay_payment_id,
         "razorpay_order_id": order.razorpay_order_id,
         "shipping_address": order.shipping_address,
         "pricing_snapshot": order.pricing_snapshot,
+        "contains_preorder": bool(getattr(order, "contains_preorder", False)),
+        "preorder_release_date": order.preorder_release_date.isoformat() if getattr(order, "preorder_release_date", None) else None,
+        "preorder_released": bool(getattr(order, "preorder_released", False)),
+        "preorder_released_at": order.preorder_released_at.isoformat() if getattr(order, "preorder_released_at", None) else None,
         "delivery_otp": None if bool(shipment and (getattr(shipment, "delivery_mode", None) == "shiprocket" or getattr(shipment, "mode", None) == "shiprocket" or shipment.courier_name or shipment.awb_number)) else ensure_order_delivery_otp(order, session),
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
@@ -1190,13 +2018,18 @@ def get_admin_order_detail(
                 "compare_price": float(item.compare_price) if item.compare_price is not None else None,
                 "quantity": item.quantity,
                 "line_total": float(item.line_total),
+                "weight_grams": detail_prod_weights.get(item.product_id, 500),
                 "status": item.status,
+                "is_preorder": bool(getattr(item, "is_preorder", False)),
+                "preorder_release_date": item.preorder_release_date.isoformat() if getattr(item, "preorder_release_date", None) else None,
                 "returnable_quantity": item.returnable_quantity,
+                "return_window_days": getattr(item, "return_window_days", 7),
+                "is_returnable": getattr(item, "return_window_days", 7) > 0,
                 "pricing_snapshot": item.pricing_snapshot,
             }
             for item in items
         ],
-        "shipment": serialize_shipment(shipment, order.status),
+        "shipment": serialize_shipment(shipment, order_status=order.status, session=session, is_admin=True),
         "status_history": [
             {
                 "id": str(entry.id),
@@ -1219,10 +2052,18 @@ def update_order_status(
     site_id: UUID,
     order_id: UUID,
     payload: UpdateOrderStatusRequest,
+    request: Request = None,
     admin=Depends(authenticate_admin),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
 ):
+    if payload.status == "cancelled":
+        if not (check_admin_has_permission(admin["adminId"], "orders:cancel", session) or check_admin_has_permission(admin["adminId"], "orders:update", session)):
+            raise HTTPException(status_code=403, detail="You do not have permission to cancel orders")
+    else:
+        if not check_admin_has_permission(admin["adminId"], "orders:update", session):
+            raise HTTPException(status_code=403, detail="You do not have permission to update order status")
+
     order = session.get(Order, order_id)
     if not order or order.site_id != site_id:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -1248,6 +2089,10 @@ def update_order_status(
     try:
         if payload.status == "confirmed":
             order.confirmed_at = now
+            for item in items:
+                if item.status not in ("cancelled", "returned"):
+                    item.status = "confirmed"
+                    session.add(item)
 
         elif payload.status == "shipped":
             # Guard: ensure an agent or partner is assigned before moving to shipped
@@ -1262,13 +2107,21 @@ def update_order_status(
                 )
 
             order.shipped_at = now
+            for item in items:
+                if item.status not in ("cancelled", "returned"):
+                    item.status = "shipped"
+                    session.add(item)
+
             if not shipment:
                 shipment = Shipment(
                     order_id=order.id,
                     site_id=site_id,
+                    mode="manual",
                     status="shipped",
                     delivery_partner_name=payload.delivery_partner_name,
                     delivery_partner_phone=payload.delivery_partner_phone,
+                    awb_number=payload.delivery_partner_phone,
+                    courier_name=payload.delivery_partner_name,
                     estimated_delivery_at=payload.estimated_delivery_at,
                     shipped_at=now,
                 )
@@ -1278,6 +2131,7 @@ def update_order_status(
                     shipment.delivery_partner_name = payload.delivery_partner_name
                 if payload.delivery_partner_phone is not None:
                     shipment.delivery_partner_phone = payload.delivery_partner_phone
+                    shipment.awb_number = payload.delivery_partner_phone
                 if payload.estimated_delivery_at is not None:
                     shipment.estimated_delivery_at = payload.estimated_delivery_at
                 shipment.shipped_at = now
@@ -1296,13 +2150,21 @@ def update_order_status(
                 )
 
             order.shipped_at = order.shipped_at or now
+            for item in items:
+                if item.status not in ("cancelled", "returned"):
+                    item.status = "out_for_delivery"
+                    session.add(item)
+
             if not shipment:
                 shipment = Shipment(
                     order_id=order.id,
                     site_id=site_id,
+                    mode="manual",
                     status="out_for_delivery",
                     delivery_partner_name=payload.delivery_partner_name,
                     delivery_partner_phone=payload.delivery_partner_phone,
+                    awb_number=payload.delivery_partner_phone,
+                    courier_name=payload.delivery_partner_name,
                     estimated_delivery_at=payload.estimated_delivery_at,
                     out_for_delivery_at=now,
                 )
@@ -1312,6 +2174,7 @@ def update_order_status(
                     shipment.delivery_partner_name = payload.delivery_partner_name
                 if payload.delivery_partner_phone is not None:
                     shipment.delivery_partner_phone = payload.delivery_partner_phone
+                    shipment.awb_number = payload.delivery_partner_phone
                 if payload.estimated_delivery_at is not None:
                     shipment.estimated_delivery_at = payload.estimated_delivery_at
                 shipment.out_for_delivery_at = now
@@ -1329,16 +2192,39 @@ def update_order_status(
                 )
             from datetime import timedelta
             order.delivered_at = now
-            order.return_window_closes_at = now + timedelta(days=2)
+
+            order_items = session.exec(
+                select(OrderItem).where(OrderItem.order_id == order.id)
+            ).all()
+            site = session.get(Site, order.site_id)
+            site_default = getattr(site, "default_return_window_days", 7) if site else 7
+            max_days = max(
+                (
+                    it.return_window_days if getattr(it, "return_window_days", None) is not None else site_default
+                    for it in order_items
+                    if it.status != "cancelled"
+                ),
+                default=0,
+            )
+
+            MIN_DISPUTE_BUFFER_HOURS = 24
+
+            if max_days == 0:
+                # Non-returnable item: enforce minimum 24-hour dispute buffer post-delivery for unboxing inspection
+                order.return_window_closes_at = now + timedelta(hours=MIN_DISPUTE_BUFFER_HOURS)
+                order.escrow_status = "held"
+            else:
+                order.return_window_closes_at = now + timedelta(days=max_days)
+                order.escrow_status = "held"
 
             ledger_entry = session.exec(
                 select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
             ).first()
             if ledger_entry:
                 ledger_entry.escrow_release_due_at = order.return_window_closes_at
+                ledger_entry.escrow_status = "held"
                 if getattr(order, "payment_method", "").lower() in ("cod", "cash_on_delivery"):
                     order.payment_status = "paid"
-                    ledger_entry.status = "paid"
                 session.add(ledger_entry)
 
             if not shipment:
@@ -1375,7 +2261,14 @@ def update_order_status(
                         client = get_razorpay_client()
                         if client:
                             refund_amount_paise = int(Decimal(str(order.total)) * 100)
-                            refund_resp = client.payment.refund(order.razorpay_payment_id, {"amount": refund_amount_paise})
+                            refund_resp = client.payment.refund(
+                                order.razorpay_payment_id,
+                                {
+                                    "amount": refund_amount_paise,
+                                    "reverse_all": 1,
+                                    "notes": {"reason": "Admin cancellation refund"},
+                                },
+                            )
                             if isinstance(refund_resp, dict):
                                 snapshot = dict(order.pricing_snapshot or {})
                                 snapshot["refund_details"] = {
@@ -1390,15 +2283,32 @@ def update_order_status(
                         print(f"Razorpay refund warning on admin cancellation: {rerr}")
 
                 order.payment_status = "refunded"
+                order.escrow_status = "reversed"
 
                 ledger_entry = session.exec(
-                    select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+                    select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id, TenantLedgerEntry.entry_type == "order_sale")
                 ).first()
+                if not ledger_entry:
+                    ledger_entry = session.exec(
+                        select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order.id)
+                    ).first()
                 if ledger_entry:
                     ledger_entry.status = "refunded"
+                    ledger_entry.escrow_status = "reversed"
+                    ledger_entry.updated_at = now
                     session.add(ledger_entry)
 
-            for item in items:
+            # Synchronize Section 194-O FY sales on cancellation
+            profile = session.exec(
+                select(MerchantTaxProfile).where(MerchantTaxProfile.site_id == order.site_id)
+            ).first()
+            if profile:
+                profile.fy_gross_sales_amount = compute_live_fy_gross_sales(session, order.site_id, profile.current_fy)
+                session.add(profile)
+
+            # Sort items deterministically by product_id to prevent database deadlocks
+            sorted_cancel_items = sorted(items, key=lambda it: str(it.product_id))
+            for item in sorted_cancel_items:
                 if item.status == "cancelled":
                     continue
 
@@ -1434,6 +2344,11 @@ def update_order_status(
                 select(Shipment).where(Shipment.order_id == order.id)
             ).all()
             for sh in shipments:
+                if sh.agent_id and sh.status not in ("delivered", "failed", "returned_to_warehouse", "cancelled"):
+                    agent = session.get(DeliveryAgent, sh.agent_id)
+                    if agent:
+                        agent.current_order_count = max(0, agent.current_order_count - 1)
+                        session.add(agent)
                 sh.status = "cancelled"
                 sh.notes = f"{sh.notes or ''} [Cancelled by admin: {payload.cancel_reason or 'Admin cancelled'}]".strip()
                 session.add(sh)
@@ -1473,6 +2388,89 @@ def update_order_status(
         )
 
         session.commit()
+
+        try:
+            action_name = "order.cancelled" if payload.status == "cancelled" else "order.status_changed"
+            summary_text = (
+                f"Cancelled order #{str(order.id)[:8]}" + (f": {payload.cancel_reason}" if payload.cancel_reason else "")
+                if payload.status == "cancelled"
+                else f"Changed status of order #{str(order.id)[:8]} from '{previous_status}' to '{payload.status}'"
+            )
+            admin_uuid = UUID(admin["adminId"]) if admin.get("adminId") else None
+            log_activity(
+                session=session,
+                admin_id=admin_uuid,
+                user_id=admin_uuid,
+                action=action_name,
+                category="orders",
+                site_id=site_id,
+                resource_type="order",
+                resource_id=str(order.id),
+                resource_name=f"Order #{str(order.id)[:8]}",
+                summary=summary_text,
+                description=summary_text,
+                details={
+                    "order_id": str(order.id),
+                    "before": {"status": previous_status},
+                    "after": {
+                        "status": payload.status,
+                        "cancel_reason": payload.cancel_reason if payload.status == "cancelled" else None,
+                    },
+                },
+                request=request,
+                actor_email=admin.get("email"),
+                actor_name=admin.get("name") or admin.get("email"),
+                actor_role=admin.get("role") or "Staff",
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to record activity log for order status update: {log_err}")
+
+        # Dispatch Customer Event (In-App & Email)
+        try:
+            site = session.get(Site, site_id)
+            customer = session.get(User, order.customer_id)
+            order_short = str(order.id)[:8].upper()
+            status_event_map = {
+                "confirmed": ("order.confirmed", "Order Confirmed", f"Your order #{order_short} has been confirmed by {site.name if site else 'the store'}.", "order_confirmed"),
+                "shipped": ("order.shipped", "Order Shipped", f"Your order #{order_short} has been shipped.", "order_shipped"),
+                "out_for_delivery": ("order.out_for_delivery", "Out for Delivery", f"Your order #{order_short} is out for delivery! OTP: {order.delivery_otp or ''}.", "order_out_for_delivery"),
+                "delivered": ("order.delivered", "Order Delivered", f"Your order #{order_short} has been delivered successfully.", "order_delivered"),
+                "cancelled": ("order.cancelled", "Order Cancelled", f"Your order #{order_short} has been cancelled." + (f" Reason: {payload.cancel_reason}" if payload.cancel_reason else ""), "order_cancelled"),
+            }
+            if payload.status in status_event_map and customer and site:
+                ev_type, ev_title, ev_msg, tpl_key = status_event_map[payload.status]
+                dispatch_customer_event(
+                    session=session,
+                    site_id=site.id,
+                    customer_id=customer.id,
+                    event_type=ev_type,
+                    category="delivery" if payload.status in ("out_for_delivery", "delivered") else "order",
+                    title=f"Order #{order_short} - {ev_title}",
+                    message=ev_msg,
+                    related_entity_type="order",
+                    related_entity_id=str(order.id),
+                    action_url=f"/store/{site.slug}/orders?orderId={order.id}",
+                    metadata={"orderId": str(order.id), "status": payload.status, "total": float(order.total)},
+                    idempotency_key=f"{site.id}:{ev_type}:{order.id}:{payload.status}",
+                    send_email=True,
+                    email_recipient=customer.email,
+                    email_template_key=tpl_key,
+                    email_template_vars={
+                        "order_number": order_short,
+                        "order_id": str(order.id),
+                        "total": f"{float(order.total):.2f}",
+                        "items": order.items,
+                        "courier_name": shipment.courier_name or payload.delivery_partner_name if shipment else payload.delivery_partner_name,
+                        "awb_number": shipment.awb_number if shipment else None,
+                        "delivery_otp": order.delivery_otp,
+                        "order_url": f"/store/{site.slug}/orders?orderId={order.id}",
+                        "customer_name": customer.name or "Valued Customer",
+                        "store_name": site.name,
+                    },
+                )
+                session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Could not dispatch order status update customer notification: {notif_err}")
     except HTTPException:
         session.rollback()
         raise
@@ -1484,6 +2482,81 @@ def update_order_status(
         "message": "Order status updated successfully",
         "order_id": str(order.id),
         "status": order.status,
+    }
+
+
+class BulkReleasePreordersRequest(BaseModel):
+    order_ids: list[UUID] = Field(default_factory=list)
+
+
+@router.post("/admin/{site_id}/{order_id}/release-preorder")
+def release_preorder(
+    site_id: UUID,
+    order_id: UUID,
+    admin=Depends(authenticate_admin),
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    if not check_admin_has_permission(admin["adminId"], "orders:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit orders")
+
+    order = session.get(Order, order_id)
+    if not order or order.site_id != site_id:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order.preorder_released = True
+    order.preorder_released_at = utc_now()
+    session.add(order)
+    session.commit()
+    session.refresh(order)
+
+    return {
+        "success": True,
+        "message": "Pre-order released for shipping & fulfillment",
+        "order_id": str(order.id),
+        "preorder_released": True,
+    }
+
+
+@router.post("/admin/{site_id}/bulk-release-preorders")
+def bulk_release_preorders(
+    site_id: UUID,
+    payload: BulkReleasePreordersRequest,
+    admin=Depends(authenticate_admin),
+    ownership=Depends(enforce_site_ownership),
+    session: Session = Depends(get_session),
+):
+    if not check_admin_has_permission(admin["adminId"], "orders:edit", session):
+        raise HTTPException(status_code=403, detail="You do not have permission to edit orders")
+
+    if not payload.order_ids:
+        orders = session.exec(
+            select(Order).where(
+                Order.site_id == site_id,
+                Order.contains_preorder == True,
+                Order.preorder_released == False,
+            )
+        ).all()
+    else:
+        orders = session.exec(
+            select(Order).where(
+                Order.site_id == site_id,
+                Order.id.in_(payload.order_ids),
+                Order.contains_preorder == True,
+            )
+        ).all()
+
+    now = utc_now()
+    for o in orders:
+        o.preorder_released = True
+        o.preorder_released_at = now
+        session.add(o)
+
+    session.commit()
+    return {
+        "success": True,
+        "released_count": len(orders),
+        "message": f"Successfully released {len(orders)} pre-orders for fulfillment",
     }
 
 
@@ -1499,7 +2572,12 @@ def place_order(
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    get_site_or_404(session, site_id)
+    site = get_site_or_404(session, site_id)
+    if not getattr(site, "is_online", True):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Store is temporarily offline for maintenance. New orders cannot be placed at this time.",
+        )
 
     if str(site_id) != user["siteId"]:
         raise HTTPException(
@@ -1511,6 +2589,51 @@ def place_order(
     cart = get_cart_for_user_or_404(session, site_id, customer.id)
     address = get_address_for_user_or_404(session, site_id, customer.id, payload.address_id)
 
+    # Deliverability check for delivery radius
+    delivery_settings = session.exec(
+        select(DeliverySettings).where(DeliverySettings.site_id == site_id)
+    ).first()
+    if delivery_settings:
+        store_lat = getattr(delivery_settings, "sender_latitude", None)
+        store_lng = getattr(delivery_settings, "sender_longitude", None)
+        delivery_mode = delivery_settings.delivery_mode or "manual"
+
+        ef = getattr(delivery_settings, "enable_fleet", None)
+        es = getattr(delivery_settings, "enable_shiprocket", None)
+        is_fleet = bool(ef) if ef is not None else (delivery_mode in ("own_agent", "hybrid"))
+        is_sr = bool(es) if es is not None else (delivery_mode in ("shiprocket", "hybrid"))
+
+        fleet_radius_km = float(delivery_settings.own_delivery_radius_km or 10)
+        sr_radius_raw = getattr(delivery_settings, "shiprocket_delivery_radius_km", None)
+        sr_radius_km = float(sr_radius_raw) if (sr_radius_raw is not None and float(sr_radius_raw) > 0) else None
+
+        if store_lat is not None and store_lng is not None:
+            cust_lat = getattr(address, "latitude", None)
+            cust_lng = getattr(address, "longitude", None)
+            if cust_lat is not None and cust_lng is not None:
+                # Haversine distance in km
+                R = 6371.0
+                phi1, phi2 = math.radians(store_lat), math.radians(cust_lat)
+                dphi = math.radians(cust_lat - store_lat)
+                dlambda = math.radians(cust_lng - store_lng)
+                a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+                dist = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+                if is_sr:
+                    if sr_radius_km is not None:
+                        effective_max = max(sr_radius_km, fleet_radius_km if is_fleet else 0.0)
+                        if dist > effective_max:
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Sorry, we currently do not deliver to this address. Please choose a different delivery location.",
+                            )
+                elif is_fleet:
+                    if dist > fleet_radius_km:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Sorry, we currently do not deliver to this address. Please choose a different delivery location.",
+                        )
+
     cart_items = session.exec(
         select(CartItem).where(CartItem.cart_id == cart.id)
     ).all()
@@ -1519,13 +2642,17 @@ def place_order(
         raise HTTPException(status_code=400, detail="Cart is empty")
 
     payment_method = normalize_payment_method(payload.payment_method)
-    checkout_settings = get_site_or_404(session, site_id).checkout_settings or build_default_checkout_settings()
+    checkout_settings = site.checkout_settings or build_default_checkout_settings()
 
     order_line_items: list[dict[str, Any]] = []
     product_map: dict[UUID, Product] = {}
 
+    # Sort cart items deterministically by product_id to prevent database deadlocks under concurrent checkouts
+    sorted_cart_items = sorted(cart_items, key=lambda item: str(item.product_id))
+
+    validation_errors: list[str] = []
     try:
-        for cart_item in cart_items:
+        for cart_item in sorted_cart_items:
             product = session.exec(
                 select(Product)
                 .where(Product.id == cart_item.product_id, Product.site_id == site_id)
@@ -1533,21 +2660,39 @@ def place_order(
             ).first()
 
             if not product:
-                raise HTTPException(status_code=404, detail=f"Product not found for cart item {cart_item.id}")
+                validation_errors.append(f"Product '{cart_item.product_name}' was removed from the store")
+                continue
 
-            if not product.in_stock or product.stock <= 0:
-                raise HTTPException(status_code=409, detail=f"{product.name} is out of stock")
+            if not getattr(product, "is_active", True):
+                validation_errors.append(f"'{product.name}' is currently unavailable")
+                continue
 
-            unit_price, compare_price, selected_variant_label, available_stock = extract_variant_details(
-                product,
-                cart_item.selected_variant_value,
+            now_dt = utc_now()
+            is_prod_preorder = bool(getattr(product, "is_preorder", False)) and (
+                getattr(product, "preorder_release_date", None) is None or getattr(product, "preorder_release_date", None) > now_dt
             )
+            if not is_prod_preorder and (not product.in_stock or product.stock <= 0):
+                validation_errors.append(f"'{product.name}' is out of stock")
+                continue
 
-            if cart_item.quantity > available_stock:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Requested quantity exceeds available stock for {product.name}",
+            try:
+                unit_price, compare_price, selected_variant_label, available_stock = extract_variant_details(
+                    product,
+                    cart_item.selected_variant_value,
+                    raise_if_out_of_stock=not is_prod_preorder,
                 )
+            except Exception as e:
+                validation_errors.append(f"'{product.name}' variant is unavailable: {e}")
+                continue
+
+            if is_prod_preorder:
+                if product.preorder_limit is not None and product.preorder_limit > 0 and cart_item.quantity > product.preorder_limit:
+                    validation_errors.append(f"Requested quantity for '{product.name}' exceeds pre-order limit ({product.preorder_limit})")
+                    continue
+            else:
+                if cart_item.quantity > available_stock:
+                    validation_errors.append(f"Requested quantity for '{product.name}' ({cart_item.quantity}) exceeds available stock ({available_stock})")
+                    continue
 
             product_image = None
             if product.images and len(product.images) > 0:
@@ -1568,9 +2713,17 @@ def place_order(
                     "compare_price": compare_price,
                     "quantity": cart_item.quantity,
                     "line_total": line_total,
+                    "is_preorder": is_prod_preorder,
+                    "preorder_release_date": product.preorder_release_date if is_prod_preorder else None,
                 }
             )
             product_map[product.id] = product
+
+        if validation_errors:
+            raise HTTPException(
+                status_code=409,
+                detail="; ".join(validation_errors),
+            )
 
         pricing_snapshot = evaluate_pricing(
             cart_items=order_line_items,
@@ -1578,7 +2731,49 @@ def place_order(
             payment_method=payment_method,
             selected_optional_charge_ids=payload.selected_optional_charge_ids,
             promo_code=payload.promo_code,
+            site_id=site_id,
+            session=session,
+            customer_email=customer.email,
+            shipping_address=serialize_address_snapshot(address),
         )
+
+        applied_coupon_code = pricing_snapshot.get("promoCode")
+        applied_discount_amount = money(Decimal(str(pricing_snapshot.get("promoDiscount", 0))))
+
+        gross_amount = money(pricing_snapshot["total"])
+        if payment_method == "cod":
+            del_settings = session.exec(
+                select(DeliverySettings).where(DeliverySettings.site_id == site_id)
+            ).first()
+            store_cod_enabled = getattr(del_settings, "enable_cod", True) if del_settings else True
+
+            # Check product-level COD eligibility (explicit False, or None when store COD disabled)
+            ineligible_products = [
+                p.name for p in product_map.values()
+                if (p.is_cod_allowed is False or (p.is_cod_allowed is None and not store_cod_enabled))
+            ]
+            if ineligible_products:
+                names_str = ", ".join(f"'{n}'" for n in ineligible_products[:3])
+                if len(ineligible_products) > 3:
+                    names_str += f" and {len(ineligible_products) - 3} other items"
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cash on Delivery (COD) is not available for {names_str}. Please choose Online Payment (UPI, Card, Netbanking).",
+                )
+            if del_settings:
+                max_cod = float(getattr(del_settings, "max_cod_amount", 5000.0) or 5000.0)
+                if max_cod > 0 and float(gross_amount) > max_cod:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Cash on Delivery is only available for orders up to ₹{max_cod:,.2f}. Please choose Online Payment.",
+                    )
+
+        contains_preorder = any(item.get("is_preorder") for item in order_line_items)
+        preorder_release_date = None
+        if contains_preorder:
+            preorder_dates = [item["preorder_release_date"] for item in order_line_items if item.get("is_preorder") and item.get("preorder_release_date")]
+            if preorder_dates:
+                preorder_release_date = max(preorder_dates)
 
         order = Order(
             site_id=site_id,
@@ -1597,11 +2792,18 @@ def place_order(
                     "compare_price": float(item["compare_price"]) if item["compare_price"] is not None else None,
                     "quantity": item["quantity"],
                     "line_total": float(item["line_total"]),
+                    "is_preorder": item.get("is_preorder", False),
+                    "preorder_release_date": item["preorder_release_date"].isoformat() if item.get("preorder_release_date") else None,
                 }
                 for item in order_line_items
             ],
             pricing_snapshot=pricing_snapshot,
             payment_method=payment_method,
+            coupon_code=applied_coupon_code,
+            discount_amount=applied_discount_amount,
+            contains_preorder=contains_preorder,
+            preorder_release_date=preorder_release_date,
+            preorder_released=False,
             status="placed",
             delivery_otp=f"{secrets.randbelow(9000) + 1000}",
             total=money(pricing_snapshot["total"]),
@@ -1609,12 +2811,39 @@ def place_order(
         session.add(order)
         session.flush()
 
+        # Atomically record coupon usage & increment usage counter
+        if applied_coupon_code and pricing_snapshot.get("couponId"):
+            try:
+                coupon_uuid = UUID(str(pricing_snapshot["couponId"]))
+                coupon_rec = session.get(Coupon, coupon_uuid)
+                if coupon_rec:
+                    coupon_rec.times_used += 1
+                    session.add(coupon_rec)
+                    usage = CouponUsage(
+                        site_id=site_id,
+                        coupon_id=coupon_rec.id,
+                        order_id=order.id,
+                        user_id=customer.id,
+                        customer_email=customer.email or "",
+                        discount_amount=applied_discount_amount,
+                    )
+                    session.add(usage)
+            except Exception as e:
+                logger.warning(f"Failed to record coupon usage: {e}")
+
         order_subtotal = sum((item["line_total"] for item in order_line_items), Decimal("0.00"))
 
         for item in order_line_items:
             product = product_map[item["product_id"]]
-            decrement_product_stock(product, item["quantity"], item["selected_variant_value"])
+            decrement_product_stock(
+                product,
+                item["quantity"],
+                item["selected_variant_value"],
+                is_preorder=bool(item.get("is_preorder", False)),
+            )
             session.add(product)
+
+            item_return_days = product.return_window_days if product.return_window_days is not None else getattr(site, "default_return_window_days", 7)
 
             order_item = OrderItem(
                 order_id=order.id,
@@ -1630,12 +2859,17 @@ def place_order(
                 quantity=item["quantity"],
                 line_total=item["line_total"],
                 status="placed",
+                is_preorder=bool(item.get("is_preorder", False)),
+                preorder_release_date=item.get("preorder_release_date"),
                 returnable_quantity=0,
+                return_window_days=item_return_days,
                 pricing_snapshot=build_order_item_pricing_snapshot(
                     line_total=item["line_total"],
                     quantity=item["quantity"],
                     order_subtotal=order_subtotal,
                     pricing_snapshot=pricing_snapshot,
+                    product_id=item["product_id"],
+                    cart_item_id=item.get("cart_item_id"),
                 ),
             )
             session.add(order_item)
@@ -1667,6 +2901,69 @@ def place_order(
         session.commit()
         session.refresh(order)
 
+        # Record statutory settlement ledger entry for COD orders
+        try:
+            from services.settlement_tax_service import compute_and_record_order_settlement
+            site_admin = session.get(Site, site_id)
+            admin_id = site_admin.admin_id if site_admin else None
+            compute_and_record_order_settlement(
+                session=session,
+                order=order,
+                admin_id=admin_id,
+                ledger_status="pending_cod",
+                escrow_status="held",
+            )
+            session.commit()
+            session.refresh(order)
+        except Exception as set_err:
+            logger.warning(f"Could not record COD settlement ledger entry: {set_err}")
+
+        # Auto-issue Rule 46 Tax Invoice
+        try:
+            issue_tax_invoice_for_order(session, order, save_pdf=True)
+        except Exception as inv_err:
+            logger.warning(f"Failed to auto-issue tax invoice for order {order.id}: {inv_err}")
+
+        # Dispatch order.placed event (In-App notification & Order receipt email)
+        try:
+            order_short = str(order.id)[:8].upper()
+            dispatch_customer_event(
+                session=session,
+                site_id=site.id,
+                customer_id=customer.id,
+                event_type="order.placed",
+                category="order",
+                title=f"Order #{order_short} Placed",
+                message=f"Your order #{order_short} for ₹{float(order.total):.2f} has been placed successfully.",
+                related_entity_type="order",
+                related_entity_id=str(order.id),
+                action_url=f"/store/{site.slug}/orders?orderId={order.id}",
+                metadata={"orderId": str(order.id), "total": float(order.total), "paymentMethod": order.payment_method},
+                idempotency_key=f"{site.id}:order.placed:{order.id}",
+                send_email=True,
+                email_recipient=customer.email,
+                email_template_key="order_placed_receipt",
+                email_template_vars={
+                    "order_number": order_short,
+                    "order_id": str(order.id),
+                    "total": f"{float(order.total):.2f}",
+                    "items": [
+                        {
+                            "product_name": it["product_name"],
+                            "quantity": it["quantity"],
+                            "line_total": f"{float(it['line_total']):.2f}",
+                        }
+                        for it in order_line_items
+                    ],
+                    "order_url": f"/store/{site.slug}/orders?orderId={order.id}",
+                    "customer_name": customer.name or "Valued Customer",
+                    "store_name": site.name,
+                },
+            )
+            session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Could not dispatch order.placed notification: {notif_err}")
+
         return {
             "message": "Order placed successfully",
             "order_id": str(order.id),
@@ -1687,8 +2984,78 @@ def build_customer_refund_info(
     allow_live_check: bool = False,
     session: Optional[Session] = None,
 ) -> Optional[dict[str, Any]]:
-    if order.status == "cancelled" or getattr(order, "payment_status", None) == "refunded":
-        is_cod = (order.payment_method or "").lower() in {"cod", "cash_on_delivery"}
+    # Extract refund transactions from pricing_snapshot
+    snapshot = (order.pricing_snapshot or {}) if isinstance(order.pricing_snapshot, dict) else {}
+    refund_history = list(snapshot.get("refund_history") or [])
+    if not refund_history and snapshot.get("refund_details"):
+        refund_history.append(snapshot.get("refund_details"))
+
+    total_refunded_amount = 0.0
+    latest_tx: Optional[dict[str, Any]] = None
+    for rf in refund_history:
+        if isinstance(rf, dict) and rf.get("amount") is not None:
+            try:
+                amt = float(rf.get("amount") or 0)
+                total_refunded_amount += amt
+                latest_tx = rf
+            except (ValueError, TypeError):
+                pass
+
+    is_cod = (order.payment_method or "").lower() in {"cod", "cash_on_delivery", "cash on delivery"}
+    is_fully_refunded = (
+        order.status == "refunded"
+        or getattr(order, "payment_status", None) == "refunded"
+        or (total_refunded_amount > 0 and total_refunded_amount >= float(order.total or 0))
+    )
+    is_partially_refunded = (
+        getattr(order, "payment_status", None) == "partially_refunded"
+        or (total_refunded_amount > 0 and total_refunded_amount < float(order.total or 0))
+    )
+
+    now = utc_now()
+    initiated_dt = order.cancelled_at or order.updated_at or order.created_at
+
+    # CASE A: Refund transactions exist OR order is marked refunded/partially refunded
+    if total_refunded_amount > 0 or is_fully_refunded or is_partially_refunded:
+        display_amount = total_refunded_amount if total_refunded_amount > 0 else float(order.total or 0)
+        status_label = "Refunded" if is_fully_refunded else "Partially Refunded"
+        ref_id = (latest_tx.get("reference_id") or latest_tx.get("refund_id")) if latest_tx else getattr(order, "razorpay_payment_id", None)
+        payout_mode = latest_tx.get("payout_mode") if latest_tx else None
+
+        if is_cod:
+            payout_desc = payout_mode or "UPI / Bank Transfer"
+            return {
+                "status": "completed",
+                "status_label": status_label,
+                "badge_color": "emerald",
+                "amount": round(display_amount, 2),
+                "payment_method": f"Cash on Delivery ({payout_desc})",
+                "reference_id": ref_id,
+                "arn": None,
+                "estimated_days": "Completed",
+                "note": f"A refund of ₹{display_amount:.2f} has been disbursed via {payout_desc}." + (f" (Ref: {ref_id})" if ref_id else ""),
+                "initiated_at": (latest_tx.get("created_at") if latest_tx else None) or (initiated_dt.isoformat() if initiated_dt else None),
+            }
+        else:
+            refund_id = (latest_tx.get("refund_id") or latest_tx.get("reference_id") or order.razorpay_payment_id) if latest_tx else order.razorpay_payment_id
+            refund_arn = latest_tx.get("arn") if latest_tx else None
+            gateway_status = (latest_tx.get("status") if latest_tx else None) or "processed"
+
+            return {
+                "status": "completed",
+                "status_label": status_label,
+                "badge_color": "emerald",
+                "amount": round(display_amount, 2),
+                "payment_method": order.payment_method or "Online Payment",
+                "reference_id": refund_id,
+                "arn": refund_arn,
+                "estimated_days": "Completed",
+                "note": f"A refund of ₹{display_amount:.2f} has been processed and credited to your original payment source.",
+                "initiated_at": (latest_tx.get("created_at") if latest_tx else None) or (initiated_dt.isoformat() if initiated_dt else None),
+            }
+
+    # CASE B: Order is cancelled without monetary refund
+    if order.status == "cancelled":
         if is_cod:
             return {
                 "status": "not_applicable",
@@ -1703,119 +3070,63 @@ def build_customer_refund_info(
                 "initiated_at": None,
             }
         else:
-            now = utc_now()
-            initiated_dt = order.cancelled_at or order.updated_at or order.created_at
-            # Check elapsed days from initiation
-            days_elapsed = 0
-            if initiated_dt:
-                # Ensure offset-naive/aware compatibility
-                if initiated_dt.tzinfo is None:
-                    initiated_dt_aware = initiated_dt.replace(tzinfo=timezone.utc)
-                else:
-                    initiated_dt_aware = initiated_dt
-                days_elapsed = (now - initiated_dt_aware).days
+            return {
+                "status": "processing",
+                "status_label": "Refund in progress",
+                "badge_color": "amber",
+                "amount": float(order.total),
+                "payment_method": order.payment_method or "Online Payment",
+                "reference_id": order.razorpay_payment_id,
+                "arn": None,
+                "estimated_days": "2-4 business days",
+                "note": f"A refund of ₹{float(order.total):.2f} is being processed to your original payment source.",
+                "initiated_at": initiated_dt.isoformat() if initiated_dt else None,
+            }
 
-            refund_details = (order.pricing_snapshot or {}).get("refund_details", {}) if isinstance(order.pricing_snapshot, dict) else {}
-            refund_id = refund_details.get("refund_id") or order.razorpay_payment_id
-            refund_arn = refund_details.get("arn")
-            gateway_status = refund_details.get("status")
-
-            # Only do live network call if explicitly allowed AND refund_details is not yet cached
-            if allow_live_check and not refund_details.get("refund_id") and order.razorpay_payment_id and not order.razorpay_payment_id.startswith("pay_mock_"):
-                try:
-                    from routers.payments import get_razorpay_client
-                    client = get_razorpay_client()
-                    if client:
-                        refunds_res = client.refund.all({"payment_id": order.razorpay_payment_id})
-                        if refunds_res and isinstance(refunds_res, dict) and refunds_res.get("items"):
-                            first_rf = refunds_res["items"][0]
-                            refund_id = first_rf.get("id") or refund_id
-                            refund_arn = first_rf.get("acquirer_data", {}).get("arn")
-                            gateway_status = first_rf.get("status") or gateway_status
-
-                            # Cache in pricing_snapshot so subsequent calls are 0ms instant
-                            if session:
-                                snapshot = dict(order.pricing_snapshot or {})
-                                snapshot["refund_details"] = {
-                                    "refund_id": refund_id,
-                                    "status": gateway_status or "processed",
-                                    "arn": refund_arn,
-                                    "amount": (first_rf.get("amount") or 0) / 100,
-                                }
-                                order.pricing_snapshot = snapshot
-                                session.add(order)
-                except Exception:
-                    pass
-
-            # 1. If payment gateway explicitly reported failure
-            if gateway_status == "failed":
-                return {
-                    "status": "failed",
-                    "status_label": "Refund Failed",
-                    "badge_color": "rose",
-                    "amount": float(order.total),
-                    "payment_method": order.payment_method or "Online Payment",
-                    "reference_id": refund_id,
-                    "arn": refund_arn,
-                    "estimated_days": "Action Required",
-                    "note": f"The refund of ₹{float(order.total):.2f} could not be processed by your bank. Please contact customer support or provide an alternate UPI/bank account for manual settlement.",
-                    "initiated_at": initiated_dt.isoformat() if initiated_dt else None,
-                }
-
-            # 2. If gateway confirmed or settled
-            is_settled = (
-                getattr(order, "refund_settled", False)
-                or gateway_status in ("processed", "completed", "settled")
-                or refund_arn is not None
-                or (getattr(order, "payment_status", None) == "refunded" and bool(refund_id) and gateway_status != "failed")
-                or days_elapsed >= 5
-            )
-
-            if is_settled:
-                return {
-                    "status": "completed",
-                    "status_label": "Refunded",
-                    "badge_color": "emerald",
-                    "amount": float(order.total),
-                    "payment_method": order.payment_method or "Online Payment",
-                    "reference_id": refund_id,
-                    "arn": refund_arn,
-                    "estimated_days": "Completed",
-                    "note": f"A refund of ₹{float(order.total):.2f} has been successfully processed by the payment gateway and credited to your original payment source.",
-                    "initiated_at": initiated_dt.isoformat() if initiated_dt else None,
-                }
-            else:
-                return {
-                    "status": "processing",
-                    "status_label": "Refund in progress",
-                    "badge_color": "amber",
-                    "amount": float(order.total),
-                    "payment_method": order.payment_method or "Online Payment",
-                    "reference_id": refund_id,
-                    "arn": refund_arn,
-                    "estimated_days": "5-7 business days",
-                    "note": f"Your refund of ₹{float(order.total):.2f} has been initiated and will be credited to your account within 5-7 business days.",
-                    "initiated_at": initiated_dt.isoformat() if initiated_dt else None,
-                }
     return None
+
+
+def _resolve_site_uuid(site_id_or_slug: str, session: Session) -> UUID:
+    try:
+        return UUID(str(site_id_or_slug))
+    except (ValueError, TypeError):
+        site = session.exec(select(Site).where(Site.slug == str(site_id_or_slug))).first()
+        if site:
+            return site.id
+        raise HTTPException(status_code=404, detail="Store not found")
 
 
 @router.get("/{site_id}/my-orders")
 def get_my_orders(
-    site_id: UUID,
+    site_id: str,
     page: Optional[int] = Query(None, ge=1, description="Page number"),
     page_size: Optional[int] = Query(None, ge=1, le=100, description="Orders per page"),
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
+    resolved_site_id = _resolve_site_uuid(site_id, session)
     user_id_uuid = UUID(user["userId"])
     customer = session.get(User, user_id_uuid)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer account not found")
 
+    user_addr_ids = session.exec(select(UserAddress.id).where(UserAddress.user_id == customer.id)).all()
+
+    conditions = [Order.customer_id == customer.id]
+    if user_addr_ids:
+        conditions.append(Order.shipping_address_id.in_(user_addr_ids))
+    if customer.email:
+        cust_e = customer.email.strip().lower()
+        conditions.append(cast(Order.shipping_address, String).ilike(f"%{cust_e}%"))
+    if customer.phone:
+        clean_phone = customer.phone.strip().replace(" ", "").replace("-", "")
+        if len(clean_phone) >= 10:
+            p10 = clean_phone[-10:]
+            conditions.append(cast(Order.shipping_address, String).ilike(f"%{p10}%"))
+
     base_query = select(Order).where(
-        Order.site_id == site_id,
-        Order.customer_id == customer.id,
+        Order.site_id == resolved_site_id,
+        or_(*conditions),
         Order.status != "pending",
     )
 
@@ -1859,43 +3170,81 @@ def get_my_orders(
                 shipment_map[sh.order_id] = sh
 
     response = []
-    has_customer_sync = False
     for order in orders:
-        if _sync_order_return_status(order, session, items_map.get(order.id)):
-            has_customer_sync = True
+        sh = shipment_map.get(order.id)
+        effective_order_status = order.status
+        if sh and order.status not in ("cancelled", "refunded", "returned"):
+            sh_st = getattr(sh, "status", None)
+            if sh_st == "delivered":
+                effective_order_status = "delivered"
+            elif sh_st in ("out_for_delivery", "picked_up"):
+                effective_order_status = "out_for_delivery"
+            elif sh_st in ("shipped", "in_transit"):
+                effective_order_status = "shipped"
+            elif sh_st in ("assigned", "accepted") and effective_order_status == "placed":
+                effective_order_status = "confirmed"
+
+            if order.status != effective_order_status:
+                order.status = effective_order_status
+                if effective_order_status == "out_for_delivery" and not order.shipped_at:
+                    order.shipped_at = sh.shipped_at or sh.out_for_delivery_at or order.confirmed_at or order.created_at
+                elif effective_order_status == "shipped" and not order.shipped_at:
+                    order.shipped_at = sh.shipped_at or order.confirmed_at or order.created_at
+                elif effective_order_status == "confirmed" and not order.confirmed_at:
+                    order.confirmed_at = order.created_at
+                session.add(order)
+                try:
+                    session.commit()
+                except Exception:
+                    session.rollback()
+
         serialized_items = [
-            serialize_customer_order_item(item, order.status)
+            serialize_customer_order_item(item, effective_order_status)
             for item in items_map.get(order.id, [])
         ]
         has_returnable_items = any(item["is_returnable"] for item in serialized_items)
-        sh = shipment_map.get(order.id)
-        is_shiprocket = bool(sh and (getattr(sh, "delivery_mode", None) == "shiprocket" or getattr(sh, "mode", None) == "shiprocket" or sh.courier_name or sh.awb_number))
+        sh_mode = getattr(sh, "delivery_mode", None) or getattr(sh, "mode", None)
+        is_own_agent = bool(
+            sh
+            and (
+                sh_mode == "own_agent"
+                or bool(getattr(sh, "agent_id", None))
+                or (bool(getattr(sh, "delivery_partner_name", None)) and sh_mode != "manual" and not getattr(sh, "awb_number", None))
+            )
+        )
+        is_out_for_delivery = bool(
+            effective_order_status == "out_for_delivery"
+            or (sh and getattr(sh, "status", None) in ("out_for_delivery", "picked_up"))
+        )
 
         response.append(
             {
                 "id": str(order.id),
-                "status": order.status,
+                "status": effective_order_status,
                 "payment_status": get_effective_payment_status(order),
                 "total": float(order.total),
                 "payment_method": order.payment_method,
                 "razorpay_payment_id": order.razorpay_payment_id,
                 "razorpay_order_id": order.razorpay_order_id,
+                "shipping_address": get_effective_shipping_address(order, session),
                 "created_at": order.created_at.isoformat() if order.created_at else None,
+                "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
+                "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,
+                "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
+                "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
+                "contains_preorder": bool(getattr(order, "contains_preorder", False)),
+                "preorder_release_date": order.preorder_release_date.isoformat() if getattr(order, "preorder_release_date", None) else None,
+                "preorder_released": bool(getattr(order, "preorder_released", False)),
                 "items": serialized_items,
                 "pricing_snapshot": order.pricing_snapshot,
-                "delivery_otp": None if is_shiprocket else ensure_order_delivery_otp(order, session),
-                "shipment": serialize_shipment(sh, order.status, session=session),
+                "delivery_otp": ensure_order_delivery_otp(order, session) if (is_own_agent and is_out_for_delivery) else None,
+                "shipment": serialize_shipment(sh, effective_order_status, session=session),
                 "has_returnable_items": has_returnable_items,
-                "can_request_return": order.status == "delivered" and has_returnable_items,
+                "can_request_return": effective_order_status == "delivered" and has_returnable_items,
+                "cancel_reason": getattr(order, "cancel_reason", None),
                 "refund_info": build_customer_refund_info(order),
             }
         )
-
-    if has_customer_sync:
-        try:
-            session.commit()
-        except Exception:
-            session.rollback()
 
     if page is not None and page_size is not None:
         return {
@@ -1964,36 +3313,57 @@ def get_my_delivered_orders(
 
 @router.get("/{site_id}/my-orders/{order_id}")
 def get_my_order_detail(
-    site_id: UUID,
+    site_id: str,
     order_id: UUID,
     user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
+    resolved_site_id = _resolve_site_uuid(site_id, session)
     user_id_uuid = UUID(user["userId"])
     customer = session.get(User, user_id_uuid)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer account not found")
 
     order = session.get(Order, order_id)
-    if not order or order.site_id != site_id or order.customer_id != customer.id:
+    if not order or order.site_id != resolved_site_id:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    shipping_addr = get_effective_shipping_address(order, session)
+    order_email = (shipping_addr.get("email") or "").strip().lower()
+    order_phone = (shipping_addr.get("mobileNumber") or shipping_addr.get("mobile_number") or shipping_addr.get("phone") or "").strip().replace(" ", "").replace("-", "")
+    cust_email = (customer.email or "").strip().lower()
+    cust_phone = (customer.phone or "").strip().replace(" ", "").replace("-", "")
+
+    user_addr_ids = session.exec(select(UserAddress.id).where(UserAddress.user_id == customer.id)).all()
+
+    is_owner = (
+        (order.customer_id == customer.id)
+        or (getattr(order, "shipping_address_id", None) in user_addr_ids)
+        or (cust_email and order_email and cust_email == order_email)
+        or (cust_phone and order_phone and (cust_phone == order_phone or cust_phone.endswith(order_phone[-10:]) or order_phone.endswith(cust_phone[-10:])))
+    )
+    if not is_owner:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.customer_id is None:
+        order.customer_id = customer.id
+        session.add(order)
+        try:
+            session.commit()
+        except Exception:
+            session.rollback()
 
     items = session.exec(
         select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.id.asc())
     ).all()
 
     # Self-heal items if order is delivered but individual items were never updated
-    # ONLY heal items that were never transitioned out of their original status.
-    # DO NOT touch returnable_quantity of items already in delivered/returned state
-    # as they may have had valid partial-return deductions applied.
     if order.status == "delivered":
         has_changes = False
         for item in items:
             if item.status not in ("delivered", "returned", "cancelled"):
-                # This item was never updated from its pre-delivery status
                 item.status = "delivered"
                 if item.returnable_quantity is None:
-                    # Uninitialized: no returns have ever been processed
                     item.returnable_quantity = item.quantity
                 has_changes = True
                 session.add(item)
@@ -2013,29 +3383,73 @@ def get_my_order_detail(
         select(Shipment).where(Shipment.order_id == order.id)
     ).first()
 
-    serialized_items = [serialize_customer_order_item(item, order.status) for item in items]
+    effective_order_status = order.status
+    if shipment and order.status not in ("cancelled", "refunded", "returned"):
+        sh_st = getattr(shipment, "status", None)
+        if sh_st == "delivered":
+            effective_order_status = "delivered"
+        elif sh_st in ("out_for_delivery", "picked_up"):
+            effective_order_status = "out_for_delivery"
+        elif sh_st in ("shipped", "in_transit"):
+            effective_order_status = "shipped"
+        elif sh_st in ("assigned", "accepted") and effective_order_status == "placed":
+            effective_order_status = "confirmed"
+
+        if order.status != effective_order_status:
+            order.status = effective_order_status
+            if effective_order_status == "out_for_delivery" and not order.shipped_at:
+                order.shipped_at = shipment.shipped_at or shipment.out_for_delivery_at or order.confirmed_at or order.created_at
+            elif effective_order_status == "shipped" and not order.shipped_at:
+                order.shipped_at = shipment.shipped_at or order.confirmed_at or order.created_at
+            elif effective_order_status == "confirmed" and not order.confirmed_at:
+                order.confirmed_at = order.created_at
+            session.add(order)
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+
+    serialized_items = [serialize_customer_order_item(item, effective_order_status) for item in items]
     has_returnable_items = any(item["is_returnable"] for item in serialized_items)
+
+    sh_mode = getattr(shipment, "delivery_mode", None) or getattr(shipment, "mode", None)
+    is_own_agent = bool(
+        shipment
+        and (
+            sh_mode == "own_agent"
+            or bool(getattr(shipment, "agent_id", None))
+            or (bool(getattr(shipment, "delivery_partner_name", None)) and sh_mode != "manual" and not getattr(shipment, "awb_number", None))
+        )
+    )
+    is_out_for_delivery = bool(
+        effective_order_status == "out_for_delivery"
+        or (shipment and getattr(shipment, "status", None) in ("out_for_delivery", "picked_up"))
+    )
 
     return {
         "id": str(order.id),
-        "status": order.status,
+        "status": effective_order_status,
         "payment_status": get_effective_payment_status(order),
         "total": float(order.total),
         "payment_method": order.payment_method,
         "razorpay_payment_id": order.razorpay_payment_id,
         "razorpay_order_id": order.razorpay_order_id,
-        "shipping_address": order.shipping_address,
+        "shipping_address": shipping_addr,
         "pricing_snapshot": order.pricing_snapshot,
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
         "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,
         "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
         "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
+        "contains_preorder": bool(getattr(order, "contains_preorder", False)),
+        "preorder_release_date": order.preorder_release_date.isoformat() if getattr(order, "preorder_release_date", None) else None,
+        "preorder_released": bool(getattr(order, "preorder_released", False)),
         "items": serialized_items,
-        "shipment": serialize_shipment(shipment, order.status, session=session),
-        "delivery_otp": None if bool(shipment and (getattr(shipment, "delivery_mode", None) == "shiprocket" or getattr(shipment, "mode", None) == "shiprocket" or shipment.courier_name or shipment.awb_number)) else ensure_order_delivery_otp(order, session),
+        "shipment": serialize_shipment(shipment, effective_order_status, session=session),
+        "delivery_otp": ensure_order_delivery_otp(order, session) if (is_own_agent and is_out_for_delivery) else None,
         "has_returnable_items": has_returnable_items,
-        "can_request_return": order.status == "delivered" and has_returnable_items,
+        "can_request_return": effective_order_status == "delivered" and has_returnable_items,
+        "cancel_reason": getattr(order, "cancel_reason", None),
         "refund_info": build_customer_refund_info(order, allow_live_check=True, session=session),
     }
 
@@ -2079,7 +3493,9 @@ def cancel_my_order(
     now = utc_now()
 
     try:
-        for item in items:
+        # Sort items deterministically by product_id to prevent database deadlocks
+        sorted_cancel_items = sorted(items, key=lambda it: str(it.product_id))
+        for item in sorted_cancel_items:
             if item.status == "cancelled":
                 continue
 
@@ -2152,7 +3568,14 @@ def cancel_my_order(
                     client = get_razorpay_client()
                     if client:
                         refund_amount_paise = int(Decimal(str(order.total)) * 100)
-                        refund_resp = client.payment.refund(order.razorpay_payment_id, {"amount": refund_amount_paise})
+                        refund_resp = client.payment.refund(
+                            order.razorpay_payment_id,
+                            {
+                                "amount": refund_amount_paise,
+                                "reverse_all": 1,
+                                "notes": {"reason": "Customer cancellation refund"},
+                            },
+                        )
                         if isinstance(refund_resp, dict):
                             snapshot = dict(order.pricing_snapshot or {})
                             snapshot["refund_details"] = {
@@ -2181,6 +3604,14 @@ def cancel_my_order(
                 ledger_entry.status = "refunded" if refund_succeeded else "refund_pending"
                 session.add(ledger_entry)
 
+        # Synchronize Section 194-O FY sales on cancellation
+        profile = session.exec(
+            select(MerchantTaxProfile).where(MerchantTaxProfile.site_id == order.site_id)
+        ).first()
+        if profile:
+            profile.fy_gross_sales_amount = compute_live_fy_gross_sales(session, order.site_id, profile.current_fy)
+            session.add(profile)
+
         session.add(order)
 
         session.add(
@@ -2193,6 +3624,51 @@ def cancel_my_order(
         )
 
         session.commit()
+
+        # Dispatch order.cancelled notification (In-App + Email)
+        try:
+            site = session.get(Site, site_id)
+            order_short = str(order.id)[:8].upper()
+            refund_note = ""
+            if getattr(order, "payment_status", None) == "refunded":
+                refund_note = f" Your refund of \u20b9{float(order.total):.2f} has been initiated."
+            elif getattr(order, "payment_status", None) == "refund_pending":
+                refund_note = " Your refund is being processed and will reflect within 5-7 business days."
+            cancel_msg = f"Your order #{order_short} has been cancelled."
+            if payload.cancel_reason:
+                cancel_msg += f" Reason: {payload.cancel_reason}."
+            cancel_msg += refund_note
+            dispatch_customer_event(
+                session=session,
+                site_id=site_id,
+                customer_id=customer.id,
+                event_type="order.cancelled",
+                category="order",
+                title=f"Order #{order_short} Cancelled",
+                message=cancel_msg,
+                related_entity_type="order",
+                related_entity_id=str(order.id),
+                action_url=f"/store/{site.slug}/orders?orderId={order.id}" if site else None,
+                metadata={"orderId": str(order.id), "total": float(order.total), "cancel_reason": payload.cancel_reason},
+                idempotency_key=f"{site_id}:order.cancelled:{order.id}",
+                send_email=True,
+                email_recipient=customer.email,
+                email_template_key="order_cancelled",
+                email_template_vars={
+                    "order_number": order_short,
+                    "order_id": str(order.id),
+                    "total": f"{float(order.total):.2f}",
+                    "cancel_reason": payload.cancel_reason or "Customer requested cancellation",
+                    "refund_note": refund_note.strip(),
+                    "order_url": f"/store/{site.slug}/orders?orderId={order.id}" if site else "#",
+                    "customer_name": customer.name or "Valued Customer",
+                    "store_name": site.name if site else "WebCreon Store",
+                },
+            )
+            session.commit()
+        except Exception as notif_err:
+            logger.warning(f"Could not dispatch order.cancelled notification: {notif_err}")
+
         return {
             "message": "Order cancelled successfully",
             "order_id": str(order.id),
@@ -2229,3 +3705,142 @@ def discard_unpaid_order(
         return {"message": "Draft order session discarded"}
 
     return {"message": "Order is not in pending state"}
+
+
+@router.get("/{order_id}/invoice/pdf")
+@router.get("/{site_id}/{order_id}/invoice/pdf")
+def get_order_invoice_pdf(
+    order_id: UUID,
+    site_id: Optional[UUID] = None,
+    session: Session = Depends(get_session),
+):
+    """
+    Streams a statutory Rule 46 GST Tax Invoice PDF.
+    Auto-generates if not yet created.
+    """
+    order = session.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    invoice = session.exec(
+        select(TaxInvoice).where(TaxInvoice.order_id == order_id)
+    ).first()
+
+    if not invoice:
+        invoice = issue_tax_invoice_for_order(session, order, save_pdf=True)
+        session.commit()
+
+    pdf_path = invoice.pdf_storage_path or f"uploads/invoices/{order.id}.pdf"
+    generate_rule46_invoice_pdf(invoice, output_path=pdf_path, session=session)
+
+    is_composition = (
+        invoice.total_tax_amount <= Decimal("0.00")
+        and invoice.cgst_amount <= Decimal("0.00")
+        and invoice.sgst_amount <= Decimal("0.00")
+        and invoice.igst_amount <= Decimal("0.00")
+    )
+    doc_prefix = "BillOfSupply" if is_composition else "Invoice"
+    clean_filename = f"{doc_prefix}_{invoice.invoice_number.replace('/', '_')}.pdf"
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=clean_filename,
+    )
+
+
+@router.get("/{order_id}/platform-invoice/pdf")
+@router.get("/{site_id}/{order_id}/platform-invoice/pdf")
+def get_order_platform_invoice_pdf(
+    order_id: UUID,
+    site_id: Optional[UUID] = None,
+    session: Session = Depends(get_session),
+):
+    """
+    Streams the official B2B Platform Service Tax Invoice from WebCreon to the Merchant.
+    Covers platform fees (SAC 998313, 18% GST), Section 52 TCS withholding, and settlement breakdown.
+    """
+    order = session.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    site = session.get(Site, order.site_id) if order.site_id else None
+    ledger_entry = session.exec(
+        select(TenantLedgerEntry).where(TenantLedgerEntry.order_id == order_id)
+    ).first()
+
+    pdf_path = f"uploads/invoices/platform_fee_{order.id}.pdf"
+    generate_platform_fee_invoice_pdf(
+        order=order,
+        site=site,
+        ledger_entry=ledger_entry,
+        output_path=pdf_path,
+        session=session,
+    )
+
+    clean_filename = f"WebCreon_Platform_Invoice_{str(order.id)[:8].upper()}.pdf"
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=clean_filename,
+    )
+
+
+
+@router.get("/{order_id}/invoice/json")
+@router.get("/{site_id}/{order_id}/invoice/json")
+def get_order_invoice_json(
+    order_id: UUID,
+    site_id: Optional[UUID] = None,
+    session: Session = Depends(get_session),
+):
+    """
+    Returns structured statutory Rule 46 invoice details for web display.
+    """
+    order = session.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    invoice = session.exec(
+        select(TaxInvoice).where(TaxInvoice.order_id == order_id)
+    ).first()
+
+    if not invoice:
+        invoice = issue_tax_invoice_for_order(session, order, save_pdf=True)
+        session.commit()
+
+    return {
+        "invoice_id": str(invoice.id),
+        "order_id": str(invoice.order_id),
+        "site_id": str(invoice.site_id),
+        "invoice_number": invoice.invoice_number,
+        "financial_year": invoice.financial_year,
+        "invoice_date": invoice.invoice_date.isoformat(),
+        "supplier": {
+            "legal_name": invoice.supplier_legal_name,
+            "trade_name": invoice.supplier_trade_name,
+            "gstin": invoice.supplier_gstin,
+            "pan": invoice.supplier_pan,
+            "address": invoice.supplier_address,
+            "state_code": invoice.supplier_state_code,
+        },
+        "recipient": {
+            "name": invoice.recipient_name,
+            "address": invoice.recipient_address,
+            "state_code": invoice.recipient_state_code,
+            "place_of_supply": invoice.place_of_supply_state_code,
+        },
+        "eco": {
+            "legal_name": invoice.eco_legal_name,
+            "gstin": invoice.eco_gstin,
+        },
+        "taxable_value": float(invoice.taxable_value),
+        "cgst_amount": float(invoice.cgst_amount),
+        "sgst_amount": float(invoice.sgst_amount),
+        "igst_amount": float(invoice.igst_amount),
+        "cess_amount": float(invoice.cess_amount),
+        "total_tax_amount": float(invoice.total_tax_amount),
+        "total_invoice_value": float(invoice.total_invoice_value),
+        "document_type": "BILL OF SUPPLY" if invoice.total_tax_amount <= Decimal("0.00") else "TAX INVOICE",
+        "items": invoice.items_snapshot,
+        "pdf_url": f"/orders/{order.id}/invoice/pdf",
+    }

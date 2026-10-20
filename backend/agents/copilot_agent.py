@@ -28,6 +28,12 @@ async def process_copilot_request(
     conversation_history: Optional[List[Dict[str, str]]] = None,
     chat_history: Optional[List[Dict[str, str]]] = None,
     draft_definition: Optional[Dict[str, Any]] = None,
+    previous_draft_definition: Optional[Dict[str, Any]] = None,
+    snapshot_history: Optional[List[Dict[str, Any]]] = None,
+    actor_id: Optional[str] = None,
+    actor_name: Optional[str] = None,
+    actor_email: Optional[str] = None,
+    actor_role: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Processes user chat request using the LangGraph Multi-Agent Orchestrator Pipeline."""
     effective_definition = draft_definition or site_definition
@@ -50,12 +56,14 @@ async def process_copilot_request(
             "pages": [],
         }
 
-    # Format history string
+    # Format history string with token bounding
     history_lines = []
     if effective_history:
-        for turn in effective_history[-6:]:
+        for turn in effective_history[-4:]:
             role = turn.get("role") or turn.get("sender") or "User"
-            content = turn.get("content") or turn.get("text") or ""
+            content = (turn.get("content") or turn.get("text") or "").strip()
+            if len(content) > 120:
+                content = content[:120] + "..."
             history_lines.append(f"{role}: {content}")
     history_str = "\n".join(history_lines) if history_lines else "No previous chat history."
 
@@ -63,7 +71,13 @@ async def process_copilot_request(
     initial_state = {
         "user_message": message,
         "site_id": site_id,
+        "actor_id": actor_id,
+        "actor_name": actor_name,
+        "actor_email": actor_email,
+        "actor_role": actor_role,
         "site_definition": copy.deepcopy(effective_definition),
+        "previous_draft_definition": previous_draft_definition,
+        "snapshot_history": snapshot_history or [],
         "history_str": history_str,
         "intent": "CHAT",
         "target_component": None,
@@ -89,6 +103,8 @@ async def process_copilot_request(
             "design_modified": final_output.get("design_modified", False) or agent_payload.get("design_modified", False),
             "updated_draft_definition": final_output.get("next_draft_definition") or agent_payload.get("next_draft_definition"),
             "data_cards": final_output.get("data_cards") or agent_payload.get("data_cards") or [],
+            "action": final_output.get("action") or agent_payload.get("action"),
+            "has_reverted_base": final_output.get("has_reverted_base", False) or agent_payload.get("has_reverted_base", False),
         }
     except Exception as ge:
         print("LangGraph Execution Error:", ge)
@@ -109,6 +125,12 @@ async def process_copilot_request_stream(
     conversation_history: Optional[List[Dict[str, str]]] = None,
     chat_history: Optional[List[Dict[str, str]]] = None,
     draft_definition: Optional[Dict[str, Any]] = None,
+    previous_draft_definition: Optional[Dict[str, Any]] = None,
+    snapshot_history: Optional[List[Dict[str, Any]]] = None,
+    actor_id: Optional[str] = None,
+    actor_name: Optional[str] = None,
+    actor_email: Optional[str] = None,
+    actor_role: Optional[str] = None,
 ):
     """Processes user chat request, yielding live word-by-word tokens followed by final event payload."""
     effective_definition = draft_definition or site_definition
@@ -132,16 +154,24 @@ async def process_copilot_request_stream(
 
     history_lines = []
     if effective_history:
-        for turn in effective_history[-6:]:
+        for turn in effective_history[-4:]:
             role = turn.get("role") or turn.get("sender") or "User"
-            content = turn.get("content") or turn.get("text") or ""
+            content = (turn.get("content") or turn.get("text") or "").strip()
+            if len(content) > 120:
+                content = content[:120] + "..."
             history_lines.append(f"{role}: {content}")
     history_str = "\n".join(history_lines) if history_lines else "No previous chat history."
 
     initial_state = {
         "user_message": message,
         "site_id": site_id,
+        "actor_id": actor_id,
+        "actor_name": actor_name,
+        "actor_email": actor_email,
+        "actor_role": actor_role,
         "site_definition": copy.deepcopy(effective_definition),
+        "previous_draft_definition": previous_draft_definition,
+        "snapshot_history": snapshot_history or [],
         "history_str": history_str,
         "intent": "CHAT",
         "target_component": None,
@@ -159,6 +189,8 @@ async def process_copilot_request_stream(
         intermediate_state = await copilot_pre_synthesis_app.ainvoke(initial_state)
         active_agent = intermediate_state.get("active_agent", "Co-Pilot Agent")
         agent_payload = intermediate_state.get("agent_payload") or {}
+        if "site_definition" not in agent_payload and intermediate_state.get("site_definition"):
+            agent_payload["site_definition"] = intermediate_state.get("site_definition")
 
         async for event in stream_synthesize_agent_response(
             user_message=message,
@@ -169,6 +201,8 @@ async def process_copilot_request_stream(
             yield event
     except Exception as ge:
         print("LangGraph Streaming Execution Error:", ge)
+        import traceback
+        traceback.print_exc()
         yield {"type": "token", "content": "I ran into an issue processing your request. Please try again."}
         yield {
             "type": "done",

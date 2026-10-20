@@ -20,13 +20,16 @@ def audit_store_health(site_id: str, site_definition: Dict[str, Any]) -> Dict[st
 
     site_uuid = UUID(site_id)
     with Session(engine) as db:
-        # 1. Orders Audit
+        # 1. Orders Audit (Active Orders needing fulfillment vs Completed/Cancelled)
         all_orders = db.exec(select(Order).where(Order.site_id == site_uuid)).all()
-        unfulfilled = [o for o in all_orders if str(o.status or "").lower() in ["placed", "pending", "new", "accepted"]]
+        new_orders = [o for o in all_orders if str(o.status or "").lower() == "placed" and (not getattr(o, "contains_preorder", False) or getattr(o, "preorder_released", False))]
+        yet_to_ship = [o for o in all_orders if str(o.status or "").lower() in ["confirmed", "accepted"]]
+        in_transit = [o for o in all_orders if str(o.status or "").lower() in ["shipped", "out_for_delivery", "in_transit", "rescheduled", "failed", "replacement_dispatched"]]
+        unfulfilled = new_orders + yet_to_ship + in_transit
         
         # 2. Returns Audit
         returns_all = db.exec(select(ReturnRequest).where(ReturnRequest.site_id == site_uuid)).all()
-        pending_returns = [r for r in returns_all if str(r.status or "").lower() in ["requested", "received", "inspected"]]
+        pending_returns = [r for r in returns_all if str(r.status or "").lower() in ["requested", "received", "inspected", "approved"]]
 
         # 3. Inventory Stock Audit
         products = db.exec(select(Product).where(Product.site_id == site_uuid)).all()
@@ -47,6 +50,9 @@ def audit_store_health(site_id: str, site_definition: Dict[str, Any]) -> Dict[st
         return {
             "total_orders": len(all_orders),
             "unfulfilled_orders_count": len(unfulfilled),
+            "new_orders_count": len(new_orders),
+            "yet_to_ship_count": len(yet_to_ship),
+            "in_transit_count": len(in_transit),
             "pending_returns_count": len(pending_returns),
             "total_products": len(products),
             "missing_description_products": [

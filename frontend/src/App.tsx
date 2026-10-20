@@ -7,57 +7,65 @@ import {
   Outlet,
   useNavigate,
   useLocation,
+  useParams,
 } from "react-router-dom";
 import { CustomerAuthProvider } from "./context/CustomerAuthContext";
 import { AdminAuthProvider, useAdminAuth } from "./context/AdminAuthContext";
+import { AdminThemeProvider, useAdminTheme } from "./context/ThemeContext";
 import { CartProvider } from "./CartContext";
 import { API_BASE_URL } from "./config/api";
 import BuilderShell from "./Component/BuilderShell";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
-import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
+import BuilderDrawerPanel, { SettingsNavKey } from "./Component/BuilderDrawerPanel";
+import AdminProfileSettings from "./Component/AdminProfileSettings";
+import AdminUsersAndRoles from "./Component/AdminUsersAndRoles";
+import AdminAuditLogs from "./Component/AdminAuditLogs";
+import {
+  AdminGeneralSettings,
+  AdminDomainSettings,
+  AdminBillingSettings,
+  AdminIntegrationsSettings,
+} from "./Component/AdminSettingsViews";
+import { AdminHelpSupport } from "./Component/AdminHelpSupport";
 import { AiWebpageGeneratingAnimation } from "./Component/AiWebpageGeneratingAnimation";
 import { AiAvatar } from "./Component/AiAvatar";
 import { UserAvatar } from "./Component/UserAvatar";
+import BuilderPage, { siteSlugMemoryCache } from "./BuilderPage";
+import { setSavedSitesMemoryCache } from "./utils/savedSitesCache";
+import { StorefrontSkeleton } from "./Component/StorefrontSkeleton";
+import { AdminWorkspaceSkeleton } from "./Component/AdminWorkspaceSkeleton";
 
-// Lazy-loaded routes for code splitting
-const BuilderPage = React.lazy(() => import("./BuilderPage"));
-const AdminLoginPage = React.lazy(() => import("./pages/AdminLoginPage"));
-const AdminSignupPage = React.lazy(() => import("./pages/AdminSignupPage"));
-const CustomerLoginPage = React.lazy(() => import("./pages/CustomerLoginPage"));
-const CustomerSignupPage = React.lazy(() => import("./pages/CustomerSignupPage"));
+import AdminLoginPage from "./pages/AdminLoginPage";
+import AdminSignupPage from "./pages/AdminSignupPage";
+import AdminResetPasswordPage from "./pages/AdminResetPasswordPage";
+import AdminAcceptInvitePage from "./pages/AdminAcceptInvitePage";
+import CustomerLoginPage from "./pages/CustomerLoginPage";
+import CustomerSignupPage from "./pages/CustomerSignupPage";
+
+// Lazy-loaded routes for secondary standalone pages
 const TrackOrderPage = React.lazy(() => import("./pages/TrackOrderPage"));
 const AgentDeliveryPage = React.lazy(() => import("./pages/AgentDeliveryPage"));
 const RiderLoginPage = React.lazy(() => import("./pages/RiderLoginPage"));
+const SupportAgentLoginPage = React.lazy(() => import("./pages/SupportAgentLoginPage"));
+const SupportAgentDashboard = React.lazy(() => import("./pages/SupportAgentDashboard"));
+
 
 function RouteLoadingFallback() {
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        background: "#0f172a",
-        color: "#f8fafc",
-        fontFamily: "inherit",
-      }}
-    >
-      <div style={{ textAlign: "center" }}>
-        <div
-          style={{
-            width: "36px",
-            height: "36px",
-            border: "3px solid rgba(255,255,255,0.15)",
-            borderTopColor: "#3b82f6",
-            borderRadius: "50%",
-            animation: "spin 0.8s linear infinite",
-            margin: "0 auto 12px",
-          }}
-        />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    </div>
-  );
+  const isStoreRoute = typeof window !== "undefined" && (window.location.pathname.includes("/store/") || window.location.pathname.includes("/site/"));
+  let slug = "";
+  if (isStoreRoute && typeof window !== "undefined") {
+    try {
+      const parts = window.location.pathname.split("/");
+      slug = parts[2] || "";
+    } catch (_) {}
+  }
+
+  if (isStoreRoute) {
+    return <StorefrontSkeleton siteSlug={slug} />;
+  }
+
+  return <AdminWorkspaceSkeleton />;
 }
 
 type Block = {
@@ -110,6 +118,8 @@ type SavedSite = {
   site_definition: SiteDefinition;
   draft_definition: SiteDefinition | null;
   version: number;
+  default_return_window_days?: number;
+  is_online?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -120,12 +130,13 @@ type ChatMessage = {
   text: string;
   time: string;
   status?: "loading" | "done" | "error";
-  type?: "text" | "palette_choice" | "choice_list" | "choice" | "generating_animation";
+  type?: "text" | "palette_choice" | "choice_list" | "choice" | "generating_animation" | "paywall";
   palette_options?: any[];
   choices?: { id: string; label: string; description?: string }[];
   progress?: number;
   currentStepMessage?: string;
   brandName?: string;
+  paywall_reset_date?: string | null;
 };
 
 function slugify(value: string) {
@@ -139,46 +150,13 @@ function slugify(value: string) {
 
 function RequireAdminAuth() {
   const location = useLocation();
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { admin, loading } = useAdminAuth();
 
-  useEffect(() => {
-    const checkAdminSession = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/auth/admin/me`, {
-          credentials: "include",
-        });
-
-        setIsAuthenticated(response.ok);
-      } catch (error) {
-        console.error("Error checking admin session:", error);
-        setIsAuthenticated(false);
-      } finally {
-        setCheckingSession(false);
-      }
-    };
-
-    checkAdminSession();
-  }, []);
-
-  if (checkingSession) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background: "#0f172a",
-          color: "#f8fafc",
-          padding: "24px",
-        }}
-      >
-        <p>Checking admin session...</p>
-      </div>
-    );
+  if (loading) {
+    return <RouteLoadingFallback />;
   }
 
-  if (!isAuthenticated) {
+  if (!admin) {
     return (
       <Navigate
         to="/admin/login"
@@ -193,20 +171,18 @@ function RequireAdminAuth() {
 
 function AdminSitesPage() {
   const navigate = useNavigate();
-  const { admin, logoutAdmin } = useAdminAuth();
+  const { admin, logoutAdmin, isOwner, hasPermission } = useAdminAuth();
 
-  const ONBOARDING_CHAT_KEY = "webnirmaan_onboarding_chat";
-  const ONBOARDING_SESSION_KEY = "webnirmaan_onboarding_session_id";
-  const ONBOARDING_COLLECTED_KEY = "webnirmaan_onboarding_collected";
+  const adminId = admin?.id || "";
+  const ONBOARDING_CHAT_KEY = adminId ? `wc_onboarding_chat_${adminId}` : "wc_onboarding_chat_guest";
+  const ONBOARDING_SESSION_KEY = adminId ? `wc_onboarding_session_${adminId}` : "wc_onboarding_session_guest";
+  const ONBOARDING_COLLECTED_KEY = adminId ? `wc_onboarding_collected_${adminId}` : "wc_onboarding_collected_guest";
 
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem(ONBOARDING_SESSION_KEY) || localStorage.getItem(ONBOARDING_SESSION_KEY);
-    }
-    return null;
-  });
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  // Never seed saved-sites from localStorage: a stale entry from a previously-logged-in
+  // admin account would momentarily expose their sites to the current admin (security gap).
   const [savedSites, setSavedSites] = useState<SavedSite[]>([]);
   const [activeDrawer, setActiveDrawer] = useState<
     | "saved-sites"
@@ -218,29 +194,44 @@ function AdminSitesPage() {
     | "qr-link"
     | null
   >(null);
+  const [activeSettingsNavKey, setActiveSettingsNavKey] = useState<SettingsNavKey | null>(null);
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = sessionStorage.getItem(ONBOARDING_CHAT_KEY) || localStorage.getItem(ONBOARDING_CHAT_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [collectedState, setCollectedState] = useState<Record<string, any>>({});
+  const [isOnboardingPaywallLocked, setIsOnboardingPaywallLocked] = useState(false);
+  const [onboardingPaywallResetDate, setOnboardingPaywallResetDate] = useState<string | null>(null);
+
+  // Sync state with current admin ID
+  useEffect(() => {
+    if (typeof window === "undefined" || !adminId) return;
+    try {
+      const stored = sessionStorage.getItem(ONBOARDING_CHAT_KEY) || localStorage.getItem(ONBOARDING_CHAT_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        } else {
+          setMessages([]);
         }
-      } catch {}
-    }
-    return [];
-  });
+      } else {
+        setMessages([]);
+      }
 
-  const [collectedState, setCollectedState] = useState<Record<string, any>>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = sessionStorage.getItem(ONBOARDING_COLLECTED_KEY) || localStorage.getItem(ONBOARDING_COLLECTED_KEY);
-        if (stored) return JSON.parse(stored);
-      } catch {}
+      const storedSession = sessionStorage.getItem(ONBOARDING_SESSION_KEY) || localStorage.getItem(ONBOARDING_SESSION_KEY);
+      setSessionId(storedSession || null);
+
+      const storedCollected = sessionStorage.getItem(ONBOARDING_COLLECTED_KEY) || localStorage.getItem(ONBOARDING_COLLECTED_KEY);
+      if (storedCollected) {
+        setCollectedState(JSON.parse(storedCollected));
+      } else {
+        setCollectedState({});
+      }
+    } catch {
+      setMessages([]);
+      setSessionId(null);
+      setCollectedState({});
     }
-    return {};
-  });
+  }, [adminId, ONBOARDING_CHAT_KEY, ONBOARDING_SESSION_KEY, ONBOARDING_COLLECTED_KEY]);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -254,7 +245,7 @@ function AdminSitesPage() {
   }, [messages, loading]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && adminId) {
       try {
         if (messages.length > 0) {
           sessionStorage.setItem(ONBOARDING_CHAT_KEY, JSON.stringify(messages));
@@ -270,7 +261,7 @@ function AdminSitesPage() {
         }
       } catch {}
     }
-  }, [messages, sessionId, collectedState]);
+  }, [adminId, messages, sessionId, collectedState, ONBOARDING_CHAT_KEY, ONBOARDING_SESSION_KEY, ONBOARDING_COLLECTED_KEY]);
 
   const handleResetOnboarding = () => {
     setMessages([]);
@@ -297,7 +288,63 @@ function AdminSitesPage() {
       }
 
       const data = await response.json();
-      setSavedSites(Array.isArray(data) ? data : []);
+      const sitesList: SavedSite[] = Array.isArray(data) ? data : [];
+      setSavedSites(sitesList);
+      setSavedSitesMemoryCache(sitesList);
+
+      // If the user is a team member (non-owner), directly open their first assigned store
+      if (!isOwner && sitesList.length > 0) {
+        navigate(`/builder/${sitesList[0].id}`, { replace: true });
+        return;
+      }
+
+      // Pre-populate memory and localStorage snapshot cache for all sites
+      sitesList.forEach((site: any) => {
+        if (site.id) {
+          siteSlugMemoryCache.set(site.id, site);
+          try {
+            localStorage.setItem(
+              `wc_site_snapshot_${site.id}`,
+              JSON.stringify(site)
+            );
+            const parsedTheme = site.site_definition?.theme;
+            if (parsedTheme) {
+              localStorage.setItem(
+                `wc_theme_mode_${site.id}`,
+                parsedTheme.mode || "light"
+              );
+              if (parsedTheme.primary_bg) {
+                localStorage.setItem(
+                  `wc_theme_bg_${site.id}`,
+                  parsedTheme.primary_bg
+                );
+              }
+            }
+          } catch (_) {}
+        }
+        if (site.slug) {
+          siteSlugMemoryCache.set(site.slug, site);
+          try {
+            localStorage.setItem(
+              `wc_site_snapshot_${site.slug}`,
+              JSON.stringify(site)
+            );
+            const parsedTheme = site.site_definition?.theme;
+            if (parsedTheme) {
+              localStorage.setItem(
+                `wc_theme_mode_${site.slug}`,
+                parsedTheme.mode || "light"
+              );
+              if (parsedTheme.primary_bg) {
+                localStorage.setItem(
+                  `wc_theme_bg_${site.slug}`,
+                  parsedTheme.primary_bg
+                );
+              }
+            }
+          } catch (_) {}
+        }
+      });
     } catch (error) {
       console.error("Error loading admin sites:", error);
       setSavedSites([]);
@@ -360,7 +407,11 @@ function AdminSitesPage() {
     }
 
     setMessages((prev) => {
-      const cleanPrev = prev.filter((m) => m.type !== "generating_animation");
+      const cleanPrev = prev.filter(
+        (m) =>
+          m.type !== "generating_animation" &&
+          (m.sender === "user" || (m.text && m.text.trim().length > 0 && m.text !== "Processing...") || m.type === "paywall" || (m.palette_options && m.palette_options.length > 0) || (m.choices && m.choices.length > 0))
+      );
       return [
         ...cleanPrev,
         {
@@ -369,7 +420,7 @@ function AdminSitesPage() {
           text: "Building your website...",
           time: currentTime,
           type: "generating_animation",
-          progress: 15,
+          progress: 0,
           currentStepMessage: "Initializing AI generation pipeline...",
           brandName: detectedBrand,
         },
@@ -381,12 +432,18 @@ function AdminSitesPage() {
 
       // Try streaming progress first
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 35000);
+
         const streamResponse = await fetch(`${API_BASE_URL}/site-definition/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
+          signal: controller.signal,
           body: JSON.stringify({ session_id: currentSessionId }),
         });
+
+        clearTimeout(timeoutId);
 
         if (streamResponse.ok && streamResponse.body) {
           const reader = streamResponse.body.getReader();
@@ -454,15 +511,14 @@ function AdminSitesPage() {
       }
 
       const brandName = data.site_definition.site.brand_name || `${data.site_definition.site.site_type} website`;
-      const baseSlug = slugify(brandName) || "website";
-      const uniqueSlug = `${baseSlug}-${Date.now()}`;
+      const cleanSlug = slugify(brandName) || "store";
 
       const createResponse = await fetch(`${API_BASE_URL}/sites`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          slug: uniqueSlug,
+          slug: cleanSlug,
           site_definition: data.site_definition,
           draft_definition: data.site_definition,
         }),
@@ -479,7 +535,7 @@ function AdminSitesPage() {
         {
           id: `done-${Date.now()}`,
           sender: "assistant",
-          text: `🎉 Created ${brandName}! Opening builder... \n\nRemember: You can customize theme, colors, and component assets anytime in the builder. Click 'Publish' at the bottom to save live updates!`,
+          text: `Created ${brandName}! Opening builder... \n\nRemember: You can customize theme, colors, and component assets anytime in the builder. Click 'Publish' at the bottom to save live updates!`,
           time: currentTime,
           status: "done",
         },
@@ -507,7 +563,7 @@ function AdminSitesPage() {
     }
   };
 
-  const handleSendReply = async (replyText: string) => {
+  const handleSendReply = async (replyText: string, displayText?: string) => {
     const trimmed = replyText.trim();
     if (!trimmed || loading) return;
 
@@ -515,9 +571,11 @@ function AdminSitesPage() {
     const assistantMsgId = `assistant-${Date.now()}`;
     const currentTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+    const visibleText = displayText?.trim() || trimmed;
+
     setMessages((prev) => [
       ...prev,
-      { id: userMsgId, sender: "user", text: trimmed, time: currentTime },
+      { id: userMsgId, sender: "user", text: visibleText, time: currentTime },
       { id: assistantMsgId, sender: "assistant", text: "", time: currentTime, status: "loading" },
     ]);
 
@@ -536,12 +594,18 @@ function AdminSitesPage() {
         ? { prompt: trimmed }
         : { session_id: sessionId, reply: trimmed };
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        signal: controller.signal,
         body: JSON.stringify(requestBody),
       });
+
+      clearTimeout(timeoutId);
 
       const updateAssistantMsg = (payload: {
         text?: string;
@@ -572,6 +636,43 @@ function AdminSitesPage() {
           )
         );
       };
+
+      if (response.status === 402) {
+        try {
+          const errData = await response.json();
+          const rDate = errData?.detail?.reset_date || null;
+          setIsOnboardingPaywallLocked(true);
+          setOnboardingPaywallResetDate(rDate);
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    text: errData?.detail?.message || "Monthly AI credit limit reached. Please upgrade your plan to continue using AI.",
+                    type: "paywall",
+                    paywall_reset_date: rDate,
+                    status: "done",
+                  }
+                : msg
+            )
+          );
+        } catch {
+          setIsOnboardingPaywallLocked(true);
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    text: "Monthly AI credit limit reached. Please upgrade your plan to continue using AI.",
+                    type: "paywall",
+                    status: "done",
+                  }
+                : msg
+            )
+          );
+        }
+        return;
+      }
 
       if (response.status === 404 && sessionId) {
         // Rehydrate session seamlessly if server restarted
@@ -628,7 +729,24 @@ function AdminSitesPage() {
               if (trimmedBlock.startsWith("data: ")) {
                 try {
                   const event = JSON.parse(trimmedBlock.slice(6));
-                  if (event.type === "token") {
+                  if (event.type === "paywall_exhausted" || event.error_code === "AI_CREDIT_LIMIT_REACHED") {
+                    setIsOnboardingPaywallLocked(true);
+                    setOnboardingPaywallResetDate(event.reset_date || null);
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === assistantMsgId
+                          ? {
+                              ...msg,
+                              text: event.message || "Monthly AI credit limit reached. Please upgrade your plan for higher monthly credit limits.",
+                              type: "paywall",
+                              paywall_reset_date: event.reset_date || null,
+                              status: "done",
+                            }
+                          : msg
+                      )
+                    );
+                    return;
+                  } else if (event.type === "token") {
                     streamedText += event.content || "";
                     setMessages((prev) =>
                       prev.map((msg) =>
@@ -681,11 +799,17 @@ function AdminSitesPage() {
   };
 
   const handleSelectPaletteOption = (pal: any) => {
-    handleSendReply(pal.id);
+    const displayName = pal.name || pal.id;
+    handleSendReply(displayName, displayName);
   };
 
   const handleSelectChoice = (choice: { id: string; label: string }) => {
-    handleSendReply(choice.id);
+    const rawLabel = choice.label || choice.id;
+    const cleanLabel = rawLabel
+      .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "")
+      .replace(/^⚡\s*/, "")
+      .trim();
+    handleSendReply(cleanLabel, cleanLabel);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -701,6 +825,8 @@ function AdminSitesPage() {
     }
   };
 
+  const { isDark, tokens } = useAdminTheme();
+
   const topBar = (
     <BuilderTopControlBar
       siteName=""
@@ -708,14 +834,23 @@ function AdminSitesPage() {
       onLogout={handleLogout}
       userName={admin?.name}
       userEmail={admin?.email}
+      avatarUrl={admin?.avatarUrl}
+      gender={admin?.gender}
+      isOwner={isOwner}
     />
   );
 
   const leftPanel = (
     <BuilderControlPanel
-      activeKey={activeDrawer}
-      disabledKeys={["chat", "customize", "admin-panel", "assets", "qr-link"]}
+      activeKey={activeDrawer || (activeSettingsNavKey ? "settings" : !isOwner ? "saved-sites" : "chat")}
+      disabledKeys={!isOwner ? ["chat", "customize", "admin-panel", "assets", "qr-link"] : ["customize", "admin-panel", "assets", "qr-link"]}
       onSelect={(key) => {
+        if (key === "chat") {
+          if (!isOwner) return;
+          setActiveSettingsNavKey(null);
+          setActiveDrawer(null);
+          return;
+        }
         if (key === "saved-sites" || key === "settings") {
           setActiveDrawer((prev) => (prev === key ? null : key));
         }
@@ -726,13 +861,24 @@ function AdminSitesPage() {
   const drawerNode = activeDrawer ? (
     <BuilderDrawerPanel
       activeDrawer={activeDrawer}
-      onClose={() => setActiveDrawer(null)}
+      onClose={() => {
+        setActiveDrawer(null);
+        try {
+          sessionStorage.removeItem("wc_active_builder_drawer");
+        } catch (_) {}
+      }}
       savedSites={savedSites}
       onSelectSite={(targetSiteId) => {
-        setActiveDrawer(null);
+        try {
+          sessionStorage.setItem("wc_active_builder_drawer", "saved-sites");
+        } catch (_) {}
         openSite(targetSiteId);
       }}
       onDeleteSite={handleDeleteSite}
+      activeSettingsNavKey={activeSettingsNavKey}
+      onSelectSettingsNav={(key) => {
+        setActiveSettingsNavKey(key);
+      }}
     />
   ) : null;
 
@@ -741,19 +887,230 @@ function AdminSitesPage() {
       topBar={topBar}
       leftPanel={leftPanel}
       drawer={drawerNode}
+      isResizableDrawer={activeDrawer === "chat"}
       plainCenter={true}
     >
+      {activeSettingsNavKey === "profile" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+          <AdminProfileSettings />
+        </div>
+      ) : activeSettingsNavKey === "users-roles" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+          <AdminUsersAndRoles />
+        </div>
+      ) : activeSettingsNavKey === "domain" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+          <AdminDomainSettings />
+        </div>
+      ) : activeSettingsNavKey === "billing" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+          <AdminBillingSettings />
+        </div>
+      ) : activeSettingsNavKey === "audit-logs" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+          <AdminAuditLogs />
+        </div>
+      ) : activeSettingsNavKey === "help-support" ? (
+        <div style={{ height: "100%", overflowY: "auto", background: tokens.surfaceBg, padding: "24px", boxSizing: "border-box" }}>
+          <AdminHelpSupport />
+        </div>
+      ) : !isOwner ? (
+        <div
+          style={{
+            height: "100%",
+            overflowY: "auto",
+            background: tokens.workspaceBg,
+            padding: "36px 32px",
+            boxSizing: "border-box",
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          }}
+        >
+          <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                  <h1 style={{ fontSize: "24px", fontWeight: 700, color: tokens.textPrimary, margin: 0, letterSpacing: "-0.02em" }}>
+                    Your Assigned Stores
+                  </h1>
+                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "12px", background: tokens.accentBg, color: tokens.accentText, border: `1px solid ${tokens.accentBorder}` }}>
+                    {admin?.role || "Staff"}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: "14px", color: tokens.textSecondary }}>
+                  Select an assigned store below to manage products, orders, and storefront configuration.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "14px 18px",
+                borderRadius: "12px",
+                background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                border: `1px solid ${tokens.border}`,
+                boxShadow: isDark ? "none" : "0 1px 3px rgba(0,0,0,0.04)",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: "28px",
+              }}
+            >
+              <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: isDark ? "rgba(245, 158, 11, 0.15)" : "#fef3c7", color: tokens.warning, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
+                🛡️
+              </div>
+              <div style={{ fontSize: "13px", color: tokens.textSecondary, lineHeight: 1.5 }}>
+                <strong style={{ color: tokens.textPrimary }}>Store Creation Restricted:</strong> The AI Store Onboarding Agent is accessible strictly by workspace owners. As a team member, you have direct access to your assigned storefronts below.
+              </div>
+            </div>
+
+            {savedSites.length === 0 ? (
+              <div
+                style={{
+                  background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                  borderRadius: "16px",
+                  border: `1px solid ${tokens.border}`,
+                  padding: "48px 24px",
+                  textAlign: "center",
+                  boxShadow: isDark ? "none" : "0 1px 4px rgba(0,0,0,0.04)",
+                }}
+              >
+                <div style={{ fontSize: "36px", marginBottom: "12px" }}>🏪</div>
+                <h3 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: "0 0 8px 0" }}>
+                  No Stores Currently Assigned
+                </h3>
+                <p style={{ fontSize: "13.5px", color: tokens.textSecondary, maxWidth: "420px", margin: "0 auto", lineHeight: 1.5 }}>
+                  Your account is active, but you have not been granted access to any store websites yet. Please contact your workspace owner.
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))",
+                  gap: "18px",
+                }}
+              >
+                {savedSites.map((site) => {
+                  const brand = site.site_definition?.site?.brand_name || site.slug;
+                  const domain = site.site_definition?.site?.domain || "E-Commerce";
+                  return (
+                    <div
+                      key={site.id}
+                      style={{
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        borderRadius: "14px",
+                        border: `1px solid ${tokens.border}`,
+                        padding: "20px",
+                        boxShadow: isDark ? "none" : "0 1px 3px rgba(0,0,0,0.04)",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        gap: "16px",
+                        transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = "translateY(-2px)";
+                        e.currentTarget.style.boxShadow = isDark ? "0 8px 24px rgba(0,0,0,0.4)" : "0 8px 24px rgba(15,23,42,0.08)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = "translateY(0)";
+                        e.currentTarget.style.boxShadow = isDark ? "none" : "0 1px 3px rgba(0,0,0,0.04)";
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", marginBottom: "8px" }}>
+                          <h3 style={{ fontSize: "16px", fontWeight: 700, color: tokens.textPrimary, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {brand}
+                          </h3>
+                          <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "6px", background: isDark ? tokens.surfaceBg : "#f1f5f9", color: tokens.textSecondary, textTransform: "uppercase" }}>
+                            {domain}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "12px", color: tokens.textMuted, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {site.slug}
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "8px", paddingTop: "12px", borderTop: `1px solid ${tokens.divider}` }}>
+                        <button
+                          type="button"
+                          onClick={() => openSite(site.id)}
+                          style={{
+                            flex: 1,
+                            padding: "8px 14px",
+                            borderRadius: "8px",
+                            background: tokens.accent,
+                            color: "#ffffff",
+                            border: "none",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                            boxShadow: "0 2px 6px rgba(59,130,246,0.25)",
+                          }}
+                        >
+                          <span>Open Store</span>
+                          <span>→</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
       <div
+        className="onboarding-agent-root"
         style={{
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          background: "#ffffff",
-          color: "#0f172a",
+          background: tokens.workspaceBg,
+          color: tokens.textPrimary,
           position: "relative",
           overflow: "hidden",
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         }}
       >
+        <style>{`
+          .onboarding-agent-root,
+          .onboarding-agent-root input,
+          .onboarding-agent-root button,
+          .onboarding-agent-root textarea,
+          .onboarding-agent-root span,
+          .onboarding-agent-root div,
+          .onboarding-agent-root p,
+          .onboarding-agent-root h1,
+          .onboarding-agent-root h2,
+          .onboarding-agent-root h3 {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+          }
+
+          .onboarding-thinking-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: ${tokens.textMuted};
+            display: inline-block;
+            animation: onboardingDotPulse 1.4s ease-in-out infinite both;
+          }
+
+          @keyframes onboardingDotPulse {
+            0%, 80%, 100% {
+              transform: scale(0.65);
+              opacity: 0.35;
+            }
+            40% {
+              transform: scale(1);
+              opacity: 0.95;
+            }
+          }
+        `}</style>
         {/* Chat Content Area */}
         <div
           style={{
@@ -772,7 +1129,7 @@ function AdminSitesPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 height: "100%",
-                color: "#64748b",
+                color: tokens.textSecondary,
                 fontSize: "14px",
                 textAlign: "center",
                 padding: "32px 20px",
@@ -780,11 +1137,11 @@ function AdminSitesPage() {
                 margin: "auto 0",
               }}
             >
-              <p style={{ margin: 0, fontWeight: 600, color: "#475569", fontSize: "15px" }}>
+              <p style={{ margin: 0, fontWeight: 600, color: tokens.textPrimary, fontSize: "15px" }}>
                 Describe the website or storefront you want to build.
               </p>
-              <p style={{ margin: 0, fontSize: "13px", color: "#94a3b8", maxWidth: "520px", lineHeight: 1.5 }}>
-                Specify your brand name, products, payment preferences, or color vibe, and WebCreon AI will guide you through building your custom store.
+              <p style={{ margin: 0, fontSize: "13px", color: tokens.textSecondary, maxWidth: "520px", lineHeight: 1.5 }}>
+                Specify your brand name, products, payment preferences, or color vibe, and WebCreon will guide you through building your custom store.
               </p>
             </div>
           ) : (
@@ -798,6 +1155,7 @@ function AdminSitesPage() {
             >
               {messages.map((msg) => {
                 const isUser = msg.sender === "user";
+                const isGeneratingActive = messages.some((m) => m.type === "generating_animation");
 
                 if (msg.type === "generating_animation") {
                   return (
@@ -810,13 +1168,19 @@ function AdminSitesPage() {
                       }}
                     >
                       <AiWebpageGeneratingAnimation
-                        themeMode="light"
+                        themeMode={isDark ? "dark" : "light"}
                         brandName={msg.brandName || "Your Website"}
                         progress={msg.progress}
                         currentMessage={msg.currentStepMessage || msg.text}
                       />
                     </div>
                   );
+                }
+
+                // If assistant message is empty and we are not in an active loading turn or generating animation is active, don't render an empty bubble
+                const isEmptyAssistant = !isUser && (!msg.text || msg.text === "Processing..." || !msg.text.trim());
+                if (isEmptyAssistant && (!loading || isGeneratingActive)) {
+                  return null;
                 }
 
                 return (
@@ -838,7 +1202,7 @@ function AdminSitesPage() {
                       }}
                     >
                       {isUser ? (
-                        <UserAvatar size={32} />
+                        <UserAvatar size={32} avatarUrl={admin?.avatarUrl} gender={admin?.gender} />
                       ) : (
                         <AiAvatar size={32} />
                       )}
@@ -850,174 +1214,422 @@ function AdminSitesPage() {
                             : "18px 18px 18px 4px",
                           padding: "14px 18px",
                           background: isUser
-                            ? "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)"
-                            : "#f8fafc",
+                            ? tokens.accent
+                            : (isDark ? tokens.surfaceBg : "#f8fafc"),
                           border: isUser
                             ? "none"
-                            : "1px solid rgba(15,23,42,0.08)",
-                          color: isUser ? "#ffffff" : "#0f172a",
+                            : `1px solid ${tokens.border}`,
+                          color: isUser ? "#ffffff" : tokens.textPrimary,
                           fontSize: "14px",
                           lineHeight: 1.5,
                           boxShadow: isUser
-                            ? "0 4px 14px rgba(37,99,235,0.22)"
-                            : "0 2px 10px rgba(15,23,42,0.04)",
+                            ? (isDark ? "0 4px 14px rgba(0,0,0,0.4)" : "0 4px 14px rgba(37,99,235,0.22)")
+                            : (isDark ? "none" : "0 2px 10px rgba(15,23,42,0.04)"),
                         }}
                       >
-                        <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
+                        {msg.type !== "paywall" && (
+                          !isUser && (!msg.text || msg.text === "Processing..." || (msg.status === "loading" && !msg.text.trim())) ? (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
+                                padding: "4px 2px",
+                              }}
+                            >
+                              <span className="onboarding-thinking-dot" style={{ animationDelay: "0s" }} />
+                              <span className="onboarding-thinking-dot" style={{ animationDelay: "0.2s" }} />
+                              <span className="onboarding-thinking-dot" style={{ animationDelay: "0.4s" }} />
+                            </div>
+                          ) : (
+                            <div>
+                              <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
+                              {!isUser && loading && msg.id === messages[messages.length - 1]?.id && (!msg.palette_options?.length && !msg.choices?.length) && (
+                                <div
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    marginTop: "8px",
+                                  }}
+                                >
+                                  <span className="onboarding-thinking-dot" style={{ animationDelay: "0s" }} />
+                                  <span className="onboarding-thinking-dot" style={{ animationDelay: "0.2s" }} />
+                                  <span className="onboarding-thinking-dot" style={{ animationDelay: "0.4s" }} />
+                                </div>
+                              )}
+                            </div>
+                          )
+                        )}
 
-                        {/* Palette Options Card Selection */}
+                        {/* Paywall Banner Card */}
+                        {msg.type === "paywall" && (
+                          <div
+                            style={{
+                              padding: "12px 14px",
+                              borderRadius: "10px",
+                              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                              border: `1px solid ${tokens.border}`,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px",
+                            }}
+                          >
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary }}>
+                              AI Credit Limit Reached
+                            </div>
+                            <div style={{ fontSize: "12px", color: tokens.textSecondary, lineHeight: 1.5 }}>
+                              You have used all credits in your monthly pool. Upgrade your plan to continue building and generating stores.
+                            </div>
+                            {msg.paywall_reset_date && (
+                              <div style={{ fontSize: "11px", color: tokens.textMuted }}>
+                                Resets on: {new Date(msg.paywall_reset_date).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+                              </div>
+                            )}
+                            <div style={{ marginTop: "4px" }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveDrawer("settings");
+                                  setActiveSettingsNavKey("billing");
+                                }}
+                                style={{
+                                  padding: "6px 14px",
+                                  background: tokens.accent,
+                                  color: "#ffffff",
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Upgrade Plan
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Palette Options Card Selection (Copilot-Style Semantic Architecture) */}
                         {msg.palette_options && msg.palette_options.length > 0 && (
                           <div
                             style={{
                               marginTop: "16px",
                               display: "grid",
-                              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
                               gap: "12px",
                             }}
                           >
-                            {msg.palette_options.map((pal: any, idx: number) => (
-                              <div
-                                key={pal.id || idx}
-                                onClick={() => handleSelectPaletteOption(pal)}
-                                style={{
-                                  padding: "12px",
-                                  borderRadius: "12px",
-                                  background: "#ffffff",
-                                  border: "1.5px solid rgba(15,23,42,0.12)",
-                                  cursor: "pointer",
-                                  transition: "all 0.15s ease",
-                                  boxShadow: "0 2px 8px rgba(15,23,42,0.04)",
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.borderColor = "#2563eb";
-                                  e.currentTarget.style.transform = "translateY(-2px)";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.borderColor = "rgba(15,23,42,0.12)";
-                                  e.currentTarget.style.transform = "translateY(0)";
-                                }}
-                              >
-                                <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
-                                  {idx + 1}. {pal.name}
-                                </div>
-                                <div style={{ fontSize: "11px", color: "#64748b", margin: "4px 0 10px 0" }}>
-                                  {pal.description}
-                                </div>
+                            {msg.palette_options.map((pal: any, idx: number) => {
+                              const pBg = pal.primary_bg || "#ffffff";
+                              const sBg = pal.secondary_bg || pal.card_bg || "#f8fafc";
+                              const aCol = pal.accent_color || "#3b82f6";
+                              const nBg = pal.navbar_bg || pBg;
+                              const fBg = pal.footer_bg || sBg;
 
-                                {/* Swatches */}
-                                <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-                                  <div
-                                    title={`Primary BG: ${pal.primary_bg}`}
-                                    style={{
-                                      width: "24px",
-                                      height: "24px",
-                                      borderRadius: "6px",
-                                      background: pal.primary_bg,
-                                      border: "1px solid rgba(0,0,0,0.15)",
-                                    }}
-                                  />
-                                  <div
-                                    title={`Accent: ${pal.accent_color}`}
-                                    style={{
-                                      width: "24px",
-                                      height: "24px",
-                                      borderRadius: "6px",
-                                      background: pal.accent_color,
-                                    }}
-                                  />
-                                  <div
-                                    title={`Navbar: ${pal.navbar_bg}`}
-                                    style={{
-                                      width: "24px",
-                                      height: "24px",
-                                      borderRadius: "6px",
-                                      background: pal.navbar_bg,
-                                      border: "1px solid rgba(0,0,0,0.15)",
-                                    }}
-                                  />
-                                  <div
-                                    title={`Footer: ${pal.footer_bg}`}
-                                    style={{
-                                      width: "24px",
-                                      height: "24px",
-                                      borderRadius: "6px",
-                                      background: pal.footer_bg,
-                                      border: "1px solid rgba(0,0,0,0.15)",
-                                    }}
-                                  />
-                                </div>
-
-                                <button
-                                  type="button"
+                              return (
+                                <div
+                                  key={pal.id || idx}
+                                  onClick={() => handleSelectPaletteOption(pal)}
                                   style={{
-                                    width: "100%",
-                                    padding: "6px 0",
-                                    borderRadius: "8px",
-                                    border: "none",
-                                    background: "#2563eb",
-                                    color: "#ffffff",
-                                    fontSize: "12px",
-                                    fontWeight: 600,
+                                    padding: "14px",
+                                    borderRadius: "12px",
+                                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                    border: `1.5px solid ${tokens.border}`,
                                     cursor: "pointer",
+                                    transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "10px",
+                                    boxShadow: isDark ? "none" : "0 2px 8px rgba(15,23,42,0.04)",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = tokens.accent;
+                                    e.currentTarget.style.transform = "translateY(-2px)";
+                                    e.currentTarget.style.boxShadow = isDark
+                                      ? "0 8px 24px rgba(0,0,0,0.4)"
+                                      : "0 8px 24px rgba(15,23,42,0.08)";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = tokens.border;
+                                    e.currentTarget.style.transform = "translateY(0)";
+                                    e.currentTarget.style.boxShadow = isDark ? "none" : "0 2px 8px rgba(15,23,42,0.04)";
                                   }}
                                 >
-                                  Select {pal.name}
-                                </button>
-                              </div>
-                            ))}
+                                  {/* Row 1: Title & WCAG Badge */}
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <span style={{ fontSize: "13px", fontWeight: 700, color: tokens.textPrimary }}>
+                                      {idx + 1}. {pal.name}
+                                    </span>
+                                    <span
+                                      style={{
+                                        fontSize: "10px",
+                                        fontWeight: 600,
+                                        color: isDark ? "#93c5fd" : "#1d4ed8",
+                                        background: isDark ? "rgba(59, 130, 246, 0.15)" : "rgba(37, 99, 235, 0.08)",
+                                        padding: "2px 7px",
+                                        borderRadius: "6px",
+                                      }}
+                                    >
+                                      WCAG AA
+                                    </span>
+                                  </div>
+
+                                  {/* Row 2: Spectrum Preview Bar */}
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      height: "8px",
+                                      borderRadius: "4px",
+                                      overflow: "hidden",
+                                      border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}`,
+                                    }}
+                                  >
+                                    <div style={{ flex: 3.5, background: pBg }} title={`Background: ${pBg}`} />
+                                    <div style={{ flex: 2.0, background: sBg }} title={`Surface: ${sBg}`} />
+                                    <div style={{ flex: 2.0, background: aCol }} title={`Accent CTA: ${aCol}`} />
+                                    <div style={{ flex: 1.5, background: nBg }} title={`Navbar: ${nBg}`} />
+                                    <div style={{ flex: 1.0, background: fBg }} title={`Footer: ${fBg}`} />
+                                  </div>
+
+                                  {/* Row 3: Semantic Color Chips Grid (Where Colors are Used) */}
+                                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "5px" }}>
+                                    {[
+                                      { label: "BG", color: pBg },
+                                      { label: "Accent", color: aCol },
+                                      { label: "Navbar", color: nBg },
+                                      { label: "Footer", color: fBg },
+                                    ].map((sw, sIdx) => (
+                                      <div
+                                        key={sIdx}
+                                        style={{
+                                          display: "flex",
+                                          flexDirection: "column",
+                                          alignItems: "center",
+                                          gap: "3px",
+                                          padding: "5px 2px",
+                                          background: isDark ? "rgba(0,0,0,0.22)" : "#f8fafc",
+                                          borderRadius: "6px",
+                                          border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
+                                          minWidth: 0,
+                                        }}
+                                      >
+                                        <div style={{ display: "flex", alignItems: "center", gap: "3px", maxWidth: "100%" }}>
+                                          <div
+                                            style={{
+                                              width: "8px",
+                                              height: "8px",
+                                              borderRadius: "50%",
+                                              background: sw.color,
+                                              border: "1px solid rgba(0,0,0,0.15)",
+                                              flexShrink: 0,
+                                            }}
+                                          />
+                                          <span
+                                            style={{
+                                              fontSize: "9px",
+                                              fontWeight: 600,
+                                              color: tokens.textMuted,
+                                              whiteSpace: "nowrap",
+                                              overflow: "hidden",
+                                              textOverflow: "ellipsis",
+                                            }}
+                                          >
+                                            {sw.label}
+                                          </span>
+                                        </div>
+                                        <span
+                                          style={{
+                                            fontFamily: "ui-monospace, monospace",
+                                            fontSize: "9px",
+                                            fontWeight: 600,
+                                            color: tokens.textSecondary,
+                                            letterSpacing: "-0.02em",
+                                          }}
+                                        >
+                                          {sw.color}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {/* Row 4: Description (Uniform 3-Line Card Box) */}
+                                  <div
+                                    style={{
+                                      fontSize: "11.5px",
+                                      color: tokens.textSecondary,
+                                      lineHeight: 1.45,
+                                      minHeight: "50px",
+                                      display: "-webkit-box",
+                                      WebkitLineClamp: 3,
+                                      WebkitBoxOrient: "vertical",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                    }}
+                                    title={pal.description || ""}
+                                  >
+                                    {pal.description || "Balanced color harmony for storefront surfaces, clean borders, and accent buttons."}
+                                  </div>
+
+                                  {/* Row 5: Action Button (Pinned to Bottom) */}
+                                  <button
+                                    type="button"
+                                    style={{
+                                      width: "100%",
+                                      padding: "7px 0",
+                                      borderRadius: "8px",
+                                      border: "none",
+                                      background: tokens.accent,
+                                      color: "#ffffff",
+                                      fontSize: "12px",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                      marginTop: "auto",
+                                    }}
+                                  >
+                                    Select {pal.name}
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
 
-                        {/* Choice Cards (Layout Archetypes, Surface Materiality, Build Now) */}
+                        {/* Choice Options (Compact Interactive Selectable Cards) */}
                         {msg.choices && msg.choices.length > 0 && (
                           <div
                             style={{
-                              marginTop: "14px",
+                              marginTop: "12px",
                               display: "grid",
-                              gridTemplateColumns: msg.choices.length <= 3 ? "repeat(auto-fit, minmax(200px, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
-                              gap: "10px",
+                              gridTemplateColumns: msg.choices.length <= 2
+                                ? "repeat(auto-fit, minmax(180px, 1fr))"
+                                : "repeat(auto-fit, minmax(210px, 1fr))",
+                              gap: "8px",
                             }}
                           >
                             {msg.choices.map((choice) => {
                               const isBuildNow = choice.id === "build_now";
+                              const cleanLabel = (choice.label || choice.id)
+                                .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "")
+                                .replace(/^⚡\s*/, "")
+                                .trim();
+                              const cleanDescription = (choice.description || "")
+                                .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "")
+                                .replace(/^⚡\s*/, "")
+                                .trim();
+
                               return (
                                 <button
                                   key={choice.id}
                                   type="button"
                                   onClick={() => handleSelectChoice(choice)}
                                   style={{
-                                    padding: "10px 14px",
-                                    borderRadius: "12px",
-                                    border: isBuildNow ? "1px solid #10b981" : "1px solid rgba(37,99,235,0.25)",
-                                    background: isBuildNow ? "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)" : "#ffffff",
-                                    color: isBuildNow ? "#065f46" : "#0f172a",
+                                    padding: "11px 13px",
+                                    borderRadius: "10px",
+                                    border: isBuildNow
+                                      ? (isDark ? "1px solid rgba(59, 130, 246, 0.35)" : "1px solid rgba(15, 98, 171, 0.25)")
+                                      : `1px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.08)"}`,
+                                    background: isBuildNow
+                                      ? (isDark ? "rgba(59, 130, 246, 0.08)" : "rgba(15, 98, 171, 0.035)")
+                                      : (isDark ? "rgba(255, 255, 255, 0.025)" : "#ffffff"),
+                                    color: tokens.textPrimary,
                                     textAlign: "left",
                                     cursor: "pointer",
-                                    transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+                                    transition: "all 0.15s ease",
                                     display: "flex",
                                     flexDirection: "column",
-                                    gap: "4px",
-                                    boxShadow: "0 2px 6px rgba(15,23,42,0.04)",
+                                    justifyContent: "flex-start",
+                                    gap: "6px",
+                                    minHeight: cleanDescription ? "88px" : "42px",
+                                    boxShadow: isDark ? "none" : "0 1px 3px rgba(15,23,42,0.03)",
                                   }}
                                   onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = tokens.accent;
+                                    e.currentTarget.style.background = isBuildNow
+                                      ? (isDark ? "rgba(59, 130, 246, 0.15)" : "rgba(15, 98, 171, 0.07)")
+                                      : (isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(15, 23, 42, 0.03)");
                                     e.currentTarget.style.transform = "translateY(-1px)";
-                                    e.currentTarget.style.boxShadow = isBuildNow
-                                      ? "0 6px 16px rgba(16,185,129,0.25)"
-                                      : "0 6px 16px rgba(37,99,235,0.18)";
-                                    e.currentTarget.style.borderColor = isBuildNow ? "#059669" : "#2563eb";
+                                    const radio = e.currentTarget.querySelector(".choice-radio-dot") as HTMLElement;
+                                    if (radio) {
+                                      radio.style.borderColor = tokens.accent;
+                                      radio.style.background = tokens.accent;
+                                    }
                                   }}
                                   onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = isBuildNow
+                                      ? (isDark ? "rgba(59, 130, 246, 0.35)" : "rgba(15, 98, 171, 0.25)")
+                                      : (isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.08)");
+                                    e.currentTarget.style.background = isBuildNow
+                                      ? (isDark ? "rgba(59, 130, 246, 0.08)" : "rgba(15, 98, 171, 0.035)")
+                                      : (isDark ? "rgba(255, 255, 255, 0.025)" : "#ffffff");
                                     e.currentTarget.style.transform = "translateY(0)";
-                                    e.currentTarget.style.boxShadow = "0 2px 6px rgba(15,23,42,0.04)";
-                                    e.currentTarget.style.borderColor = isBuildNow ? "#10b981" : "rgba(37,99,235,0.25)";
+                                    const radio = e.currentTarget.querySelector(".choice-radio-dot") as HTMLElement;
+                                    if (radio) {
+                                      radio.style.borderColor = isDark ? "rgba(255,255,255,0.25)" : "rgba(15,23,42,0.25)";
+                                      radio.style.background = "transparent";
+                                    }
                                   }}
                                 >
-                                  <div style={{ fontSize: "13px", fontWeight: 700, color: isBuildNow ? "#047857" : "#1d4ed8" }}>
-                                    {choice.label}
+                                  {/* Top row: Title + Select badge */}
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
+                                    <span
+                                      style={{
+                                        fontSize: "12.5px",
+                                        fontWeight: 600,
+                                        color: isBuildNow ? (isDark ? "#93c5fd" : "#0f62ab") : tokens.textPrimary,
+                                        whiteSpace: "nowrap",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                      }}
+                                    >
+                                      {cleanLabel}
+                                    </span>
+                                    {isBuildNow ? (
+                                      <span
+                                        style={{
+                                          fontSize: "9.5px",
+                                          fontWeight: 700,
+                                          textTransform: "uppercase",
+                                          letterSpacing: "0.03em",
+                                          padding: "1px 5px",
+                                          borderRadius: "4px",
+                                          background: isDark ? "rgba(59, 130, 246, 0.2)" : "rgba(15, 98, 171, 0.1)",
+                                          color: isDark ? "#93c5fd" : "#0f62ab",
+                                          flexShrink: 0,
+                                        }}
+                                      >
+                                        Fast Track
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="choice-radio-dot"
+                                        style={{
+                                          width: "12px",
+                                          height: "12px",
+                                          borderRadius: "50%",
+                                          border: `1.5px solid ${isDark ? "rgba(255,255,255,0.25)" : "rgba(15,23,42,0.25)"}`,
+                                          display: "inline-block",
+                                          flexShrink: 0,
+                                          transition: "all 0.15s ease",
+                                        }}
+                                      />
+                                    )}
                                   </div>
-                                  {choice.description && (
-                                    <div style={{ fontSize: "11px", color: "#64748b", lineHeight: 1.4 }}>
-                                      {choice.description}
+
+                                  {/* Bottom row: Description */}
+                                  {cleanDescription && (
+                                    <div
+                                      style={{
+                                        fontSize: "11px",
+                                        color: tokens.textSecondary,
+                                        lineHeight: 1.42,
+                                        display: "-webkit-box",
+                                        WebkitLineClamp: 4,
+                                        WebkitBoxOrient: "vertical",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      {cleanDescription}
                                     </div>
                                   )}
                                 </button>
@@ -1026,44 +1638,7 @@ function AdminSitesPage() {
                           </div>
                         )}
 
-                        {msg.status === "loading" && (
-                          <div
-                            style={{
-                              marginTop: "8px",
-                              display: "flex",
-                              gap: "5px",
-                              alignItems: "center",
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: "6px",
-                                height: "6px",
-                                borderRadius: "50%",
-                                background: "#2563eb",
-                                animation: "pulse 1.2s infinite ease-in-out",
-                              }}
-                            />
-                            <div
-                              style={{
-                                width: "6px",
-                                height: "6px",
-                                borderRadius: "50%",
-                                background: "#2563eb",
-                                animation: "pulse 1.2s infinite ease-in-out 0.2s",
-                              }}
-                            />
-                            <div
-                              style={{
-                                width: "6px",
-                                height: "6px",
-                                borderRadius: "50%",
-                                background: "#2563eb",
-                                animation: "pulse 1.2s infinite ease-in-out 0.4s",
-                              }}
-                            />
-                          </div>
-                        )}
+
                       </div>
                     </div>
                   </div>
@@ -1094,8 +1669,8 @@ function AdminSitesPage() {
               }}
             >
               {collectedState.brand_name ? (
-                <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 500 }}>
-                  Store: <strong style={{ color: "#0f172a" }}>{collectedState.brand_name}</strong>
+                <span style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 500 }}>
+                  Store: <strong style={{ color: tokens.textPrimary }}>{collectedState.brand_name}</strong>
                 </span>
               ) : <span />}
               <button
@@ -1105,7 +1680,7 @@ function AdminSitesPage() {
                   background: "transparent",
                   border: "none",
                   fontSize: "11px",
-                  color: "#94a3b8",
+                  color: tokens.textMuted,
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
@@ -1114,8 +1689,8 @@ function AdminSitesPage() {
                   borderRadius: "4px",
                   transition: "color 0.15s ease",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#0f172a")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
+                onMouseEnter={(e) => (e.currentTarget.style.color = tokens.textPrimary)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = tokens.textMuted)}
               >
                 <span>↺ Start Fresh</span>
               </button>
@@ -1125,11 +1700,11 @@ function AdminSitesPage() {
             style={{
               maxWidth: "760px",
               margin: "0 auto",
-              background: "#ffffff",
-              border: "1px solid rgba(15,23,42,0.12)",
+              background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+              border: `1px solid ${tokens.border}`,
               borderRadius: "24px",
               padding: "10px 16px",
-              boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
+              boxShadow: isDark ? "0 10px 30px rgba(0,0,0,0.5)" : "0 10px 30px rgba(15,23,42,0.08)",
               display: "flex",
               alignItems: "flex-end",
               gap: "12px",
@@ -1140,15 +1715,19 @@ function AdminSitesPage() {
               value={prompt}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Describe the website or reply to questions..."
+              placeholder={
+                isOnboardingPaywallLocked
+                  ? `Monthly limit reached. ${onboardingPaywallResetDate ? `Resets on ${new Date(onboardingPaywallResetDate).toLocaleDateString("en-IN", { month: "short", day: "numeric" })} or upgrade plan.` : "Upgrade plan to continue."}`
+                  : "Describe the website or reply to questions..."
+              }
               rows={1}
-              disabled={loading}
+              disabled={loading || isOnboardingPaywallLocked}
               style={{
                 flex: 1,
                 background: "transparent",
                 border: "none",
                 outline: "none",
-                color: "#0f172a",
+                color: isOnboardingPaywallLocked ? tokens.textMuted : tokens.textPrimary,
                 fontSize: "14px",
                 lineHeight: 1.4,
                 resize: "none",
@@ -1156,32 +1735,38 @@ function AdminSitesPage() {
                 minHeight: "26px",
                 maxHeight: "160px",
                 padding: "6px 4px",
+                cursor: isOnboardingPaywallLocked ? "not-allowed" : "text",
               }}
             />
 
             <button
               type="button"
               onClick={() => handleSendReply(prompt)}
-              disabled={loading || !prompt.trim()}
-              title="Send message"
+              disabled={loading || !prompt.trim() || isOnboardingPaywallLocked}
+              title={isOnboardingPaywallLocked ? "Limit reached" : "Send message"}
               style={{
                 width: "38px",
                 height: "38px",
                 borderRadius: "12px",
-                border: "none",
+                border: `1px solid ${
+                  loading || !prompt.trim() || isOnboardingPaywallLocked
+                    ? isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"
+                    : "transparent"
+                }`,
                 background:
-                  loading || !prompt.trim()
-                    ? "#e2e8f0"
-                    : "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                color: loading || !prompt.trim() ? "#94a3b8" : "#ffffff",
-                cursor: loading || !prompt.trim() ? "not-allowed" : "pointer",
+                  loading || !prompt.trim() || isOnboardingPaywallLocked
+                    ? isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(15, 23, 42, 0.04)"
+                    : tokens.accent,
+                color: loading || !prompt.trim() || isOnboardingPaywallLocked ? tokens.textMuted : "#ffffff",
+                cursor: loading || !prompt.trim() || isOnboardingPaywallLocked ? "not-allowed" : "pointer",
                 display: "grid",
                 placeItems: "center",
                 flexShrink: 0,
+                opacity: loading || !prompt.trim() || isOnboardingPaywallLocked ? 0.6 : 1,
                 boxShadow:
-                  loading || !prompt.trim()
+                  loading || !prompt.trim() || isOnboardingPaywallLocked
                     ? "none"
-                    : "0 3px 10px rgba(37,99,235,0.3)",
+                    : "0 3px 12px rgba(59,130,246,0.35)",
                 transition: "all 0.15s ease",
               }}
             >
@@ -1202,6 +1787,7 @@ function AdminSitesPage() {
           </div>
         </div>
       </div>
+      )}
     </BuilderShell>
   );
 }
@@ -1226,9 +1812,81 @@ function ScrollToTop() {
     });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
+
+    try {
+      if (typeof (window as any).__wcUpdateViewport === "function") {
+        (window as any).__wcUpdateViewport();
+      }
+    } catch {}
   }, [pathname, search, hash]);
 
   return null;
+}
+
+function StoreLoginWrapper() {
+  const { slug } = useParams<{ slug: string }>();
+  return <CustomerLoginPage key={slug || "default_login"} />;
+}
+
+function StoreSignupWrapper() {
+  const { slug } = useParams<{ slug: string }>();
+  return <CustomerSignupPage key={slug || "default_signup"} />;
+}
+
+function StandaloneStorePageRedirect({ slug: propSlug }: { slug?: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams<{ customSlug?: string }>();
+
+  useEffect(() => {
+    let activeSlug = "";
+    try {
+      activeSlug = localStorage.getItem("wc_last_visited_store") || "";
+    } catch (_) {}
+
+    if (!activeSlug && siteSlugMemoryCache.size > 0) {
+      for (const [, site] of siteSlugMemoryCache.entries()) {
+        if (site?.slug) {
+          activeSlug = site.slug;
+          break;
+        }
+      }
+    }
+
+    const isCustomPage = Boolean(params.customSlug || location.pathname.startsWith("/pages/"));
+    const rawSlug =
+      propSlug ||
+      params.customSlug ||
+      location.pathname.replace(/^\/pages\//, "").replace(/^\//, "");
+
+    const destination = isCustomPage ? `pages/${rawSlug}` : rawSlug;
+
+    if (activeSlug) {
+      navigate(`/store/${activeSlug}/${destination}`, { replace: true });
+      return;
+    }
+
+    const resolveStore = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/admin/sites`, { credentials: "include" });
+        if (res.ok) {
+          const sites = await res.json();
+          if (Array.isArray(sites) && sites.length > 0) {
+            const chosen = sites[0]?.slug || sites[0]?.id;
+            if (chosen) {
+              navigate(`/store/${chosen}/${destination}`, { replace: true });
+              return;
+            }
+          }
+        }
+      } catch (_) {}
+      navigate("/admin/login", { replace: true });
+    };
+
+    resolveStore();
+  }, [propSlug, params.customSlug, location.pathname, navigate]);
+
+  return <RouteLoadingFallback />;
 }
 
 function AppRoutes() {
@@ -1238,25 +1896,40 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/admin/login" replace />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin/signup" element={<AdminSignupPage />} />
+        <Route path="/admin/reset-password" element={<AdminResetPasswordPage />} />
+        <Route path="/admin/accept-invite" element={<AdminAcceptInvitePage />} />
 
-        <Route path="/store/:slug/login" element={<CustomerLoginPage />} />
-        <Route path="/store/:slug/signup" element={<CustomerSignupPage />} />
+        <Route path="/store/:slug/login" element={<StoreLoginWrapper />} />
+        <Route path="/store/:slug/signup" element={<StoreSignupWrapper />} />
         <Route path="/store/:slug/track/:orderId" element={<TrackOrderPage />} />
         <Route path="/store/:slug/rider/login" element={<RiderLoginPage />} />
         <Route path="/store/:slug/rider/dashboard" element={<AgentDeliveryPage />} />
+        <Route path="/store/:slug/support/login" element={<SupportAgentLoginPage />} />
+        <Route path="/store/:slug/support/dashboard" element={<SupportAgentDashboard />} />
         <Route path="/store/:slug/*" element={<BuilderPage />} />
 
-        {/* Global Rider & Tracking Routes */}
+        {/* Global Rider, Support & Tracking Routes */}
         <Route path="/rider/login" element={<RiderLoginPage />} />
         <Route path="/rider/dashboard" element={<AgentDeliveryPage />} />
+        <Route path="/support/login" element={<SupportAgentLoginPage />} />
+        <Route path="/support/dashboard" element={<SupportAgentDashboard />} />
         <Route path="/track/:siteId/:orderId" element={<TrackOrderPage />} />
         <Route path="/agent/delivery/:shipmentId" element={<AgentDeliveryPage />} />
 
+        {/* Direct / Standalone Page Resolution for root-level URLs */}
+        <Route path="/about" element={<StandaloneStorePageRedirect slug="about" />} />
+        <Route path="/contact" element={<StandaloneStorePageRedirect slug="contact" />} />
+        <Route path="/privacy" element={<StandaloneStorePageRedirect slug="privacy" />} />
+        <Route path="/terms" element={<StandaloneStorePageRedirect slug="terms" />} />
+        <Route path="/story" element={<StandaloneStorePageRedirect slug="story" />} />
+        <Route path="/products" element={<StandaloneStorePageRedirect slug="products" />} />
+        <Route path="/product" element={<StandaloneStorePageRedirect slug="products" />} />
+        <Route path="/pages/:customSlug" element={<StandaloneStorePageRedirect />} />
+
         <Route element={<RequireAdminAuth />}>
           <Route path="/admin/sites" element={<AdminSitesPage />} />
+          <Route path="/builder/:siteId/*" element={<BuilderPage />} />
         </Route>
-
-        <Route path="/builder/:siteId/*" element={<BuilderPage />} />
       </Routes>
     </Suspense>
   );
@@ -1265,14 +1938,16 @@ function AppRoutes() {
 function App() {
   return (
     <AdminAuthProvider>
-      <CustomerAuthProvider>
-        <CartProvider>
-          <BrowserRouter>
-            <ScrollToTop />
-            <AppRoutes />
-          </BrowserRouter>
-        </CartProvider>
-      </CustomerAuthProvider>
+      <AdminThemeProvider>
+        <BrowserRouter>
+          <CustomerAuthProvider>
+            <CartProvider>
+              <ScrollToTop />
+              <AppRoutes />
+            </CartProvider>
+          </CustomerAuthProvider>
+        </BrowserRouter>
+      </AdminThemeProvider>
     </AdminAuthProvider>
   );
 }

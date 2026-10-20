@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebCreon AI - Algorithmic Color Engine Preview (12 Palettes)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 32px 24px;
+            background: #090d16;
+            color: #f8fafc;
+            font-family: 'Inter', -apple-system, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .header {
+            max-width: 1380px;
+            margin: 0 auto 36px auto;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin: 0 0 10px 0;
+            background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header p {
+            font-size: 15px;
+            color: #94a3b8;
+            margin: 0;
+        }
+        .grid {
+            max-width: 1380px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+            gap: 28px;
+        }
+        .palette-card {
+            background: #111827;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 18px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .palette-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .palette-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 6px 0 0 0;
+            color: #f8fafc;
+        }
+        .badge {
+            font-size: 10.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 999px;
+            letter-spacing: 0.04em;
+        }
+        .query-badge {
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
+        }
+        .style-badge {
+            background: rgba(16, 185, 129, 0.2);
+            color: #6ee7b7;
+        }
+        .palette-desc {
+            font-size: 12.5px;
+            color: #94a3b8;
+            margin: -6px 0 0 0;
+            line-height: 1.5;
+        }
+        .swatches-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+        }
+        .swatch {
+            height: 64px;
+            border-radius: 10px;
+            padding: 6px;
+            display: flex;
+            align-items: flex-end;
+        }
+        .swatch-label {
+            font-size: 9.5px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .swatch-label code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 8.5px;
+            opacity: 0.9;
+        }
+        .store-preview {
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s ease;
+        }
+        .mini-nav {
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .mini-hero {
+            padding: 18px 14px;
+        }
+        .mini-product-card {
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .product-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .mini-btn {
+            border: none;
+            padding: 8px 14px;
+            font-size: 11.5px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .mini-footer {
+            padding: 8px 14px;
+            font-size: 10px;
+            text-align: center;
+            opacity: 0.9;
+        }
+        .metrics-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .metric-pill {
+            font-size: 11px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+            padding: 4px 10px;
+            border-radius: 6px;
+        }
+        .metric-pill strong {
+            color: #38bdf8;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>WebCreon AI Color Harmony Swatches</h1>
+        <p>12 Dynamically Generated Palettes demonstrating true mathematical harmonies, rich colored canvases, and strict WCAG AA accessibility.</p>
+    </div>
+    <div class="grid">
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">3 red theme palettes</span>
+                    <h3 class="palette-title">Red Bold Header & Studio</h3>
+                </div>
+                <span class="badge style-badge">solid_clean</span>
+            </div>
+            <p class="palette-desc">Crisp alabaster body anchored by an iconic bold red navigation header and vibrant action buttons.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #fefefe; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #fefefe">
+                    <span class="swatch-label" style="color: #1d1616;">Canvas<br><code>#fefefe</code></span>
+                </div>
+                <div class="swatch" style="background: #ffffff; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #ffffff">
+                    <span class="swatch-label" style="color: #1d1616;">Card<br><code>#ffffff</code></span>
+                </div>
+                <div class="swatch" style="background: #ad090c;" title="Accent: #ad090c">
+                    <span class="swatch-label" style="color: #ffffff;">Accent<br><code>#ad090c</code></span>
+                </div>
+                <div class="swatch" style="background: #ae1013; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #ae1013">
+                    <span class="swatch-label" style="color: #ffffff;">Nav<br><code>#ae1013</code></span>
+                </div>
+                <div class="swatch" style="background: #0f172a;" title="Footer BG: #0f172a">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#0f172a</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #fefefe; border: 1px solid #e8e3e3; border-radius: 20px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #ae1013; border-bottom: 1px solid #e8e3e3;">
+                    <span style="font-weight: 700; color: #ffffff; font-size: 13px;">Cactus Tech</span>
+                    <span style="font-size: 11px; color: #ffffff; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #1d1616; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #7e6363; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #ffffff; border: 1px solid #e8e3e3; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #1d1616; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #7e6363;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #ad090c; color: #ffffff; border-radius: 12px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #0f172a; color: #ffffff;">
+                    <span>&copy; 2026 Cactus Tech &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>17.7:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>7.4:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>17.8:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">3 red theme palettes</span>
+                    <h3 class="palette-title">Red Noir Obsidian</h3>
+                </div>
+                <span class="badge style-badge">cyber_glow</span>
+            </div>
+            <p class="palette-desc">Atmospheric obsidian dark canvas electrified by glowing red jewel-tone CTA buttons and high-contrast typography.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #130b0d; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #130b0d">
+                    <span class="swatch-label" style="color: #f8fafc;">Canvas<br><code>#130b0d</code></span>
+                </div>
+                <div class="swatch" style="background: #211a1c; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #211a1c">
+                    <span class="swatch-label" style="color: #f8fafc;">Card<br><code>#211a1c</code></span>
+                </div>
+                <div class="swatch" style="background: #c10b34;" title="Accent: #c10b34">
+                    <span class="swatch-label" style="color: #ffffff;">Accent<br><code>#c10b34</code></span>
+                </div>
+                <div class="swatch" style="background: #0c0809; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #0c0809">
+                    <span class="swatch-label" style="color: #f8fafc;">Nav<br><code>#0c0809</code></span>
+                </div>
+                <div class="swatch" style="background: #090607;" title="Footer BG: #090607">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#090607</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #130b0d; border: 1px solid #3b2b2f; border-radius: 20px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #0c0809; border-bottom: 1px solid #3b2b2f;">
+                    <span style="font-weight: 700; color: #f8fafc; font-size: 13px;">Cactus Tech</span>
+                    <span style="font-size: 11px; color: #f8fafc; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #f8fafc; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #94a3b8; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #211a1c; border: 1px solid #3b2b2f; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.35);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #f8fafc; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #94a3b8;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #c10b34; color: #ffffff; border-radius: 12px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #090607; color: #ffffff;">
+                    <span>&copy; 2026 Cactus Tech &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>18.6:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>6.2:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>16.3:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">3 red theme palettes</span>
+                    <h3 class="palette-title">Velvet Red Monochrome</h3>
+                </div>
+                <span class="badge style-badge">elevated_luxury</span>
+            </div>
+            <p class="palette-desc">All components richly harmonized in coordinated shades of deep red, ruby cards, and radiant CTA highlights.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #330308; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #330308">
+                    <span class="swatch-label" style="color: #f6f4f4;">Canvas<br><code>#330308</code></span>
+                </div>
+                <div class="swatch" style="background: #52141a; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #52141a">
+                    <span class="swatch-label" style="color: #ffffff;">Card<br><code>#52141a</code></span>
+                </div>
+                <div class="swatch" style="background: #cc0b1d;" title="Accent: #cc0b1d">
+                    <span class="swatch-label" style="color: #ffffff;">Accent<br><code>#cc0b1d</code></span>
+                </div>
+                <div class="swatch" style="background: #1c0305; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #1c0305">
+                    <span class="swatch-label" style="color: #ffffff;">Nav<br><code>#1c0305</code></span>
+                </div>
+                <div class="swatch" style="background: #100405;" title="Footer BG: #100405">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#100405</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #330308; border: 1px solid #592227; border-radius: 24px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #1c0305; border-bottom: 1px solid #592227;">
+                    <span style="font-weight: 700; color: #ffffff; font-size: 13px;">Cactus Tech</span>
+                    <span style="font-size: 11px; color: #ffffff; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #f6f4f4; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #c4abad; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #52141a; border: 1px solid #592227; border-radius: 18px; box-shadow: 0 8px 30px rgba(0,0,0,0.35);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #ffffff; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #c4abad;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #cc0b1d; color: #ffffff; border-radius: 16px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #100405; color: #ffffff;">
+                    <span>&copy; 2026 Cactus Tech &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>16.6:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>5.8:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>14.2:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">3 emerald green palettes</span>
+                    <h3 class="palette-title">Velvet Emerald Monochrome</h3>
+                </div>
+                <span class="badge style-badge">elevated_luxury</span>
+            </div>
+            <p class="palette-desc">All components richly harmonized in coordinated shades of deep emerald, ruby cards, and radiant CTA highlights.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #063620; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #063620">
+                    <span class="swatch-label" style="color: #f4f6f5;">Canvas<br><code>#063620</code></span>
+                </div>
+                <div class="swatch" style="background: #0b5b36; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #0b5b36">
+                    <span class="swatch-label" style="color: #ffffff;">Card<br><code>#0b5b36</code></span>
+                </div>
+                <div class="swatch" style="background: #0fda7d;" title="Accent: #0fda7d">
+                    <span class="swatch-label" style="color: #424242;">Accent<br><code>#0fda7d</code></span>
+                </div>
+                <div class="swatch" style="background: #041b10; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #041b10">
+                    <span class="swatch-label" style="color: #ffffff;">Nav<br><code>#041b10</code></span>
+                </div>
+                <div class="swatch" style="background: #04100b;" title="Footer BG: #04100b">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#04100b</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #063620; border: 1px solid #225940; border-radius: 24px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #041b10; border-bottom: 1px solid #225940;">
+                    <span style="font-weight: 700; color: #ffffff; font-size: 13px;">Aura Botanicals</span>
+                    <span style="font-size: 11px; color: #ffffff; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #f4f6f5; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #abc4b9; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #0b5b36; border: 1px solid #225940; border-radius: 18px; box-shadow: 0 8px 30px rgba(0,0,0,0.35);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #ffffff; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #abc4b9;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #0fda7d; color: #424242; border-radius: 16px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #04100b; color: #ffffff;">
+                    <span>&copy; 2026 Aura Botanicals &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>12.4:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>5.4:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>8.2:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">3 emerald green palettes</span>
+                    <h3 class="palette-title">Emerald Noir Obsidian</h3>
+                </div>
+                <span class="badge style-badge">cyber_glow</span>
+            </div>
+            <p class="palette-desc">Atmospheric obsidian dark canvas electrified by glowing emerald jewel-tone CTA buttons and high-contrast typography.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #0b100a; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #0b100a">
+                    <span class="swatch-label" style="color: #f8fafc;">Canvas<br><code>#0b100a</code></span>
+                </div>
+                <div class="swatch" style="background: #192217; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #192217">
+                    <span class="swatch-label" style="color: #f8fafc;">Card<br><code>#192217</code></span>
+                </div>
+                <div class="swatch" style="background: #28d406;" title="Accent: #28d406">
+                    <span class="swatch-label" style="color: #424242;">Accent<br><code>#28d406</code></span>
+                </div>
+                <div class="swatch" style="background: #090c09; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #090c09">
+                    <span class="swatch-label" style="color: #f8fafc;">Nav<br><code>#090c09</code></span>
+                </div>
+                <div class="swatch" style="background: #090607;" title="Footer BG: #090607">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#090607</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #0b100a; border: 1px solid #2e3b2b; border-radius: 20px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #090c09; border-bottom: 1px solid #2e3b2b;">
+                    <span style="font-weight: 700; color: #f8fafc; font-size: 13px;">Aura Botanicals</span>
+                    <span style="font-size: 11px; color: #f8fafc; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #f8fafc; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #94a3b8; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #192217; border: 1px solid #2e3b2b; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.35);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #f8fafc; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #94a3b8;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #28d406; color: #424242; border-radius: 12px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #090607; color: #ffffff;">
+                    <span>&copy; 2026 Aura Botanicals &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>18.4:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>5.0:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>15.6:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">3 emerald green palettes</span>
+                    <h3 class="palette-title">Emerald Bold Header & Studio</h3>
+                </div>
+                <span class="badge style-badge">solid_clean</span>
+            </div>
+            <p class="palette-desc">Crisp alabaster body anchored by an iconic bold emerald navigation header and vibrant action buttons.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #fcfcfc; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #fcfcfc">
+                    <span class="swatch-label" style="color: #161d17;">Canvas<br><code>#fcfcfc</code></span>
+                </div>
+                <div class="swatch" style="background: #ffffff; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #ffffff">
+                    <span class="swatch-label" style="color: #161d17;">Card<br><code>#ffffff</code></span>
+                </div>
+                <div class="swatch" style="background: #09b22d;" title="Accent: #09b22d">
+                    <span class="swatch-label" style="color: #242424;">Accent<br><code>#09b22d</code></span>
+                </div>
+                <div class="swatch" style="background: #14a833; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #14a833">
+                    <span class="swatch-label" style="color: #242424;">Nav<br><code>#14a833</code></span>
+                </div>
+                <div class="swatch" style="background: #0d1c10;" title="Footer BG: #0d1c10">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#0d1c10</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #fcfcfc; border: 1px solid #e3e8e4; border-radius: 20px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #14a833; border-bottom: 1px solid #e3e8e4;">
+                    <span style="font-weight: 700; color: #242424; font-size: 13px;">Aura Botanicals</span>
+                    <span style="font-size: 11px; color: #242424; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #161d17; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #637e68; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #ffffff; border: 1px solid #e3e8e4; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #161d17; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #637e68;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #09b22d; color: #242424; border-radius: 12px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #0d1c10; color: #ffffff;">
+                    <span>&copy; 2026 Aura Botanicals &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>16.7:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>5.5:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>17.2:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">2 gold and honey palettes</span>
+                    <h3 class="palette-title">Gold & Champagne Gold Luxe</h3>
+                </div>
+                <span class="badge style-badge">elevated_luxury</span>
+            </div>
+            <p class="palette-desc">Opulent deep gold velvet canvas accented by luminous champagne gold buttons and brushed metallic borders.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #272307; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #272307">
+                    <span class="swatch-label" style="color: #fdf8f6;">Canvas<br><code>#272307</code></span>
+                </div>
+                <div class="swatch" style="background: #3f3a12; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #3f3a12">
+                    <span class="swatch-label" style="color: #fdf8f6;">Card<br><code>#3f3a12</code></span>
+                </div>
+                <div class="swatch" style="background: #d1bb0e;" title="Accent: #d1bb0e">
+                    <span class="swatch-label" style="color: #424242;">Accent<br><code>#d1bb0e</code></span>
+                </div>
+                <div class="swatch" style="background: #272307; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #272307">
+                    <span class="swatch-label" style="color: #fef3c7;">Nav<br><code>#272307</code></span>
+                </div>
+                <div class="swatch" style="background: #0b0b04;" title="Footer BG: #0b0b04">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#0b0b04</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #272307; border: 1px solid #f9bb10; border-radius: 20px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #272307; border-bottom: 1px solid #f9bb10;">
+                    <span style="font-weight: 700; color: #fef3c7; font-size: 13px;">Luxe Horizon</span>
+                    <span style="font-size: 11px; color: #fef3c7; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #fdf8f6; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #f3e8e2; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #3f3a12; border: 1px solid #f9bb10; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.35);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #fdf8f6; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #f3e8e2;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #d1bb0e; color: #424242; border-radius: 12px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #0b0b04; color: #ffffff;">
+                    <span>&copy; 2026 Luxe Horizon &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>15.0:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>5.2:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>10.9:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">2 gold and honey palettes</span>
+                    <h3 class="palette-title">Gold Bold Header & Studio</h3>
+                </div>
+                <span class="badge style-badge">solid_clean</span>
+            </div>
+            <p class="palette-desc">Crisp alabaster body anchored by an iconic bold gold navigation header and vibrant action buttons.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #fcfcfb; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #fcfcfb">
+                    <span class="swatch-label" style="color: #1d1c16;">Canvas<br><code>#fcfcfb</code></span>
+                </div>
+                <div class="swatch" style="background: #ffffff; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #ffffff">
+                    <span class="swatch-label" style="color: #1d1c16;">Card<br><code>#ffffff</code></span>
+                </div>
+                <div class="swatch" style="background: #b89c09;" title="Accent: #b89c09">
+                    <span class="swatch-label" style="color: #333333;">Accent<br><code>#b89c09</code></span>
+                </div>
+                <div class="swatch" style="background: #ab910a; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #ab910a">
+                    <span class="swatch-label" style="color: #242424;">Nav<br><code>#ab910a</code></span>
+                </div>
+                <div class="swatch" style="background: #0f172a;" title="Footer BG: #0f172a">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#0f172a</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #fcfcfb; border: 1px solid #e8e7e3; border-radius: 20px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #ab910a; border-bottom: 1px solid #e8e7e3;">
+                    <span style="font-weight: 700; color: #242424; font-size: 13px;">Luxe Horizon</span>
+                    <span style="font-size: 11px; color: #242424; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #1d1c16; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #7e7963; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #ffffff; border: 1px solid #e8e7e3; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #1d1c16; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #7e7963;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #b89c09; color: #333333; border-radius: 12px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #0f172a; color: #ffffff;">
+                    <span>&copy; 2026 Luxe Horizon &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>16.6:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>4.7:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>17.1:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">2 warm earthy terracotta palettes</span>
+                    <h3 class="palette-title">Terracotta & Champagne Gold Luxe</h3>
+                </div>
+                <span class="badge style-badge">elevated_luxury</span>
+            </div>
+            <p class="palette-desc">Opulent deep terracotta velvet canvas accented by luminous champagne gold buttons and brushed metallic borders.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #221202; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #221202">
+                    <span class="swatch-label" style="color: #fdf8f6;">Canvas<br><code>#221202</code></span>
+                </div>
+                <div class="swatch" style="background: #3f2912; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #3f2912">
+                    <span class="swatch-label" style="color: #fdf8f6;">Card<br><code>#3f2912</code></span>
+                </div>
+                <div class="swatch" style="background: #c46808;" title="Accent: #c46808">
+                    <span class="swatch-label" style="color: #141414;">Accent<br><code>#c46808</code></span>
+                </div>
+                <div class="swatch" style="background: #221202; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #221202">
+                    <span class="swatch-label" style="color: #fef3c7;">Nav<br><code>#221202</code></span>
+                </div>
+                <div class="swatch" style="background: #0b0804;" title="Footer BG: #0b0804">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#0b0804</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #221202; border: 1px solid #f9b310; border-radius: 20px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #221202; border-bottom: 1px solid #f9b310;">
+                    <span style="font-weight: 700; color: #fef3c7; font-size: 13px;">Solstice Home</span>
+                    <span style="font-size: 11px; color: #fef3c7; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #fdf8f6; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #f3e8e2; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #3f2912; border: 1px solid #f9b310; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.35);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #fdf8f6; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #f3e8e2;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #c46808; color: #141414; border-radius: 12px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #0b0804; color: #ffffff;">
+                    <span>&copy; 2026 Solstice Home &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>17.3:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>4.7:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>13.0:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">2 warm earthy terracotta palettes</span>
+                    <h3 class="palette-title">Velvet Terracotta Monochrome</h3>
+                </div>
+                <span class="badge style-badge">elevated_luxury</span>
+            </div>
+            <p class="palette-desc">All components richly harmonized in coordinated shades of deep terracotta, ruby cards, and radiant CTA highlights.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #281206; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #281206">
+                    <span class="swatch-label" style="color: #f6f4f4;">Canvas<br><code>#281206</code></span>
+                </div>
+                <div class="swatch" style="background: #562910; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #562910">
+                    <span class="swatch-label" style="color: #ffffff;">Card<br><code>#562910</code></span>
+                </div>
+                <div class="swatch" style="background: #c84904;" title="Accent: #c84904">
+                    <span class="swatch-label" style="color: #ffffff;">Accent<br><code>#c84904</code></span>
+                </div>
+                <div class="swatch" style="background: #1a0c05; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #1a0c05">
+                    <span class="swatch-label" style="color: #ffffff;">Nav<br><code>#1a0c05</code></span>
+                </div>
+                <div class="swatch" style="background: #100804;" title="Footer BG: #100804">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#100804</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #281206; border: 1px solid #593522; border-radius: 24px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #1a0c05; border-bottom: 1px solid #593522;">
+                    <span style="font-weight: 700; color: #ffffff; font-size: 13px;">Solstice Home</span>
+                    <span style="font-size: 11px; color: #ffffff; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #f6f4f4; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #c4b4ab; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #562910; border: 1px solid #593522; border-radius: 18px; box-shadow: 0 8px 30px rgba(0,0,0,0.35);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #ffffff; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #c4b4ab;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #c84904; color: #ffffff; border-radius: 16px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #100804; color: #ffffff;">
+                    <span>&copy; 2026 Solstice Home &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>16.3:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>4.8:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>12.2:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">2 royal sapphire blue palettes</span>
+                    <h3 class="palette-title">Sapphire & Sage Editorial</h3>
+                </div>
+                <span class="badge style-badge">warm_organic</span>
+            </div>
+            <p class="palette-desc">Modern editorial parchment body with refined sapphire CTA buttons and subtle sage green card accents.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #f5f6f7; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #f5f6f7">
+                    <span class="swatch-label" style="color: #16191d;">Canvas<br><code>#f5f6f7</code></span>
+                </div>
+                <div class="swatch" style="background: #ffffff; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #ffffff">
+                    <span class="swatch-label" style="color: #16191d;">Card<br><code>#ffffff</code></span>
+                </div>
+                <div class="swatch" style="background: #0a4daa;" title="Accent: #0a4daa">
+                    <span class="swatch-label" style="color: #ffffff;">Accent<br><code>#0a4daa</code></span>
+                </div>
+                <div class="swatch" style="background: #f5f6f7; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #f5f6f7">
+                    <span class="swatch-label" style="color: #16191d;">Nav<br><code>#f5f6f7</code></span>
+                </div>
+                <div class="swatch" style="background: #0f172a;" title="Footer BG: #0f172a">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#0f172a</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #f5f6f7; border: 1px solid #dfd3c3; border-radius: 20px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #f5f6f7; border-bottom: 1px solid #dfd3c3;">
+                    <span style="font-weight: 700; color: #16191d; font-size: 13px;">Velvet Drift</span>
+                    <span style="font-size: 11px; color: #16191d; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #16191d; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #5e6978; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #ffffff; border: 1px solid #dfd3c3; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #16191d; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #5e6978;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #0a4daa; color: #ffffff; border-radius: 12px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #0f172a; color: #ffffff;">
+                    <span>&copy; 2026 Velvet Drift &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>16.3:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>7.9:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>17.6:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+        <div class="palette-card">
+            <div class="palette-header">
+                <div>
+                    <span class="badge query-badge">2 royal sapphire blue palettes</span>
+                    <h3 class="palette-title">Sapphire Noir Obsidian</h3>
+                </div>
+                <span class="badge style-badge">cyber_glow</span>
+            </div>
+            <p class="palette-desc">Atmospheric obsidian dark canvas electrified by glowing sapphire jewel-tone CTA buttons and high-contrast typography.</p>
+
+            <!-- SWATCHES -->
+            <div class="swatches-grid">
+                <div class="swatch" style="background: #0b0e13; border: 1px solid rgba(128,128,128,0.25);" title="Primary BG: #0b0e13">
+                    <span class="swatch-label" style="color: #f8fafc;">Canvas<br><code>#0b0e13</code></span>
+                </div>
+                <div class="swatch" style="background: #1c1f23; border: 1px solid rgba(128,128,128,0.25);" title="Card BG: #1c1f23">
+                    <span class="swatch-label" style="color: #f8fafc;">Card<br><code>#1c1f23</code></span>
+                </div>
+                <div class="swatch" style="background: #0b53ca;" title="Accent: #0b53ca">
+                    <span class="swatch-label" style="color: #ffffff;">Accent<br><code>#0b53ca</code></span>
+                </div>
+                <div class="swatch" style="background: #090a0c; border: 1px solid rgba(128,128,128,0.25);" title="Navbar BG: #090a0c">
+                    <span class="swatch-label" style="color: #f8fafc;">Nav<br><code>#090a0c</code></span>
+                </div>
+                <div class="swatch" style="background: #090607;" title="Footer BG: #090607">
+                    <span class="swatch-label" style="color: #ffffff;">Footer<br><code>#090607</code></span>
+                </div>
+            </div>
+
+            <!-- LIVE MINI STOREFRONT PREVIEW -->
+            <div class="store-preview" style="background: #0b0e13; border: 1px solid #2b313b; border-radius: 20px;">
+                <!-- MINI NAVBAR -->
+                <div class="mini-nav" style="background: #090a0c; border-bottom: 1px solid #2b313b;">
+                    <span style="font-weight: 700; color: #f8fafc; font-size: 13px;">Velvet Drift</span>
+                    <span style="font-size: 11px; color: #f8fafc; opacity: 0.85;">Cart (2)</span>
+                </div>
+
+                <!-- MINI HERO -->
+                <div class="mini-hero">
+                    <h4 style="color: #f8fafc; margin: 0 0 4px 0; font-size: 16px; font-weight: 800;">Curated Essentials</h4>
+                    <p style="color: #94a3b8; margin: 0 0 12px 0; font-size: 12px;">Experience handcrafted precision in every detail.</p>
+
+                    <!-- MINI PRODUCT CARD -->
+                    <div class="mini-product-card" style="background: #1c1f23; border: 1px solid #2b313b; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.35);">
+                        <div class="product-info">
+                            <span style="font-weight: 700; color: #f8fafc; font-size: 13px;">Signature Series</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #94a3b8;">$149.00</span>
+                        </div>
+                        <button class="mini-btn" style="background: #0b53ca; color: #ffffff; border-radius: 12px;">
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MINI FOOTER -->
+                <div class="mini-footer" style="background: #090607; color: #ffffff;">
+                    <span>&copy; 2026 Velvet Drift &bull; Powered by WebCreon</span>
+                </div>
+            </div>
+
+            <!-- CONTRAST RATIOS -->
+            <div class="metrics-row">
+                <span class="metric-pill">Text Contrast: <strong>18.5:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Accent Contrast: <strong>6.8:1</strong> &#10003; AA</span>
+                <span class="metric-pill">Card Contrast: <strong>15.8:1</strong> &#10003; AA</span>
+            </div>
+        </div>
+        
+    </div>
+</body>
+</html>

@@ -2,19 +2,21 @@ import React, { useMemo, useState } from "react";
 import { API_BASE_URL } from "../config/api";
 import { isColorDarkHex } from "../context/ThemeContext";
 import { useRazorpay } from "../hooks/useRazorpay";
+import { getCustomerAuthHeaders } from "../utils/customerAuthFetch";
+import { useCart } from "../CartContext";
 
 type ThemeInput =
   | "dark"
   | "light"
   | {
-      mode?: string;
-      accent_color?: string;
-      festival_theme?: string;
-      text_color?: string;
-      place_order_btn_bg?: string;
-      place_order_btn_text?: string;
-      place_order_text?: string;
-    };
+    mode?: string;
+    accent_color?: string;
+    festival_theme?: string;
+    text_color?: string;
+    place_order_btn_bg?: string;
+    place_order_btn_text?: string;
+    place_order_text?: string;
+  };
 
 type PaymentData = {
   method: string;
@@ -42,6 +44,7 @@ type CreatePaymentOrderApiResponse = {
   currency: string;
   key_id: string;
   pricing_snapshot: Record<string, any>;
+  store_name?: string;
 };
 
 type ErrorResponse = {
@@ -58,11 +61,16 @@ type PlaceOrderCtaProps = {
   theme?: ThemeInput;
   text_color?: string;
   border_radius?: number;
+  button_border_radius?: number;
+  button_height?: number;
   padding?: number;
   max_width?: number;
   reviewMode?: boolean;
   selectedAddressId?: string | null;
   paymentData?: PaymentData;
+  promoCode?: string;
+  helperText?: string;
+  editMode?: boolean;
   onOrderPlaced?: (payload: OrderPlacedPayload) => void;
 };
 
@@ -78,6 +86,34 @@ function isErrorResponse(data: unknown): data is ErrorResponse {
   return typeof data === "object" && data !== null && "detail" in data;
 }
 
+function extractApiErrorMessage(data: unknown, fallback: string): string {
+  if (typeof data === "string" && data.trim()) return data.trim();
+  if (data && typeof data === "object") {
+    const obj = data as Record<string, any>;
+    if (typeof obj.detail === "string" && obj.detail.trim()) return obj.detail.trim();
+    if (Array.isArray(obj.detail)) {
+      return obj.detail.map((e: any) => e.msg || e.message || JSON.stringify(e)).join(", ");
+    }
+    if (typeof obj.message === "string" && obj.message.trim()) return obj.message.trim();
+  }
+  return fallback;
+}
+
+export function cleanStoreName(name?: string): string {
+  if (!name || typeof name !== "string") return "Store";
+  let clean = name.trim();
+  // Strip trailing timestamps, long ids, uuid chunks
+  clean = clean.replace(/[-_]\d{4,}$/, "");
+  clean = clean.replace(/[-_][0-9a-fA-F]{6,}$/, "");
+  clean = clean.replace(/\d{6,}$/, "");
+  clean = clean.replace(/[-_]/g, " ").trim();
+  if (!clean) return "Store";
+  return clean
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
 export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
   siteId,
   buttonLabel = "Place order",
@@ -88,16 +124,30 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
   theme,
   text_color,
   border_radius,
+  button_border_radius,
+  button_height,
   padding,
   max_width,
   reviewMode = false,
   selectedAddressId,
   paymentData,
+  promoCode,
+  helperText: customHelperText,
+  editMode = false,
   onOrderPlaced,
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const { openRazorpay } = useRazorpay();
+  const { clearCart, refreshCart } = useCart();
+  const paymentHandledRef = React.useRef(false);
+
+  const cleanupRazorpayDom = () => {
+    try {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    } catch { }
+  };
 
   const resolvedMode =
     typeof theme === "string" ? theme : theme?.mode === "light" ? "light" : "dark";
@@ -113,7 +163,8 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
     (typeof theme === "object" && (theme as any)?.place_order_btn_text) ||
     (isColorDarkHex(resolvedAccent) ? "#ffffff" : "#0f172a");
 
-  const resolvedRadius = border_radius ?? 14;
+  const resolvedRadius = button_border_radius ?? border_radius ?? 14;
+  const resolvedMinHeight = button_height ? `${button_height}px` : (compact ? "52px" : "56px");
   const resolvedPaddingY = padding ?? (compact ? 14 : 16);
   const resolvedPaddingX = compact ? 18 : 22;
   const helperTextColor =
@@ -132,18 +183,31 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
 
     if (errorMessage) return errorMessage;
 
+    if (customHelperText) return customHelperText;
+
     if (reviewMode) {
       return "Review the delivery and payment details, then complete the order.";
     }
 
     return "";
-  }, [errorMessage, isSubmitting, paymentData?.method, reviewMode]);
+  }, [errorMessage, isSubmitting, paymentData?.method, reviewMode, customHelperText]);
 
   const handlePlaceOrder = async () => {
     if (finalDisabled) return;
 
     if (onClick) {
       onClick();
+      return;
+    }
+
+    if (editMode) {
+      if (onOrderPlaced) {
+        onOrderPlaced({
+          orderId: "preview-editor-order",
+          status: "confirmed",
+          total: 0,
+        });
+      }
       return;
     }
 
@@ -164,6 +228,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
     }
 
     try {
+      paymentHandledRef.current = false;
       setIsSubmitting(true);
       setErrorMessage("");
 
@@ -172,10 +237,11 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
         const response = await fetch(`${API_BASE_URL}/orders/${siteId}/place`, {
           method: "POST",
           credentials: "include",
-          headers: { "Content-Type": "application/json" },
+          headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
           body: JSON.stringify({
             address_id: selectedAddressId,
             payment_method: "cod",
+            promo_code: promoCode || undefined,
           }),
         });
 
@@ -186,15 +252,21 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
         }
 
         if (!response.ok) {
-          if (isErrorResponse(data) && typeof data.detail === "string") {
-            throw new Error(data.detail);
-          }
-          throw new Error(`Failed to place COD order (${response.status})`);
+          throw new Error(extractApiErrorMessage(data, `Failed to place COD order (${response.status})`));
         }
 
         if (!isPlaceOrderApiResponse(data)) {
           throw new Error("Invalid place order response");
         }
+
+        paymentHandledRef.current = true;
+        setIsSubmitting(false);
+        try {
+          await clearCart();
+        } catch { }
+        try {
+          window.dispatchEvent(new CustomEvent("wc_customer_notification_refresh"));
+        } catch { }
 
         onOrderPlaced?.({
           orderId: data.order_id || "",
@@ -208,10 +280,11 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       const initResponse = await fetch(`${API_BASE_URL}/orders/${siteId}/create-payment-order`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
         body: JSON.stringify({
           address_id: selectedAddressId,
           payment_method: normalizedMethod,
+          promo_code: promoCode || undefined,
         }),
       });
 
@@ -222,10 +295,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       }
 
       if (!initResponse.ok) {
-        if (isErrorResponse(initData) && typeof initData.detail === "string") {
-          throw new Error(initData.detail);
-        }
-        throw new Error(`Failed to initialize payment (${initResponse.status})`);
+        throw new Error(extractApiErrorMessage(initData, `Failed to initialize payment (${initResponse.status})`));
       }
 
       if (!isCreatePaymentOrderApiResponse(initData)) {
@@ -233,6 +303,20 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       }
 
       const { order_id, razorpay_order_id, amount, currency, key_id } = initData;
+
+      // Persist pending order in storage to handle mobile bank page redirects
+      const pendingOrderData = {
+        siteId,
+        order_id,
+        razorpay_order_id,
+        timestamp: Date.now(),
+      };
+      try {
+        sessionStorage.setItem(`pending_checkout_order_${siteId}`, JSON.stringify(pendingOrderData));
+        localStorage.setItem(`pending_checkout_order_${siteId}`, JSON.stringify(pendingOrderData));
+        sessionStorage.setItem("pending_checkout_order", JSON.stringify(pendingOrderData));
+        localStorage.setItem("pending_checkout_order", JSON.stringify(pendingOrderData));
+      } catch { }
 
       // Validate VPA so email addresses don't break Razorpay's UPI modal
       const rawVpa = paymentData?.upiId?.trim() || "";
@@ -243,43 +327,51 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
       const isCard = normalizedMethod.includes("card");
       const isNetbanking = normalizedMethod.includes("netbank") || normalizedMethod.includes("bank");
       const isWallet = normalizedMethod.includes("wallet");
+      const isUpi = normalizedMethod.includes("upi");
 
-      const targetMethod = isCard ? "card" : isNetbanking ? "netbanking" : isWallet ? "wallet" : "upi";
-      const targetName = isCard ? "Card" : isNetbanking ? "Netbanking" : isWallet ? "Wallet" : "UPI";
+      const targetMethod = isCard ? "card" : isNetbanking ? "netbanking" : isWallet ? "wallet" : isUpi ? "upi" : undefined;
 
-      // Launch Razorpay Checkout locked exclusively to the chosen instrument
+      // Safety net: if Razorpay's SDK times out internally and never calls
+      // handler / ondismiss / onPaymentFailed, this timer resets the loading
+      // state so the page doesn't freeze forever. 5 minutes is generous.
+      let safetyTimer: ReturnType<typeof setTimeout> | null = null;
+      safetyTimer = setTimeout(() => {
+        if (!paymentHandledRef.current) {
+          paymentHandledRef.current = true; // prevent double-fire
+          setIsSubmitting(false);
+          setErrorMessage("Payment session timed out. Please refresh and try again.");
+        }
+      }, 5 * 60 * 1000);
+
+      const rawStoreName =
+        initData.store_name ||
+        (typeof document !== "undefined" && document.title ? document.title.split("-")[0].split("|")[0].trim() : "") ||
+        "Store";
+      const dynamicStoreName = cleanStoreName(rawStoreName);
+
+      // Launch standard in-app Razorpay modal dedicated to selected method
+      try {
       await openRazorpay({
         key: key_id,
         amount: amount,
         currency: currency || "INR",
-        name: "WebCreon Store",
-        description: `Order #${order_id.slice(0, 8).toUpperCase()}`,
+        name: dynamicStoreName,
+        description: "Secure Order Checkout",
         order_id: razorpay_order_id.startsWith("order_mock_") ? undefined : razorpay_order_id,
         prefill: {
-          contact: "+918825255108",
-          email: "customer@example.com",
-          method: targetMethod,
-          vpa: validVpa,
-        },
-        config: {
-          display: {
-            blocks: {
-              chosen_only: {
-                name: `Pay with ${targetName}`,
-                instruments: [{ method: targetMethod }],
-              },
-            },
-            sequence: ["block.chosen_only"],
-            preferences: {
-              show_default_blocks: false, // Completely hides all other options & sidebar
-            },
-          },
+          method: targetMethod || undefined,
+          vpa: validVpa || undefined,
         },
         theme: {
           color: resolvedAccent,
         },
         modal: {
+          backdropclose: true,
           ondismiss: async () => {
+            // If payment was already verified and completed in handler, ignore dismissal
+            if (paymentHandledRef.current) return;
+            if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+
             setIsSubmitting(false);
             // Check if payment was completed before closing modal (e.g. mobile netbanking return)
             if (order_id && siteId) {
@@ -287,7 +379,7 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
                 const checkRes = await fetch(`${API_BASE_URL}/orders/${siteId}/verify-payment`, {
                   method: "POST",
                   credentials: "include",
-                  headers: { "Content-Type": "application/json" },
+                  headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
                   body: JSON.stringify({
                     order_id: order_id,
                     razorpay_order_id: razorpay_order_id,
@@ -296,6 +388,20 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
                 if (checkRes.ok) {
                   const checkData = await checkRes.json();
                   if (checkData.status === "placed" && checkData.payment_status === "paid") {
+                    paymentHandledRef.current = true;
+                    cleanupRazorpayDom();
+                    try {
+                      sessionStorage.removeItem(`pending_checkout_order_${siteId}`);
+                      localStorage.removeItem(`pending_checkout_order_${siteId}`);
+                      sessionStorage.removeItem("pending_checkout_order");
+                      localStorage.removeItem("pending_checkout_order");
+                    } catch { }
+                    try {
+                      await clearCart();
+                    } catch { }
+                    try {
+                      window.dispatchEvent(new CustomEvent("wc_customer_notification_refresh"));
+                    } catch { }
                     onOrderPlaced?.({
                       orderId: checkData.order_id || order_id,
                       status: "placed",
@@ -305,7 +411,6 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
                   } else if (checkData.is_refunded || checkData.status === "cancelled") {
                     const refundMsg = checkData.message || "Item went out of stock right as payment completed. A 100% automated refund has been initiated back to your source account.";
                     setErrorMessage(refundMsg);
-                    alert(refundMsg);
                     return;
                   }
                 }
@@ -321,11 +426,15 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
           razorpay_order_id?: string;
           razorpay_signature: string;
         }) => {
+          if (paymentHandledRef.current) return;
+          paymentHandledRef.current = true;
+          if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+
           try {
             const verifyRes = await fetch(`${API_BASE_URL}/orders/${siteId}/verify-payment`, {
               method: "POST",
               credentials: "include",
-              headers: { "Content-Type": "application/json" },
+              headers: getCustomerAuthHeaders(siteId, { "Content-Type": "application/json" }),
               body: JSON.stringify({
                 order_id: order_id,
                 razorpay_order_id: paymentResponse.razorpay_order_id || razorpay_order_id,
@@ -345,9 +454,24 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
             if (verifyData?.is_refunded || verifyData?.status === "cancelled") {
               const refundMsg = verifyData.message || "Item went out of stock right as payment completed. A 100% automated refund has been initiated back to your source account.";
               setErrorMessage(refundMsg);
-              alert(refundMsg);
               return;
             }
+
+            cleanupRazorpayDom();
+            try {
+              sessionStorage.removeItem(`pending_checkout_order_${siteId}`);
+              localStorage.removeItem(`pending_checkout_order_${siteId}`);
+              sessionStorage.removeItem("pending_checkout_order");
+              localStorage.removeItem("pending_checkout_order");
+            } catch { }
+
+            try {
+              await clearCart();
+            } catch { }
+
+            try {
+              window.dispatchEvent(new CustomEvent("wc_customer_notification_refresh"));
+            } catch { }
 
             onOrderPlaced?.({
               orderId: verifyData.order_id || order_id,
@@ -355,116 +479,128 @@ export const PlaceOrderCta: React.FC<PlaceOrderCtaProps> = ({
               total: verifyData.total,
             });
           } catch (vErr: any) {
+            paymentHandledRef.current = false;
+            cleanupRazorpayDom();
             const msg = vErr.message || "Failed to confirm payment";
             setErrorMessage(msg);
-            alert(msg);
           } finally {
             setIsSubmitting(false);
           }
         },
         onPaymentFailed: (error: any) => {
+          paymentHandledRef.current = false;
+          cleanupRazorpayDom();
+          if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
           setIsSubmitting(false);
           const failMsg = error?.description || "Payment failed. Please try with another payment method.";
           setErrorMessage(failMsg);
-          alert(failMsg);
         },
       });
-    } catch (error) {
-      setIsSubmitting(false);
-      const errTxt = error instanceof Error ? error.message : "Failed to initiate payment";
-      setErrorMessage(errTxt);
-      alert(errTxt);
+    } catch (innerError) {
+      // openRazorpay itself threw (SDK load failure etc.)
+      cleanupRazorpayDom();
+      if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+      throw innerError; // re-throw so the outer catch handles it
     }
-  };
-
-  return (
-    <section
-      style={{
-        width: "100%",
-        maxWidth: max_width ? `${max_width}px` : undefined,
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          display: "grid",
-          gap: "10px",
-        }}
-      >
-        {errorMessage ? (
-          <div
-            style={{
-              padding: "12px 14px",
-              borderRadius: "10px",
-              background: resolvedMode === "light" ? "#fef2f2" : "rgba(239, 68, 68, 0.15)",
-              border: "1px solid rgba(239, 68, 68, 0.3)",
-              color: resolvedMode === "light" ? "#b91c1c" : "#fca5a5",
-              fontSize: "13px",
-              lineHeight: 1.5,
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            <span style={{ fontSize: "16px" }}>⚠️</span>
-            <span>{errorMessage}</span>
-          </div>
-        ) : helperText ? (
-          <p
-            style={{
-              margin: 0,
-              fontSize: "13px",
-              lineHeight: 1.6,
-              color: helperTextColor,
-            }}
-          >
-            {helperText}
-          </p>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={handlePlaceOrder}
-          disabled={finalDisabled}
-          style={{
-            width: "100%",
-            minHeight: compact ? "52px" : "56px",
-            padding: `${resolvedPaddingY}px ${resolvedPaddingX}px`,
-            borderRadius: `${resolvedRadius}px`,
-            border: "none",
-            background: finalDisabled ? "#94a3b8" : resolvedAccent,
-            color: resolvedButtonTextColor,
-            fontWeight: 800,
-            fontSize: compact ? "15px" : "16px",
-            letterSpacing: "-0.02em",
-            cursor: finalDisabled ? "not-allowed" : "pointer",
-            boxShadow: finalDisabled
-              ? "none"
-              : "0 14px 34px rgba(0,0,0,0.14), 0 6px 16px rgba(0,0,0,0.10)",
-            transition:
-              "transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease",
-            opacity: finalDisabled ? 0.9 : 1,
-          }}
-          onMouseDown={(e) => {
-            if (!finalDisabled) e.currentTarget.style.transform = "translateY(1px)";
-          }}
-          onMouseUp={(e) => {
-            e.currentTarget.style.transform = "translateY(0)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "translateY(0)";
-          }}
-        >
-          {isSubmitting
-            ? paymentData?.method?.toUpperCase() === "COD"
-              ? "Placing Order..."
-              : "Connecting Gateway..."
-            : buttonLabel}
-        </button>
-      </div>
-    </section>
-  );
+  } catch (error) {
+    paymentHandledRef.current = false;
+    cleanupRazorpayDom();
+    setIsSubmitting(false);
+    const errTxt = error instanceof Error ? error.message : "Failed to initiate payment";
+    setErrorMessage(errTxt);
+    try {
+      await refreshCart();
+    } catch { }
+  }
 };
 
-export default PlaceOrderCta;
+return (
+  <section
+    style={{
+      width: "100%",
+      maxWidth: max_width ? `${max_width}px` : undefined,
+    }}
+  >
+    <div
+      style={{
+        width: "100%",
+        display: "grid",
+        gap: "10px",
+      }}
+    >
+      {errorMessage ? (
+        <div
+          style={{
+            padding: "12px 14px",
+            borderRadius: "10px",
+            background: resolvedMode === "light" ? "#fef2f2" : "rgba(239, 68, 68, 0.15)",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            color: resolvedMode === "light" ? "#b91c1c" : "#fca5a5",
+            fontSize: "13px",
+            lineHeight: 1.5,
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <span>{errorMessage}</span>
+        </div>
+      ) : helperText ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: "13px",
+            lineHeight: 1.6,
+            color: helperTextColor,
+          }}
+        >
+          {helperText}
+        </p>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={handlePlaceOrder}
+        disabled={finalDisabled}
+        style={{
+          width: "100%",
+          minHeight: resolvedMinHeight,
+          padding: `${resolvedPaddingY}px ${resolvedPaddingX}px`,
+          borderRadius: `${resolvedRadius}px`,
+          border: "none",
+          background: finalDisabled ? "#94a3b8" : resolvedAccent,
+          color: resolvedButtonTextColor,
+          fontWeight: 800,
+          fontSize: compact ? "15px" : "16px",
+          letterSpacing: "-0.02em",
+          cursor: finalDisabled ? "not-allowed" : "pointer",
+          boxShadow: finalDisabled
+            ? "none"
+            : "0 14px 34px rgba(0,0,0,0.14), 0 6px 16px rgba(0,0,0,0.10)",
+          transition:
+            "transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease",
+          opacity: finalDisabled ? 0.9 : 1,
+        }}
+        onMouseDown={(e) => {
+          if (!finalDisabled) e.currentTarget.style.transform = "translateY(1px)";
+        }}
+        onMouseUp={(e) => {
+          e.currentTarget.style.transform = "translateY(0)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = "translateY(0)";
+        }}
+      >
+        {isSubmitting
+          ? paymentData?.method?.toUpperCase() === "COD"
+            ? "Placing Order..."
+            : "Connecting Gateway..."
+          : buttonLabel}
+      </button>
+    </div>
+  </section>
+);
+};
+
+export default PlaceOrderCta;
