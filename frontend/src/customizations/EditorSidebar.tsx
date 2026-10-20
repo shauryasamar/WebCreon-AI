@@ -2688,7 +2688,7 @@ function HeroSlidesEditor({
                           (Array.isArray(slide.trust_badges) ? slide.trust_badges.length > 0 : slide.variant === "minimal_brand") ? (
                             <div style={{ display: "grid", gap: "4px", padding: "5px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}`, borderRadius: "5px" }}>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Trust Badges</label>
+                                <label style={{ fontSize: "8.5px", fontWeight: 700, color: isDark ? tokens.textSecondary : "#64748b", textTransform: "uppercase" }}>Trust Badges</label>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -2698,7 +2698,7 @@ function HeroSlidesEditor({
                                   style={{
                                     fontSize: "8.5px",
                                     fontWeight: 700,
-                                    color: ADMIN_BLUE,
+                                    color: tokens.accent || ADMIN_BLUE,
                                     background: "none",
                                     border: "none",
                                     cursor: "pointer",
@@ -2717,12 +2717,12 @@ function HeroSlidesEditor({
                                       display: "flex",
                                       alignItems: "center",
                                       gap: "3px",
-                                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                                      background: isDark ? "rgba(255, 255, 255, 0.08)" : "#ffffff",
                                       border: `1px solid ${tokens.border}`,
                                       borderRadius: "4px",
                                       padding: "1px 5px",
                                       fontSize: "9.5px",
-                                      color: "#334155",
+                                      color: tokens.textPrimary,
                                     }}
                                   >
                                     <input
@@ -2740,7 +2740,7 @@ function HeroSlidesEditor({
                                         background: "transparent",
                                         fontSize: "9.5px",
                                         fontWeight: 600,
-                                        color: "#334155",
+                                        color: tokens.textPrimary,
                                         width: `${Math.max(45, badge.length * 6.5)}px`,
                                         padding: 0,
                                       }}
@@ -2777,7 +2777,7 @@ function HeroSlidesEditor({
                                 style={{
                                   fontSize: "8.5px",
                                   fontWeight: 700,
-                                  color: ADMIN_BLUE,
+                                  color: tokens.accent || ADMIN_BLUE,
                                   background: "none",
                                   border: "none",
                                   cursor: "pointer",
