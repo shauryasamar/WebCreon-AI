@@ -7,6 +7,7 @@ import GlassToast from "./GlassToast";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
 import AccessDeniedView from "./AccessDeniedView";
+import { AdminSelect } from "./AdminSelect";
 import {
   resolveMediaUrl,
   parseMessageWithMedia,
@@ -94,12 +95,12 @@ const plainCardStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "8px 12px",
-  borderRadius: "6px",
+  borderRadius: "9px",
   border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   background: "var(--admin-elevated-surface, #f8fafc)",
   color: "var(--admin-text-primary, #0f172a)",
   outline: "none",
-  fontSize: "14px",
+  fontSize: "13.5px",
   boxSizing: "border-box",
 };
 
@@ -1546,31 +1547,31 @@ export const AdminSupportDesk: React.FC = () => {
 
                 <div>
                   <label style={{ ...labelStyle, fontSize: "12px", marginBottom: "4px" }}>Priority</label>
-                  <select
+                  <AdminSelect
                     value={priorityFilter}
                     onChange={(e) => {
                       setPriorityFilter(e.target.value);
                       setCurrentPage(1);
                     }}
-                    style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
+                    style={{ fontSize: "13px", height: "34px", minWidth: "150px" }}
                   >
                     <option value="all">All Priorities</option>
                     <option value="urgent">Urgent</option>
                     <option value="high">High</option>
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
-                  </select>
+                  </AdminSelect>
                 </div>
 
                 <div>
                   <label style={{ ...labelStyle, fontSize: "12px", marginBottom: "4px" }}>Issue Category</label>
-                  <select
+                  <AdminSelect
                     value={categoryFilter}
                     onChange={(e) => {
                       setCategoryFilter(e.target.value);
                       setCurrentPage(1);
                     }}
-                    style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
+                    style={{ fontSize: "13px", height: "34px", minWidth: "160px" }}
                   >
                     <option value="all">All Categories</option>
                     <option value="delivery_delay">Delivery Delay</option>
@@ -1580,18 +1581,18 @@ export const AdminSupportDesk: React.FC = () => {
                     <option value="refund_request">Refund Request</option>
                     <option value="payment_issue">Payment Issue</option>
                     <option value="other">Other Inquiries</option>
-                  </select>
+                  </AdminSelect>
                 </div>
 
                 <div>
                   <label style={{ ...labelStyle, fontSize: "12px", marginBottom: "4px" }}>Assigned Support Agent</label>
-                  <select
+                  <AdminSelect
                     value={agentFilter}
                     onChange={(e) => {
                       setAgentFilter(e.target.value);
                       setCurrentPage(1);
                     }}
-                    style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
+                    style={{ fontSize: "13px", height: "34px", minWidth: "170px" }}
                   >
                     <option value="all">All Tickets</option>
                     <option value="unassigned">Unassigned Only</option>
@@ -1600,7 +1601,7 @@ export const AdminSupportDesk: React.FC = () => {
                         Agent: {ag.name}
                       </option>
                     ))}
-                  </select>
+                  </AdminSelect>
                 </div>
 
                 {/* Action footer */}
@@ -2019,18 +2020,13 @@ export const AdminSupportDesk: React.FC = () => {
                           {/* Quick Agent Assignment Dropdown */}
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <span style={{ fontSize: "12px", color: tokens.textSecondary, fontWeight: 600 }}>Assigned:</span>
-                            <select
+                            <AdminSelect
                               value={t.assigned_agent.id || ""}
                               onChange={(e) => handleAssignAgent(t.id, e.target.value || null)}
                               style={{
                                 height: "30px",
-                                borderRadius: "6px",
-                                border: `1px solid ${t.assigned_agent.id ? (isDark ? "rgba(59, 130, 246, 0.35)" : "#bfdbfe") : tokens.border}`,
+                                minWidth: "140px",
                                 fontSize: "12px",
-                                padding: "0 8px",
-                                background: t.assigned_agent.id ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff") : tokens.elevatedSurfaceBg,
-                                color: t.assigned_agent.id ? (isDark ? "#93c5fd" : "#1d4ed8") : tokens.textPrimary,
-                                fontWeight: 600,
                               }}
                             >
                               <option value="">Unassigned</option>
@@ -2039,7 +2035,7 @@ export const AdminSupportDesk: React.FC = () => {
                                   {ag.name}
                                 </option>
                               ))}
-                            </select>
+                            </AdminSelect>
                           </div>
 
                           <button
@@ -3072,34 +3068,30 @@ export const AdminSupportDesk: React.FC = () => {
                         </div>
 
                         {/* Compact Quick Templates Dropdown */}
-                        <select
-                          disabled={!canRespond}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              setComposerMessage(e.target.value);
-                              e.target.value = "";
-                            }
-                          }}
-                          style={{
-                            height: "28px",
-                            padding: "0 8px",
-                            borderRadius: "5px",
-                            border: `1px solid ${tokens.border}`,
-                            background: tokens.surfaceBg,
-                            fontSize: "11.5px",
-                            color: tokens.textSecondary,
-                            outline: "none",
-                            cursor: !canRespond ? "not-allowed" : "pointer",
-                            opacity: !canRespond ? 0.6 : 1,
-                          }}
-                        >
-                          <option value="">+ Quick Templates...</option>
-                          {CANNED_RESPONSES.map((c, i) => (
-                            <option key={i} value={c.text}>
-                              {c.label}
-                            </option>
-                          ))}
-                        </select>
+                        <div style={{ minWidth: "160px" }}>
+                          <AdminSelect
+                            value=""
+                            placeholder="+ Quick Templates..."
+                            disabled={!canRespond}
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                setComposerMessage(e.target.value);
+                              }
+                            }}
+                            style={{
+                              height: "28px",
+                              fontSize: "11.5px",
+                              opacity: !canRespond ? 0.6 : 1,
+                            }}
+                          >
+                            <option value="" disabled>+ Quick Templates...</option>
+                            {CANNED_RESPONSES.map((c, i) => (
+                              <option key={i} value={c.text}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </AdminSelect>
+                        </div>
                       </div>
 
                       {/* Composer Image Attachment Preview */}
@@ -4022,13 +4014,13 @@ export const AdminSupportDesk: React.FC = () => {
                   <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "4px" }}>
                     Return / Refund Policy Reason
                   </label>
-                  <select
+                  <AdminSelect
                     onChange={(e) => {
                       if (e.target.value) {
                         setResolutionNoteInput(e.target.value);
                       }
                     }}
-                    style={{ ...inputStyle, marginBottom: "6px", fontSize: "12px" }}
+                    style={{ height: "36px", fontSize: "12.5px" }}
                   >
                     <option value="">-- Select Policy Basis --</option>
                     <option value="Policy Approved: Damaged or Defective Item on Delivery">Damaged / Defective Item on Delivery</option>
@@ -4036,7 +4028,7 @@ export const AdminSupportDesk: React.FC = () => {
                     <option value="Policy Approved: Wrong Product / Variant Dispatched">Wrong Product Delivered</option>
                     <option value="Policy Approved: Return Inspected and Restocked">Return Inspected & Received at Warehouse</option>
                     <option value="Policy Exception: Customer Goodwill Courtesy Refund">Goodwill / Policy Exception Courtesy</option>
-                  </select>
+                  </AdminSelect>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
@@ -4079,16 +4071,16 @@ export const AdminSupportDesk: React.FC = () => {
                         <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "4px" }}>
                           Disbursal Method
                         </label>
-                        <select
+                        <AdminSelect
                           value={payoutModeInput}
                           onChange={(e) => setPayoutModeInput(e.target.value)}
-                          style={{ ...inputStyle, marginBottom: 0, fontSize: "12px" }}
+                          style={{ fontSize: "12px" }}
                         >
                           <option value="UPI Transfer">Direct UPI Transfer</option>
                           <option value="Bank Transfer (NEFT/IMPS)">Bank Account (IMPS/NEFT)</option>
                           <option value="Cash Handover by Delivery Partner">Cash Handover (Rider)</option>
                           <option value="Store Credit / Wallet">Store Credit / Wallet</option>
-                        </select>
+                        </AdminSelect>
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "4px" }}>
@@ -4333,21 +4325,23 @@ export const AdminSupportDesk: React.FC = () => {
               <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "4px" }}>
                 Replacement Reason / Policy Basis
               </label>
-              <select
+              <AdminSelect
+                value=""
+                placeholder="-- Select Replacement Reason --"
                 onChange={(e) => {
                   if (e.target.value) {
                     setResolutionNoteInput(e.target.value);
                   }
                 }}
-                style={{ ...inputStyle, marginBottom: "6px", fontSize: "12.5px" }}
+                style={{ fontSize: "12.5px" }}
               >
-                <option value="">-- Select Replacement Reason --</option>
+                <option value="" disabled>-- Select Replacement Reason --</option>
                 <option value="Replacement Approved: Item arrived damaged or broken in transit">Damaged or Broken in Transit</option>
                 <option value="Replacement Approved: Item defective or malfunctioning on arrival">Defective / Malfunctioning on Arrival</option>
                 <option value="Replacement Approved: Missing item from received package">Missing Item from Package</option>
                 <option value="Replacement Approved: Incorrect size or variant delivered">Wrong Size / Variant Delivered</option>
                 <option value="Replacement Exception: Customer courtesy goodwill replacement">Courtesy Goodwill Replacement</option>
-              </select>
+              </AdminSelect>
             </div>
 
             <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "4px" }}>

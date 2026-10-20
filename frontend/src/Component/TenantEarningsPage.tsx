@@ -1,9 +1,10 @@
-﻿import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAdminTheme } from "../context/ThemeContext";
 import { useParams, Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "./Pagination";
 import GlassToast from "./GlassToast";
+import { AdminSelect } from "./AdminSelect";
 
 type LedgerEntry = {
   id: string;
@@ -828,20 +829,20 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                     <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "4px", textTransform: "uppercase" }}>
                       Date Range
                     </label>
-                    <select
+                    <AdminSelect
                       value={dateFilter}
                       onChange={(e) => {
                         setDateFilter(e.target.value as DateFilter);
                         setCurrentPage(1);
                       }}
-                      style={{ ...inputStyle, width: "100%", height: "34px", padding: "0 8px" }}
+                      style={{ width: "100%", height: "34px", fontSize: "13px" }}
                     >
                       <option value="last_30_days">Last 30 Days (Default)</option>
                       <option value="today">Today</option>
                       <option value="last_7_days">Last 7 Days</option>
                       <option value="all">All Time</option>
                       <option value="custom">Custom Date Range...</option>
-                    </select>
+                    </AdminSelect>
 
                     {dateFilter === "custom" && (
                       <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
@@ -873,13 +874,13 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                     <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "4px", textTransform: "uppercase" }}>
                       Settlement Status
                     </label>
-                    <select
+                    <AdminSelect
                       value={statusFilter}
                       onChange={(e) => {
                         setStatusFilter(e.target.value);
                         setCurrentPage(1);
                       }}
-                      style={{ ...inputStyle, width: "100%", height: "34px", padding: "0 8px" }}
+                      style={{ width: "100%", height: "34px", fontSize: "13px" }}
                     >
                       <option value="all">All Statuses</option>
                       <option value="settled">Settled to Bank</option>
@@ -887,7 +888,7 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                       <option value="cod">Cash on Delivery (COD)</option>
                       <option value="pending">Pending Payout</option>
                       <option value="refunded">Refunded / Reversed</option>
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {/* Sort Order */}
@@ -895,19 +896,19 @@ export default function TenantEarningsPage({ siteId: propSiteId }: { siteId?: st
                     <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "4px", textTransform: "uppercase" }}>
                       Sort By
                     </label>
-                    <select
+                    <AdminSelect
                       value={sortOrder}
                       onChange={(e) => {
                         setSortOrder(e.target.value as SortOrder);
                         setCurrentPage(1);
                       }}
-                      style={{ ...inputStyle, width: "100%", height: "34px", padding: "0 8px" }}
+                      style={{ width: "100%", height: "34px", fontSize: "13px" }}
                     >
                       <option value="date_desc">Newest First (Default)</option>
                       <option value="date_asc">Oldest First</option>
                       <option value="amount_desc">Highest Net Amount</option>
                       <option value="amount_asc">Lowest Net Amount</option>
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {/* Action footer */}

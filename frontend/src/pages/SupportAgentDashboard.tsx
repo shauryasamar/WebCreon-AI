@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { Pagination } from "../Component/Pagination";
 import GlassToast from "../Component/GlassToast";
+import { AdminSelect } from "../Component/AdminSelect";
 import {
   resolveMediaUrl,
   parseMessageWithMedia,
@@ -1429,32 +1430,28 @@ export const SupportAgentDashboard: React.FC = () => {
                         </div>
 
                         {/* Compact Quick Templates Dropdown */}
-                        <select
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              setComposerMessage(e.target.value);
-                              e.target.value = "";
-                            }
-                          }}
-                          style={{
-                            height: "28px",
-                            padding: "0 8px",
-                            borderRadius: "5px",
-                            border: "1px solid #cbd5e1",
-                            background: "#ffffff",
-                            fontSize: "11.5px",
-                            color: "#475569",
-                            outline: "none",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <option value="">+ Quick Templates...</option>
-                          {CANNED_RESPONSES.map((c, i) => (
-                            <option key={i} value={c.text}>
-                              {c.label}
-                            </option>
-                          ))}
-                        </select>
+                        <div style={{ minWidth: "160px" }}>
+                          <AdminSelect
+                            value=""
+                            placeholder="+ Quick Templates..."
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                setComposerMessage(e.target.value);
+                              }
+                            }}
+                            style={{
+                              height: "28px",
+                              fontSize: "11.5px",
+                            }}
+                          >
+                            <option value="" disabled>+ Quick Templates...</option>
+                            {CANNED_RESPONSES.map((c, i) => (
+                              <option key={i} value={c.text}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </AdminSelect>
+                        </div>
                       </div>
 
                       {/* Composer Image Attachment Preview */}
@@ -2403,21 +2400,23 @@ export const SupportAgentDashboard: React.FC = () => {
                   <label style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
                     Return / Refund Policy Reason
                   </label>
-                  <select
+                  <AdminSelect
+                    value=""
+                    placeholder="-- Select Policy Basis --"
                     onChange={(e) => {
                       if (e.target.value) {
                         setResolutionNoteInput(e.target.value);
                       }
                     }}
-                    style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", marginBottom: "6px", boxSizing: "border-box", fontSize: "12px", outline: "none", background: "#ffffff" }}
+                    style={{ fontSize: "12px" }}
                   >
-                    <option value="">-- Select Policy Basis --</option>
+                    <option value="" disabled>-- Select Policy Basis --</option>
                     <option value="Policy Approved: Damaged or Defective Item on Delivery">Damaged / Defective Item on Delivery</option>
                     <option value="Policy Approved: Missing Item from Shipment Package">Missing Item from Package</option>
                     <option value="Policy Approved: Wrong Product / Variant Dispatched">Wrong Product Delivered</option>
                     <option value="Policy Approved: Return Inspected and Restocked">Return Inspected & Received at Warehouse</option>
                     <option value="Policy Exception: Customer Goodwill Courtesy Refund">Goodwill / Policy Exception Courtesy</option>
-                  </select>
+                  </AdminSelect>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
@@ -2460,16 +2459,16 @@ export const SupportAgentDashboard: React.FC = () => {
                         <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
                           Disbursal Method
                         </label>
-                        <select
+                        <AdminSelect
                           value={payoutModeInput}
                           onChange={(e) => setPayoutModeInput(e.target.value)}
-                          style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", marginBottom: 0, boxSizing: "border-box", fontSize: "12px", outline: "none", background: "#ffffff" }}
+                          style={{ fontSize: "12px" }}
                         >
                           <option value="UPI Transfer">Direct UPI Transfer</option>
                           <option value="Bank Transfer (NEFT/IMPS)">Bank Account (IMPS/NEFT)</option>
                           <option value="Cash Handover by Delivery Partner">Cash Handover (Rider)</option>
                           <option value="Store Credit / Wallet">Store Credit / Wallet</option>
-                        </select>
+                        </AdminSelect>
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
@@ -2709,21 +2708,23 @@ export const SupportAgentDashboard: React.FC = () => {
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>
                 Replacement Reason / Policy Basis
               </label>
-              <select
+              <AdminSelect
+                value=""
+                placeholder="-- Select Replacement Reason --"
                 onChange={(e) => {
                   if (e.target.value) {
                     setResolutionNoteInput(e.target.value);
                   }
                 }}
-                style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", marginBottom: "6px", boxSizing: "border-box", fontSize: "12.5px", outline: "none", background: "#ffffff" }}
+                style={{ fontSize: "12.5px" }}
               >
-                <option value="">-- Select Replacement Reason --</option>
+                <option value="" disabled>-- Select Replacement Reason --</option>
                 <option value="Replacement Approved: Item arrived damaged or broken in transit">Damaged or Broken in Transit</option>
                 <option value="Replacement Approved: Item defective or malfunctioning on arrival">Defective / Malfunctioning on Arrival</option>
                 <option value="Replacement Approved: Missing item from received package">Missing Item from Package</option>
                 <option value="Replacement Approved: Incorrect size or variant delivered">Wrong Size / Variant Delivered</option>
                 <option value="Replacement Exception: Customer courtesy goodwill replacement">Courtesy Goodwill Replacement</option>
-              </select>
+              </AdminSelect>
             </div>
 
             <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>

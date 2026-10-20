@@ -6,6 +6,7 @@ import { useAdminTheme } from "../context/ThemeContext";
 import { AccessDeniedView } from "./AccessDeniedView";
 import { GlassToast } from "./GlassToast";
 import { Pagination } from "./Pagination";
+import { AdminSelect } from "./AdminSelect";
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -803,109 +804,85 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Category
                     </label>
-                    <select
+                    <AdminSelect
                       value={selectedCategory}
                       onChange={(e) => setSelectedCategory(e.target.value)}
                       style={{
                         width: "100%",
                         height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
                         fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
                       }}
                     >
                       {CATEGORIES.map((cat) => (
-                        <option key={cat.id} value={cat.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                        <option key={cat.id} value={cat.id}>
                           {cat.label}
                         </option>
                       ))}
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   <div>
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Source / Origin
                     </label>
-                    <select
+                    <AdminSelect
                       value={selectedSource}
                       onChange={(e) => setSelectedSource(e.target.value)}
                       style={{
                         width: "100%",
                         height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
                         fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
                       }}
                     >
                       {SOURCES.map((src) => (
-                        <option key={src.id} value={src.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                        <option key={src.id} value={src.id}>
                           {src.label}
                         </option>
                       ))}
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   <div>
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Status / Outcome
                     </label>
-                    <select
+                    <AdminSelect
                       value={selectedStatus}
                       onChange={(e) => setSelectedStatus(e.target.value)}
                       style={{
                         width: "100%",
                         height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
                         fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
                       }}
                     >
                       {STATUS_OPTIONS.map((st) => (
-                        <option key={st.id} value={st.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                        <option key={st.id} value={st.id}>
                           {st.label}
                         </option>
                       ))}
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   <div>
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       User / Actor
                     </label>
-                    <select
+                    <AdminSelect
                       value={selectedUser}
                       onChange={(e) => setSelectedUser(e.target.value)}
                       style={{
                         width: "100%",
                         height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
                         fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
                       }}
                     >
-                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Team Members</option>
+                      <option value="all">All Team Members</option>
                       {availableUsers.map((u: any) => (
-                        <option key={u.id} value={u.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                        <option key={u.id} value={u.id}>
                           {u.name || u.email} {u.role ? `(${u.role})` : ""}
                         </option>
                       ))}
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {!effectiveSiteId && (
@@ -913,28 +890,22 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                       <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                         Website / Store
                       </label>
-                      <select
+                      <AdminSelect
                         value={selectedSite}
                         onChange={(e) => setSelectedSite(e.target.value)}
                         style={{
                           width: "100%",
                           height: "34px",
-                          padding: "0 8px",
-                          borderRadius: "6px",
-                          border: `1px solid ${tokens.border}`,
                           fontSize: "13px",
-                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                          color: tokens.textPrimary,
-                          outline: "none",
                         }}
                       >
-                        <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Websites</option>
+                        <option value="all">All Websites</option>
                         {availableSites.map((site) => (
-                          <option key={site.id} value={site.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                          <option key={site.id} value={site.id}>
                             {site.name || site.slug}
                           </option>
                         ))}
-                      </select>
+                      </AdminSelect>
                     </div>
                   )}
 
@@ -942,27 +913,21 @@ export default function AdminAuditLogs({ siteId: propSiteId }: { siteId?: string
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Date Range
                     </label>
-                    <select
+                    <AdminSelect
                       value={dateRange}
                       onChange={(e) => setDateRange(e.target.value)}
                       style={{
                         width: "100%",
                         height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
                         fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
                       }}
                     >
                       {DATE_RANGES.map((dr) => (
-                        <option key={dr.id} value={dr.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                        <option key={dr.id} value={dr.id}>
                           {dr.label}
                         </option>
                       ))}
-                    </select>
+                    </AdminSelect>
 
                     {dateRange === "custom" && (
                       <div style={{ marginTop: "10px", display: "grid", gap: "8px" }}>

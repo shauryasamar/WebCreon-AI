@@ -6,6 +6,7 @@ import GlassToast from "./GlassToast";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
 import { AdminCheckbox } from "./AdminProducts";
+import { AdminSelect } from "./AdminSelect";
 import AccessDeniedView from "./AccessDeniedView";
 
 type AdminMode = "orders" | "returns";
@@ -389,13 +390,13 @@ const plainCardStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  borderRadius: "6px",
+  borderRadius: "9px",
   border: "1px solid var(--admin-border, #cbd5e1)",
   background: "var(--admin-elevated-surface, #f8fafc)",
   color: "var(--admin-text-primary, #0f172a)",
-  padding: "9px 10px",
+  padding: "9px 12px",
   outline: "none",
-  fontSize: "14px",
+  fontSize: "13.5px",
 };
 
 const labelStyle: React.CSSProperties = {
@@ -3011,20 +3012,20 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                 {/* Date Filter */}
                 <div>
                   <label style={{ ...labelStyle, fontSize: "12px", marginBottom: "4px" }}>Date Range</label>
-                  <select
+                  <AdminSelect
                     value={dateFilter}
                     onChange={(e) => {
                       setDateFilter(e.target.value as any);
                       setCurrentPage(1);
                     }}
-                    style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
+                    style={{ fontSize: "13px", height: "34px", minWidth: "160px" }}
                   >
-                    <option value="last_30_days" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Last 30 Days (Default)</option>
-                    <option value="today" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Today</option>
-                    <option value="last_7_days" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Last 7 Days</option>
-                    <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Time</option>
-                    <option value="custom" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Custom Date Range...</option>
-                  </select>
+                    <option value="last_30_days">Last 30 Days (Default)</option>
+                    <option value="today">Today</option>
+                    <option value="last_7_days">Last 7 Days</option>
+                    <option value="all">All Time</option>
+                    <option value="custom">Custom Date Range...</option>
+                  </AdminSelect>
 
                   {dateFilter === "custom" && (
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
@@ -3055,21 +3056,21 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                 {mode === "orders" && (
                   <div>
                     <label style={{ ...labelStyle, fontSize: "12px", marginBottom: "4px" }}>Payment Method</label>
-                    <select
+                    <AdminSelect
                       value={paymentFilter}
                       onChange={(e) => {
                         setPaymentFilter(e.target.value);
                         setCurrentPage(1);
                       }}
-                      style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
+                      style={{ fontSize: "13px", height: "34px", minWidth: "160px" }}
                     >
-                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Payment Methods</option>
+                      <option value="all">All Payment Methods</option>
                       <option value="cod">Cash on Delivery (COD)</option>
                       <option value="online">Prepaid / Online</option>
                       <option value="upi">UPI</option>
                       <option value="card">Card</option>
                       <option value="netbanking">Netbanking</option>
-                    </select>
+                    </AdminSelect>
                   </div>
                 )}
 
@@ -3077,15 +3078,15 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                 {mode === "orders" && availableFulfillmentModes.hasAnyDispatchConfig && (
                   <div>
                     <label style={{ ...labelStyle, fontSize: "12px", marginBottom: "4px" }}>Dispatch & Delivery</label>
-                    <select
+                    <AdminSelect
                       value={fulfillmentFilter}
                       onChange={(e) => {
                         setFulfillmentFilter(e.target.value);
                         setCurrentPage(1);
                       }}
-                      style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
+                      style={{ fontSize: "13px", height: "34px", minWidth: "180px" }}
                     >
-                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Orders (Dispatched & Pending)</option>
+                      <option value="all">All Orders (Dispatched & Pending)</option>
                       <option value="unassigned">Unassigned (Pending Dispatch)</option>
                       <option value="dispatched">All Dispatched Orders</option>
 
@@ -3102,15 +3103,15 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                       )}
 
                       {deliveryAgents && deliveryAgents.length > 0 && (
-                        <optgroup label="Filter by Specific Rider">
+                        <>
                           {deliveryAgents.map((agent) => (
                             <option key={agent.id} value={`agent_${agent.id}`}>
                               Rider: {agent.name}
                             </option>
                           ))}
-                        </optgroup>
+                        </>
                       )}
-                    </select>
+                    </AdminSelect>
                   </div>
                 )}
 
@@ -4629,38 +4630,20 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                 <div style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>
                                                   Option 1: Choose Replacement In-House Rider
                                                 </div>
-                                                <div style={{ position: "relative" }}>
-                                                  <select
+                                                  <AdminSelect
                                                     value={reassignAgentIdMap[order.id] || ""}
                                                     onChange={(e) => setReassignAgentIdMap((p) => ({ ...p, [order.id]: e.target.value }))}
-                                                    style={{
-                                                      ...inputStyle,
-                                                      height: "38px",
-                                                      padding: "0 34px 0 12px",
-                                                      borderRadius: "8px",
-                                                      border: `1px solid ${tokens.border}`,
-                                                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                                                      color: tokens.textPrimary,
-                                                      colorScheme: isDark ? "dark" : "light",
-                                                      cursor: "pointer",
-                                                      appearance: "none",
-                                                      fontSize: "13px",
-                                                      fontWeight: 500,
-                                                    }}
+                                                    style={{ height: "38px", fontSize: "13px" }}
                                                   >
-                                                    <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>-- Choose Rider --</option>
+                                                    <option value="">-- Choose Rider --</option>
                                                     {deliveryAgents
                                                       .filter((a) => a.is_active)
                                                       .map((a) => (
-                                                        <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>
+                                                        <option key={a.id} value={a.id}>
                                                           {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
                                                         </option>
                                                       ))}
-                                                  </select>
-                                                  <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: tokens.textSecondary, display: "grid", placeItems: "center" }}>
-                                                    <ChevronDownIcon />
-                                                  </div>
-                                                </div>
+                                                  </AdminSelect>
                                                 <div style={{ display: "flex", gap: "8px" }}>
                                                   <button
                                                     type="button"
@@ -4788,38 +4771,20 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                                 <div>
                                                   <label style={labelStyle}>Assign Delivery Rider</label>
-                                                  <div style={{ position: "relative" }}>
-                                                    <select
+                                                    <AdminSelect
                                                       value={selectedAgentMap[order.id] || ""}
                                                       onChange={(e) => setSelectedAgentMap((p) => ({ ...p, [order.id]: e.target.value }))}
-                                                      style={{
-                                                        ...inputStyle,
-                                                        height: "38px",
-                                                        padding: "0 34px 0 12px",
-                                                        borderRadius: "8px",
-                                                        border: `1px solid ${tokens.border}`,
-                                                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                                                        color: tokens.textPrimary,
-                                                        colorScheme: isDark ? "dark" : "light",
-                                                        cursor: "pointer",
-                                                        appearance: "none",
-                                                        fontSize: "13px",
-                                                        fontWeight: 500,
-                                                      }}
+                                                      style={{ height: "38px", fontSize: "13px" }}
                                                     >
-                                                      <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Auto-Assign (Least Busy Rider)</option>
+                                                      <option value="">Auto-Assign (Least Busy Rider)</option>
                                                       {deliveryAgents
                                                         .filter((a) => a.is_active)
                                                         .map((a) => (
-                                                          <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>
+                                                          <option key={a.id} value={a.id}>
                                                             {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
                                                           </option>
                                                         ))}
-                                                    </select>
-                                                    <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: tokens.textSecondary, display: "grid", placeItems: "center" }}>
-                                                      <ChevronDownIcon />
-                                                    </div>
-                                                  </div>
+                                                    </AdminSelect>
                                                 </div>
 
                                                 <button
@@ -6117,18 +6082,18 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                       <label style={{ fontSize: "12px", fontWeight: 700, color: tokens.textPrimary }}>
                                                         Option 1: Choose Replacement Rider
                                                       </label>
-                                                      <select
+                                                      <AdminSelect
                                                         value={reassignReturnAgentIdMap[returnItem.id] || ""}
                                                         onChange={(e) => setReassignReturnAgentIdMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
-                                                        style={{ ...inputStyle, fontSize: "13px" }}
+                                                        style={{ height: "36px", fontSize: "13px" }}
                                                       >
-                                                        <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>-- Choose Rider --</option>
+                                                        <option value="">-- Choose Rider --</option>
                                                         {deliveryAgents.filter((a) => a.is_active).map((a) => (
-                                                          <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                                                          <option key={a.id} value={a.id}>
                                                             {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
                                                           </option>
                                                         ))}
-                                                      </select>
+                                                      </AdminSelect>
                                                       <div style={{ display: "flex", gap: "8px", marginTop: "2px" }}>
                                                         <button
                                                           type="button"
@@ -6259,38 +6224,20 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                                <div>
                                                  <label style={labelStyle}>Assign Delivery Fleet Rider for Pickup</label>
-                                                 <div style={{ position: "relative" }}>
-                                                   <select
-                                                     value={selectedReturnAgentMap[returnItem.id] || ""}
-                                                     onChange={(e) => setSelectedReturnAgentMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
-                                                     style={{
-                                                       ...inputStyle,
-                                                       height: "38px",
-                                                       padding: "0 34px 0 12px",
-                                                       borderRadius: "8px",
-                                                       border: `1px solid ${tokens.border}`,
-                                                       background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                                                       color: tokens.textPrimary,
-                                                       colorScheme: isDark ? "dark" : "light",
-                                                       cursor: "pointer",
-                                                       appearance: "none",
-                                                       fontSize: "13px",
-                                                       fontWeight: 500,
-                                                     }}
-                                                   >
-                                                     <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Auto-Assign (Least Busy Rider)</option>
-                                                     {deliveryAgents
-                                                       .filter((a) => a.is_active)
-                                                       .map((a) => (
-                                                         <option key={a.id} value={a.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>
-                                                           {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
-                                                         </option>
-                                                       ))}
-                                                   </select>
-                                                   <div style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: tokens.textSecondary, display: "grid", placeItems: "center" }}>
-                                                     <ChevronDownIcon />
-                                                   </div>
-                                                 </div>
+                                                 <AdminSelect
+                                                   value={selectedReturnAgentMap[returnItem.id] || ""}
+                                                   onChange={(e) => setSelectedReturnAgentMap((p) => ({ ...p, [returnItem.id]: e.target.value }))}
+                                                   style={{ height: "38px", fontSize: "13px" }}
+                                                 >
+                                                   <option value="">Auto-Assign (Least Busy Rider)</option>
+                                                   {deliveryAgents
+                                                     .filter((a) => a.is_active)
+                                                     .map((a) => (
+                                                       <option key={a.id} value={a.id}>
+                                                         {a.name} ({formatPhoneDisplay(a.phone)}) — {a.current_order_count} active orders
+                                                       </option>
+                                                     ))}
+                                                 </AdminSelect>
                                                </div>
 
                                                <button
@@ -6775,7 +6722,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                             <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "8px", alignItems: "center" }}>
                                               <div>
                                                 <div style={{ fontSize: "11px", color: tokens.textSecondary, fontWeight: 600 }}>Decision</div>
-                                                <select
+                                                <AdminSelect
                                                   value={currentDecision}
                                                   onChange={(e) => {
                                                     const dec = e.target.value as "restock" | "quarantine" | "discard";
@@ -6791,11 +6738,11 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                                       },
                                                     }));
                                                   }}
-                                                  style={{ ...inputStyle, padding: "6px 8px", fontSize: "12px" }}
+                                                  style={{ height: "32px", fontSize: "12px", minWidth: "140px" }}
                                                 >
                                                   <option value="restock">Restock (Return to Inventory)</option>
                                                   <option value="discard">Discard (Damaged / Unsellable)</option>
-                                                </select>
+                                                </AdminSelect>
                                               </div>
 
                                               <div>
@@ -7096,7 +7043,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                   <div style={{ display: "grid", gap: "10px", marginBottom: "14px" }}>
                                     <div>
                                       <div style={labelStyle}>Refund Method</div>
-                                      <select
+                                      <AdminSelect
                                         value={refundDraft.refundMethod}
                                         onChange={(e) =>
                                           setRefundDraftValue(returnItem.id, (draft) => ({
@@ -7104,7 +7051,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                             refundMethod: e.target.value,
                                           }))
                                         }
-                                        style={inputStyle}
+                                        style={{ height: "38px" }}
                                       >
                                         {isOrderOnlinePaid && (
                                           <option value="original_payment">Auto-Refund to Source (Razorpay Gateway)</option>
@@ -7114,7 +7061,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                                         {!isOrderOnlinePaid && (
                                           <option value="original_payment">Original Payment Gateway (Fallback)</option>
                                         )}
-                                      </select>
+                                      </AdminSelect>
 
                                       <div style={{ fontSize: "11.5px", color: tokens.textSecondary, marginTop: "4px", fontStyle: "italic" }}>
                                         {refundDraft.refundMethod === "original_payment"
@@ -7381,17 +7328,13 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                 <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                   Cancellation Reason Preset
                 </label>
-                <select
+                <AdminSelect
                   value={adminCancelReason}
                   onChange={(e) => setAdminCancelReason(e.target.value)}
                   style={{
                     width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
+                    height: "40px",
                     fontSize: "13px",
-                    color: tokens.textPrimary,
-                    background: tokens.surfaceBg,
                   }}
                   required
                 >
@@ -7400,7 +7343,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({
                       {r}
                     </option>
                   ))}
-                </select>
+                </AdminSelect>
               </div>
 
               <div>

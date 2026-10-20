@@ -5,6 +5,7 @@ import { useAdminAuth } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
 import WebCreonAnimatedLogo from "../Component/WebCreonAnimatedLogo";
 import AdminThemeToggle from "../Component/AdminThemeToggle";
+import { AdminSelect } from "../Component/AdminSelect";
 
 export default function AdminSignupPage() {
   const navigate = useNavigate();
@@ -411,32 +412,20 @@ export default function AdminSignupPage() {
                   <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>
                     Gender
                   </label>
-                  <select
+                  <AdminSelect
                     value={gender}
+                    placeholder="Select gender..."
                     onChange={(e) => setGender(e.target.value)}
                     style={{
-                      width: "100%",
                       height: "42px",
-                      borderRadius: "8px",
-                      border: `1px solid ${tokens.border}`,
-                      padding: "0 12px",
                       fontSize: "13px",
-                      background: tokens.elevatedSurfaceBg,
-                      outline: "none",
-                      color: tokens.textPrimary,
-                      boxSizing: "border-box",
-                      cursor: "pointer",
-                      transition: "border-color 0.15s ease",
+                      borderRadius: "8px",
                     }}
-                    onFocus={(e) => (e.currentTarget.style.borderColor = tokens.accent)}
-                    onBlur={(e) => (e.currentTarget.style.borderColor = tokens.border)}
                   >
-                    <option value="">Select gender...</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="non_binary">Non-binary</option>
-                    <option value="prefer_not_to_say">Prefer not to say</option>
-                  </select>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </AdminSelect>
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>

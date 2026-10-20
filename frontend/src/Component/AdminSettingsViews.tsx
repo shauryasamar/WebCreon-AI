@@ -4,6 +4,7 @@ import { useAdminTheme } from "../context/ThemeContext";
 import { AccessDeniedView } from "./AccessDeniedView";
 import { GlassToast } from "./GlassToast";
 import { AdminCheckbox } from "./AdminProducts";
+import { AdminSelect } from "./AdminSelect";
 
 // ==========================================
 // 1. GENERAL STORE SETTINGS
@@ -148,33 +149,33 @@ export const AdminGeneralSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>Storefront Currency</label>
-              <select
+              <AdminSelect
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
                 disabled={!canEdit}
-                style={inputStyle}
+                style={{ height: "38px" }}
               >
-                <option value="INR" style={optionStyle}>INR (₹) — Indian Rupee</option>
-                <option value="USD" style={optionStyle}>USD ($) — US Dollar</option>
-                <option value="EUR" style={optionStyle}>EUR (€) — Euro</option>
-                <option value="GBP" style={optionStyle}>GBP (£) — British Pound</option>
-                <option value="AED" style={optionStyle}>AED (د.إ) — UAE Dirham</option>
-              </select>
+                <option value="INR">INR (₹) — Indian Rupee</option>
+                <option value="USD">USD ($) — US Dollar</option>
+                <option value="EUR">EUR (€) — Euro</option>
+                <option value="GBP">GBP (£) — British Pound</option>
+                <option value="AED">AED (د.إ) — UAE Dirham</option>
+              </AdminSelect>
             </div>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "6px" }}>Timezone</label>
-              <select
+              <AdminSelect
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
                 disabled={!canEdit}
-                style={inputStyle}
+                style={{ height: "38px" }}
               >
-                <option value="Asia/Kolkata" style={optionStyle}>Asia/Kolkata (IST +5:30)</option>
-                <option value="UTC" style={optionStyle}>UTC (GMT +0:00)</option>
-                <option value="America/New_York" style={optionStyle}>America/New_York (EST -5:00)</option>
-                <option value="Europe/London" style={optionStyle}>Europe/London (BST +1:00)</option>
-                <option value="Asia/Dubai" style={optionStyle}>Asia/Dubai (GST +4:00)</option>
-              </select>
+                <option value="Asia/Kolkata">Asia/Kolkata (IST +5:30)</option>
+                <option value="UTC">UTC (GMT +0:00)</option>
+                <option value="America/New_York">America/New_York (EST -5:00)</option>
+                <option value="Europe/London">Europe/London (BST +1:00)</option>
+                <option value="Asia/Dubai">Asia/Dubai (GST +4:00)</option>
+              </AdminSelect>
             </div>
           </div>
         </div>
@@ -199,17 +200,17 @@ export const AdminGeneralSettings: React.FC<{ siteId?: string }> = ({ siteId }) 
               <div style={{ fontSize: "13px", fontWeight: 600, color: tokens.textPrimary }}>Auto-Cancel Pending Orders</div>
               <div style={{ fontSize: "12px", color: tokens.textSecondary }}>Automatically cancel unpaid checkout orders after a set time period.</div>
             </div>
-            <select
+            <AdminSelect
               value={autoCancelUnpaidHours}
               onChange={(e) => setAutoCancelUnpaidHours(e.target.value)}
               disabled={!canEdit}
-              style={{ padding: "6px 10px", borderRadius: "6px", border: `1px solid ${tokens.border}`, fontSize: "12px", background: isDark ? tokens.elevatedSurfaceBg : "#ffffff", color: tokens.textPrimary, colorScheme: isDark ? "dark" : "light", outline: "none" }}
+              style={{ width: "160px", height: "32px", fontSize: "12px" }}
             >
-              <option value="12" style={optionStyle}>After 12 Hours</option>
-              <option value="24" style={optionStyle}>After 24 Hours</option>
-              <option value="48" style={optionStyle}>After 48 Hours</option>
-              <option value="never" style={optionStyle}>Never Cancel</option>
-            </select>
+              <option value="12">After 12 Hours</option>
+              <option value="24">After 24 Hours</option>
+              <option value="48">After 48 Hours</option>
+              <option value="never">Never Cancel</option>
+            </AdminSelect>
           </div>
         </div>
 
@@ -995,53 +996,39 @@ export const AdminHelpAndSupport: React.FC<{ siteId?: string }> = ({ siteId }) =
                   <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "5px" }}>
                     Category
                   </label>
-                  <select
+                  <AdminSelect
                     value={ticketCategory}
                     onChange={(e) => setTicketCategory(e.target.value)}
                     style={{
                       width: "100%",
-                      padding: "8px 10px",
-                      borderRadius: "8px",
-                      border: `1px solid ${tokens.border}`,
+                      height: "38px",
                       fontSize: "13px",
-                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                      color: tokens.textPrimary,
-                      colorScheme: isDark ? "dark" : "light",
-                      outline: "none",
-                      boxSizing: "border-box",
                     }}
                   >
-                    <option value="technical" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Technical Issue</option>
-                    <option value="domain" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Custom Domain & DNS</option>
-                    <option value="billing" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Billing & Payouts</option>
-                    <option value="general" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>General Question</option>
-                  </select>
+                    <option value="technical">Technical Issue</option>
+                    <option value="domain">Custom Domain & DNS</option>
+                    <option value="billing">Billing & Payouts</option>
+                    <option value="general">General Question</option>
+                  </AdminSelect>
                 </div>
 
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: tokens.textSecondary, marginBottom: "5px" }}>
                     Priority
                   </label>
-                  <select
+                  <AdminSelect
                     value={ticketPriority}
                     onChange={(e) => setTicketPriority(e.target.value)}
                     style={{
                       width: "100%",
-                      padding: "8px 10px",
-                      borderRadius: "8px",
-                      border: `1px solid ${tokens.border}`,
+                      height: "38px",
                       fontSize: "13px",
-                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                      color: tokens.textPrimary,
-                      colorScheme: isDark ? "dark" : "light",
-                      outline: "none",
-                      boxSizing: "border-box",
                     }}
                   >
-                    <option value="normal" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Normal</option>
-                    <option value="high" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>High</option>
-                    <option value="urgent" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Urgent (Live Store)</option>
-                  </select>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent (Live Store)</option>
+                  </AdminSelect>
                 </div>
               </div>
 

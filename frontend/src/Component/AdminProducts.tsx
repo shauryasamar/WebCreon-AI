@@ -7,6 +7,7 @@ import { useAdminAuth } from "../context/AdminAuthContext";
 import { useAdminTheme, ADMIN_LIGHT_TOKENS } from "../context/ThemeContext";
 import { AccessDeniedView } from "./AccessDeniedView";
 import { GlassToast } from "./GlassToast";
+import { AdminSelect } from "./AdminSelect";
 
 const tokens = ADMIN_LIGHT_TOKENS;
 
@@ -579,8 +580,8 @@ const labelStyle: React.CSSProperties = {
 };
 
 const inputStyle: React.CSSProperties = {
-  padding: "7px 10px",
-  borderRadius: "6px",
+  padding: "8px 12px",
+  borderRadius: "9px",
   border: `1px solid ${tokens.border}`,
   background: tokens.surfaceBg,
   color: tokens.textPrimary,
@@ -688,7 +689,7 @@ const AdminProducts = () => {
 
   const inputStyle: React.CSSProperties = {
     padding: "8px 12px",
-    borderRadius: "8px",
+    borderRadius: "9px",
     border: `1px solid ${tokens.border}`,
     background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
     color: tokens.textPrimary,
@@ -2814,33 +2815,22 @@ const AdminProducts = () => {
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Category
                     </label>
-                    <select
+                    <AdminSelect
                       value={filterCategory}
                       onChange={(e) => {
                         setFilterCategory(e.target.value);
                         setCurrentPage(1);
                         loadProducts({ page: 1, catId: e.target.value });
                       }}
-                      style={{
-                        width: "100%",
-                        height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
-                        fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
+                      style={{ width: "100%", height: "34px", fontSize: "13px" }}
                     >
-                      <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Categories</option>
+                      <option value="">All Categories</option>
                       {categories.map((c) => (
-                        <option key={c.id} value={c.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                        <option key={c.id} value={c.id}>
                           {c.name}
                         </option>
                       ))}
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {/* Filter by Collection */}
@@ -2848,33 +2838,22 @@ const AdminProducts = () => {
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Collection / Badge
                     </label>
-                    <select
+                    <AdminSelect
                       value={filterCollection}
                       onChange={(e) => {
                         setFilterCollection(e.target.value);
                         setCurrentPage(1);
                         loadProducts({ page: 1, colId: e.target.value });
                       }}
-                      style={{
-                        width: "100%",
-                        height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
-                        fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
+                      style={{ width: "100%", height: "34px", fontSize: "13px" }}
                     >
-                      <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Collections</option>
+                      <option value="">All Collections</option>
                       {collections.map((col) => (
-                        <option key={col.id} value={col.id} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                        <option key={col.id} value={col.id}>
                           {col.name} {col.is_badge ? "(Badge)" : ""}
                         </option>
                       ))}
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {/* Filter by Brand */}
@@ -2883,33 +2862,22 @@ const AdminProducts = () => {
                       <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                         Brand
                       </label>
-                      <select
+                      <AdminSelect
                         value={filterBrand}
                         onChange={(e) => {
                           setFilterBrand(e.target.value);
                           setCurrentPage(1);
                           loadProducts({ page: 1, brand: e.target.value });
                         }}
-                        style={{
-                          width: "100%",
-                          height: "34px",
-                          padding: "0 8px",
-                          borderRadius: "6px",
-                          border: `1px solid ${tokens.border}`,
-                          fontSize: "13px",
-                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                          color: tokens.textPrimary,
-                          outline: "none",
-                          boxSizing: "border-box",
-                        }}
+                        style={{ width: "100%", height: "34px", fontSize: "13px" }}
                       >
-                        <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Brands</option>
+                        <option value="">All Brands</option>
                         {availableBrands.map((b) => (
-                          <option key={b} value={b} style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>
+                          <option key={b} value={b}>
                             {b}
                           </option>
                         ))}
-                      </select>
+                      </AdminSelect>
                     </div>
                   )}
 
@@ -2972,30 +2940,19 @@ const AdminProducts = () => {
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Discount / Offer
                     </label>
-                    <select
+                    <AdminSelect
                       value={filterDiscount}
                       onChange={(e) => {
                         setFilterDiscount(e.target.value as any);
                         setCurrentPage(1);
                         loadProducts({ page: 1, discount: e.target.value as any });
                       }}
-                      style={{
-                        width: "100%",
-                        height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
-                        fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
+                      style={{ width: "100%", height: "34px", fontSize: "13px" }}
                     >
-                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Products</option>
-                      <option value="discounted" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Discounted Only (On Sale)</option>
-                      <option value="regular" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Regular Price Only</option>
-                    </select>
+                      <option value="all">All Products</option>
+                      <option value="discounted">Discounted Only (On Sale)</option>
+                      <option value="regular">Regular Price Only</option>
+                    </AdminSelect>
                   </div>
 
                   {/* Return Policy Filter */}
@@ -3003,30 +2960,19 @@ const AdminProducts = () => {
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Return Policy
                     </label>
-                    <select
+                    <AdminSelect
                       value={filterReturnPolicy}
                       onChange={(e) => {
                         setFilterReturnPolicy(e.target.value as any);
                         setCurrentPage(1);
                         loadProducts({ page: 1, retPol: e.target.value as any });
                       }}
-                      style={{
-                        width: "100%",
-                        height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
-                        fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
+                      style={{ width: "100%", height: "34px", fontSize: "13px" }}
                     >
-                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Policies</option>
-                      <option value="returnable" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Returnable</option>
-                      <option value="non_returnable" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Non-Returnable</option>
-                    </select>
+                      <option value="all">All Policies</option>
+                      <option value="returnable">Returnable</option>
+                      <option value="non_returnable">Non-Returnable</option>
+                    </AdminSelect>
                   </div>
 
                   {/* COD Payment Policy Filter */}
@@ -3034,30 +2980,19 @@ const AdminProducts = () => {
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Cash on Delivery (COD)
                     </label>
-                    <select
+                    <AdminSelect
                       value={filterCod}
                       onChange={(e) => {
                         setFilterCod(e.target.value as any);
                         setCurrentPage(1);
                         loadProducts({ page: 1, codPol: e.target.value as any });
                       }}
-                      style={{
-                        width: "100%",
-                        height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
-                        fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
+                      style={{ width: "100%", height: "34px", fontSize: "13px" }}
                     >
-                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All (COD & Prepaid)</option>
-                      <option value="cod_allowed" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>COD Allowed</option>
-                      <option value="prepaid_only" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Prepaid Only (COD Disabled)</option>
-                    </select>
+                      <option value="all">All (COD & Prepaid)</option>
+                      <option value="cod_allowed">COD Allowed</option>
+                      <option value="prepaid_only">Prepaid Only (COD Disabled)</option>
+                    </AdminSelect>
                   </div>
 
                   {/* Video Media Filter */}
@@ -3065,30 +3000,19 @@ const AdminProducts = () => {
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Media / Video
                     </label>
-                    <select
+                    <AdminSelect
                       value={filterHasVideo}
                       onChange={(e) => {
                         setFilterHasVideo(e.target.value as any);
                         setCurrentPage(1);
                         loadProducts({ page: 1, hasVid: e.target.value as any });
                       }}
-                      style={{
-                        width: "100%",
-                        height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
-                        fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
+                      style={{ width: "100%", height: "34px", fontSize: "13px" }}
                     >
-                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Media</option>
-                      <option value="with_video" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Has Product Video</option>
-                      <option value="images_only" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Photos Only</option>
-                    </select>
+                      <option value="all">All Media</option>
+                      <option value="with_video">Has Product Video</option>
+                      <option value="images_only">Photos Only</option>
+                    </AdminSelect>
                   </div>
 
                   {/* Sort Order */}
@@ -3096,35 +3020,24 @@ const AdminProducts = () => {
                     <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Sort By
                     </label>
-                    <select
+                    <AdminSelect
                       value={filterSortBy}
                       onChange={(e) => {
                         setFilterSortBy(e.target.value);
                         setCurrentPage(1);
                         loadProducts({ page: 1, sortB: e.target.value });
                       }}
-                      style={{
-                        width: "100%",
-                        height: "34px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
-                        fontSize: "13px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
+                      style={{ width: "100%", height: "34px", fontSize: "13px" }}
                     >
-                      <option value="newest" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Newest Added</option>
-                      <option value="oldest" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Oldest Added</option>
-                      <option value="price_asc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Price: Low to High</option>
-                      <option value="price_desc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Price: High to Low</option>
-                      <option value="stock_asc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Stock: Low to High</option>
-                      <option value="stock_desc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Stock: High to Low</option>
-                      <option value="name_asc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Name: A to Z</option>
-                      <option value="name_desc" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Name: Z to A</option>
-                    </select>
+                      <option value="newest">Newest Added</option>
+                      <option value="oldest">Oldest Added</option>
+                      <option value="price_asc">Price: Low to High</option>
+                      <option value="price_desc">Price: High to Low</option>
+                      <option value="stock_asc">Stock: Low to High</option>
+                      <option value="stock_desc">Stock: High to Low</option>
+                      <option value="name_asc">Name: A to Z</option>
+                      <option value="name_desc">Name: Z to A</option>
+                    </AdminSelect>
                   </div>
 
                   {/* Popover Footer */}
@@ -3929,17 +3842,17 @@ const AdminProducts = () => {
                           <label style={{ ...labelStyle, fontSize: "12px", fontWeight: 600 }}>
                             Video Slot
                           </label>
-                          <select
-                            value={formValues.video_position}
+                          <AdminSelect
+                            value={String(formValues.video_position)}
                             onChange={(e) => handleFormChange("video_position", Number(e.target.value))}
-                            style={{ ...inputStyle, height: "34px", fontSize: "12px", padding: "4px 8px" }}
+                            style={{ height: "34px", fontSize: "12px" }}
                           >
                             <option value="0">1st (Cover Video)</option>
                             <option value="1">2nd (After Photo 1)</option>
                             <option value="2">3rd (Recommended)</option>
                             <option value="3">4th</option>
                             <option value="99">Last Slot</option>
-                          </select>
+                          </AdminSelect>
                         </div>
                       )}
                     </div>
@@ -4094,20 +4007,20 @@ const AdminProducts = () => {
                     <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: "10px", alignItems: "start" }}>
                       <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                         <span style={labelStyle}>Option Preset</span>
-                        <select
+                        <AdminSelect
                           value={formValues.optionType}
                           onChange={(e) =>
                             handleFormChange("optionType", e.target.value as ProductVariantOption["optionType"])
                           }
-                          style={{ ...inputStyle, height: "34px", fontSize: "12px", padding: "4px 8px" }}
+                          style={{ height: "34px", fontSize: "12px" }}
                         >
-                          <option value="custom" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Custom (or None)</option>
-                          <option value="size" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Size</option>
-                          <option value="weight" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Weight</option>
-                          <option value="shoe_size" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Shoe Size</option>
-                          <option value="volume" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Volume</option>
-                          <option value="pack_size" style={{ background: isDark ? "#1e293b" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a" }}>Pack Size</option>
-                        </select>
+                          <option value="custom">Custom (or None)</option>
+                          <option value="size">Size</option>
+                          <option value="weight">Weight</option>
+                          <option value="shoe_size">Shoe Size</option>
+                          <option value="volume">Volume</option>
+                          <option value="pack_size">Pack Size</option>
+                        </AdminSelect>
                       </label>
 
                       <FormField
@@ -4536,7 +4449,7 @@ const AdminProducts = () => {
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                       <label style={labelStyle}>Category</label>
                       <div style={{ display: "flex", gap: "6px" }}>
-                        <select
+                        <AdminSelect
                           value={formValues.categoryId}
                           onChange={(e) => {
                             const selectedId = e.target.value;
@@ -4546,7 +4459,7 @@ const AdminProducts = () => {
                               handleFormChange("category", catObj.name);
                             }
                           }}
-                          style={{ ...inputStyle, flex: 1, height: "34px", fontSize: "13px", padding: "4px 8px" }}
+                          style={{ flex: 1, height: "34px", fontSize: "13px" }}
                         >
                           <option value="">Select Category (Optional)</option>
                           {categories.map((cat) => (
@@ -4554,7 +4467,7 @@ const AdminProducts = () => {
                               {cat.name}
                             </option>
                           ))}
-                        </select>
+                        </AdminSelect>
                         <button
                           type="button"
                           onClick={() => setShowAddCategory(!showAddCategory)}
@@ -4618,10 +4531,10 @@ const AdminProducts = () => {
                     {/* Return Policy */}
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                       <label style={labelStyle}>Return Policy</label>
-                      <select
+                      <AdminSelect
                         value={formValues.return_window_days}
                         onChange={(e) => handleFormChange("return_window_days", e.target.value)}
-                        style={{ ...inputStyle, height: "34px", fontSize: "13px", padding: "4px 8px" }}
+                        style={{ height: "34px", fontSize: "13px" }}
                       >
                         <option value="">Use Store Default ({defaultReturnWindowDays} Days)</option>
                         <option value="0">Non-Returnable (Final Sale - Instant Payout)</option>
@@ -4630,7 +4543,7 @@ const AdminProducts = () => {
                         <option value="10">10 Days Returnable</option>
                         <option value="14">14 Days Returnable</option>
                         <option value="30">30 Days Returnable</option>
-                      </select>
+                      </AdminSelect>
                     </div>
 
                     {/* Collections & Badges */}

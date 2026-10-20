@@ -1,6 +1,8 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { useDeviceMode } from "../context/DeviceModeContext";
 import { useAdminTheme } from "../context/ThemeContext";
+import { AdminSelect } from "./AdminSelect";
 
 export type PaginationProps = {
   currentPage?: number;
@@ -54,6 +56,188 @@ function getContrastTextColor(bgHex?: string, fallbackLight = "#ffffff", fallbac
   if (!bgHex) return fallbackDark;
   return isColorDarkHex(bgHex) ? fallbackLight : fallbackDark;
 }
+
+const StorefrontPageSizeSelect: React.FC<{
+  value?: number;
+  options: number[];
+  onChange: (val: number) => void;
+  btnBg: string;
+  btnTextColor: string;
+  borderColor: string;
+  accentColor: string;
+  isDark: boolean;
+}> = ({ value, options, onChange, btnBg, btnTextColor, borderColor, accentColor, isDark }) => {
+  const [open, setOpen] = React.useState(false);
+  const [coords, setCoords] = React.useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+
+  const updateCoords = React.useCallback(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + 4,
+        left: rect.left + rect.width / 2,
+      });
+    }
+  }, []);
+
+  const handleToggle = () => {
+    if (!open) {
+      updateCoords();
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (!open) return;
+    updateCoords();
+
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        const menuEl = document.getElementById("storefront-page-size-menu");
+        if (menuEl && menuEl.contains(e.target as Node)) return;
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const handleScrollOrResize = () => {
+      updateCoords();
+    };
+
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", handleScrollOrResize, { passive: true, capture: true });
+    window.addEventListener("resize", handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handleScrollOrResize, { capture: true } as any);
+      window.removeEventListener("resize", handleScrollOrResize);
+    };
+  }, [open, updateCoords]);
+
+  const menuBg = isDark ? (btnBg || "#18181b") : "#ffffff";
+  const contrastBorder = isDark ? "rgba(255, 255, 255, 0.16)" : "rgba(15, 23, 42, 0.14)";
+  const triggerBg = isDark ? "rgba(255, 255, 255, 0.08)" : "#ffffff";
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", display: "inline-block", userSelect: "none" }}>
+      <button
+        type="button"
+        onClick={handleToggle}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "8px",
+          height: "28px",
+          minWidth: "62px",
+          padding: "0 8px 0 10px",
+          borderRadius: "8px",
+          border: `1px solid ${open ? accentColor : (borderColor || contrastBorder)}`,
+          background: triggerBg,
+          color: btnTextColor,
+          fontSize: "12px",
+          fontWeight: 600,
+          cursor: "pointer",
+          outline: "none",
+          transition: "all 0.15s ease",
+          boxShadow: open ? `0 0 0 2px ${accentColor}25` : "0 1px 2px rgba(0,0,0,0.04)",
+        }}
+      >
+        <span>{value}</span>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.15s ease",
+            opacity: 0.75,
+          }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && typeof document !== "undefined" && createPortal(
+        <div
+          id="storefront-page-size-menu"
+          style={{
+            position: "fixed",
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            transform: "translateX(-50%)",
+            minWidth: "76px",
+            background: menuBg,
+            border: `1px solid ${borderColor || contrastBorder}`,
+            borderRadius: "10px",
+            boxShadow: isDark
+              ? "0 16px 36px -4px rgba(0, 0, 0, 0.85), 0 4px 12px rgba(0, 0, 0, 0.5)"
+              : "0 16px 36px -4px rgba(15, 23, 42, 0.20), 0 4px 12px rgba(15, 23, 42, 0.08)",
+            padding: "4px",
+            zIndex: 9999999,
+          }}
+        >
+          {options.map((opt) => {
+            const isSelected = opt === value;
+            return (
+              <div
+                key={opt}
+                onClick={() => {
+                  onChange(opt);
+                  setOpen(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "6px",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: isSelected ? 700 : 500,
+                  color: isSelected ? accentColor : btnTextColor,
+                  background: isSelected ? `${accentColor}18` : "transparent",
+                  cursor: "pointer",
+                  transition: "background 0.12s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.05)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = "transparent";
+                  }
+                }}
+              >
+                <span>{opt}</span>
+                {isSelected && (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </div>
+            );
+          })}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
 
 export const Pagination: React.FC<PaginationProps> = ({
   currentPage = 1,
@@ -203,6 +387,8 @@ export const Pagination: React.FC<PaginationProps> = ({
         width: "100%",
         boxSizing: "border-box",
         margin: "0 auto",
+        position: "relative",
+        zIndex: 20,
         ...style,
       }}
     >
@@ -356,38 +542,37 @@ export const Pagination: React.FC<PaginationProps> = ({
       {pageSizeOptions && pageSizeOptions.length > 0 && onPageSizeChange && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "12.5px", color: mutedText, marginTop: "2px" }}>
           <span>Per page:</span>
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            style={{
-              padding: "3px 8px",
-              borderRadius: "6px",
-              border: `1px solid ${borderColor}`,
-              background: btnBg,
-              color: btnTextColor,
-              fontSize: "12px",
-              fontWeight: 600,
-              cursor: "pointer",
-              outline: "none",
-            }}
-          >
-            {pageSizeOptions.map((opt) => (
-              <option
-                key={opt}
-                value={opt}
-                style={{
-                  background: isStorefront
-                    ? (isDarkCanvas ? (theme?.secondary_bg || "#18181b") : (theme?.secondary_bg || "#ffffff"))
-                    : (isDarkCanvas ? (adminTokens?.surfaceBg || "#18181b") : "#ffffff"),
-                  color: isStorefront
-                    ? (theme?.text_color || (isDarkCanvas ? "#f4f4f5" : "#0f172a"))
-                    : (isDarkCanvas ? (adminTokens?.textPrimary || "#f4f4f5") : "#0f172a"),
-                }}
-              >
-                {opt}
-              </option>
-            ))}
-          </select>
+          {isStorefront ? (
+            <StorefrontPageSizeSelect
+              value={pageSize}
+              options={pageSizeOptions}
+              onChange={onPageSizeChange}
+              btnBg={btnBg}
+              btnTextColor={btnTextColor}
+              borderColor={borderColor}
+              accentColor={resolvedAccent}
+              isDark={isDarkCanvas}
+            />
+          ) : (
+            <AdminSelect
+              direction="up"
+              value={String(pageSize)}
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              style={{
+                height: "28px",
+                minWidth: "64px",
+                fontSize: "12px",
+                fontWeight: 600,
+                borderRadius: "6px",
+              }}
+            >
+              {pageSizeOptions.map((opt) => (
+                <option key={opt} value={String(opt)}>
+                  {opt}
+                </option>
+              ))}
+            </AdminSelect>
+          )}
         </div>
       )}
     </nav>

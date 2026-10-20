@@ -8,6 +8,7 @@ import { optimizeImageUrl, getThumbnailUrl, compressImageFile } from "../utils/i
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
 import { AdminCheckbox } from "./AdminProducts";
+import { AdminSelect } from "./AdminSelect";
 import AccessDeniedView from "./AccessDeniedView";
 
 export interface SectionGroupTileItem {
@@ -81,10 +82,10 @@ const labelStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "8px 10px",
-  borderRadius: "6px",
+  padding: "8px 12px",
+  borderRadius: "9px",
   border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
-  fontSize: "12.5px",
+  fontSize: "13px",
   color: "var(--admin-text-primary, #0f172a)",
   background: "var(--admin-elevated-surface, #f8fafc)",
   outline: "none",
@@ -1370,38 +1371,38 @@ export const AdminHomeSections: React.FC = () => {
                   {/* Filter by Section Type */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                     <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Section Type</label>
-                    <select
+                    <AdminSelect
                       value={filterType}
                       onChange={(e) => setFilterType(e.target.value as any)}
-                      style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
+                      style={{ fontSize: "12.5px", height: "34px" }}
                     >
                       <option value="all">All Types</option>
                       <option value="product_carousel">Products Rows</option>
                       <option value="section_group_carousel">Visual Collection Cards</option>
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {/* Filter by Status */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                     <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Status</label>
-                    <select
+                    <AdminSelect
                       value={filterStatus}
                       onChange={(e) => setFilterStatus(e.target.value as any)}
-                      style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
+                      style={{ fontSize: "12.5px", height: "34px" }}
                     >
                       <option value="all">All Statuses</option>
                       <option value="active">Active (Live on Store)</option>
                       <option value="hidden">Hidden / Inactive</option>
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {/* Filter by Category */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                     <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Category</label>
-                    <select
+                    <AdminSelect
                       value={filterCategory}
                       onChange={(e) => setFilterCategory(e.target.value)}
-                      style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
+                      style={{ fontSize: "12.5px", height: "34px" }}
                     >
                       <option value="">All Categories</option>
                       {uniqueCategories.map((c) => (
@@ -1409,17 +1410,17 @@ export const AdminHomeSections: React.FC = () => {
                           {c}
                         </option>
                       ))}
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {/* Filter by Brand */}
                   {uniqueBrands.length > 0 && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                       <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Brand</label>
-                      <select
+                      <AdminSelect
                         value={filterBrand}
                         onChange={(e) => setFilterBrand(e.target.value)}
-                        style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
+                        style={{ fontSize: "12.5px", height: "34px" }}
                       >
                         <option value="">All Brands</option>
                         {uniqueBrands.map((b) => (
@@ -1427,7 +1428,7 @@ export const AdminHomeSections: React.FC = () => {
                             {b}
                           </option>
                         ))}
-                      </select>
+                      </AdminSelect>
                     </div>
                   )}
 
@@ -1435,10 +1436,10 @@ export const AdminHomeSections: React.FC = () => {
                   {collections.length > 0 && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                       <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Collection</label>
-                      <select
+                      <AdminSelect
                         value={filterCollection}
                         onChange={(e) => setFilterCollection(e.target.value)}
-                        style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
+                        style={{ fontSize: "12.5px", height: "34px" }}
                       >
                         <option value="">All Collections</option>
                         {collections.map((col) => (
@@ -1446,17 +1447,17 @@ export const AdminHomeSections: React.FC = () => {
                             {col.name} {col.is_badge ? "(Badge)" : ""}
                           </option>
                         ))}
-                      </select>
+                      </AdminSelect>
                     </div>
                   )}
 
                   {/* Card Visual Style */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                     <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Card Style</label>
-                    <select
+                    <AdminSelect
                       value={filterCardShape}
                       onChange={(e) => setFilterCardShape(e.target.value)}
-                      style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
+                      style={{ fontSize: "12.5px", height: "34px" }}
                     >
                       <option value="all">All Styles</option>
                       <option value="portrait">Portrait</option>
@@ -1464,21 +1465,21 @@ export const AdminHomeSections: React.FC = () => {
                       <option value="square">Square</option>
                       <option value="circle">Circle (Story)</option>
                       <option value="pill">Pill</option>
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {/* Display Layout */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                     <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Display Layout</label>
-                    <select
+                    <AdminSelect
                       value={filterLayout}
                       onChange={(e) => setFilterLayout(e.target.value)}
-                      style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}
+                      style={{ fontSize: "12.5px", height: "34px" }}
                     >
                       <option value="all">All Layouts</option>
                       <option value="carousel">Horizontal Scroll Carousel</option>
                       <option value="grid">Multi-Column Grid</option>
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {/* Apply / Close Button */}
@@ -2317,23 +2318,21 @@ export const AdminHomeSections: React.FC = () => {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                     <div>
                       <label style={labelStyle}>Display Layout</label>
-                      <select
+                      <AdminSelect
                         value={activeSection.layout || "carousel"}
                         onChange={(e) => setActiveSection({ ...activeSection, layout: e.target.value as any })}
-                        style={inputStyle}
                       >
                         <option value="carousel">Horizontal Scroll Carousel</option>
                         <option value="grid">Multi-Column Grid</option>
-                      </select>
+                      </AdminSelect>
                     </div>
 
                     {activeSection.type === "product_carousel" && (
                       <div>
                         <label style={labelStyle}>Card Style</label>
-                        <select
+                        <AdminSelect
                           value={activeSection.cardStyle || "default"}
                           onChange={(e) => setActiveSection({ ...activeSection, cardStyle: e.target.value as any })}
-                          style={inputStyle}
                         >
                           <option value="default">Store Theme Default</option>
                           <option value="fashion">Fashion (3:4 Portrait)</option>
@@ -2341,24 +2340,23 @@ export const AdminHomeSections: React.FC = () => {
                           <option value="grocery">Grocery (2-Row Stacked)</option>
                           <option value="beauty">Beauty (Rounded Minimal)</option>
                           <option value="standard">Standard (1:1 Square)</option>
-                        </select>
+                        </AdminSelect>
                       </div>
                     )}
 
                     {activeSection.type === "section_group_carousel" && (
                       <div>
                         <label style={labelStyle}>Card Shape</label>
-                        <select
+                        <AdminSelect
                           value={activeSection.cardShape || "portrait"}
                           onChange={(e) => setActiveSection({ ...activeSection, cardShape: e.target.value as any })}
-                          style={inputStyle}
                         >
                           <option value="portrait">Portrait</option>
                           <option value="horizontal">Horizontal (Landscape)</option>
                           <option value="square">Square</option>
                           <option value="circle">Circle (Story)</option>
                           <option value="pill">Pill</option>
-                        </select>
+                        </AdminSelect>
                       </div>
                     )}
                   </div>
@@ -2493,7 +2491,7 @@ export const AdminHomeSections: React.FC = () => {
                     {/* Category */}
                     <div>
                       <label style={labelStyle}>Category</label>
-                      <select
+                      <AdminSelect
                         value={activeSection.rules.category || ""}
                         onChange={(e) =>
                           setActiveSection({
@@ -2501,7 +2499,6 @@ export const AdminHomeSections: React.FC = () => {
                             rules: { ...activeSection.rules, category: e.target.value || undefined },
                           })
                         }
-                        style={inputStyle}
                       >
                         <option value="">All Categories</option>
                         {uniqueCategories.map((c) => (
@@ -2509,13 +2506,13 @@ export const AdminHomeSections: React.FC = () => {
                             {c}
                           </option>
                         ))}
-                      </select>
+                      </AdminSelect>
                     </div>
 
                     {/* Collection */}
                     <div>
                       <label style={labelStyle}>Collection</label>
-                      <select
+                      <AdminSelect
                         value={activeSection.rules.collection_id || ""}
                         onChange={(e) =>
                           setActiveSection({
@@ -2523,7 +2520,6 @@ export const AdminHomeSections: React.FC = () => {
                             rules: { ...activeSection.rules, collection_id: e.target.value || undefined },
                           })
                         }
-                        style={inputStyle}
                       >
                         <option value="">All Collections</option>
                         {collections.map((col) => (
@@ -2531,14 +2527,14 @@ export const AdminHomeSections: React.FC = () => {
                             {col.name} {col.is_badge ? "(Badge)" : ""}
                           </option>
                         ))}
-                      </select>
+                      </AdminSelect>
                     </div>
 
                     {/* Brand & Sort */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                       <div>
                         <label style={labelStyle}>Brand</label>
-                        <select
+                        <AdminSelect
                           value={activeSection.rules.brand || ""}
                           onChange={(e) =>
                             setActiveSection({
@@ -2546,7 +2542,6 @@ export const AdminHomeSections: React.FC = () => {
                               rules: { ...activeSection.rules, brand: e.target.value || undefined },
                             })
                           }
-                          style={inputStyle}
                         >
                           <option value="">All Brands</option>
                           {uniqueBrands.map((b) => (
@@ -2554,12 +2549,12 @@ export const AdminHomeSections: React.FC = () => {
                               {b}
                             </option>
                           ))}
-                        </select>
+                        </AdminSelect>
                       </div>
 
                       <div>
                         <label style={labelStyle}>Sort Order</label>
-                        <select
+                        <AdminSelect
                           value={activeSection.rules.sort_by || "newest"}
                           onChange={(e) =>
                             setActiveSection({
@@ -2567,7 +2562,6 @@ export const AdminHomeSections: React.FC = () => {
                               rules: { ...activeSection.rules, sort_by: e.target.value as any },
                             })
                           }
-                          style={inputStyle}
                         >
                           <option value="bestseller">Bestseller</option>
                           <option value="rating_desc">Highest Rating</option>
@@ -2575,7 +2569,7 @@ export const AdminHomeSections: React.FC = () => {
                           <option value="discount_desc">Discount</option>
                           <option value="price_asc">Price: Low to High</option>
                           <option value="price_desc">Price: High to Low</option>
-                        </select>
+                        </AdminSelect>
                       </div>
                     </div>
 
@@ -3039,7 +3033,7 @@ export const AdminHomeSections: React.FC = () => {
                                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px" }}>
                                     <div>
                                       <label style={labelStyle}>Category</label>
-                                      <select
+                                      <AdminSelect
                                         value={tile.category || ""}
                                         onChange={(e) => {
                                           const catVal = e.target.value;
@@ -3052,7 +3046,6 @@ export const AdminHomeSections: React.FC = () => {
                                           };
                                           setActiveSection({ ...activeSection, items: next });
                                         }}
-                                        style={inputStyle}
                                       >
                                         <option value="">All Categories</option>
                                         {uniqueCategories.map((c) => (
@@ -3060,12 +3053,12 @@ export const AdminHomeSections: React.FC = () => {
                                             {c}
                                           </option>
                                         ))}
-                                      </select>
+                                      </AdminSelect>
                                     </div>
 
                                     <div>
                                       <label style={labelStyle}>Collection</label>
-                                      <select
+                                      <AdminSelect
                                         value={tile.collection_id || ""}
                                         onChange={(e) => {
                                           const colVal = e.target.value;
@@ -3076,7 +3069,6 @@ export const AdminHomeSections: React.FC = () => {
                                           };
                                           setActiveSection({ ...activeSection, items: next });
                                         }}
-                                        style={inputStyle}
                                       >
                                         <option value="">All Collections</option>
                                         {collections.map((col) => (
@@ -3084,12 +3076,12 @@ export const AdminHomeSections: React.FC = () => {
                                             {col.name}
                                           </option>
                                         ))}
-                                      </select>
+                                      </AdminSelect>
                                     </div>
 
                                     <div>
                                       <label style={labelStyle}>Brand</label>
-                                      <select
+                                      <AdminSelect
                                         value={tile.brand || ""}
                                         onChange={(e) => {
                                           const brVal = e.target.value;
@@ -3100,7 +3092,6 @@ export const AdminHomeSections: React.FC = () => {
                                           };
                                           setActiveSection({ ...activeSection, items: next });
                                         }}
-                                        style={inputStyle}
                                       >
                                         <option value="">All Brands</option>
                                         {uniqueBrands.map((b) => (
@@ -3108,7 +3099,7 @@ export const AdminHomeSections: React.FC = () => {
                                             {b}
                                           </option>
                                         ))}
-                                      </select>
+                                      </AdminSelect>
                                     </div>
                                   </div>
                                 </div>

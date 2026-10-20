@@ -10,6 +10,7 @@ import { API_BASE_URL } from "../config/api";
 import { usePublicSiteTheme, cleanSiteName } from "../hooks/usePublicSiteTheme";
 import GlassToast from "../Component/GlassToast";
 import { getRiderStorageKey } from "./RiderLoginPage";
+import { AdminSelect } from "../Component/AdminSelect";
 
 type DeliveryItem = {
   id?: string;
@@ -1892,18 +1893,17 @@ export default function AgentDeliveryPage() {
             >
               <div>
                 <label style={modalLabelStyle}>Why was delivery unsuccessful?</label>
-                <select
+                <AdminSelect
                   value={rescheduleReason}
                   onChange={(e) => setRescheduleReason(e.target.value)}
-                  style={modalInputStyle}
-                  required
+                  style={{ fontSize: "14px", height: "42px", borderRadius: "10px" }}
                 >
                   {RESCHEDULE_REASONS.map((r) => (
                     <option key={r} value={r}>
                       {r}
                     </option>
                   ))}
-                </select>
+                </AdminSelect>
               </div>
 
               <div>
@@ -2058,18 +2058,17 @@ export default function AgentDeliveryPage() {
             >
               <div>
                 <label style={modalLabelStyle}>Reason for Warehouse Return</label>
-                <select
+                <AdminSelect
                   value={warehouseDropReason}
                   onChange={(e) => setWarehouseDropReason(e.target.value)}
-                  style={modalInputStyle}
-                  required
+                  style={{ fontSize: "14px", height: "42px", borderRadius: "10px" }}
                 >
                   {RETURN_TO_WAREHOUSE_REASONS.map((r) => (
                     <option key={r} value={r}>
                       {r}
                     </option>
                   ))}
-                </select>
+                </AdminSelect>
               </div>
 
               <div>
@@ -2194,18 +2193,17 @@ export default function AgentDeliveryPage() {
             >
               <div>
                 <label style={modalLabelStyle}>Reason for declining</label>
-                <select
+                <AdminSelect
                   value={declineReason}
                   onChange={(e) => setDeclineReason(e.target.value)}
-                  style={modalInputStyle}
-                  required
+                  style={{ fontSize: "14px", height: "42px", borderRadius: "10px" }}
                 >
                   {DECLINE_REASONS.map((r) => (
                     <option key={r} value={r}>
                       {r}
                     </option>
                   ))}
-                </select>
+                </AdminSelect>
               </div>
 
               <div>
@@ -2329,18 +2327,17 @@ export default function AgentDeliveryPage() {
             >
               <div>
                 <label style={modalLabelStyle}>Inspection Failure Reason</label>
-                <select
+                <AdminSelect
                   value={doorstepRejectReason}
                   onChange={(e) => setDoorstepRejectReason(e.target.value)}
-                  style={modalInputStyle}
-                  required
+                  style={{ fontSize: "14px", height: "42px", borderRadius: "10px" }}
                 >
                   {DOORSTEP_INSPECTION_REASONS.map((r) => (
                     <option key={r} value={r}>
                       {r}
                     </option>
                   ))}
-                </select>
+                </AdminSelect>
               </div>
 
               <div>

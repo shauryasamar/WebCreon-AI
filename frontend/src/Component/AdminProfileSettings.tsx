@@ -5,6 +5,7 @@ import { useAdminTheme } from "../context/ThemeContext";
 import { resolveAvatarUrl } from "./UserAvatar";
 import { GlassToast } from "./GlassToast";
 import { AccessDeniedView } from "./AccessDeniedView";
+import { AdminSelect } from "./AdminSelect";
 
 // Predefined avatar presets for quick selection (Yellow Circle 3D Avatars)
 export const AVATAR_PRESETS = [
@@ -657,27 +658,21 @@ export default function AdminProfileSettings() {
             <label style={{ fontSize: "11px", fontWeight: 700, color: tokens.textSecondary }}>
               Timezone
             </label>
-            <select
+            <AdminSelect
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
               style={{
                 height: "38px",
-                padding: "0 12px",
-                borderRadius: "8px",
-                border: `1px solid ${tokens.border}`,
                 fontSize: "13px",
-                outline: "none",
-                background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                color: tokens.textPrimary,
-                cursor: "pointer",
+                borderRadius: "8px",
               }}
             >
-              <option value="Asia/Kolkata" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Asia/Kolkata (IST - UTC+5:30)</option>
-              <option value="America/New_York" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>America/New_York (EST - UTC-5:00)</option>
-              <option value="Europe/London" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Europe/London (GMT - UTC+0:00)</option>
-              <option value="Asia/Tokyo" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Asia/Tokyo (JST - UTC+9:00)</option>
-              <option value="Australia/Sydney" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: tokens.textPrimary }}>Australia/Sydney (AEST - UTC+10:00)</option>
-            </select>
+              <option value="Asia/Kolkata">Asia/Kolkata (IST - UTC+5:30)</option>
+              <option value="America/New_York">America/New_York (EST - UTC-5:00)</option>
+              <option value="Europe/London">Europe/London (GMT - UTC+0:00)</option>
+              <option value="Asia/Tokyo">Asia/Tokyo (JST - UTC+9:00)</option>
+              <option value="Australia/Sydney">Australia/Sydney (AEST - UTC+10:00)</option>
+            </AdminSelect>
           </div>
 
           <hr style={{ border: "none", borderTop: `1px solid ${tokens.border}`, margin: 0 }} />

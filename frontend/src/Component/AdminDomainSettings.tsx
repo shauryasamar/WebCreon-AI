@@ -5,6 +5,7 @@ import { useAdminAuth } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
 import { AccessDeniedView } from "./AccessDeniedView";
 import { GlassToast } from "./GlassToast";
+import { AdminSelect } from "./AdminSelect";
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -652,7 +653,7 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                     <label style={{ display: "block", fontSize: "11.5px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                       Plan Tier
                     </label>
-                    <select
+                    <AdminSelect
                       value={planFilter}
                       onChange={(e) => {
                         setPlanFilter(e.target.value);
@@ -661,21 +662,14 @@ export function AdminDomainSettings({ siteId: propSiteId }: { siteId?: string } 
                       style={{
                         width: "100%",
                         height: "32px",
-                        padding: "0 8px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
                         fontSize: "12.5px",
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        color: tokens.textPrimary,
-                        colorScheme: isDark ? "dark" : "light",
-                        outline: "none",
                       }}
                     >
-                      <option value="all" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Plans</option>
-                      <option value="FREE" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Free Tier</option>
-                      <option value="STARTER" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Starter Tier</option>
-                      <option value="PRO" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Growth Pro Tier</option>
-                    </select>
+                      <option value="all">All Plans</option>
+                      <option value="FREE">Free Tier</option>
+                      <option value="STARTER">Starter Tier</option>
+                      <option value="PRO">Growth Pro Tier</option>
+                    </AdminSelect>
                   </div>
                 )}
               </div>

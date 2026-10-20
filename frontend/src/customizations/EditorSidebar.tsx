@@ -25,6 +25,7 @@ import {
   resolveAndUploadPendingAssets,
 } from "../utils/pendingAssetRegistry";
 import { API_BASE_URL } from "../config/api";
+import { AdminSelect } from "../Component/AdminSelect";
 
 function PageBlocksTreeView({
   siteDefinition: _siteDefinition,
@@ -1600,57 +1601,26 @@ function renderFieldControl(
 
     return (
       <div style={{ position: "relative", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-        <select
+        <AdminSelect
           value={rawVal}
+          placeholder={`Select ${field.label}...`}
           onChange={(e) => onChange(e.target.value)}
           style={{
-            ...inputStyle,
-            paddingRight: "22px",
-            appearance: "none",
-            WebkitAppearance: "none",
-            MozAppearance: "none",
-            cursor: "pointer",
-            background: isDark ? "#242429" : "#ffffff",
-            color: isDark ? "#f4f4f5" : "#0f172a",
-            fontWeight: 500,
+            height: "28px",
             fontSize: "11px",
+            fontWeight: 500,
+            borderRadius: "6px",
           }}
         >
-          {!rawVal && !field.defaultValue && (
-            <option value="" disabled>
-              Select {field.label}...
-            </option>
-          )}
           {(field.options || []).map((opt) => (
             <option
               key={String(opt.value)}
               value={String(opt.value)}
-              style={{ color: isDark ? "#f4f4f5" : "#0f172a", background: isDark ? "#242429" : "#ffffff", fontSize: "11px" }}
             >
               {opt.label}
             </option>
           ))}
-        </select>
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{
-            position: "absolute",
-            right: "7px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            width: "11px",
-            height: "11px",
-            color: isDark ? "#a1a1aa" : "#64748b",
-            pointerEvents: "none",
-          }}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        </AdminSelect>
       </div>
     );
   }

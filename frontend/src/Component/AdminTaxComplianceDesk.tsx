@@ -6,6 +6,7 @@ import { useAdminTheme } from "../context/ThemeContext";
 import { AdminCheckbox } from "./AdminProducts";
 import { GlassToast } from "./GlassToast";
 import { Pagination } from "./Pagination";
+import { AdminSelect } from "./AdminSelect";
 
 interface TaxProfile {
   site_id: string;
@@ -654,24 +655,24 @@ export const AdminTaxComplianceDesk: React.FC<{
 
                 <div>
                   <label style={labelStyle}>Legal Entity Type *</label>
-                  <select
+                  <AdminSelect
                     value={formEntityType}
                     onChange={(e) => setFormEntityType(e.target.value)}
-                    style={inputStyle}
+                    style={{ height: "38px" }}
                   >
-                    <option value="proprietorship" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Sole Proprietorship</option>
-                    <option value="individual" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Individual</option>
-                    <option value="partnership" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Partnership Firm</option>
-                    <option value="llp" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Limited Liability Partnership (LLP)</option>
-                    <option value="company" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Private / Public Limited Company</option>
-                    <option value="huf" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Hindu Undivided Family (HUF)</option>
-                    <option value="trust_society" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Trust / Society</option>
-                  </select>
+                    <option value="proprietorship">Sole Proprietorship</option>
+                    <option value="individual">Individual</option>
+                    <option value="partnership">Partnership Firm</option>
+                    <option value="llp">Limited Liability Partnership (LLP)</option>
+                    <option value="company">Private / Public Limited Company</option>
+                    <option value="huf">Hindu Undivided Family (HUF)</option>
+                    <option value="trust_society">Trust / Society</option>
+                  </AdminSelect>
                 </div>
 
                 <div>
                   <label style={labelStyle}>GST Registration Type *</label>
-                  <select
+                  <AdminSelect
                     value={formRegType}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -679,12 +680,12 @@ export const AdminTaxComplianceDesk: React.FC<{
                       if (val === "composition") setFormIsComposition(true);
                       else setFormIsComposition(false);
                     }}
-                    style={inputStyle}
+                    style={{ height: "38px" }}
                   >
-                    <option value="regular" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Regular GST Registered</option>
-                    <option value="composition" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Composition Scheme Dealer (Section 10)</option>
-                    <option value="unregistered" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Unregistered (Exempted Threshold)</option>
-                  </select>
+                    <option value="regular">Regular GST Registered</option>
+                    <option value="composition">Composition Scheme Dealer (Section 10)</option>
+                    <option value="unregistered">Unregistered (Exempted Threshold)</option>
+                  </AdminSelect>
                 </div>
 
                 <div>
@@ -873,62 +874,40 @@ export const AdminTaxComplianceDesk: React.FC<{
 
                   {/* Compact Right-Side Controls: Filters & Small Export Button */}
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                    <select
+                    <AdminSelect
                       value={gstr8FY}
                       onChange={(e) => {
                         setGstr8FY(e.target.value);
                         setGstr8Page(1);
                       }}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        color: tokens.textPrimary,
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        colorScheme: isDark ? "dark" : "light",
-                        outline: "none",
-                        cursor: "pointer",
-                      }}
+                      style={{ height: "30px", fontSize: "12px", minWidth: "120px" }}
                     >
-                      <option value="2026-2027" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>FY 2026-27</option>
-                      <option value="2025-2026" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>FY 2025-26</option>
-                    </select>
+                      <option value="2026-2027">FY 2026-27</option>
+                      <option value="2025-2026">FY 2025-26</option>
+                    </AdminSelect>
 
-                    <select
-                      value={gstr8Month}
+                    <AdminSelect
+                      value={String(gstr8Month)}
                       onChange={(e) => {
                         setGstr8Month(e.target.value === "" ? "" : Number(e.target.value));
                         setGstr8Page(1);
                       }}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "6px",
-                        border: `1px solid ${tokens.border}`,
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        color: tokens.textPrimary,
-                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        colorScheme: isDark ? "dark" : "light",
-                        outline: "none",
-                        cursor: "pointer",
-                      }}
+                      style={{ height: "30px", fontSize: "12px", minWidth: "160px" }}
                     >
-                      <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>All Months (Cumulative)</option>
-                      <option value="4" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Apr</option>
-                      <option value="5" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>May</option>
-                      <option value="6" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Jun</option>
-                      <option value="7" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Jul</option>
-                      <option value="8" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Aug</option>
-                      <option value="9" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Sep</option>
-                      <option value="10" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Oct</option>
-                      <option value="11" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Nov</option>
-                      <option value="12" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Dec</option>
-                      <option value="1" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Jan</option>
-                      <option value="2" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Feb</option>
-                      <option value="3" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Mar</option>
-                    </select>
+                      <option value="">All Months (Cumulative)</option>
+                      <option value="4">Apr</option>
+                      <option value="5">May</option>
+                      <option value="6">Jun</option>
+                      <option value="7">Jul</option>
+                      <option value="8">Aug</option>
+                      <option value="9">Sep</option>
+                      <option value="10">Oct</option>
+                      <option value="11">Nov</option>
+                      <option value="12">Dec</option>
+                      <option value="1">Jan</option>
+                      <option value="2">Feb</option>
+                      <option value="3">Mar</option>
+                    </AdminSelect>
 
                     <button
                       type="button"
@@ -1373,54 +1352,32 @@ export const AdminTaxComplianceDesk: React.FC<{
 
               {/* Compact Right-Side Controls: Filters & Small Export Button */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                <select
+                <AdminSelect
                   value={tdsFY}
                   onChange={(e) => {
                     setTdsFY(e.target.value);
                     setTdsPage(1);
                   }}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    border: `1px solid ${tokens.border}`,
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: tokens.textPrimary,
-                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        colorScheme: isDark ? "dark" : "light",
-                        outline: "none",
-                        cursor: "pointer",
-                  }}
+                  style={{ height: "30px", fontSize: "12px", minWidth: "120px" }}
                 >
-                  <option value="2026-2027" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>FY 2026-27</option>
-                  <option value="2025-2026" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>FY 2025-26</option>
-                </select>
+                  <option value="2026-2027">FY 2026-27</option>
+                  <option value="2025-2026">FY 2025-26</option>
+                </AdminSelect>
 
-                <select
-                  value={tdsQuarter}
+                <AdminSelect
+                  value={String(tdsQuarter)}
                   onChange={(e) => {
                     setTdsQuarter(e.target.value === "" ? "" : Number(e.target.value));
                     setTdsPage(1);
                   }}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    border: `1px solid ${tokens.border}`,
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: tokens.textPrimary,
-                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                        colorScheme: isDark ? "dark" : "light",
-                        outline: "none",
-                        cursor: "pointer",
-                  }}
+                  style={{ height: "30px", fontSize: "12px", minWidth: "180px" }}
                 >
-                  <option value="" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Full Year (Cumulative)</option>
+                  <option value="">Full Year (Cumulative)</option>
                   <option value="1">Q1 (Apr - Jun)</option>
                   <option value="2">Q2 (Jul - Sep)</option>
                   <option value="3">Q3 (Oct - Dec)</option>
                   <option value="4">Q4 (Jan - Mar)</option>
-                </select>
+                </AdminSelect>
 
                 <button
                   type="button"

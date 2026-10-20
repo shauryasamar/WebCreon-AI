@@ -6,6 +6,7 @@ import { useAdminAuth } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
 import { AdminCheckbox } from "./AdminProducts";
 import AccessDeniedView from "./AccessDeniedView";
+import { AdminSelect } from "./AdminSelect";
 
 interface CouponItem {
   id: string;
@@ -930,34 +931,34 @@ export default function AdminCoupons({ siteId: propSiteId }: { siteId?: string }
                   {/* Filter by Type */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                     <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Discount Type</label>
-                    <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}>
+                    <AdminSelect value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ fontSize: "12.5px" }}>
                       <option value="all">All Types</option>
                       <option value="percentage">Percentage (%)</option>
                       <option value="fixed_amount">Fixed Amount (₹)</option>
                       <option value="free_shipping">Free Shipping</option>
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {/* Filter First Order */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                     <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Customer Eligibility</label>
-                    <select value={filterFirstOrder} onChange={(e) => setFilterFirstOrder(e.target.value)} style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}>
+                    <AdminSelect value={filterFirstOrder} onChange={(e) => setFilterFirstOrder(e.target.value)} style={{ fontSize: "12.5px" }}>
                       <option value="all">All Discounts</option>
                       <option value="first_only">First-Time Customers Only</option>
                       <option value="all_orders">Existing & Returning</option>
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   {/* Sort By */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                     <label style={{ fontSize: "12px", fontWeight: 600, color: tokens.textSecondary }}>Sort Order</label>
-                    <select value={filterSortBy} onChange={(e) => setFilterSortBy(e.target.value)} style={{ ...inputStyle, fontSize: "12.5px", padding: "5px 8px" }}>
+                    <AdminSelect value={filterSortBy} onChange={(e) => setFilterSortBy(e.target.value)} style={{ fontSize: "12.5px" }}>
                       <option value="newest">Newest Created</option>
                       <option value="oldest">Oldest Created</option>
                       <option value="most_used">Most Redeemed</option>
                       <option value="discount_desc">Highest Discount</option>
                       <option value="code_asc">Code: A to Z</option>
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>

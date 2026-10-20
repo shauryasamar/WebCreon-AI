@@ -6,6 +6,7 @@ import { useAdminTheme } from "../context/ThemeContext";
 import { GlassToast } from "./GlassToast";
 import { AccessDeniedView } from "./AccessDeniedView";
 import { AdminCheckbox } from "./AdminProducts";
+import { AdminSelect } from "./AdminSelect";
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -1029,28 +1030,22 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                       <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: tokens.textSecondary, marginBottom: "6px" }}>
                         Role
                       </label>
-                      <select
+                      <AdminSelect
                         value={roleFilter}
                         onChange={(e) => setRoleFilter(e.target.value)}
                         style={{
                           width: "100%",
                           height: "34px",
-                          padding: "0 8px",
-                          borderRadius: "6px",
-                          border: `1px solid ${tokens.border}`,
                           fontSize: "13px",
-                          background: tokens.elevatedSurfaceBg,
-                          color: tokens.textPrimary,
-                          outline: "none",
                         }}
                       >
-                        <option value="all" style={{ background: tokens.surfaceBg, color: tokens.textPrimary }}>All Roles</option>
+                        <option value="all">All Roles</option>
                         {roles.map((r) => (
-                          <option key={r.id} value={r.name} style={{ background: tokens.surfaceBg, color: tokens.textPrimary }}>
+                          <option key={r.id} value={r.name}>
                             {r.name}
                           </option>
                         ))}
-                      </select>
+                      </AdminSelect>
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px", borderTop: `1px solid ${tokens.border}` }}>
@@ -1970,24 +1965,25 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
                 {/* Role Selector */}
                 <div>
                   <label style={labelStyle}>Assigned Role *</label>
-                  <select
+                  <AdminSelect
                     value={userRoleId}
                     onChange={(e) => setUserRoleId(e.target.value)}
                     disabled={selectedUser?.is_owner}
                     style={{
-                      ...inputStyle,
+                      height: "38px",
+                      fontSize: "13px",
                       background: selectedUser?.is_owner ? (isDark ? "rgba(255,255,255,0.04)" : "#f8fafc") : (isDark ? tokens.surfaceBg : "#ffffff"),
                     }}
                   >
-                    <option value="" disabled style={{ background: tokens.surfaceBg, color: tokens.textPrimary }}>Select Role</option>
+                    <option value="" disabled>Select Role</option>
                     {roles
                       .filter((r) => (selectedUser?.is_owner ? true : r.name !== "Owner"))
                       .map((r) => (
-                        <option key={r.id} value={r.id} style={{ background: tokens.surfaceBg, color: tokens.textPrimary }}>
+                        <option key={r.id} value={r.id}>
                           {r.name} {r.is_system ? "(Default System Role)" : "(Custom Role)"}
                         </option>
                       ))}
-                  </select>
+                  </AdminSelect>
                 </div>
 
                 {/* Website Access (Only Pro websites are available) */}
@@ -3070,7 +3066,7 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   height: "36px",
   padding: "0 12px",
-  borderRadius: "8px",
+  borderRadius: "9px",
   border: "1px solid var(--admin-border, rgba(15, 23, 42, 0.08))",
   background: "var(--admin-elevated-surface, #f8fafc)",
   fontSize: "13px",

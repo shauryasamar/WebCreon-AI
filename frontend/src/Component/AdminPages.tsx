@@ -7,6 +7,7 @@ import { useAdminTheme } from "../context/ThemeContext";
 import AccessDeniedView from "./AccessDeniedView";
 import GlassToast from "./GlassToast";
 import { ToggleSwitch } from "./AdminProducts";
+import { AdminSelect } from "./AdminSelect";
 
 export type StorePage = {
   id: string;
@@ -989,10 +990,10 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
                 <div>
                   <label style={{ ...labelStyle, fontSize: "12px", marginBottom: "4px" }}>Page Type</label>
-                  <select
+                  <AdminSelect
                     value={typeFilter}
                     onChange={(e) => setTypeFilter(e.target.value)}
-                    style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
+                    style={{ fontSize: "13px", height: "34px" }}
                   >
                     <option value="all">All Page Types</option>
                     <option value="policy">Privacy Policy</option>
@@ -1001,20 +1002,20 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     <option value="contact">Contact Us</option>
                     <option value="story">Brand Story</option>
                     <option value="custom">Custom Content</option>
-                  </select>
+                  </AdminSelect>
                 </div>
 
                 <div>
                   <label style={{ ...labelStyle, fontSize: "12px", marginBottom: "4px" }}>Status</label>
-                  <select
+                  <AdminSelect
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value as any)}
-                    style={{ ...inputStyle, fontSize: "13px", height: "34px", padding: "0 8px" }}
+                    style={{ fontSize: "13px", height: "34px" }}
                   >
                     <option value="all">All Statuses</option>
                     <option value="published">Active Only</option>
                     <option value="draft">Inactive Only</option>
-                  </select>
+                  </AdminSelect>
                 </div>
 
                 {/* Action footer */}
@@ -1869,10 +1870,10 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
 
                     <div>
                       <label style={labelStyle}>Page Type</label>
-                      <select
+                      <AdminSelect
                         value={formData.page_type}
                         onChange={(e) => setFormData((prev) => ({ ...prev, page_type: e.target.value }))}
-                        style={{ ...inputStyle, cursor: "pointer" }}
+                        style={{ ...inputStyle, padding: "0 10px" }}
                       >
                         <option value="custom">Custom Content</option>
                         <option value="about">About Us</option>
@@ -1880,7 +1881,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         <option value="policy">Privacy Policy</option>
                         <option value="terms">Terms of Service</option>
                         <option value="story">Brand Story</option>
-                      </select>
+                      </AdminSelect>
                     </div>
                   </div>
 
@@ -2166,24 +2167,18 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                     </button>
 
                     {/* Prebuilt Templates Menu */}
-                    <div style={{ marginLeft: "auto" }}>
-                      <select
-                        defaultValue=""
+                    <div style={{ marginLeft: "auto", minWidth: "180px" }}>
+                      <AdminSelect
+                        value=""
+                        placeholder="📑 Insert Template..."
                         onChange={(e) => {
                           if (e.target.value) {
                             handleApplyTemplate(e.target.value);
-                            e.target.value = "";
                           }
                         }}
                         style={{
-                          padding: "4px 8px",
-                          border: `1px solid ${tokens.border}`,
-                          borderRadius: "4px",
+                          height: "28px",
                           fontSize: "11.5px",
-                          fontWeight: 600,
-                          color: tokens.textPrimary,
-                          background: tokens.surfaceBg,
-                          cursor: "pointer",
                         }}
                       >
                         <option value="" disabled>
@@ -2194,7 +2189,7 @@ const AdminPages: React.FC<AdminPagesProps> = ({ siteId: propSiteId, siteSlug: p
                         <option value="faq">FAQ Accordion</option>
                         <option value="shipping">Shipping & Delivery</option>
                         <option value="story">Brand Story</option>
-                      </select>
+                      </AdminSelect>
                     </div>
                   </div>
 

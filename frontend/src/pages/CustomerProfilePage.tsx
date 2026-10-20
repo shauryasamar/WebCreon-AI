@@ -949,9 +949,7 @@ export default function CustomerProfilePage({
                     <option value="" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Select Gender</option>
                     <option value="Male" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Male</option>
                     <option value="Female" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Female</option>
-                    <option value="Non-Binary" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Non-Binary</option>
                     <option value="Other" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Other</option>
-                    <option value="Prefer not to say" style={{ background: isDarkCard ? "#1e293b" : "#ffffff", color: isDarkCard ? "#f8fafc" : "#0f172a" }}>Prefer not to say</option>
                   </select>
                 </div>
               )}

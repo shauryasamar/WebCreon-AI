@@ -7,6 +7,7 @@ import { GoogleMapPicker, GeoPickerResult } from "./GoogleMapPicker";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import AccessDeniedView from "./AccessDeniedView";
 import { useAdminTheme } from "../context/ThemeContext";
+import { AdminSelect } from "./AdminSelect";
 
 export type DeliveryMode = "own_agent" | "shiprocket" | "hybrid" | "manual";
 
@@ -1330,72 +1331,72 @@ export default function DeliverySettingsPage() {
                         {/* Status Filter */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                           <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>Status</span>
-                          <select
+                          <AdminSelect
                             value={statusFilter}
                             onChange={(e) => {
                               setStatusFilter(e.target.value);
                               setCurrentPage(1);
                             }}
-                            style={{ ...inputStyle, height: "30px", fontSize: "12px", padding: "0 8px" }}
+                            style={{ height: "30px", fontSize: "12px", minWidth: "120px" }}
                           >
                             <option value="all">All Riders</option>
                             <option value="active">Active Only</option>
                             <option value="inactive">Inactive Only</option>
-                          </select>
+                          </AdminSelect>
                         </div>
 
                         {/* Activity / Cash Filter */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                           <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>Activity & Cash</span>
-                          <select
+                          <AdminSelect
                             value={activityFilter}
                             onChange={(e) => {
                               setActivityFilter(e.target.value);
                               setCurrentPage(1);
                             }}
-                            style={{ ...inputStyle, height: "30px", fontSize: "12px", padding: "0 8px" }}
+                            style={{ height: "30px", fontSize: "12px", minWidth: "160px" }}
                           >
                             <option value="all">All Activities</option>
                             <option value="cash_in_hand">With Cash in Hand (COD)</option>
                             <option value="active_orders">Currently on Delivery</option>
                             <option value="zero_orders">Idle (0 Active Orders)</option>
-                          </select>
+                          </AdminSelect>
                         </div>
 
                         {/* Vehicle Type Filter */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                           <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>Vehicle Type</span>
-                          <select
+                          <AdminSelect
                             value={vehicleFilter}
                             onChange={(e) => {
                               setVehicleFilter(e.target.value);
                               setCurrentPage(1);
                             }}
-                            style={{ ...inputStyle, height: "30px", fontSize: "12px", padding: "0 8px" }}
+                            style={{ height: "30px", fontSize: "12px", minWidth: "140px" }}
                           >
                             <option value="all">All Vehicles</option>
                             <option value="bike">Motorcycle / Bike</option>
                             <option value="scooter">Scooter / EV</option>
                             <option value="van">Delivery Van</option>
                             <option value="walking">On Foot</option>
-                          </select>
+                          </AdminSelect>
                         </div>
 
                         {/* Sort Order */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                           <span style={{ fontSize: "11px", fontWeight: 600, color: tokens.textSecondary }}>Sort Order</span>
-                          <select
+                          <AdminSelect
                             value={sortBy}
                             onChange={(e) => {
                               setSortBy(e.target.value);
                               setCurrentPage(1);
                             }}
-                            style={{ ...inputStyle, height: "30px", fontSize: "12px", padding: "0 8px" }}
+                            style={{ height: "30px", fontSize: "12px", minWidth: "170px" }}
                           >
                             <option value="default">Default Order</option>
                             <option value="most_deliveries">Highest Completed Deliveries</option>
                             <option value="highest_cash">Highest Pending Cash in Hand</option>
-                          </select>
+                          </AdminSelect>
                         </div>
 
                         <button
@@ -1714,16 +1715,16 @@ export default function DeliverySettingsPage() {
 
                       <label style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                         <span style={labelStyle}>Assigned Vehicle</span>
-                        <select
+                        <AdminSelect
                           value={newAgentVehicle}
                           onChange={(e) => setNewAgentVehicle(e.target.value)}
-                          style={{ ...inputStyle, height: "34px" }}
+                          style={{ height: "34px" }}
                         >
                           <option value="bike">Motorcycle / Bike</option>
                           <option value="scooter">Scooter / EV</option>
                           <option value="van">Delivery Van</option>
                           <option value="walking">On Foot / Walking</option>
-                        </select>
+                        </AdminSelect>
                       </label>
                     </div>
 

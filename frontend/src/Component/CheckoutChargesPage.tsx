@@ -6,6 +6,7 @@ import { useAdminAuth } from "../context/AdminAuthContext";
 import AccessDeniedView from "./AccessDeniedView";
 import { useAdminTheme } from "../context/ThemeContext";
 import { AdminTaxComplianceDesk } from "./AdminTaxComplianceDesk";
+import { AdminSelect } from "./AdminSelect";
 
 export type ChargeCode =
   | "shipping_fee"
@@ -1157,17 +1158,16 @@ const ChargeConfigCard: React.FC<{
           {/* Amount Type */}
           <div>
             <div style={labelStyle}>Amount Type</div>
-            <select
+            <AdminSelect
               disabled={!canEdit}
               value={charge.amountType}
               onChange={(e) => {
                 if (canEdit) onChange(charge.id, "amountType", e.target.value as "fixed" | "percent");
               }}
-              style={inputStyle}
             >
-              <option value="fixed" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Fixed (₹)</option>
-              <option value="percent" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Percentage (%)</option>
-            </select>
+              <option value="fixed">Fixed (₹)</option>
+              <option value="percent">Percentage (%)</option>
+            </AdminSelect>
           </div>
 
           {/* Amount Value */}
@@ -1191,19 +1191,18 @@ const ChargeConfigCard: React.FC<{
           {/* Application Condition */}
           <div>
             <div style={labelStyle}>Application Condition</div>
-            <select
+            <AdminSelect
               disabled={!canEdit}
               value={charge.applyConditionType}
               onChange={(e) => {
                 if (canEdit) onChange(charge.id, "applyConditionType", e.target.value as ChargeRule["applyConditionType"]);
               }}
-              style={inputStyle}
             >
-              <option value="none" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Always Apply (Default)</option>
-              <option value="subtotal_lt" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Subtotal less than (&lt;)</option>
-              <option value="subtotal_gte" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Subtotal greater than or equal (≥)</option>
-              <option value="payment_method" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Payment method (e.g. COD)</option>
-            </select>
+              <option value="none">Always Apply (Default)</option>
+              <option value="subtotal_lt">Subtotal less than (&lt;)</option>
+              <option value="subtotal_gte">Subtotal greater than or equal (≥)</option>
+              <option value="payment_method">Payment method (e.g. COD)</option>
+            </AdminSelect>
           </div>
 
           {/* Condition Value (if condition active) */}
@@ -1230,17 +1229,16 @@ const ChargeConfigCard: React.FC<{
           {/* Waiver Condition */}
           <div>
             <div style={labelStyle}>Free / Waiver Condition</div>
-            <select
+            <AdminSelect
               disabled={!canEdit}
               value={charge.waiveConditionType}
               onChange={(e) => {
                 if (canEdit) onChange(charge.id, "waiveConditionType", e.target.value as ChargeRule["waiveConditionType"]);
               }}
-              style={inputStyle}
             >
-              <option value="none" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>No Waiver</option>
-              <option value="subtotal_gte" style={{ background: isDark ? tokens.surfaceBg : "#ffffff", color: isDark ? tokens.textPrimary : "#0f172a" }}>Free when Subtotal ≥</option>
-            </select>
+              <option value="none">No Waiver</option>
+              <option value="subtotal_gte">Free when Subtotal ≥</option>
+            </AdminSelect>
           </div>
 
           {/* Waiver Value */}
