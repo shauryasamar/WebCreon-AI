@@ -1892,6 +1892,11 @@ const NumberStepperField = ({
 
   const percent = max > min ? Math.max(0, Math.min(100, ((Number(value ?? min) - min) / (max - min)) * 100)) : 0;
 
+  const formattedUnit = unit ? (unit.toLowerCase() === "px" ? "Px" : unit) : "";
+  const displayLabel = formattedUnit && !label.includes("(")
+    ? `${label} (${formattedUnit})`
+    : label;
+
   return (
     <div
       style={{
@@ -1916,27 +1921,10 @@ const NumberStepperField = ({
             flex: 1,
             minWidth: 0,
           }}
-          title={label}
+          title={displayLabel}
         >
-          {label}
+          {displayLabel}
         </label>
-        <span
-          style={{
-            fontSize: "10px",
-            fontWeight: 700,
-            color: tokens.accent,
-            background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)",
-            padding: "1px 5px",
-            borderRadius: "3px",
-            fontVariantNumeric: "tabular-nums",
-            textAlign: "right",
-            flexShrink: 0,
-            display: "inline-block",
-            lineHeight: 1.2,
-          }}
-        >
-          {value}{unit}
-        </span>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "3px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
