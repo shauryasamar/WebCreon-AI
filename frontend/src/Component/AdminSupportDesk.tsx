@@ -15,6 +15,7 @@ import {
   compressImageFile,
   MessageStatusTick,
 } from "./AdaptiveSupportMedia";
+import { getSavedSitesMemoryCache } from "../utils/savedSitesCache";
 
 // ─── Module-level RAM cache for site snapshots (replaces localStorage) ───────
 const wcSiteSnapshotRamCache = new Map<string, any>();
@@ -400,6 +401,12 @@ export const AdminSupportDesk: React.FC = () => {
         const cached = getRamSnapshot(`wc_site_snapshot_${siteId}`);
         if (cached?.slug) {
           setSiteSlug(cached.slug);
+          return;
+        }
+        const memorySites = getSavedSitesMemoryCache();
+        const memMatch = memorySites.find((s: any) => s.id === siteId || s.slug === siteId);
+        if (memMatch?.slug) {
+          setSiteSlug(memMatch.slug);
           return;
         }
         const res = await fetch(`${API_BASE_URL}/admin/sites`, { credentials: "include" });

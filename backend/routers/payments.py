@@ -23,7 +23,7 @@ except Exception:
     except Exception:
         razorpay = None
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm.attributes import flag_modified
@@ -1889,6 +1889,15 @@ def process_mature_escrows(session: Session, site_id: Optional[UUID] = None) -> 
     return released_count, total_amount_released
 
 
+def _bg_process_mature_escrows(site_id: UUID):
+    try:
+        from db.database import engine
+        with Session(engine) as bg_session:
+            process_mature_escrows(bg_session, site_id=site_id)
+    except Exception as exc:
+        logger.error("Background mature escrow processing failed for site %s: %s", site_id, exc)
+
+
 @router.post("/admin/{site_id}/release-mature-escrows")
 def release_mature_escrows(
     site_id: UUID,
@@ -2128,6 +2137,7 @@ def get_earnings_summary(
     admin=Depends(require_permission("earnings:view")),
     ownership=Depends(enforce_site_ownership),
     session: Session = Depends(get_session),
+    background_tasks: BackgroundTasks = None,
 ):
     # Check bank configured
     bank_acc = session.exec(
@@ -2215,6 +2225,24 @@ def get_earnings_summary(
                 session.add(ledger_entry)
                 has_mutations = True
             continue
+
+        # Fast-path optimization: Skip expensive calculation if ledger entry is already synchronized
+        if ledger_entry and ledger_entry.status not in ("unpaid", None):
+            is_order_returned = ord_obj.status in ("cancelled", "returned", "refunded") or getattr(ord_obj, "payment_status", None) == "refunded"
+            needs_recalc = False
+            if is_order_returned and ledger_entry.status != "refunded":
+                needs_recalc = True
+            elif is_cod_ord and ledger_entry.status in ("in_escrow", "held", "pending_payout", "unpaid"):
+                needs_recalc = True
+            elif not is_cod_ord and is_valid_online_order and ledger_entry.status == "unpaid":
+                needs_recalc = True
+            elif ord_obj.total is not None and getattr(ledger_entry, "gross_amount", None) != Decimal(str(ord_obj.total or "0.00")):
+                needs_recalc = True
+            elif ord_obj.updated_at and ledger_entry.updated_at and ord_obj.updated_at > ledger_entry.updated_at:
+                needs_recalc = True
+
+            if not needs_recalc:
+                continue
 
         gross = Decimal(str(ord_obj.total or "0.00"))
         comm_pct = Decimal("3.00")
@@ -2461,6 +2489,7 @@ def get_earnings_summary(
     cod_platform_fees_cooling = Decimal("0.00")
     cod_platform_fees_deducted = Decimal("0.00")
     refund_gateway_fees_due = Decimal("0.00")
+    has_mature_escrows_to_release = False
 
     def _is_entry_cod(o_item: Optional[Order], e_item: Optional[TenantLedgerEntry]) -> bool:
         if e_item and getattr(e_item, "status", None) == "pending_cod":
@@ -2497,18 +2526,19 @@ def get_earnings_summary(
                 pass
 
     def _matches_date_filter(e_date: datetime) -> bool:
-        if not date_filter or date_filter == "all":
+        df_str = date_filter if isinstance(date_filter, str) else "all"
+        if not df_str or df_str == "all":
             return True
         if e_date.tzinfo is None:
             e_date = e_date.replace(tzinfo=timezone.utc)
-        if date_filter == "today":
+        if df_str == "today":
             start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
             return e_date >= start_today
-        elif date_filter == "last_7_days":
+        elif df_str == "last_7_days":
             return e_date >= (now - timedelta(days=7))
-        elif date_filter == "last_30_days":
+        elif df_str == "last_30_days":
             return e_date >= (now - timedelta(days=30))
-        elif date_filter == "custom":
+        elif df_str == "custom":
             if from_dt and e_date < from_dt:
                 return False
             if to_dt and e_date > to_dt:
@@ -2545,24 +2575,7 @@ def get_earnings_summary(
                 # Online Escrow matures ONLY after order is delivered AND the return window has passed
                 window_closes = order.return_window_closes_at
                 if window_closes and now >= window_closes:
-                    from models import ReturnRequest, SupportTicket
-                    open_returns = session.exec(
-                        select(ReturnRequest).where(
-                            ReturnRequest.order_id == order.id,
-                            ReturnRequest.status.in_(["requested", "approved", "pickup_scheduled", "in_transit", "received", "inspected"])
-                        )
-                    ).all()
-                    open_tickets = session.exec(
-                        select(SupportTicket).where(
-                            SupportTicket.order_id == order.id,
-                            SupportTicket.status.in_(["open", "in_progress", "waiting_customer", "escalated", "pending"])
-                        )
-                    ).all()
-                    if not open_returns and not open_tickets:
-                        try:
-                            unhold_tenant_escrow_transfer(order=order, session=session)
-                        except Exception as e:
-                            logger.error("Auto unhold in get_earnings failed for order %s: %s", order.id, e)
+                    has_mature_escrows_to_release = True
 
         # Get entry date for period-based metrics accumulation
         e_date = order.created_at if (order and order.created_at) else (entry.created_at or datetime.min.replace(tzinfo=timezone.utc))
@@ -2615,7 +2628,17 @@ def get_earnings_summary(
     online_net_amount = max(Decimal("0.00"), online_gross_amount - online_refunded_amount)
     cod_net_amount = max(Decimal("0.00"), cod_gross_amount - cod_refunded_amount)
 
-    session.commit()
+    if has_mutations:
+        session.commit()
+
+    if has_mature_escrows_to_release:
+        if background_tasks:
+            background_tasks.add_task(_bg_process_mature_escrows, site_id)
+        else:
+            try:
+                process_mature_escrows(session, site_id=site_id)
+            except Exception as e:
+                logger.error("Auto unhold in get_earnings fallback failed: %s", e)
 
     total_dues_owed_to_platform = cod_platform_fees_due + refund_gateway_fees_due
     net_payable_to_merchant = max(Decimal("0.00"), pending_payout - total_dues_owed_to_platform)
@@ -2623,7 +2646,10 @@ def get_earnings_summary(
     # Apply search, date_filter, status, and sorting to table entries
     filtered_entries = []
 
-    search_q = (search or "").strip().lower().replace("#", "")
+    search_str = search if isinstance(search, str) else None
+    search_q = (search_str or "").strip().lower().replace("#", "")
+
+    status_filter = status if isinstance(status, str) else None
 
     for e in all_entries:
         ord_obj = site_order_map.get(e.order_id)
@@ -2637,7 +2663,7 @@ def get_earnings_summary(
             continue
 
         # 2. Status Filter
-        if status and status != "all":
+        if status_filter and status_filter != "all":
             is_settled = (e.status == "paid" and getattr(e, "escrow_status", "held") == "unheld")
             is_escrow = (getattr(e, "escrow_status", "held") == "held" and e.status not in ("paid", "refunded") and not is_cod)
             is_refunded = (e.status in ("refunded", "reversed") or getattr(e, "escrow_status", "held") == "reversed" or (ord_obj and ord_obj.status in ("cancelled", "returned", "refunded")))
@@ -2985,7 +3011,7 @@ def export_earnings_ledger_csv(
     else:  # date_desc
         query = query.order_by(TenantLedgerEntry.created_at.desc())
 
-    search_q = (search or "").strip().lower().replace("#", "")
+    search_q = (search if isinstance(search, str) else "").strip().lower().replace("#", "")
 
     # 3. Stream generator (chunked batching)
     def iter_csv():

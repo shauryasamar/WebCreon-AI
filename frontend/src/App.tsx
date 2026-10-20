@@ -33,6 +33,8 @@ import { AiAvatar } from "./Component/AiAvatar";
 import { UserAvatar } from "./Component/UserAvatar";
 import BuilderPage, { siteSlugMemoryCache } from "./BuilderPage";
 import { setSavedSitesMemoryCache } from "./utils/savedSitesCache";
+import { StorefrontSkeleton } from "./Component/StorefrontSkeleton";
+import { AdminWorkspaceSkeleton } from "./Component/AdminWorkspaceSkeleton";
 
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminSignupPage from "./pages/AdminSignupPage";
@@ -50,57 +52,20 @@ const SupportAgentDashboard = React.lazy(() => import("./pages/SupportAgentDashb
 
 
 function RouteLoadingFallback() {
-  const { isDark: isAdminDark, tokens } = useAdminTheme();
   const isStoreRoute = typeof window !== "undefined" && (window.location.pathname.includes("/store/") || window.location.pathname.includes("/site/"));
-  let bg = isAdminDark ? tokens.workspaceBg : "#f8fafc";
-  let isDark = isAdminDark;
-
+  let slug = "";
   if (isStoreRoute && typeof window !== "undefined") {
     try {
       const parts = window.location.pathname.split("/");
-      const slug = parts[2];
-      if (slug) {
-        const snapRaw = localStorage.getItem(`wc_site_snapshot_${slug}`);
-        if (snapRaw) {
-          const snap = JSON.parse(snapRaw);
-          const t = snap?.site_definition?.theme || snap?.draft_definition?.theme;
-          if (t?.primary_bg) bg = t.primary_bg;
-          if (t?.mode === "dark" || (t?.primary_bg && (t.primary_bg.startsWith("#0") || t.primary_bg.startsWith("#1")))) isDark = true;
-        }
-        const savedBg = localStorage.getItem(`wc_theme_bg_${slug}`);
-        if (savedBg) bg = savedBg;
-        if (localStorage.getItem(`wc_theme_mode_${slug}`) === "dark") isDark = true;
-      }
+      slug = parts[2] || "";
     } catch (_) {}
   }
 
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        backgroundColor: bg,
-        color: isDark ? "#f8fafc" : tokens.textPrimary,
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      }}
-    >
-      <div style={{ textAlign: "center" }}>
-        <div
-          style={{
-            width: "32px",
-            height: "32px",
-            border: `2.5px solid ${isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(125, 125, 125, 0.18)"}`,
-            borderTopColor: "#3b82f6",
-            borderRadius: "50%",
-            animation: "spin 0.8s linear infinite",
-            margin: "0 auto",
-          }}
-        />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    </div>
-  );
+  if (isStoreRoute) {
+    return <StorefrontSkeleton siteSlug={slug} />;
+  }
+
+  return <AdminWorkspaceSkeleton />;
 }
 
 type Block = {

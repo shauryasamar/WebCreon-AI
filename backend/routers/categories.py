@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, field_validator
 from sqlmodel import Session, select, update
 
@@ -72,9 +72,11 @@ class CategoryResponse(BaseModel):
 @router.get("/public", response_model=list[CategoryResponse])
 def list_categories_public(
     site_id: UUID,
+    response: Response,
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
     categories = session.exec(
         select(Category)
         .where(Category.site_id == site_id)

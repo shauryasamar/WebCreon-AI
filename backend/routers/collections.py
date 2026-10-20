@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, field_validator
 from sqlmodel import Session, select, delete
 
@@ -81,9 +81,11 @@ class CollectionResponse(BaseModel):
 @router.get("/public", response_model=list[CollectionResponse])
 def list_collections_public(
     site_id: UUID,
+    response: Response,
     session: Session = Depends(get_session),
 ):
     get_site_or_404(session, site_id)
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
     collections = session.exec(
         select(Collection)
         .where(Collection.site_id == site_id)

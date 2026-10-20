@@ -1774,7 +1774,7 @@ def get_public_site_by_slug(
     now = time.time()
     cached = PUBLIC_SITE_CACHE.get(slug)
     if cached and cached.get("full_site") and cached.get("expiry", 0) > now:
-        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["Cache-Control"] = "public, max-age=15, stale-while-revalidate=60"
         response.headers["ETag"] = cached.get("etag", f'"{cached["id"]}"')
         return cached["full_site"]
 
@@ -1788,7 +1788,7 @@ def get_public_site_by_slug(
     PUBLIC_SITE_CACHE[slug]["etag"] = etag_val
     PUBLIC_SITE_CACHE[slug]["expiry"] = now + 300
 
-    response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    response.headers["Cache-Control"] = "public, max-age=15, stale-while-revalidate=60"
     response.headers["ETag"] = etag_val
     return site
 

@@ -54,6 +54,7 @@ import AccessDeniedView from "./Component/AccessDeniedView";
 import StorefrontCustomPage from "./Component/StorefrontCustomPage";
 import StoreMaintenancePage from "./Component/StoreMaintenancePage";
 import StoreClosedPage from "./Component/StoreClosedPage";
+import AdminWorkspaceSkeleton, { AdminContentSkeleton } from "./Component/AdminWorkspaceSkeleton";
 
 import EditorRenderPage from "./customizations/EditorRenderPage";
 import EditorSidebar from "./customizations/EditorSidebar";
@@ -295,41 +296,96 @@ function getInitialCachedSite(slugOrId?: string): SavedSite | null {
   return null;
 }
 
+const inFlightSlugResolutions = new Map<string, Promise<SavedSite | null>>();
+
 async function resolveSiteBySlug(
   siteSlugParam: string,
-  preferNetwork = true
+  preferNetwork = false
 ): Promise<SavedSite | null> {
   if (!siteSlugParam) return null;
   if (!preferNetwork && siteSlugMemoryCache.has(siteSlugParam)) {
     return siteSlugMemoryCache.get(siteSlugParam)!;
   }
 
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/public/sites/slug/${siteSlugParam}?t=${Date.now()}`,
-      { credentials: "include", cache: "no-cache" }
-    );
+  if (inFlightSlugResolutions.has(siteSlugParam)) {
+    return inFlightSlugResolutions.get(siteSlugParam)!;
+  }
 
-    if (response.ok) {
-      const data = await response.json();
-      if (
-        data?.id ||
-        data?.slug ||
-        data?.site_definition ||
-        data?.draft_definition
-      ) {
-        const res = data as SavedSite;
-        siteSlugMemoryCache.set(siteSlugParam, res);
-        if (res.id) siteSlugMemoryCache.set(res.id, res);
-        if (res.slug) siteSlugMemoryCache.set(res.slug, res);
-        const parsedDef = res.site_definition;
-        const targetSlug = res.slug || siteSlugParam;
+  const fetchPromise = (async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/public/sites/slug/${encodeURIComponent(siteSlugParam)}`,
+        { credentials: "include" }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (
+          data?.id ||
+          data?.slug ||
+          data?.site_definition ||
+          data?.draft_definition
+        ) {
+          const res = data as SavedSite;
+          siteSlugMemoryCache.set(siteSlugParam, res);
+          if (res.id) siteSlugMemoryCache.set(res.id, res);
+          if (res.slug) siteSlugMemoryCache.set(res.slug, res);
+          const parsedDef = res.site_definition;
+          const targetSlug = res.slug || siteSlugParam;
+          if (targetSlug && typeof window !== "undefined") {
+            try {
+              const serialized = JSON.stringify(res);
+              localStorage.setItem(`wc_site_snapshot_${targetSlug}`, serialized);
+              if (res.id) {
+                localStorage.setItem(`wc_site_snapshot_${res.id}`, serialized);
+              }
+              if (parsedDef?.theme) {
+                localStorage.setItem(
+                  `wc_theme_mode_${targetSlug}`,
+                  parsedDef.theme.mode || "light"
+                );
+                if (parsedDef.theme.primary_bg) {
+                  localStorage.setItem(
+                    `wc_theme_bg_${targetSlug}`,
+                    parsedDef.theme.primary_bg
+                  );
+                }
+              }
+            } catch (_) { }
+          }
+          return res;
+        }
+      }
+    } catch (error) {
+      console.warn("Site slug lookup failed:", error);
+    }
+
+    // Fallback to cached copy if offline
+    if (siteSlugMemoryCache.has(siteSlugParam)) {
+      return siteSlugMemoryCache.get(siteSlugParam)!;
+    }
+
+    try {
+      const adminResponse = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
+        credentials: "include",
+      });
+
+      if (!adminResponse.ok) return null;
+
+      const sites: SavedSite[] = await adminResponse.json();
+      const found = sites.find((site) => site.slug === siteSlugParam || site.id === siteSlugParam) ?? null;
+      if (found) {
+        siteSlugMemoryCache.set(siteSlugParam, found);
+        if (found.id) siteSlugMemoryCache.set(found.id, found);
+        if (found.slug) siteSlugMemoryCache.set(found.slug, found);
+        const parsedDef = found.site_definition;
+        const targetSlug = found.slug || siteSlugParam;
         if (targetSlug && typeof window !== "undefined") {
           try {
-            const serialized = JSON.stringify(res);
+            const serialized = JSON.stringify(found);
             localStorage.setItem(`wc_site_snapshot_${targetSlug}`, serialized);
-            if (res.id) {
-              localStorage.setItem(`wc_site_snapshot_${res.id}`, serialized);
+            if (found.id) {
+              localStorage.setItem(`wc_site_snapshot_${found.id}`, serialized);
             }
             if (parsedDef?.theme) {
               localStorage.setItem(
@@ -345,60 +401,18 @@ async function resolveSiteBySlug(
             }
           } catch (_) { }
         }
-        return res;
       }
+      return found;
+    } catch (error) {
+      console.warn("Admin site slug fallback failed:", error);
+      return null;
+    } finally {
+      inFlightSlugResolutions.delete(siteSlugParam);
     }
-  } catch (error) {
-    console.warn("Site slug lookup failed:", error);
-  }
+  })();
 
-  // Fallback to cached copy if offline
-  if (siteSlugMemoryCache.has(siteSlugParam)) {
-    return siteSlugMemoryCache.get(siteSlugParam)!;
-  }
-
-  try {
-    const adminResponse = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
-      credentials: "include",
-    });
-
-    if (!adminResponse.ok) return null;
-
-    const sites: SavedSite[] = await adminResponse.json();
-    const found = sites.find((site) => site.slug === siteSlugParam || site.id === siteSlugParam) ?? null;
-    if (found) {
-      siteSlugMemoryCache.set(siteSlugParam, found);
-      if (found.id) siteSlugMemoryCache.set(found.id, found);
-      if (found.slug) siteSlugMemoryCache.set(found.slug, found);
-      const parsedDef = found.site_definition;
-      const targetSlug = found.slug || siteSlugParam;
-      if (targetSlug && typeof window !== "undefined") {
-        try {
-          const serialized = JSON.stringify(found);
-          localStorage.setItem(`wc_site_snapshot_${targetSlug}`, serialized);
-          if (found.id) {
-            localStorage.setItem(`wc_site_snapshot_${found.id}`, serialized);
-          }
-          if (parsedDef?.theme) {
-            localStorage.setItem(
-              `wc_theme_mode_${targetSlug}`,
-              parsedDef.theme.mode || "light"
-            );
-            if (parsedDef.theme.primary_bg) {
-              localStorage.setItem(
-                `wc_theme_bg_${targetSlug}`,
-                parsedDef.theme.primary_bg
-              );
-            }
-          }
-        } catch (_) { }
-      }
-    }
-    return found;
-  } catch (error) {
-    console.warn("Admin site slug fallback failed:", error);
-    return null;
-  }
+  inFlightSlugResolutions.set(siteSlugParam, fetchPromise);
+  return fetchPromise;
 }
 
 
@@ -918,9 +932,9 @@ function StorefrontSkeleton({
   const isSiteDark = storeTheme?.mode === "dark" || (primaryBg ? isColorDarkHex(primaryBg) : false);
   const isDark = storeTheme ? isSiteDark : isAdminDark;
 
-  const bg = primaryBg || (isDark ? "#0b0f17" : "#f8fafc");
+  const bg = primaryBg || (isDark ? "#121214" : "#f8fafc");
   const headerBg = isDark
-    ? (primaryBg ? primaryBg : "rgba(11, 15, 23, 0.9)")
+    ? (primaryBg ? primaryBg : "rgba(24, 24, 27, 0.9)")
     : "rgba(255, 255, 255, 0.9)";
   const border = isDark
     ? "1px solid rgba(255, 255, 255, 0.08)"
@@ -1215,7 +1229,7 @@ function BuilderPageContent() {
 
   const navigate = useNavigate();
   const { products } = useCart();
-  const { admin: authAdmin, logoutAdmin: authLogoutAdmin, hasPermission, isOwner } = useAdminAuth();
+  const { admin: authAdmin, loading: authAdminLoading, logoutAdmin: authLogoutAdmin, hasPermission, isOwner } = useAdminAuth();
   const { isDark, tokens } = useAdminTheme();
   const canPublish = isOwner || hasPermission("customize:publish");
 
@@ -1955,45 +1969,29 @@ function BuilderPageContent() {
         return;
       }
 
+      // Avoid duplicate parallel fetch: wait for AdminAuthContext to finish checking session
+      if (authAdminLoading) {
+        return;
+      }
+
       if (authAdmin) {
         setAdminAuthenticated(true);
         setAdminAuthChecked(true);
         return;
       }
 
-      try {
-        const response = await fetch(`${API_BASE_URL}/auth/admin/me`, {
-          credentials: "include",
+      setAdminAuthenticated(false);
+      setAdminAuthChecked(true);
+      if (!isStoreRoute) {
+        navigate("/admin/login", {
+          replace: true,
+          state: { from: location.pathname },
         });
-
-        if (!response.ok) {
-          setAdminAuthenticated(false);
-          if (!isStoreRoute) {
-            navigate("/admin/login", {
-              replace: true,
-              state: { from: location.pathname },
-            });
-          }
-          return;
-        }
-
-        setAdminAuthenticated(true);
-      } catch (error) {
-        console.error("Failed to verify admin session:", error);
-        setAdminAuthenticated(false);
-        if (!isStoreRoute) {
-          navigate("/admin/login", {
-            replace: true,
-            state: { from: location.pathname },
-          });
-        }
-      } finally {
-        setAdminAuthChecked(true);
       }
     };
 
     checkAdminAuth();
-  }, [isAdminRoute, isStoreRoute, authAdmin]);
+  }, [isAdminRoute, isStoreRoute, authAdmin, authAdminLoading, location.pathname, navigate]);
 
 
   // Fetch pending order/return counts for the notification badge
@@ -3358,24 +3356,25 @@ function BuilderPageContent() {
           }}
         >
           {!activeSiteDefinition && loading ? (
-            <StorefrontSkeleton
-              isProductDetail={Boolean(productSlug)}
-              siteSlug={siteSlug || siteSlugParam || ""}
-            />
+            isAdminRoute ? (
+              <AdminContentSkeleton />
+            ) : (
+              <StorefrontSkeleton
+                isProductDetail={Boolean(productSlug)}
+                siteSlug={siteSlug || siteSlugParam || ""}
+              />
+            )
           ) : (
             <Suspense
               fallback={
-                <div
-                  style={{
-                    minHeight: "50vh",
-                    display: "grid",
-                    placeItems: "center",
-                    color: "#64748b",
-                    fontSize: "14px",
-                  }}
-                >
-                  Loading page...
-                </div>
+                isAdminRoute ? (
+                  <AdminContentSkeleton />
+                ) : (
+                  <StorefrontSkeleton
+                    isProductDetail={Boolean(productSlug)}
+                    siteSlug={siteSlug || siteSlugParam || ""}
+                  />
+                )
               }
             >
               <Routes>
@@ -4292,6 +4291,7 @@ export default function BuilderPage() {
   const siteSlugParam = params.slug;
   const location = useLocation();
   const isStoreRoute = location.pathname.startsWith("/store/");
+  const isAdminRoute = !isStoreRoute && (location.pathname.includes("/admin") || location.pathname.includes("/settings"));
 
   const currentIdentifier = siteSlugParam || siteId || "";
   const [prevIdentifier, setPrevIdentifier] = useState(currentIdentifier);
@@ -4315,7 +4315,7 @@ export default function BuilderPage() {
   );
   const [siteProducts, setSiteProducts] = useState<Product[]>(initialProducts);
   const [isProductsLoading, setIsProductsLoading] = useState<boolean>(
-    initialProducts.length === 0
+    !isAdminRoute && initialProducts.length === 0
   );
   const [defaultReturnWindowDays, setDefaultReturnWindowDays] = useState<number>(
     initialCachedSite?.default_return_window_days != null
@@ -4329,7 +4329,7 @@ export default function BuilderPage() {
     setPrevIdentifier(currentIdentifier);
     setResolvedSiteId(initialCachedSite?.id || siteId || "");
     setSiteProducts(initialProducts);
-    setIsProductsLoading(initialProducts.length === 0);
+    setIsProductsLoading(!isAdminRoute && initialProducts.length === 0);
     setDefaultReturnWindowDays(
       initialCachedSite?.default_return_window_days != null
         ? Number(initialCachedSite.default_return_window_days)
@@ -4343,6 +4343,14 @@ export default function BuilderPage() {
 
     const resolveAndLoadProducts = async () => {
       try {
+        // Skip fetching public products when browsing admin management pages (Orders, Earnings, Support Desk, etc.)
+        if (isAdminRoute) {
+          if (!cancelled) {
+            setIsProductsLoading(false);
+          }
+          return;
+        }
+
         let targetSiteId = siteId || "";
         let defaultDays = 7;
 
@@ -4382,8 +4390,18 @@ export default function BuilderPage() {
           setDefaultReturnWindowDays(defaultDays);
         }
 
+        // Check memory cache before hitting network
+        const inMemory = siteProductsMemoryCache.get(targetSiteId) || (siteSlugParam ? siteProductsMemoryCache.get(siteSlugParam) : null);
+        if (inMemory && inMemory.length > 0) {
+          if (!cancelled) {
+            setSiteProducts(inMemory);
+            setIsProductsLoading(false);
+          }
+          return;
+        }
+
         const res = await fetch(
-          `${API_BASE_URL}/sites/${targetSiteId}/products/public?page=1&page_size=1000`
+          `${API_BASE_URL}/sites/${targetSiteId}/products/public?page=1&page_size=100`
         );
 
         if (res.ok) {
@@ -4437,7 +4455,7 @@ export default function BuilderPage() {
       cancelled = true;
       window.removeEventListener("wc_products_catalog_updated", handleCatalogUpdated);
     };
-  }, [siteId, siteSlugParam]);
+  }, [siteId, siteSlugParam, isAdminRoute]);
 
   const stableKey = siteSlugParam
     ? `store-${siteSlugParam}`

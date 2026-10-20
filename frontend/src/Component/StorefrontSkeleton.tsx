@@ -25,7 +25,7 @@ export const StorefrontSkeleton: React.FC<StorefrontSkeletonProps> = ({
     effectiveTheme.primary_bg ||
     effectiveTheme.primaryBg ||
     effectiveTheme.page_bg ||
-    (effectiveTheme.mode === "dark" ? "#0b0f17" : "#f8fafc");
+    (effectiveTheme.mode === "dark" ? "#121214" : "#f8fafc");
 
   const isDark =
     effectiveTheme.mode === "dark" ||
@@ -73,12 +73,7 @@ export const StorefrontSkeleton: React.FC<StorefrontSkeletonProps> = ({
     willChange: "background-position",
   };
 
-  const accentShimmerStyle: React.CSSProperties = {
-    backgroundImage: `linear-gradient(90deg, ${accentColor}1f 25%, ${accentColor}40 50%, ${accentColor}1f 75%)`,
-    backgroundSize: "200% 100%",
-    animation: "storeShimmer 1.5s infinite linear",
-    willChange: "background-position",
-  };
+  const accentShimmerStyle: React.CSSProperties = skStyle;
 
   return (
     <div
@@ -111,7 +106,7 @@ export const StorefrontSkeleton: React.FC<StorefrontSkeletonProps> = ({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          background: isDark ? "rgba(11, 15, 23, 0.85)" : "rgba(255, 255, 255, 0.85)",
+          background: isDark ? "rgba(24, 24, 27, 0.85)" : "rgba(255, 255, 255, 0.85)",
           backdropFilter: "blur(14px)",
           position: "sticky",
           top: 0,
@@ -126,7 +121,7 @@ export const StorefrontSkeleton: React.FC<StorefrontSkeletonProps> = ({
               width: "38px",
               height: "38px",
               borderRadius: "10px",
-              border: `1px solid ${accentColor}33`,
+              border: border,
             }}
           />
           <div
@@ -355,7 +350,7 @@ export const StorefrontSkeleton: React.FC<StorefrontSkeletonProps> = ({
                     width: "4px",
                     height: "20px",
                     borderRadius: "2px",
-                    background: accentColor,
+                    background: isDark ? "rgba(255,255,255,0.4)" : "rgba(15,23,42,0.4)",
                   }}
                 />
                 <div style={{ ...skStyle, width: "180px", height: "22px", borderRadius: "6px" }} />
