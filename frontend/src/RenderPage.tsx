@@ -325,7 +325,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
   theme,
   appBase,
 }) => {
-  const { products, cartItems, appliedCoupon, setAppliedCoupon, clearAppliedCoupon, clearCart } = useCart();
+  const { products, cartItems, appliedCoupon, setAppliedCoupon, clearAppliedCoupon, clearCart, isProductsLoading: isCartProductsLoading } = useCart();
   const { isAuthenticated, loading: authLoading } = useCustomerAuth();
   const deviceMode = useDeviceMode();
 
@@ -1515,6 +1515,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
               setCurrentPage(1);
             }}
             totalProducts={resolvedTotalCount}
+            isProductsLoading={isServerLoading || Boolean(isCartProductsLoading && (!resolvedStoreProducts || resolvedStoreProducts.length === 0))}
           />
         </React.Fragment>
       );

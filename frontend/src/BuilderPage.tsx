@@ -24,46 +24,45 @@ import type { AdminNavKey, SettingsNavKey } from "./Component/BuilderDrawerPanel
 import { useAdminAuth } from "./context/AdminAuthContext";
 import { useAdminTheme } from "./context/ThemeContext";
 
-// Lazy-loaded administrative & editor panels for lightweight, sub-second public storefront loads
-const AdminLayout = React.lazy(() => import("./Component/AdminLayout"));
-const AdminProducts = React.lazy(() => import("./Component/AdminProducts"));
-const AdminHomeSections = React.lazy(() => import("./Component/AdminHomeSections"));
-const AdminOrders = React.lazy(() => import("./Component/AdminOrders"));
-const AdminCoupons = React.lazy(() => import("./Component/AdminCoupons"));
-const CheckoutChargesPage = React.lazy(() => import("./Component/CheckoutChargesPage"));
-const TenantPaymentSettingsPage = React.lazy(() => import("./Component/TenantPaymentSettingsPage"));
-const TenantEarningsPage = React.lazy(() => import("./Component/TenantEarningsPage"));
-const DeliverySettingsPage = React.lazy(() => import("./Component/DeliverySettingsPage"));
-const AdminNotificationsSettings = React.lazy(() => import("./Component/AdminNotificationsSettings"));
-const AdminSupportDesk = React.lazy(() => import("./Component/AdminSupportDesk"));
-const AdminProfileSettings = React.lazy(() => import("./Component/AdminProfileSettings"));
-const AdminPages = React.lazy(() => import("./Component/AdminPages"));
-const AdminAnalytics = React.lazy(() => import("./Component/AdminAnalytics"));
-const AdminUsersAndRoles = React.lazy(() => import("./Component/AdminUsersAndRoles"));
-const AdminAuditLogs = React.lazy(() => import("./Component/AdminAuditLogs"));
-
-const AdminGeneralSettings = React.lazy(() => import("./Component/AdminSettingsViews").then((m) => ({ default: m.AdminGeneralSettings })));
-const AdminDomainSettings = React.lazy(() => import("./Component/AdminSettingsViews").then((m) => ({ default: m.AdminDomainSettings })));
-const AdminBillingSettings = React.lazy(() => import("./Component/AdminSettingsViews").then((m) => ({ default: m.AdminBillingSettings })));
-const AdminIntegrationsSettings = React.lazy(() => import("./Component/AdminSettingsViews").then((m) => ({ default: m.AdminIntegrationsSettings })));
-const AdminTaxSettings = React.lazy(() => import("./Component/AdminSettingsViews").then((m) => ({ default: m.AdminTaxSettings })));
-
-const AdminHelpSupport = React.lazy(() => import("./Component/AdminHelpSupport").then((m) => ({ default: m.AdminHelpSupport })));
-const AdminFaqFullView = React.lazy(() => import("./Component/AdminFaqFullView").then((m) => ({ default: m.AdminFaqFullView })));
-const AccessDeniedView = React.lazy(() => import("./Component/AccessDeniedView"));
-
+// Direct imports for instant, 60fps zero-jitter workspace interactions
+import AdminLayout from "./Component/AdminLayout";
+import AdminProducts from "./Component/AdminProducts";
+import AdminHomeSections from "./Component/AdminHomeSections";
+import AdminOrders from "./Component/AdminOrders";
+import AdminCoupons from "./Component/AdminCoupons";
+import CheckoutChargesPage from "./Component/CheckoutChargesPage";
+import TenantPaymentSettingsPage from "./Component/TenantPaymentSettingsPage";
+import TenantEarningsPage from "./Component/TenantEarningsPage";
+import DeliverySettingsPage from "./Component/DeliverySettingsPage";
+import AdminNotificationsSettings from "./Component/AdminNotificationsSettings";
+import AdminSupportDesk from "./Component/AdminSupportDesk";
+import AdminProfileSettings from "./Component/AdminProfileSettings";
+import AdminPages from "./Component/AdminPages";
+import AdminAnalytics from "./Component/AdminAnalytics";
+import AdminUsersAndRoles from "./Component/AdminUsersAndRoles";
+import AdminAuditLogs from "./Component/AdminAuditLogs";
+import {
+  AdminGeneralSettings,
+  AdminDomainSettings,
+  AdminBillingSettings,
+  AdminIntegrationsSettings,
+  AdminTaxSettings,
+} from "./Component/AdminSettingsViews";
+import { AdminHelpSupport } from "./Component/AdminHelpSupport";
+import { AdminFaqFullView } from "./Component/AdminFaqFullView";
+import AccessDeniedView from "./Component/AccessDeniedView";
 import StorefrontCustomPage from "./Component/StorefrontCustomPage";
 import StoreMaintenancePage from "./Component/StoreMaintenancePage";
 import StoreClosedPage from "./Component/StoreClosedPage";
 
-const EditorRenderPage = React.lazy(() => import("./customizations/EditorRenderPage"));
-const EditorSidebar = React.lazy(() => import("./customizations/EditorSidebar"));
-const BuilderDrawerPanel = React.lazy(() => import("./Component/BuilderDrawerPanel"));
+import EditorRenderPage from "./customizations/EditorRenderPage";
+import EditorSidebar from "./customizations/EditorSidebar";
 import CustomerOrdersPage from "./pages/CustomerOrdersPage";
 import CustomerProfilePage from "./pages/CustomerProfilePage";
 import CustomerLoginPage from "./pages/CustomerLoginPage";
 import CustomerSignupPage from "./pages/CustomerSignupPage";
 import QrLinkPopup from "./Component/QrLinkPopup";
+import BuilderDrawerPanel from "./Component/BuilderDrawerPanel";
 import { normalizeStorefrontProduct, slugify } from "./utils/productNormalizer";
 import { isColorDarkHex } from "./context/ThemeContext";
 import FestiveBackgroundOverlay from "./Component/FestiveBackgroundOverlay";
@@ -307,8 +306,8 @@ async function resolveSiteBySlug(
 
   try {
     const response = await fetch(
-      `${API_BASE_URL}/public/sites/slug/${siteSlugParam}`,
-      { credentials: "include" }
+      `${API_BASE_URL}/public/sites/slug/${siteSlugParam}?t=${Date.now()}`,
+      { credentials: "include", cache: "no-cache" }
     );
 
     if (response.ok) {
@@ -449,11 +448,13 @@ function StorefrontShell({
       (typeof window !== "undefined" &&
         (window.location.pathname.endsWith("/orders") || window.location.pathname.includes("/orders")))
     );
+  const isDarkStore = siteDefinition.theme?.mode === "dark" || isColorDarkHex(siteDefinition.theme?.primary_bg);
+  const defaultStoreBg = isDarkStore ? "#0b0f17" : "#ffffff";
   const resolvedShellBg = isSupportPath
-    ? (siteDefinition.theme?.support_bg || siteDefinition.theme?.primary_bg)
+    ? (siteDefinition.theme?.support_bg || siteDefinition.theme?.primary_bg || defaultStoreBg)
     : isOrdersPath
-      ? (siteDefinition.theme?.order_history_bg || siteDefinition.theme?.primary_bg)
-      : siteDefinition.theme?.primary_bg;
+      ? (siteDefinition.theme?.order_history_bg || siteDefinition.theme?.primary_bg || defaultStoreBg)
+      : (siteDefinition.theme?.primary_bg || defaultStoreBg);
 
   const navbarBlockRef = useRef<HTMLDivElement | null>(null);
   const footerBlockRef = useRef<HTMLDivElement | null>(null);
@@ -544,7 +545,7 @@ function StorefrontShell({
         flexDirection: "column",
         zIndex: 1,
         isolation: "isolate",
-        background: resolvedShellBg || "#ffffff",
+        background: resolvedShellBg || defaultStoreBg,
       }}
     >
       <FestiveBackgroundOverlay
@@ -882,17 +883,53 @@ function StorefrontPage({
 
 function StorefrontSkeleton({
   isProductDetail,
+  siteSlug,
 }: {
   isProductDetail?: boolean;
   siteSlug?: string;
 }) {
-  const { isDark, tokens } = useAdminTheme();
+  const { isDark: isAdminDark, tokens: adminTokens } = useAdminTheme();
 
-  const bg = isDark ? tokens.workspaceBg : "#f8fafc";
-  const headerBg = isDark ? tokens.surfaceBg : "rgba(255,255,255,0.9)";
-  const border = `1px solid ${tokens.border}`;
-  const cardBg = isDark ? tokens.surfaceBg : "#ffffff";
-  const cardBorder = `1px solid ${tokens.border}`;
+  // Instant synchronous cache resolution for zero-jitter, zero-flash skeleton rendering
+  const storeTheme = useMemo(() => {
+    if (!siteSlug || typeof window === "undefined") return null;
+    try {
+      const snapRaw = localStorage.getItem(`wc_site_snapshot_${siteSlug}`);
+      if (snapRaw) {
+        const snap = JSON.parse(snapRaw);
+        const t = snap?.site_definition?.theme || snap?.draft_definition?.theme;
+        if (t) return t;
+      }
+      const themeRaw = localStorage.getItem(`wc_site_theme_${siteSlug}`);
+      if (themeRaw) {
+        const th = JSON.parse(themeRaw);
+        if (th?.theme) return th.theme;
+      }
+      const savedBg = localStorage.getItem(`wc_theme_bg_${siteSlug}`);
+      const savedMode = localStorage.getItem(`wc_theme_mode_${siteSlug}`);
+      if (savedBg || savedMode) {
+        return { primary_bg: savedBg, mode: savedMode };
+      }
+    } catch (_) {}
+    return null;
+  }, [siteSlug]);
+
+  const primaryBg = storeTheme?.primary_bg || storeTheme?.primaryBg;
+  const isSiteDark = storeTheme?.mode === "dark" || (primaryBg ? isColorDarkHex(primaryBg) : false);
+  const isDark = storeTheme ? isSiteDark : isAdminDark;
+
+  const bg = primaryBg || (isDark ? "#0b0f17" : "#f8fafc");
+  const headerBg = isDark
+    ? (primaryBg ? primaryBg : "rgba(11, 15, 23, 0.9)")
+    : "rgba(255, 255, 255, 0.9)";
+  const border = isDark
+    ? "1px solid rgba(255, 255, 255, 0.08)"
+    : `1px solid ${adminTokens.border || "rgba(15, 23, 42, 0.08)"}`;
+  const cardBg = storeTheme?.card_bg || (isDark ? "rgba(255, 255, 255, 0.04)" : "#ffffff");
+  const cardBorder = isDark
+    ? "1px solid rgba(255, 255, 255, 0.08)"
+    : `1px solid ${adminTokens.border || "rgba(15, 23, 42, 0.08)"}`;
+  const textColor = isDark ? "#f8fafc" : adminTokens.textPrimary;
 
   const skStyle: React.CSSProperties = {
     backgroundImage: isDark
@@ -909,7 +946,7 @@ function StorefrontSkeleton({
       style={{
         minHeight: "100vh",
         background: bg,
-        color: tokens.textPrimary,
+        color: textColor,
         overflow: "hidden",
         fontFamily:
           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -3182,124 +3219,114 @@ function BuilderPageContent() {
           borderLeft: `1px solid ${tokens.border}`,
         }}
       >
-        <Suspense
-          fallback={
-            <div style={{ padding: "24px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
-              Loading editor tools...
-            </div>
-          }
-        >
-          <EditorSidebar
-            key={resolvedSiteId || siteId || "editor-sidebar"}
-            siteDefinition={activeSiteDefinition}
-            publishedSiteDefinition={publishedSiteDefinition || undefined}
-            selectedBlockId={selectedBlockId}
-            selectedTab={editorTab}
-            onTabChange={setEditorTab}
-            onSelectBlock={(bId) => {
-              if (bId) {
-                handleSelectBlock(bId);
-              } else {
-                setSelectedBlockId(null);
-              }
-            }}
-            onSelectPage={(targetRouteOrId) => {
-              const targetPage = activeSiteDefinition?.pages?.find(
-                (p) => p.id === targetRouteOrId || p.route === targetRouteOrId
-              );
-              const route = targetPage ? targetPage.route : targetRouteOrId;
-              if (isProductDetailRoute(route)) {
-                const sampleSlug = products[0]?.slug || products[0]?.id || "sample-product";
-                navigate(toFullAppPath(appBase, `/products/${sampleSlug}`));
-              } else {
-                navigate(toFullAppPath(appBase, route));
-              }
-            }}
-            onSiteDefinitionChange={(next) =>
-              handleSiteDefinitionChange(next as SiteDefinition)
+        <EditorSidebar
+          key={resolvedSiteId || siteId || "editor-sidebar"}
+          siteDefinition={activeSiteDefinition}
+          publishedSiteDefinition={publishedSiteDefinition || undefined}
+          selectedBlockId={selectedBlockId}
+          selectedTab={editorTab}
+          onTabChange={setEditorTab}
+          onSelectBlock={(bId) => {
+            if (bId) {
+              handleSelectBlock(bId);
+            } else {
+              setSelectedBlockId(null);
             }
-          />
-        </Suspense>
+          }}
+          onSelectPage={(targetRouteOrId) => {
+            const targetPage = activeSiteDefinition?.pages?.find(
+              (p) => p.id === targetRouteOrId || p.route === targetRouteOrId
+            );
+            const route = targetPage ? targetPage.route : targetRouteOrId;
+            if (isProductDetailRoute(route)) {
+              const sampleSlug = products[0]?.slug || products[0]?.id || "sample-product";
+              navigate(toFullAppPath(appBase, `/products/${sampleSlug}`));
+            } else {
+              navigate(toFullAppPath(appBase, route));
+            }
+          }}
+          onSiteDefinitionChange={(next) =>
+            handleSiteDefinitionChange(next as SiteDefinition)
+          }
+        />
       </div>
     ) : undefined;
 
 
   const drawerNode =
     showAdminTopbar && activeDrawer ? (
-      <Suspense fallback={null}>
-        <BuilderDrawerPanel
-          activeDrawer={activeDrawer}
-          onClose={() => setActiveDrawer(null)}
-          savedSites={savedSites}
-          savedSitesLoading={savedSitesLoading}
-          selectedSiteId={resolvedSiteId || siteId || ""}
-          onSelectSite={(targetSiteId) => {
-            const target = savedSites.find((s) => s.id === targetSiteId);
-            if (target) {
-              siteSlugMemoryCache.set(targetSiteId, target);
-              if (target.slug) siteSlugMemoryCache.set(target.slug, target);
-              try {
+      <BuilderDrawerPanel
+        activeDrawer={activeDrawer}
+        onClose={() => setActiveDrawer(null)}
+        savedSites={savedSites}
+        savedSitesLoading={savedSitesLoading}
+        selectedSiteId={resolvedSiteId || siteId || ""}
+        onSelectSite={(targetSiteId) => {
+          const target = savedSites.find((s) => s.id === targetSiteId);
+          if (target) {
+            siteSlugMemoryCache.set(targetSiteId, target);
+            if (target.slug) siteSlugMemoryCache.set(target.slug, target);
+            try {
+              localStorage.setItem(
+                `wc_site_snapshot_${targetSiteId}`,
+                JSON.stringify(target)
+              );
+              if (target.slug) {
                 localStorage.setItem(
-                  `wc_site_snapshot_${targetSiteId}`,
+                  `wc_site_snapshot_${target.slug}`,
                   JSON.stringify(target)
                 );
-                if (target.slug) {
-                  localStorage.setItem(
-                    `wc_site_snapshot_${target.slug}`,
-                    JSON.stringify(target)
-                  );
-                }
-              } catch (_) { }
-            }
-            if (targetSiteId === (resolvedSiteId || siteId)) {
-              return;
-            }
-            setSelectedBlockId(null);
-            // Persistent drawer: do NOT close drawer on site switch!
-            navigate(`/builder/${targetSiteId}`);
-          }}
-          onDeleteSite={handleDeleteSite}
-          activeAdminNavKey={activeAdminNavKey}
-          onSelectAdminNav={(key) => {
-            if (key === "tax-compliance") {
-              navigate(`${builderBase}/admin/checkout-charges?tab=tax`);
-            } else {
-              navigate(`${builderBase}/admin/${key}`);
-            }
-          }}
-          activeSettingsNavKey={
-            location.pathname.includes("/settings/users-roles")
-              ? "users-roles"
-              : location.pathname.includes("/settings/profile")
-                ? "profile"
-                : location.pathname.includes("/settings/domain")
-                  ? "domain"
-                  : location.pathname.includes("/settings/billing")
-                    ? "billing"
-                    : location.pathname.includes("/settings/audit-logs") || location.pathname.includes("/settings/activity")
-                      ? "audit-logs"
-                      : location.pathname.includes("/settings/help-support")
-                        ? "help-support"
-                        : null
+              }
+            } catch (_) { }
           }
-          onSelectSettingsNav={(key) => {
-            navigate(`${builderBase}/settings/${key}`);
-          }}
-          siteDefinition={activeSiteDefinition}
-          onSiteDefinitionChange={(next) =>
-            handleSiteDefinitionChange(next as SiteDefinition)
+          if (targetSiteId === (resolvedSiteId || siteId)) {
+            return;
           }
-          isOnline={isOnline}
-          isPublished={Boolean(
-            publishedSiteDefinition?.blocks?.length ||
-            siteDefinition?.blocks?.length ||
-            activeSiteDefinition?.blocks?.length ||
-            (activeSiteDefinition as any)?.pages?.length
-          )}
-          onToggleStoreStatus={handleToggleStoreStatus}
-          statusLoading={statusLoading}
-        />
-      </Suspense>
+          setSelectedBlockId(null);
+          // Persistent drawer: do NOT close drawer on site switch!
+          navigate(`/builder/${targetSiteId}`);
+        }}
+        onDeleteSite={handleDeleteSite}
+        activeAdminNavKey={activeAdminNavKey}
+        onSelectAdminNav={(key) => {
+          if (key === "tax-compliance") {
+            navigate(`${builderBase}/admin/checkout-charges?tab=tax`);
+          } else {
+            navigate(`${builderBase}/admin/${key}`);
+          }
+        }}
+        activeSettingsNavKey={
+          location.pathname.includes("/settings/users-roles")
+            ? "users-roles"
+            : location.pathname.includes("/settings/profile")
+              ? "profile"
+              : location.pathname.includes("/settings/domain")
+                ? "domain"
+                : location.pathname.includes("/settings/billing")
+                  ? "billing"
+                  : location.pathname.includes("/settings/audit-logs") || location.pathname.includes("/settings/activity")
+                    ? "audit-logs"
+                    : location.pathname.includes("/settings/help-support")
+                      ? "help-support"
+                      : null
+        }
+        onSelectSettingsNav={(key) => {
+          navigate(`${builderBase}/settings/${key}`);
+        }}
+        siteDefinition={activeSiteDefinition}
+        onSiteDefinitionChange={(next) =>
+          handleSiteDefinitionChange(next as SiteDefinition)
+        }
+        isOnline={isOnline}
+        isPublished={Boolean(
+          publishedSiteDefinition?.blocks?.length ||
+          siteDefinition?.blocks?.length ||
+          activeSiteDefinition?.blocks?.length ||
+          (activeSiteDefinition as any)?.pages?.length
+        )}
+        onToggleStoreStatus={handleToggleStoreStatus}
+        statusLoading={statusLoading}
+      />
     ) : null;
 
 
@@ -4356,7 +4383,7 @@ export default function BuilderPage() {
         }
 
         const res = await fetch(
-          `${API_BASE_URL}/sites/${targetSiteId}/products/public?page=1&page_size=24`
+          `${API_BASE_URL}/sites/${targetSiteId}/products/public?page=1&page_size=1000`
         );
 
         if (res.ok) {
@@ -4372,16 +4399,12 @@ export default function BuilderPage() {
             setIsProductsLoading(false);
             siteProductsMemoryCache.set(targetSiteId, normalizedProducts);
             if (siteSlugParam) siteProductsMemoryCache.set(siteSlugParam, normalizedProducts);
-            // Defer writing snapshot asynchronously to avoid blocking the main UI thread
-            setTimeout(() => {
-              try {
-                const snapshot = normalizedProducts.slice(0, 24);
-                localStorage.setItem(`wc_site_products_${targetSiteId}`, JSON.stringify(snapshot));
-                if (siteSlugParam) {
-                  localStorage.setItem(`wc_site_products_${siteSlugParam}`, JSON.stringify(snapshot));
-                }
-              } catch (_) { }
-            }, 300);
+            try {
+              localStorage.setItem(`wc_site_products_${targetSiteId}`, JSON.stringify(normalizedProducts));
+              if (siteSlugParam) {
+                localStorage.setItem(`wc_site_products_${siteSlugParam}`, JSON.stringify(normalizedProducts));
+              }
+            } catch (_) { }
           }
         } else {
           console.error("Failed to load products for site", res.status);

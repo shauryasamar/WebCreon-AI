@@ -9,6 +9,7 @@ import {
   usePublicSiteTheme,
 } from "../hooks/usePublicSiteTheme";
 import { useDeviceMode } from "../context/DeviceModeContext";
+import CustomerAuthSkeleton from "../Component/CustomerAuthSkeleton";
 
 type LocationState = {
   from?: string;
@@ -51,7 +52,18 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
   const { slug, siteId } = useParams<{ slug?: string; siteId?: string }>();
   const targetSlug = propSiteSlug || slug || siteId || "";
   const { signup, loginWithGoogle, loading: authLoading } = useCustomerAuth();
-  const { siteData } = usePublicSiteTheme(targetSlug);
+  const { siteData, loadingSite } = usePublicSiteTheme(targetSlug);
+
+  if (loadingSite && !siteData && !propTheme) {
+    return (
+      <CustomerAuthSkeleton
+        siteSlug={targetSlug}
+        isSignup={true}
+        theme={propTheme}
+        siteName={propSiteName}
+      />
+    );
+  }
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");

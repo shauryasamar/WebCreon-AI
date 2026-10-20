@@ -94,8 +94,39 @@
             if (siteKey) {
               var storeTheme = localStorage.getItem("wc_theme_mode_" + siteKey);
               var storeBg = localStorage.getItem("wc_theme_bg_" + siteKey);
+              if (!storeBg || !storeTheme) {
+                try {
+                  var snapRaw = localStorage.getItem("wc_site_snapshot_" + siteKey);
+                  if (snapRaw) {
+                    var snap = JSON.parse(snapRaw);
+                    var def = snap.site_definition || snap.draft_definition;
+                    if (def && def.theme) {
+                      if (!storeBg) storeBg = def.theme.primary_bg || def.theme.page_bg;
+                      if (!storeTheme) storeTheme = def.theme.mode;
+                    }
+                  }
+                } catch(_) {}
+              }
+              if (!storeBg || !storeTheme) {
+                try {
+                  var thRaw = localStorage.getItem("wc_site_theme_" + siteKey);
+                  if (thRaw) {
+                    var th = JSON.parse(thRaw);
+                    if (th && th.theme) {
+                      if (!storeBg) storeBg = th.theme.primary_bg || th.theme.page_bg;
+                      if (!storeTheme) storeTheme = th.theme.mode;
+                    }
+                  }
+                } catch(_) {}
+              }
               if (storeBg) customBg = storeBg;
               if (storeTheme === "dark") isDark = true;
+              if (customBg) {
+                var c = customBg.toLowerCase().trim();
+                if (c === "black" || c === "#000" || c === "#000000" || c === "#0b0f17" || c.indexOf("#0") === 0 || c.indexOf("#1") === 0) {
+                  isDark = true;
+                }
+              }
             }
           }
 
@@ -112,14 +143,20 @@
             }
           }
 
-          var bg = customBg || (isDark ? "#121214" : "#f8fafc");
+          var bg = customBg || (isDark ? "#0b0f17" : "#f8fafc");
           var text = isDark ? "#f4f4f5" : "#0f172a";
           var scheme = isDark ? "dark" : "light";
 
           document.documentElement.style.backgroundColor = bg;
+          document.documentElement.style.setProperty("--page-bg", bg);
           document.documentElement.style.color = text;
           document.documentElement.style.colorScheme = scheme;
           document.documentElement.setAttribute("data-theme", scheme);
+
+          var initStyle = document.createElement("style");
+          initStyle.id = "wc-instant-bg-lock";
+          initStyle.textContent = "html, body { background-color: " + bg + " !important; color: " + text + " !important; }";
+          document.head.appendChild(initStyle);
         } catch(e) {}
       })();
     </script>
