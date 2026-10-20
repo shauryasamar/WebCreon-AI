@@ -299,29 +299,45 @@ def get_word_stems(word: str) -> list[str]:
 
 
 def get_site_vocabulary(session: Session, site_id: UUID) -> set[str]:
-    """Retrieves unique catalog vocabulary tokens for the site (cached for 60s)."""
+    """Retrieves unique catalog vocabulary tokens for the site (cached for 300s)."""
     site_key = str(site_id)
     now = time.time()
     if site_key in _VOCAB_CACHE:
         cached_time, vocab = _VOCAB_CACHE[site_key]
-        if now - cached_time < 60:
+        if now - cached_time < 300:
             return vocab
 
     try:
-        rows = session.exec(
-            select(Product.name, Product.brand, Product.category)
-            .where(Product.site_id == site_id, Product.is_active == True)
-            .limit(1000)
+        vocab: set[str] = set()
+
+        # 1. Distinct categories & brands
+        cats = session.exec(
+            select(Product.category).where(Product.site_id == site_id, Product.is_active == True).distinct()
+        ).all()
+        brands = session.exec(
+            select(Product.brand).where(Product.site_id == site_id, Product.is_active == True).distinct()
+        ).all()
+        cat_names = session.exec(
+            select(Category.name).where(Category.site_id == site_id)
         ).all()
 
-        vocab: set[str] = set()
-        for name, brand, cat in rows:
-            for field in (name, brand, cat):
-                if field:
-                    clean_f = normalize_search_string(str(field)).lower()
-                    for token in re.findall(r"[a-zA-Z0-9]+", clean_f):
-                        if len(token) >= 2:
-                            vocab.add(token)
+        for field in list(cats) + list(brands) + list(cat_names):
+            if field:
+                clean_f = normalize_search_string(str(field)).lower()
+                for token in re.findall(r"[a-zA-Z0-9]+", clean_f):
+                    if len(token) >= 2:
+                        vocab.add(token)
+
+        # 2. Product names across catalog
+        names = session.exec(
+            select(Product.name).where(Product.site_id == site_id, Product.is_active == True).limit(10000)
+        ).all()
+        for name in names:
+            if name:
+                clean_f = normalize_search_string(str(name)).lower()
+                for token in re.findall(r"[a-zA-Z0-9]+", clean_f):
+                    if len(token) >= 2:
+                        vocab.add(token)
 
         _VOCAB_CACHE[site_key] = (now, vocab)
         return vocab
@@ -337,6 +353,27 @@ def _is_subsequence(sub: str, full: str) -> bool:
         return False
     it = iter(full)
     return all(c in it for c in sub)
+
+
+def _check_token_exists_in_catalog(session: Session, site_id: UUID, token: str) -> bool:
+    """Verifies if token exists in any active product on the site (handles large catalogs beyond sample limit)."""
+    if not token or len(token) < 2:
+        return False
+    pat = f"%{token}%"
+    found = session.exec(
+        select(Product.id).where(
+            Product.site_id == site_id,
+            Product.is_active == True,
+            or_(
+                Product.name.ilike(pat),
+                Product.category.ilike(pat),
+                Product.brand.ilike(pat),
+                Product.description.ilike(pat),
+                Product.sku.ilike(pat),
+            ),
+        ).limit(1)
+    ).first()
+    return found is not None
 
 
 def _find_best_vocab_match(token: str, vocab_list: list[str]) -> Optional[str]:
@@ -366,11 +403,11 @@ def _find_best_vocab_match(token: str, vocab_list: list[str]) -> Optional[str]:
         # Subsequence / missing vowel match (e.g. pnk in pink, snkrs in sneakers, drss in dress)
         if _is_subsequence(t, w):
             sub_score = 0.78 - (abs(t_len - w_len) * 0.05)
-            if sub_score > best_score and sub_score >= 0.55:
+            if sub_score > best_score and sub_score >= 0.65:
                 best_score = sub_score
                 best_match = word
 
-        if abs(t_len - w_len) > 4:
+        if abs(t_len - w_len) > 3:
             continue
 
         # Compute Levenshtein edit distance
@@ -389,17 +426,17 @@ def _find_best_vocab_match(token: str, vocab_list: list[str]) -> Optional[str]:
         dist = dp[t_len][w_len]
         max_len = max(t_len, w_len)
 
-        # Allow proportional edits (up to 45% edit distance)
-        max_allowed_dist = 1 if max_len <= 3 else (2 if max_len <= 6 else 3)
+        # Allow proportional edits (tight precision: 1 edit for <=4 chars, 2 edits for longer)
+        max_allowed_dist = 1 if max_len <= 4 else 2
         if dist <= max_allowed_dist:
             score = 1.0 - (dist / max_len)
-            if score > best_score and score >= 0.50:
+            if score > best_score and score >= 0.70:
                 best_score = score
                 best_match = word
         else:
             # Character overlap ratio fallback
             ratio = difflib.SequenceMatcher(None, t, w).ratio()
-            if ratio > best_score and ratio >= 0.58:
+            if ratio > best_score and ratio >= 0.75:
                 best_score = ratio
                 best_match = word
 
@@ -411,6 +448,7 @@ def get_spelling_suggestion(session: Session, site_id: UUID, raw_search: str) ->
     Intelligent token-level spelling correction for the store catalog.
     If user types misspelled words like 'pint shirt', 'pnk', 'pinnk', 'shrit',
     detects 'pink shirt' / 'shirt' from the store's actual catalog vocabulary.
+    Never corrects words that actually exist in the site catalog.
     """
     clean = normalize_search_string(raw_search).lower()
     if not clean or len(clean) < 2:
@@ -430,6 +468,9 @@ def get_spelling_suggestion(session: Session, site_id: UUID, raw_search: str) ->
 
     for token in tokens:
         if token in vocab:
+            corrected_tokens.append(token)
+        elif _check_token_exists_in_catalog(session, site_id, token):
+            vocab.add(token)
             corrected_tokens.append(token)
         else:
             match = _find_best_vocab_match(token, vocab_list)
@@ -467,14 +508,13 @@ def build_fuzzy_product_search_filter(search_term: str, corrected_term: Optional
         queries_to_match.append(normalize_search_string(corrected_term).strip())
 
     branch_conditions = []
-    scoring_cases = []
 
     for q in queries_to_match:
         q_clean = q.strip()
         q_pat = f"%{q_clean}%"
         raw_words = [w for w in re.findall(r"[a-zA-Z0-9]+", q_clean) if len(w) >= 2]
 
-        # 1. Exact phrase substring match
+        # 1. Exact phrase substring match across all key fields
         phrase_match = (
             (Product.name.ilike(q_pat))
             | (Product.brand.ilike(q_pat))
@@ -483,9 +523,6 @@ def build_fuzzy_product_search_filter(search_term: str, corrected_term: Optional
             | (Product.sku.ilike(q_pat))
         )
         branch_conditions.append(phrase_match)
-        scoring_cases.append((Product.name.ilike(q_pat), 500))
-        scoring_cases.append((Product.brand.ilike(q_pat), 350))
-        scoring_cases.append((Product.category.ilike(q_pat), 320))
 
         # 2. Multi-token concept match (ignoring stop words if multi-token)
         if len(raw_words) > 1:
@@ -512,36 +549,76 @@ def build_fuzzy_product_search_filter(search_term: str, corrected_term: Optional
                     )
                 clause = or_(*variant_or_list)
                 token_and_clauses.append(clause)
-                scoring_cases.append((Product.name.ilike(f"%{w}%"), 100))
-                scoring_cases.append((Product.category.ilike(f"%{w}%"), 60))
-                scoring_cases.append((Product.brand.ilike(f"%{w}%"), 60))
 
-            # Match ALL concepts
+            # Match ALL concepts (Every word in the query must match)
             if len(token_and_clauses) > 1:
                 branch_conditions.append(and_(*token_and_clauses))
 
-                # Handle extra/unrelated words: Match subsets of (N - 1) words
+                # Handle extra/unrelated words: Match subsets of (N - 1) words if query is 3+ words
                 if len(token_and_clauses) >= 3:
                     for i in range(len(token_and_clauses)):
                         subset = [token_and_clauses[j] for j in range(len(token_and_clauses)) if j != i]
                         branch_conditions.append(and_(*subset))
-                # Individual concept fallback
-                branch_conditions.append(or_(*token_and_clauses))
             elif len(token_and_clauses) == 1:
                 branch_conditions.append(token_and_clauses[0])
 
     combined_filter = or_(*branch_conditions)
 
-    # Relevance ranking order clause
+    # Dynamic multi-tier relevance ranking order clause
     primary_term = corrected_term.strip() if (corrected_term and corrected_term.strip()) else clean_raw
-    relevance_order = case(
-        (Product.name.ilike(clean_raw), 600),
-        (Product.name.ilike(primary_term), 550),
-        (Product.name.ilike(f"{clean_raw}%"), 500),
-        (Product.name.ilike(f"{primary_term}%"), 450),
-        *scoring_cases,
-        else_=10
-    ).desc()
+    scoring_cases = []
+
+    # Tier 1: Exact full name match (e.g. name == 'pink underwear') -> 1000
+    scoring_cases.append((Product.name.ilike(clean_raw), 1000))
+    if primary_term.lower() != clean_raw.lower():
+        scoring_cases.append((Product.name.ilike(primary_term), 950))
+
+    # Tier 2: Name starts with search query (e.g. 'Pink Underwear Pack') -> 900
+    scoring_cases.append((Product.name.ilike(f"{clean_raw}%"), 900))
+    if primary_term.lower() != clean_raw.lower():
+        scoring_cases.append((Product.name.ilike(f"{primary_term}%"), 850))
+
+    # Tier 3: Exact phrase substring inside product name -> 800
+    scoring_cases.append((Product.name.ilike(f"%{clean_raw}%"), 800))
+    if primary_term.lower() != clean_raw.lower():
+        scoring_cases.append((Product.name.ilike(f"%{primary_term}%"), 750))
+
+    # Tier 4: Multi-token: ALL tokens in product name (e.g. 'Women Pink Seamless Underwear') -> 650
+    raw_words = [w for w in re.findall(r"[a-zA-Z0-9]+", clean_raw) if len(w) >= 2]
+    meaningful_words = [w for w in raw_words if w not in STOP_WORDS] if len(raw_words) > 1 else raw_words
+    words_to_score = meaningful_words if meaningful_words else raw_words
+
+    if len(words_to_score) > 1:
+        name_token_clauses = [Product.name.ilike(f"%{w}%") for w in words_to_score]
+        scoring_cases.append((and_(*name_token_clauses), 650))
+
+        # Tier 5: ALL tokens in product across name/brand/category -> 550
+        prod_token_clauses = []
+        for w in words_to_score:
+            variants = get_word_stems(w)
+            if w in SYNONYMS_MAP:
+                variants.extend(SYNONYMS_MAP[w])
+            vp_list = [f"%{v}%" for v in set(variants)]
+            clause = or_(*[
+                (Product.name.ilike(vp)) | (Product.brand.ilike(vp)) | (Product.category.ilike(vp))
+                for vp in vp_list
+            ])
+            prod_token_clauses.append(clause)
+        scoring_cases.append((and_(*prod_token_clauses), 550))
+
+    # Tier 6: Phrase in Brand, Category, SKU, or Description
+    scoring_cases.append((Product.brand.ilike(f"%{clean_raw}%"), 400))
+    scoring_cases.append((Product.category.ilike(f"%{clean_raw}%"), 350))
+    scoring_cases.append((Product.sku.ilike(f"%{clean_raw}%"), 300))
+    scoring_cases.append((Product.description.ilike(f"%{clean_raw}%"), 200))
+
+    # Tier 7: Individual token matches
+    for w in words_to_score:
+        scoring_cases.append((Product.name.ilike(f"%{w}%"), 120))
+        scoring_cases.append((Product.category.ilike(f"%{w}%"), 80))
+        scoring_cases.append((Product.brand.ilike(f"%{w}%"), 80))
+
+    relevance_order = case(*scoring_cases, else_=10).desc()
 
     return combined_filter, relevance_order
 
@@ -1371,20 +1448,22 @@ def list_products(
     base_query = select(Product).where(*status_conditions)
 
     # Sorting
-    if sort_by == "price_asc":
-        order_clause = Product.price.asc()
+    if admin_search_order is not None and (not sort_by or sort_by in ("relevance", "newest")):
+        order_clauses = [admin_search_order, Product.created_at.desc()]
+    elif sort_by == "price_asc":
+        order_clauses = [Product.price.asc()]
     elif sort_by == "price_desc":
-        order_clause = Product.price.desc()
+        order_clauses = [Product.price.desc()]
     elif sort_by == "stock_asc":
-        order_clause = Product.stock.asc()
+        order_clauses = [Product.stock.asc()]
     elif sort_by == "stock_desc":
-        order_clause = Product.stock.desc()
+        order_clauses = [Product.stock.desc()]
     elif sort_by == "name_asc":
-        order_clause = Product.name.asc()
+        order_clauses = [Product.name.asc()]
     elif admin_search_order is not None:
-        order_clause = admin_search_order
+        order_clauses = [admin_search_order, Product.created_at.desc()]
     else:
-        order_clause = Product.created_at.desc()
+        order_clauses = [Product.created_at.desc()]
 
     # If pagination is requested
     if page is not None and page_size is not None:
@@ -1402,7 +1481,7 @@ def list_products(
             total_count = all_count
 
         paginated_query = (
-            base_query.order_by(order_clause)
+            base_query.order_by(*order_clauses)
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -1428,7 +1507,7 @@ def list_products(
         return result
 
     # Unpaginated fallback
-    products = session.exec(base_query.order_by(order_clause)).all()
+    products = session.exec(base_query.order_by(*order_clauses)).all()
     result = to_product_responses_batch(products, session, include_reviews=False, include_siblings=False)
     catalog_cache.set(cache_key, result, ttl=30.0)
     return result
@@ -1469,7 +1548,15 @@ def autocomplete_products(
 
     # Spelling suggestion & Query Expansion
     did_you_mean = get_spelling_suggestion(session, site.id, search_str)
-    clean_dym = did_you_mean if (did_you_mean and did_you_mean.strip().lower() != search_str.lower()) else None
+
+    # Check if user's search words exist in catalog
+    search_tokens = [t.lower() for t in re.findall(r"[a-zA-Z0-9]+", search_str.lower()) if len(t) >= 2]
+    all_tokens_exist = all(_check_token_exists_in_catalog(session, site.id, t) for t in search_tokens) if search_tokens else True
+
+    clean_dym = None
+    if did_you_mean and did_you_mean.strip().lower() != search_str.lower():
+        if not all_tokens_exist:
+            clean_dym = did_you_mean.strip()
 
     search_filter, relevance_order = build_fuzzy_product_search_filter(search_str, clean_dym)
 
@@ -1480,6 +1567,10 @@ def autocomplete_products(
     # Count total matches
     count_stmt = select(func.count()).select_from(base_query.subquery())
     total_matches = session.exec(count_stmt).one() or 0
+
+    # If original query returned 0 matches but a spelling correction was found, surface clean_dym
+    if total_matches == 0 and did_you_mean and did_you_mean.strip().lower() != search_str.lower():
+        clean_dym = did_you_mean.strip()
 
     # Fetch top products
     query = base_query.order_by(relevance_order, Product.created_at.desc()).limit(limit)
@@ -1493,14 +1584,20 @@ def autocomplete_products(
         suggestions_set.append(clean_dym.strip())
         seen.add(clean_dym.strip().lower())
 
+    # Add matching categories first (high-intent e-commerce navigation)
     for p in matching_products:
-        if p.name and p.name.strip().lower() not in seen:
-            suggestions_set.append(p.name.strip())
-            seen.add(p.name.strip().lower())
         cat = p.category
         if cat and cat.strip().lower() not in seen:
             suggestions_set.append(cat.strip())
             seen.add(cat.strip().lower())
+            if len(suggestions_set) >= 3:
+                break
+
+    # Add matching product names
+    for p in matching_products:
+        if p.name and p.name.strip().lower() not in seen:
+            suggestions_set.append(p.name.strip())
+            seen.add(p.name.strip().lower())
         if len(suggestions_set) >= 6:
             break
 
@@ -1639,7 +1736,10 @@ def list_products_public(
         query = query.where(Product.in_stock == True)
 
     # --- Sorting ---
-    if sort_by == "price_asc":
+    if search_relevance_order is not None and (not sort_by or sort_by in ("relevance", "newest")):
+        # By default when searching: Relevance first, then newest first within same relevance score
+        query = query.order_by(search_relevance_order, Product.created_at.desc())
+    elif sort_by == "price_asc":
         query = query.order_by(Product.price.asc())
     elif sort_by == "price_desc":
         query = query.order_by(Product.price.desc())
@@ -1669,7 +1769,6 @@ def list_products_public(
             .order_by(func.coalesce(avg_rating_sub.c.avg_rating, 0).desc())
         )
     elif search_relevance_order is not None:
-        # If searching with no explicit sort, prioritize relevance then newest
         query = query.order_by(search_relevance_order, Product.created_at.desc())
     else:
         # Default: newest first
@@ -1685,7 +1784,13 @@ def list_products_public(
     paginated_query = query.offset((effective_page - 1) * effective_page_size).limit(effective_page_size)
     products = session.exec(paginated_query).all()
 
-    clean_dym = did_you_mean_term if (did_you_mean_term and search and did_you_mean_term.strip().lower() != search.strip().lower()) else None
+    clean_dym = None
+    if did_you_mean_term and search and did_you_mean_term.strip().lower() != search.strip().lower():
+        # Only surface Did You Mean if the original search tokens did not exist in the catalog or returned 0 results
+        search_tokens = [t.lower() for t in re.findall(r"[a-zA-Z0-9]+", search.lower()) if len(t) >= 2]
+        all_tokens_exist = all(_check_token_exists_in_catalog(session, site.id, t) for t in search_tokens) if search_tokens else True
+        if not all_tokens_exist or total_count == 0:
+            clean_dym = did_you_mean_term.strip()
 
     res = {
         "items": to_product_responses_batch(products, session, include_reviews=False, include_siblings=False),
@@ -1715,15 +1820,9 @@ def _build_product_filter_conditions(
     conditions = []
 
     if exclude != "search" and search and search.strip():
-        search_term = search.strip()
-        conditions.append(
-            or_(
-                Product.name.ilike(f"%{search_term}%"),
-                Product.brand.ilike(f"%{search_term}%"),
-                Product.category.ilike(f"%{search_term}%"),
-                Product.description.ilike(f"%{search_term}%"),
-            )
-        )
+        search_filter, _ = build_fuzzy_product_search_filter(search)
+        if search_filter is not None:
+            conditions.append(search_filter)
 
     if exclude != "category" and category_id and category_id.strip():
         cat_str = category_id.strip()

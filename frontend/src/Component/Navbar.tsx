@@ -1495,24 +1495,20 @@ const Navbar: React.FC<NavbarProps> = (props) => {
         const fullText = `${name} ${brand} ${cat}`;
         const textWords = fullText.split(/[^a-z0-9]+/);
 
-        let matchesAny = fullText.includes(qLower);
-
-        if (!matchesAny) {
-          for (const token of rawTokens) {
-            if (fullText.includes(token)) {
-              matchesAny = true;
-              break;
-            }
-            if (token.length >= 2) {
-              if (textWords.some((tw) => isSubsequenceMatch(token, tw))) {
-                matchesAny = true;
-                break;
-              }
-            }
-          }
+        let matches = false;
+        if (rawTokens.length > 1) {
+          // For multi-word queries (e.g. "pink underwear"), all tokens must match
+          matches = rawTokens.every((token) => {
+            if (fullText.includes(token)) return true;
+            if (token.length >= 2 && textWords.some((tw) => isSubsequenceMatch(token, tw))) return true;
+            return false;
+          });
+        } else if (rawTokens.length === 1) {
+          const token = rawTokens[0];
+          matches = fullText.includes(token) || (token.length >= 2 && textWords.some((tw) => isSubsequenceMatch(token, tw)));
         }
 
-        if (matchesAny) {
+        if (matches) {
           if (matchedProds.length < 6) {
             matchedProds.push({
               id: String(prod.id),

@@ -12,6 +12,7 @@ type SortOption = {
 };
 
 const SORT_OPTIONS: SortOption[] = [
+  { value: "relevance", label: "Relevance", description: "Most relevant matches first" },
   { value: "newest", label: "Newest Arrivals", description: "Recently added products" },
   { value: "price_asc", label: "Price: Low to High", description: "Sort by increasing price" },
   { value: "price_desc", label: "Price: High to Low", description: "Sort by decreasing price" },

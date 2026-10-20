@@ -334,7 +334,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
   const initialSearchQuery = searchParams.get("search") || "";
-  const initialSortBy = searchParams.get("sort_by") || searchParams.get("sort") || "newest";
+  const initialSortBy = searchParams.get("sort_by") || searchParams.get("sort") || (initialSearchQuery.trim() ? "relevance" : "newest");
   const initialCatParam = searchParams.get("category") || searchParams.get("category_id");
   const initialBrandParams = searchParams.getAll("brand");
   const initialColParams = searchParams.getAll("collection").concat(searchParams.getAll("collection_id"));
@@ -388,6 +388,10 @@ const RenderPage: React.FC<RenderPageProps> = ({
     const sortParam = params.get("sort_by") || params.get("sort");
     if (sortParam) {
       setSortBy(sortParam);
+    } else if (q.trim()) {
+      setSortBy("relevance");
+    } else {
+      setSortBy("newest");
     }
 
     const catParam = params.get("category") || params.get("category_id");
@@ -972,7 +976,12 @@ const RenderPage: React.FC<RenderPageProps> = ({
         }
       }
 
-      scoredList.sort((a, b) => b.score - a.score);
+      scoredList.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const tA = a.prod.created_at ? new Date(a.prod.created_at).getTime() : 0;
+        const tB = b.prod.created_at ? new Date(b.prod.created_at).getTime() : 0;
+        return tB - tA;
+      });
       list = scoredList.map((item) => item.prod);
     }
 
@@ -1089,6 +1098,8 @@ const RenderPage: React.FC<RenderPageProps> = ({
         };
         return getDisc(b) - getDisc(a);
       });
+    } else if (searchQuery.trim() && (sortBy === "relevance" || !sortBy)) {
+      // Relevance sort: scoredList already sorted by relevance score desc, then newest first
     } else {
       // default: newest
       list.sort((a, b) => {
@@ -1108,9 +1119,22 @@ const RenderPage: React.FC<RenderPageProps> = ({
   }, [filteredAndSortedProducts, currentPage, pageSize]);
 
   const isSectionFocused = Boolean(sectionTitleParam || currentSectionIdParam);
-  const resolvedStoreProducts = isSectionFocused ? paginatedProducts : (serverProducts ?? paginatedProducts);
-  const resolvedTotalCount = isSectionFocused ? filteredAndSortedProducts.length : (serverTotal ?? filteredAndSortedProducts.length);
-  const resolvedTotalPages = isSectionFocused ? totalPages : (serverTotalPages ?? totalPages);
+  const isSearchingServer = Boolean(searchQuery.trim() && (isServerLoading || serverProducts === null));
+  const resolvedStoreProducts = isSectionFocused
+    ? paginatedProducts
+    : isSearchingServer
+      ? []
+      : (serverProducts ?? paginatedProducts);
+  const resolvedTotalCount = isSectionFocused
+    ? filteredAndSortedProducts.length
+    : isSearchingServer
+      ? 0
+      : (serverTotal ?? filteredAndSortedProducts.length);
+  const resolvedTotalPages = isSectionFocused
+    ? totalPages
+    : isSearchingServer
+      ? 1
+      : (serverTotalPages ?? totalPages);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -1515,7 +1539,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
               setCurrentPage(1);
             }}
             totalProducts={resolvedTotalCount}
-            isProductsLoading={isServerLoading || Boolean(isCartProductsLoading && (!resolvedStoreProducts || resolvedStoreProducts.length === 0))}
+            isProductsLoading={isServerLoading || isSearchingServer || Boolean(isCartProductsLoading && (!resolvedStoreProducts || resolvedStoreProducts.length === 0))}
           />
         </React.Fragment>
       );

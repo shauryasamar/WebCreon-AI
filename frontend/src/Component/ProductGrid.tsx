@@ -119,6 +119,7 @@ type ProductGridProps = {
   card_style?: string;
   cardStyle?: string;
   show_brand_name?: boolean;
+  isProductsLoading?: boolean;
 
   theme?: {
     mode?: string;
@@ -160,6 +161,7 @@ function formatAspectRatio(ratio?: string): string {
 const ProductGrid: React.FC<ProductGridProps> = ({
   siteId,
   products: productsProp,
+  isProductsLoading: isProductsLoadingProp,
   title,
   subtitle,
   itemCount,
@@ -221,7 +223,8 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const { slug: siteSlug } = useParams();
-  const { products: cartProducts, isProductsLoading = false } = useCart();
+  const { products: cartProducts, isProductsLoading: cartIsProductsLoading = false } = useCart();
+  const isProductsLoading = isProductsLoadingProp !== undefined ? isProductsLoadingProp : cartIsProductsLoading;
 
   const isDedicatedFilteredView = useMemo(() => {
     const params = new URLSearchParams(location.search);

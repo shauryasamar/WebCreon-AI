@@ -486,7 +486,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
   const initialSearchQuery = searchParams.get("search") || "";
-  const initialSortBy = searchParams.get("sort_by") || searchParams.get("sort") || "newest";
+  const initialSortBy = searchParams.get("sort_by") || searchParams.get("sort") || (initialSearchQuery.trim() ? "relevance" : "newest");
   const initialCatParam = searchParams.get("category") || searchParams.get("category_id");
   const initialBrandParams = searchParams.getAll("brand");
   const initialColParams = searchParams.getAll("collection").concat(searchParams.getAll("collection_id"));
@@ -519,6 +519,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
 
   useEffect(() => {
     setCurrentPage(1);
+    setServerProducts(null);
   }, [filters, searchQuery, sortBy]);
 
   useEffect(() => {
@@ -530,6 +531,10 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
     const sortParam = params.get("sort_by") || params.get("sort");
     if (sortParam) {
       setSortBy(sortParam);
+    } else if (q.trim()) {
+      setSortBy("relevance");
+    } else {
+      setSortBy("newest");
     }
 
     const catParam = params.get("category") || params.get("category_id");
@@ -1083,6 +1088,8 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
         };
         return getDisc(b) - getDisc(a);
       });
+    } else if (searchQuery.trim() && (sortBy === "relevance" || !sortBy)) {
+      // Relevance sort: already sorted by relevance score, newest first
     } else {
       list.sort((a, b) => {
         const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -1101,9 +1108,22 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
   }, [filteredAndSortedProducts, currentPage, pageSize]);
 
   const isSectionFocused = Boolean(sectionTitleParam || currentSectionIdParam);
-  const resolvedStoreProducts = isSectionFocused ? paginatedProducts : (serverProducts ?? paginatedProducts);
-  const resolvedTotalCount = isSectionFocused ? filteredAndSortedProducts.length : (serverTotal ?? filteredAndSortedProducts.length);
-  const resolvedTotalPages = isSectionFocused ? totalPages : (serverTotalPages ?? totalPages);
+  const isSearchingServer = Boolean(searchQuery.trim() && (isServerLoading || serverProducts === null));
+  const resolvedStoreProducts = isSectionFocused
+    ? paginatedProducts
+    : isSearchingServer
+      ? []
+      : (serverProducts ?? paginatedProducts);
+  const resolvedTotalCount = isSectionFocused
+    ? filteredAndSortedProducts.length
+    : isSearchingServer
+      ? 0
+      : (serverTotal ?? filteredAndSortedProducts.length);
+  const resolvedTotalPages = isSectionFocused
+    ? totalPages
+    : isSearchingServer
+      ? 1
+      : (serverTotalPages ?? totalPages);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -1499,6 +1519,7 @@ const EditorRenderPage: React.FC<EditorRenderPageProps> = ({
             setCurrentPage(1);
           }}
           totalProducts={resolvedTotalCount}
+          isProductsLoading={isServerLoading || isSearchingServer}
         />
       );
     } else if (resolvedDataSource === "cart") {
