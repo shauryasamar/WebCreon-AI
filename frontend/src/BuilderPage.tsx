@@ -3212,7 +3212,7 @@ function BuilderPageContent() {
       <div
         style={{
           height: "100%",
-          overflowY: "auto",
+          overflow: "hidden",
           background: tokens.surfaceBg,
           borderLeft: `1px solid ${tokens.border}`,
         }}

@@ -1735,7 +1735,7 @@ const SegmentedRow = ({
   value,
   onChange,
 }: {
-  options: { label: string; value: string }[];
+  options: { label: string; value: string; icon?: React.ReactNode }[];
   value: string;
   onChange: (val: string) => void;
 }) => {
@@ -1750,34 +1750,57 @@ const SegmentedRow = ({
         gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`,
         background: isDark ? tokens.surfaceBg : "#f1f5f9",
         padding: "2px",
-        borderRadius: "5px",
+        borderRadius: "6px",
         gap: "2px",
+        height: "30px",
+        minHeight: "30px",
+        maxHeight: "30px",
         width: "100%",
         maxWidth: "100%",
         boxSizing: "border-box",
         minWidth: 0,
-        border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "transparent"}`,
+        alignItems: "stretch",
+        border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"}`,
       }}
     >
       {options.map((opt) => {
         const active = opt.value === value;
+        const tooltip =
+          opt.label ||
+          (opt.value === "on"
+            ? "Enabled"
+            : opt.value === "off"
+            ? "Disabled"
+            : String(opt.value).replace(/_/g, " "));
+
         return (
           <button
             key={opt.value}
             type="button"
             onClick={() => onChange(opt.value)}
-            title={opt.label}
+            title={tooltip}
             style={{
-              padding: isVeryCompact ? "4px 1px" : isCompact ? "4px 2px" : "4px 4px",
-              fontSize: isVeryCompact ? "9px" : isCompact ? "9.5px" : "10px",
-              lineHeight: 1.2,
+              height: "24px",
+              minHeight: "24px",
+              maxHeight: "24px",
+              padding: isVeryCompact ? "0 1px" : isCompact ? "0 2px" : "0 4px",
+              fontSize: isVeryCompact ? "8.5px" : isCompact ? "9px" : "9.5px",
+              lineHeight: 1,
               fontWeight: active ? 700 : 500,
               borderRadius: "4px",
-              border: "none",
+              border: active
+                ? isDark
+                  ? "1px solid rgba(255,255,255,0.12)"
+                  : "1px solid rgba(0,0,0,0.08)"
+                : "1px solid transparent",
               background: active ? (isDark ? tokens.elevatedSurfaceBg : "#ffffff") : "transparent",
               color: active ? (isDark ? tokens.textPrimary : "#0f172a") : tokens.textMuted,
               boxShadow: active ? (isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 2px rgba(0,0,0,0.08)") : "none",
               cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: opt.icon && opt.label ? "4px" : "0px",
               textAlign: "center",
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -1788,10 +1811,125 @@ const SegmentedRow = ({
               boxSizing: "border-box",
             }}
           >
-            {opt.label}
+            {opt.icon && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  opacity: active ? 1 : 0.72,
+                }}
+              >
+                {opt.icon}
+              </span>
+            )}
+            {opt.label ? (
+              <span
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {opt.label}
+              </span>
+            ) : null}
           </button>
         );
       })}
+    </div>
+  );
+};
+
+interface EditorSubTabOption {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
+}
+
+const EditorSubTabs = ({
+  tabs,
+  activeTab,
+  onChange,
+}: {
+  tabs: EditorSubTabOption[];
+  activeTab: string;
+  onChange: (id: any) => void;
+}) => {
+  const { isDark, tokens } = useAdminTheme();
+  return (
+    <div
+      style={{
+        position: "sticky",
+        top: "-8px",
+        zIndex: 12,
+        background: tokens.surfaceBg,
+        paddingTop: "0px",
+        paddingBottom: "6px",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))`,
+          gap: "2px",
+          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+          padding: "2px",
+          borderRadius: "6px",
+          height: "28px",
+          minHeight: "28px",
+          maxHeight: "28px",
+          width: "100%",
+          boxSizing: "border-box",
+          alignItems: "center",
+        }}
+      >
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onChange(tab.id)}
+              style={{
+                height: "24px",
+                minHeight: "24px",
+                maxHeight: "24px",
+                padding: "0 2px",
+                border: "none",
+                borderRadius: "4px",
+                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
+                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
+                fontWeight: isActive ? 700 : 500,
+                fontSize: tabs.length >= 5 ? "9.5px" : "10px",
+                cursor: "pointer",
+                textAlign: "center",
+                boxShadow: isActive
+                  ? isDark
+                    ? "0 1px 3px rgba(0,0,0,0.3)"
+                    : "0 1px 2px rgba(0,0,0,0.06)"
+                  : "none",
+                transition: "all 0.12s ease",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: 0,
+              }}
+              title={tab.label}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 };
@@ -3305,54 +3443,14 @@ function SectionGroupCarouselEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 2 Clean Navigation Tabs matching Navbar theme */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
-          gap: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          padding: "2px",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "styling", label: "Styles" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.12s ease",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                minWidth: 0,
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. LAYOUT & STRUCTURE TAB */}
       {activeTab === "layout" && (
@@ -3830,31 +3928,14 @@ function ProductCarouselEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* Tab Bar */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "2px", background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9", padding: "2px", borderRadius: "6px", boxSizing: "border-box" }}>
-        {[{ id: "layout", label: "Layout" }, { id: "styling", label: "Styles" }].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 4px", border: "none", borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600, fontSize: "10px",
-                cursor: "pointer", textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.12s ease", whiteSpace: "nowrap",
-                overflow: "hidden", textOverflow: "ellipsis", minWidth: 0,
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <EditorSubTabs
+        tabs={[
+          { id: "layout", label: "Layout" },
+          { id: "styling", label: "Styles" },
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* ── Layout Tab ─────────────────────────────────────────────────────── */}
       {activeTab === "layout" && (
@@ -4283,31 +4364,14 @@ function ProductGridEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* Tab Bar */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "2px", background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9", padding: "2px", borderRadius: "6px", boxSizing: "border-box" }}>
-        {[{ id: "layout", label: "Layout" }, { id: "styling", label: "Styles" }].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 4px", border: "none", borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600, fontSize: "10px",
-                cursor: "pointer", textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.12s ease", whiteSpace: "nowrap",
-                overflow: "hidden", textOverflow: "ellipsis", minWidth: 0,
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <EditorSubTabs
+        tabs={[
+          { id: "layout", label: "Layout" },
+          { id: "styling", label: "Styles" },
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* ── Layout Tab ─────────────────────────────────────────────────────── */}
       {activeTab === "layout" && (
@@ -4817,50 +4881,15 @@ function FooterEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Focused Tabs */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "3px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          padding: "2px",
-          borderRadius: "6px",
-          width: "100%",
-          boxSizing: "border-box",
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                border: "none",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontSize: "11px",
-                fontWeight: isActive ? 800 : 600,
-                padding: "6px 4px",
-                borderRadius: "5px",
-                cursor: "pointer",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.1s ease",
-                whiteSpace: "nowrap",
-                textAlign: "center",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* ── 1. Layout Tab (Dimensions, Spacing & Social Links) ─────────────── */}
       {activeTab === "layout" && (
@@ -5341,51 +5370,15 @@ function CartEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Modern Clean Navigation Tabs */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          padding: "2px",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. LAYOUT & FEATURES TAB */}
       {activeTab === "layout" && (
@@ -6087,51 +6080,15 @@ function CheckoutStepsEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Navigation Tabs: Layout, Content, Colors */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          padding: "2px",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. LAYOUT TAB */}
       {activeTab === "layout" && (
@@ -6624,51 +6581,15 @@ function PaymentMethodsEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Navigation Tabs with Layout Coming First */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "2px",
-          padding: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. LAYOUT TAB (METHODS TOGGLES + RADII + SPACING) */}
       {activeTab === "layout" && (
@@ -7114,45 +7035,15 @@ function ProfileEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Clean Modern Tabs */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          padding: "2px",
-          borderRadius: "6px",
-          marginBottom: "2px",
-        }}
-      >
-        {(["layout", "content", "colors"] as const).map((tab) => {
-          const active = activeTab === tab;
-          return (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              style={{
-                padding: "5px 2px",
-                fontSize: "10.5px",
-                fontWeight: active ? 800 : 600,
-                borderRadius: "4px",
-                border: "none",
-                background: active ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: active ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                boxShadow: active ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                cursor: "pointer",
-                textTransform: "capitalize",
-                textAlign: "center",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab}
-            </button>
-          );
-        })}
-      </div>
+      <EditorSubTabs
+        tabs={[
+          { id: "layout", label: "Layout" },
+          { id: "content", label: "Content" },
+          { id: "colors", label: "Colors" },
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. LAYOUT TAB */}
       {activeTab === "layout" && (
@@ -7550,51 +7441,15 @@ function SignInEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Navigation Tabs */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "2px",
-          padding: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. LAYOUT TAB */}
       {activeTab === "layout" && (
@@ -7949,51 +7804,15 @@ function SignUpEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Navigation Tabs */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "2px",
-          padding: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. LAYOUT TAB */}
       {activeTab === "layout" && (
@@ -8394,51 +8213,15 @@ function SupportEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Navigation Tabs */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "2px",
-          padding: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10.5px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. LAYOUT TAB */}
       {activeTab === "layout" && (
@@ -8917,51 +8700,15 @@ function OrdersEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Navigation Tabs */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "2px",
-          padding: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. LAYOUT TAB */}
       {activeTab === "layout" && (
@@ -9435,51 +9182,15 @@ function PlaceOrderEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Standard Tabs: Layout, Content, Colors */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "2px",
-          padding: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. LAYOUT TAB */}
       {activeTab === "layout" && (
@@ -9978,51 +9689,15 @@ function CheckoutOrderSummaryEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Modern Clean Navigation Tabs */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          padding: "2px",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. LAYOUT & FEATURES TAB */}
       {activeTab === "layout" && (
@@ -10503,51 +10178,15 @@ function DeliveryFormEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 3 Standard Navigation Tabs: Layout, Content, Colors */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          padding: "2px",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "layout", label: "Layout" },
           { id: "content", label: "Content" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* ========================================================================= */}
       {/* 1. LAYOUT TAB */}
@@ -11343,54 +10982,14 @@ function ProductDetailEditor({
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 2 Modern Clean Navigation Tabs */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          padding: "2px",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "design", label: "Design" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "6px 2px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.12s ease",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                minWidth: 0,
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* 1. DESIGN & CONTENT TAB */}
       {activeTab === "design" && (
@@ -11915,6 +11514,312 @@ function ProductDetailEditor({
   );
 }
 
+// Navbar Editbar Icons for Segmented Controls
+const IconDisplayBoth = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="3.5" width="5" height="9" rx="1.2" />
+    <circle cx="4.5" cy="8" r="0.8" fill="currentColor" stroke="none" />
+    <line x1="9" y1="6.5" x2="14" y2="6.5" />
+    <line x1="9" y1="9.5" x2="12.5" y2="9.5" />
+  </svg>
+);
+
+const IconDisplayLogo = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2.5" width="12" height="11" rx="1.5" />
+    <circle cx="5.5" cy="6" r="1" />
+    <path d="M14 10.5l-3.5-3.5-5 5" />
+    <path d="M7.5 10l-1.5-1.5L2 12" />
+  </svg>
+);
+
+const IconDisplayName = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" y1="3.5" x2="13" y2="3.5" />
+    <line x1="3" y1="3.5" x2="3" y2="5" />
+    <line x1="13" y1="3.5" x2="13" y2="5" />
+    <line x1="8" y1="3.5" x2="8" y2="12.5" />
+    <line x1="5.5" y1="12.5" x2="10.5" y2="12.5" />
+  </svg>
+);
+
+const IconAlignLeft = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <line x1="2.5" y1="4.5" x2="10.5" y2="4.5" />
+    <line x1="2.5" y1="8" x2="13.5" y2="8" />
+    <line x1="2.5" y1="11.5" x2="7.5" y2="11.5" />
+  </svg>
+);
+
+const IconAlignCenter = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <line x1="2.5" y1="4.5" x2="13.5" y2="4.5" />
+    <line x1="4.5" y1="8" x2="11.5" y2="8" />
+    <line x1="6" y1="11.5" x2="10" y2="11.5" />
+  </svg>
+);
+
+const IconAlignRight = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <line x1="5.5" y1="4.5" x2="13.5" y2="4.5" />
+    <line x1="2.5" y1="8" x2="13.5" y2="8" />
+    <line x1="8.5" y1="11.5" x2="13.5" y2="11.5" />
+  </svg>
+);
+
+const IconDirectionRow = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <rect x="3" y="3.5" width="4.25" height="9" rx="1.5" />
+    <rect x="8.75" y="3.5" width="4.25" height="9" rx="1.5" />
+  </svg>
+);
+
+const IconDirectionColumn = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <rect x="3.5" y="3" width="9" height="4.25" rx="1.5" />
+    <rect x="3.5" y="8.75" width="9" height="4.25" rx="1.5" />
+  </svg>
+);
+
+const IconFitContain = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <rect x="2" y="2" width="12" height="12" rx="2" strokeOpacity="0.45" />
+    <rect x="3.75" y="5.25" width="8.5" height="5.5" rx="1" />
+  </svg>
+);
+
+const IconFitCover = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <rect x="4" y="4" width="8" height="8" rx="1" />
+    <path d="M4 2v2M12 2v2M4 12v2M12 12v2M2 4h2M2 12h2M12 4h2M12 12h2" />
+  </svg>
+);
+
+const IconFitFill = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2" width="12" height="12" rx="2" strokeOpacity="0.45" />
+    <path d="M4 6V4h2" />
+    <path d="M12 6V4h-2" />
+    <path d="M4 10v2h2" />
+    <path d="M12 10v2h-2" />
+    <line x1="4" y1="4" x2="6.5" y2="6.5" />
+    <line x1="12" y1="4" x2="9.5" y2="6.5" />
+    <line x1="4" y1="12" x2="6.5" y2="9.5" />
+    <line x1="12" y1="12" x2="9.5" y2="9.5" />
+  </svg>
+);
+
+const IconSearchBar = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <circle cx="6.75" cy="6.75" r="4.25" />
+    <line x1="9.75" y1="9.75" x2="13.5" y2="13.5" />
+  </svg>
+);
+
+const IconSearchIconOnly = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <circle cx="8" cy="8" r="5.75" />
+    <line x1="8" y1="5.25" x2="8" y2="8.25" />
+    <circle cx="8" cy="10.75" r="0.65" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const IconFontNormal = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3.5" y1="3.5" x2="12.5" y2="3.5" />
+    <line x1="8" y1="3.5" x2="8" y2="12.5" />
+    <line x1="5.5" y1="12.5" x2="10.5" y2="12.5" />
+  </svg>
+);
+
+const IconFontItalic = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+    <line x1="6.5" y1="3.5" x2="12" y2="3.5" />
+    <line x1="4" y1="12.5" x2="9.5" y2="12.5" />
+    <line x1="9.5" y1="3.5" x2="6.5" y2="12.5" />
+  </svg>
+);
+
+const IconScrollSticky = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9.5 3.5l3 3-2 2-4-4 2-2zM6.5 4.5l-4 4 1 1 2-2 3 3-2 2 1 1 4-4" />
+    <line x1="2.5" y1="13.5" x2="5.5" y2="10.5" />
+  </svg>
+);
+
+const IconScrollFixed = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3.5" y="7" width="9" height="7" rx="1.5" />
+    <path d="M5.5 7V4.5a2.5 2.5 0 0 1 5 0V7" />
+  </svg>
+);
+
+const IconScrollStatic = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <rect x="2.5" y="3.5" width="11" height="9" rx="1.5" />
+    <line x1="2.5" y1="7" x2="13.5" y2="7" />
+  </svg>
+);
+
+const IconStyleOutline = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <circle cx="8" cy="8" r="5" />
+  </svg>
+);
+
+const IconStyleSolid = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
+    <circle cx="8" cy="8" r="5" />
+  </svg>
+);
+
+const IconStyleDuotone = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" stroke="currentColor" strokeWidth="1.3">
+    <circle cx="8" cy="8" r="5" fill="currentColor" fillOpacity="0.25" />
+    <path d="M8 3a5 5 0 0 0 0 10V3z" fill="currentColor" />
+  </svg>
+);
+
+const IconShapeRounded = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <rect x="3" y="3" width="10" height="10" rx="3" />
+  </svg>
+);
+
+const IconShapeCircle = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <circle cx="8" cy="8" r="5.25" />
+  </svg>
+);
+
+const IconShapeSquare = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <rect x="3" y="3" width="10" height="10" rx="0.5" />
+  </svg>
+);
+
+const IconShapeGhost = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2 2">
+    <rect x="3" y="3" width="10" height="10" rx="2" />
+  </svg>
+);
+
+// Navbar Action Icons Variants (Matching Navbar.tsx)
+const IconVariantCart = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="9" cy="20" r="1.5" />
+    <circle cx="17" cy="20" r="1.5" />
+    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+  </svg>
+);
+
+const IconVariantBag = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 9V7a6 6 0 0 1 12 0v2" />
+    <path d="M4 9h16l-1.5 12H5.5L4 9z" />
+  </svg>
+);
+
+const IconVariantBasket = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 10h16l-1.5 10H5.5L4 10z" />
+    <path d="M7 10l5-7 5 7" />
+    <path d="M12 10v10" />
+    <path d="M4 10h16" />
+  </svg>
+);
+
+const IconVariantUserClean = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+const IconVariantUserCircle = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="10" r="3" />
+    <path d="M6.2 18.5a7 7 0 0 1 11.6 0" />
+  </svg>
+);
+
+const IconVariantUserRounded = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <circle cx="12" cy="8" r="4.25" />
+    <path d="M5 19.5a7 7 0 0 1 14 0" />
+  </svg>
+);
+
+const IconVariantBellClassic = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </svg>
+);
+
+const IconVariantBellCurved = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 16h12c-1.5-2-2-5-2-8a4 4 0 1 0-8 0c0 3-.5 6-2 8z" />
+    <path d="M10 19a2 2 0 0 0 4 0" />
+  </svg>
+);
+
+const IconVariantBellRing = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    <path d="M4 4a8.5 8.5 0 0 0 0 10M20 4a8.5 8.5 0 0 1 0 10" opacity="0.6" />
+  </svg>
+);
+
+const IconVariantSearchMagnifier = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <circle cx="11" cy="11" r="7.5" />
+    <line x1="21" y1="21" x2="16.5" y2="16.5" />
+  </svg>
+);
+
+const IconVariantSearchMinimal = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <circle cx="11" cy="11" r="7" />
+    <path d="M16 16l4.5 4.5" />
+  </svg>
+);
+
+const IconVariantSearchRound = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <circle cx="10.5" cy="10.5" r="6.5" />
+    <path d="M15.5 15.5L20.5 20.5" />
+  </svg>
+);
+
+const IconBorderOn = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+  </svg>
+);
+
+const IconBorderOff = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" strokeDasharray="2.5 2" opacity="0.65" />
+    <line x1="3" y1="13" x2="13" y2="3" />
+  </svg>
+);
+
+const IconBgFilled = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+  </svg>
+);
+
+const IconBgNone = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" strokeDasharray="2.5 2" opacity="0.65" />
+    <line x1="3" y1="13" x2="13" y2="3" />
+  </svg>
+);
+
 function NavbarEditor({
   selectedBlock,
   isLightMode,
@@ -12031,57 +11936,17 @@ function NavbarEditor({
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
-      {/* 5 Clean Navigation Tabs */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(5, 1fr)",
-          gap: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          padding: "2px",
-          borderRadius: "6px",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          minWidth: 0,
-        }}
-      >
-        {[
+      <EditorSubTabs
+        tabs={[
           { id: "brand", label: "Brand" },
           { id: "search", label: "Search" },
           { id: "layout", label: "Layout" },
           { id: "icons", label: "Icons" },
           { id: "colors", label: "Colors" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "5px 1px",
-                border: "none",
-                borderRadius: "4px",
-                background: isActive ? (isDark ? tokens.surfaceBg : "#ffffff") : "transparent",
-                color: isActive ? (isDark ? tokens.accent : ADMIN_BLUE) : tokens.textMuted,
-                fontWeight: isActive ? 800 : 600,
-                fontSize: "10px",
-                cursor: "pointer",
-                textAlign: "center",
-                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.12s ease",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                minWidth: 0,
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        ]}
+        activeTab={activeTab}
+        onChange={(val) => setActiveTab(val as any)}
+      />
 
       {/* TAB 1: BRAND & LOGO */}
       {activeTab === "brand" && (
@@ -12096,9 +11961,9 @@ function NavbarEditor({
                 value={brandDisplayMode}
                 onChange={(val) => updateField("brand_display_mode", val)}
                 options={[
-                  { label: "Both", value: "both" },
-                  { label: "Logo", value: "logo_only" },
-                  { label: "Name", value: "name_only" },
+                  { label: "Both", value: "both", icon: <IconDisplayBoth /> },
+                  { label: "Logo", value: "logo_only", icon: <IconDisplayLogo /> },
+                  { label: "Name", value: "name_only", icon: <IconDisplayName /> },
                 ]}
               />
             </div>
@@ -12113,8 +11978,8 @@ function NavbarEditor({
                   value={brandAlignment}
                   onChange={(val) => updateField("brand_alignment", val)}
                   options={[
-                    { label: "Left", value: "left" },
-                    { label: "Center", value: "center" },
+                    { label: "", value: "left", icon: <IconAlignLeft /> },
+                    { label: "", value: "center", icon: <IconAlignCenter /> },
                   ]}
                 />
               </div>
@@ -12128,8 +11993,8 @@ function NavbarEditor({
                     value={brandLayoutDirection}
                     onChange={(val) => updateField("brand_layout_direction", val)}
                     options={[
-                      { label: "Row", value: "row" },
-                      { label: "Column", value: "column" },
+                      { label: "", value: "row", icon: <IconDirectionRow /> },
+                      { label: "", value: "column", icon: <IconDirectionColumn /> },
                     ]}
                   />
                 </div>
@@ -12155,9 +12020,9 @@ function NavbarEditor({
                     value={logoFit}
                     onChange={(val) => updateField("logo_fit", val)}
                     options={[
-                      { label: "Contain", value: "contain" },
-                      { label: "Cover", value: "cover" },
-                      { label: "Fill", value: "fill" },
+                      { label: "Contain", value: "contain", icon: <IconFitContain /> },
+                      { label: "Cover", value: "cover", icon: <IconFitCover /> },
+                      { label: "Fill", value: "fill", icon: <IconFitFill /> },
                     ]}
                   />
                 </div>
@@ -12272,8 +12137,8 @@ function NavbarEditor({
                       value={brandFontStyle}
                       onChange={(val) => updateField("brand_font_style", val)}
                       options={[
-                        { label: "Normal", value: "normal" },
-                        { label: "Italic", value: "italic" },
+                        { label: "", value: "normal", icon: <IconFontNormal /> },
+                        { label: "", value: "italic", icon: <IconFontItalic /> },
                       ]}
                     />
                   </div>
@@ -12307,8 +12172,8 @@ function NavbarEditor({
                 value={searchDisplayMode}
                 onChange={(val) => updateField("search_display_mode", val)}
                 options={[
-                  { label: "Search Bar", value: "bar" },
-                  { label: "Icon Only", value: "icon" },
+                  { label: "Search Bar", value: "bar", icon: <IconSearchBar /> },
+                  { label: "Icon Only", value: "icon", icon: <IconSearchIconOnly /> },
                 ]}
               />
             </div>
@@ -12323,9 +12188,9 @@ function NavbarEditor({
                     value={searchPlacement}
                     onChange={(val) => updateField("search_placement", val)}
                     options={[
-                      { label: "Left", value: "left" },
-                      { label: "Center", value: "center" },
-                      { label: "Right", value: "right" },
+                      { label: "Left", value: "left", icon: <IconAlignLeft /> },
+                      { label: "Center", value: "center", icon: <IconAlignCenter /> },
+                      { label: "Right", value: "right", icon: <IconAlignRight /> },
                     ]}
                   />
                 </div>
@@ -12390,9 +12255,9 @@ function NavbarEditor({
                 value={navbarPosition}
                 onChange={(val) => updateField("navbar_position", val)}
                 options={[
-                  { label: "Sticky", value: "sticky" },
-                  { label: "Fixed", value: "fixed" },
-                  { label: "Static", value: "static" },
+                  { label: "Sticky", value: "sticky", icon: <IconScrollSticky /> },
+                  { label: "Fixed", value: "fixed", icon: <IconScrollFixed /> },
+                  { label: "Static", value: "static", icon: <IconScrollStatic /> },
                 ]}
               />
             </div>
@@ -12478,9 +12343,9 @@ function NavbarEditor({
                   value={navbarIconStyle}
                   onChange={(val) => updateField("navbar_icon_style", val)}
                   options={[
-                    { label: "Outline", value: "outline" },
-                    { label: "Solid", value: "solid" },
-                    { label: "Duotone", value: "duotone" },
+                    { label: "Outline", value: "outline", icon: <IconStyleOutline /> },
+                    { label: "Solid", value: "solid", icon: <IconStyleSolid /> },
+                    { label: "Duotone", value: "duotone", icon: <IconStyleDuotone /> },
                   ]}
                 />
               </div>
@@ -12511,8 +12376,8 @@ function NavbarEditor({
                       value={navbarIconBgEnabled ? "on" : "off"}
                       onChange={(val) => updateField("navbar_icon_bg_enabled", val === "on")}
                       options={[
-                        { label: "Filled", value: "on" },
-                        { label: "None", value: "off" },
+                        { label: "", value: "on", icon: <IconBgFilled /> },
+                        { label: "", value: "off", icon: <IconBgNone /> },
                       ]}
                     />
                   </div>
@@ -12525,8 +12390,8 @@ function NavbarEditor({
                       value={navbarIconBorderEnabled ? "on" : "off"}
                       onChange={(val) => updateField("navbar_icon_border_enabled", val === "on")}
                       options={[
-                        { label: "Border", value: "on" },
-                        { label: "No Border", value: "off" },
+                        { label: "", value: "on", icon: <IconBorderOn /> },
+                        { label: "", value: "off", icon: <IconBorderOff /> },
                       ]}
                     />
                   </div>
@@ -12546,9 +12411,9 @@ function NavbarEditor({
                   value={navbarCartIconVariant}
                   onChange={(val) => updateField("navbar_cart_icon_variant", val)}
                   options={[
-                    { label: "Cart", value: "cart" },
-                    { label: "Shopping Bag", value: "bag" },
-                    { label: "Basket", value: "basket" },
+                    { label: "", value: "cart", icon: <IconVariantCart /> },
+                    { label: "", value: "bag", icon: <IconVariantBag /> },
+                    { label: "", value: "basket", icon: <IconVariantBasket /> },
                   ]}
                 />
               </div>
@@ -12561,9 +12426,9 @@ function NavbarEditor({
                   value={navbarAccountIconVariant}
                   onChange={(val) => updateField("navbar_account_icon_variant", val)}
                   options={[
-                    { label: "Standard", value: "user_clean" },
-                    { label: "Circle", value: "user_circle" },
-                    { label: "Rounded", value: "user_rounded" },
+                    { label: "", value: "user_clean", icon: <IconVariantUserClean /> },
+                    { label: "", value: "user_circle", icon: <IconVariantUserCircle /> },
+                    { label: "", value: "user_rounded", icon: <IconVariantUserRounded /> },
                   ]}
                 />
               </div>
@@ -12576,9 +12441,9 @@ function NavbarEditor({
                   value={navbarNotificationIconVariant}
                   onChange={(val) => updateField("navbar_notification_icon_variant", val)}
                   options={[
-                    { label: "Classic", value: "bell" },
-                    { label: "Curved", value: "bell_curved" },
-                    { label: "Ringing", value: "bell_ring" },
+                    { label: "", value: "bell", icon: <IconVariantBellClassic /> },
+                    { label: "", value: "bell_curved", icon: <IconVariantBellCurved /> },
+                    { label: "", value: "bell_ring", icon: <IconVariantBellRing /> },
                   ]}
                 />
               </div>
@@ -12591,9 +12456,9 @@ function NavbarEditor({
                   value={navbarSearchIconVariant}
                   onChange={(val) => updateField("navbar_search_icon_variant", val)}
                   options={[
-                    { label: "Classic", value: "magnifier" },
-                    { label: "Compact", value: "search_minimal" },
-                    { label: "Angled", value: "search_round" },
+                    { label: "", value: "magnifier", icon: <IconVariantSearchMagnifier /> },
+                    { label: "", value: "search_minimal", icon: <IconVariantSearchMinimal /> },
+                    { label: "", value: "search_round", icon: <IconVariantSearchRound /> },
                   ]}
                 />
               </div>
@@ -12758,6 +12623,31 @@ export default function EditorSidebar({
   const [showAllSnapshots, setShowAllSnapshots] = useState(false);
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [appliedSnapshotId, setAppliedSnapshotId] = useState<string | null>(null);
+
+  const [thumbTop, setThumbTop] = useState(8);
+  const [thumbHeight, setThumbHeight] = useState(0);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollTimeoutRef = useRef<any>(null);
+  const outerRef = useRef<HTMLDivElement>(null);
+
+  const handleSidebarScroll = (e: React.UIEvent<HTMLElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollHeight > el.clientHeight + 4) {
+      const bodyH = el.clientHeight;
+      const height = Math.max(28, (bodyH / el.scrollHeight) * bodyH);
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      const ratio = maxScroll > 0 ? el.scrollTop / maxScroll : 0;
+      const headerH = el.offsetTop || 0;
+      const maxTop = bodyH - height - 16;
+      setThumbHeight(height);
+      setThumbTop(headerH + ratio * maxTop + 8);
+      setIsScrolling(true);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = setTimeout(() => setIsScrolling(false), 900);
+    } else {
+      setThumbHeight(0);
+    }
+  };
 
   useEffect(() => {
     const handleUpdate = (e: any) => {
@@ -13008,65 +12898,93 @@ export default function EditorSidebar({
     return `${activePage.name?.toUpperCase() || "HOME"} (${activePage.route || "/"})`;
   }, [currentPath, activePage]);
 
+  const selectedBlockTitle = useMemo(() => {
+    if (!selectedBlock) return activePageTitle;
+    if (isPlaceOrderBlock(selectedBlock) || selectedBlock.id === "place_order_cta" || selectedBlock.type === "place_order_cta" || selectedBlock.type === "placeordercta" || selectedBlock.id === "checkout_review" || selectedBlock.type === "checkout_review" || selectedBlockId === "place_order_cta" || selectedBlockId === "checkout_review") return "Review & Pay";
+    if (isProfileBlock(selectedBlock) || selectedBlock.id === "profile_details" || selectedBlock.type === "profile_details" || selectedBlock.type === "profiledetails" || selectedBlock.type === "profile" || selectedBlockId === "profile_details" || selectedBlockId === "profile") return "Profile Details";
+    if (isSignInBlock(selectedBlock) || selectedBlock.id === "signin_form" || selectedBlock.type === "signin_form" || selectedBlock.type === "signinform" || selectedBlock.type === "login_form" || selectedBlock.type === "login" || selectedBlockId === "signin_form" || selectedBlockId === "login") return "Sign In Form";
+    if (isSignUpBlock(selectedBlock) || selectedBlock.id === "signup_form" || selectedBlock.type === "signup_form" || selectedBlock.type === "signupform" || selectedBlock.type === "register_form" || selectedBlock.type === "signup" || selectedBlockId === "signup_form" || selectedBlockId === "signup") return "Sign Up Form";
+    if (isOrdersBlock(selectedBlock) || selectedBlock.id === "customer_orders" || selectedBlock.type === "customer_orders" || selectedBlock.type === "customerorders" || selectedBlock.type === "orders" || selectedBlock.type === "order_history" || selectedBlock.type === "order_history_list" || selectedBlockId === "customer_orders" || selectedBlockId === "orders") return "Order History";
+    if (isSupportBlock(selectedBlock) || selectedBlock?.id === "customer_support" || selectedBlock?.type === "customer_support" || selectedBlock?.type === "customersupport" || selectedBlock?.type === "support" || selectedBlock?.type === "support_desk" || selectedBlockId === "customer_support" || selectedBlockId === "support") return "Help & Support Desk";
+    if (isCheckoutSummaryBlock(selectedBlock) || selectedBlock.id === "checkout_order_summary" || selectedBlock.type === "checkout_order_summary" || selectedBlock.type === "checkoutordersummary" || selectedBlock.id === "order_summary" || selectedBlock.type === "order_summary" || selectedBlockId === "checkout_order_summary" || selectedBlockId === "order_summary") return "Order Summary";
+    if (isPaymentMethodsBlock(selectedBlock) || selectedBlock.id === "payment_methods" || selectedBlock.type === "payment_methods" || selectedBlock.type === "paymentmethods" || selectedBlock.type === "payments" || selectedBlockId === "payment_methods" || selectedBlockId === "payments") return "Payment Methods";
+    if (isDeliveryBlock(selectedBlock) || editableConfig?.displayName === "Delivery Form") {
+      if (selectedBlock.type === "delivery_map_picker") return "Map Location Picker";
+      if (selectedBlock.type === "delivery_address_form") return "Add / Edit Address Form";
+      return "Delivery Form";
+    }
+    if (isCheckoutStepsBlock(selectedBlock) || selectedBlock.id === "checkout_steps" || selectedBlock.type === "checkout_steps" || selectedBlockId === "checkout_steps") return "Checkout Steps";
+    if (selectedBlock.type === "product_grid" || selectedBlock.type === "productgrid") return "Product Grid";
+    if (selectedBlock.type === "hero_banner" || selectedBlock.type === "herobanner" || selectedBlock.type === "hero" || selectedBlock.type === "banner") return "Hero Banner";
+    if (selectedBlock.type === "navbar" || selectedBlock.type === "header" || selectedBlock.id === "navbar" || selectedBlock.id === "header") return "Navbar";
+    if (selectedBlock.type === "footer" || selectedBlock.id === "footer") return "Footer";
+    if (selectedBlock.type === "cart" || selectedBlock.type === "cart_view" || selectedBlock.type === "cartview" || selectedBlock.type === "cart_sidebar" || selectedBlock.type === "cartsidebar" || selectedBlock.type === "cart_items" || selectedBlock.type === "cartitems" || selectedBlockId === "cart_items" || selectedBlockId === "cart") return "Cart Items";
+    if (isProductDetailBlock(selectedBlock) || editableConfig?.displayName === "Product Detail") return "Product Detail";
+    return editableConfig?.displayName || (selectedBlock as any)?.name || selectedBlock.type?.toUpperCase() || "Selected Block";
+  }, [selectedBlock, activePageTitle, selectedBlockId, editableConfig]);
+
   return (
-    <aside
-      className="wc-editor-sidebar"
+    <div
+      ref={outerRef}
       style={{
         width: "100%",
-        minWidth: 0,
         height: "100%",
-        flexShrink: 0,
         position: "relative",
-        top: "auto",
-        overflowY: "auto",
-        overflowX: "hidden",
-        padding: "8px 10px",
-        boxSizing: "border-box",
-        color: tokens.textPrimary,
-        background: tokens.surfaceBg,
-        border: "none",
-        borderRadius: 0,
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        overflow: "hidden",
       }}
     >
-      <style>{`
-        .wc-editor-sidebar,
-        .wc-editor-sidebar * {
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-          box-sizing: border-box;
-        }
+      <aside
+        className="wc-editor-sidebar"
+        style={{
+          width: "100%",
+          minWidth: 0,
+          height: "100%",
+          flexShrink: 0,
+          position: "relative",
+          top: "auto",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          boxSizing: "border-box",
+          color: tokens.textPrimary,
+          background: tokens.surfaceBg,
+          border: "none",
+          borderRadius: 0,
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        }}
+      >
+        <style>{`
+          .wc-editor-sidebar,
+          .wc-editor-sidebar * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            box-sizing: border-box;
+          }
 
-        .wc-editor-sidebar input:not([type="range"]):focus,
-        .wc-editor-sidebar select:focus,
-        .wc-editor-sidebar textarea:focus {
-          border-color: ${tokens.accent} !important;
-          background: ${isDark ? tokens.surfaceBg : "#ffffff"} !important;
-          box-shadow: 0 0 0 2px ${tokens.accent}33 !important;
-        }
+          .wc-editor-sidebar input:not([type="range"]):focus,
+          .wc-editor-sidebar select:focus,
+          .wc-editor-sidebar textarea:focus {
+            border-color: ${tokens.accent} !important;
+            background: ${isDark ? tokens.surfaceBg : "#ffffff"} !important;
+            box-shadow: 0 0 0 2px ${tokens.accent}33 !important;
+          }
 
-        .wc-editor-sidebar input:not([type="range"]):hover,
-        .wc-editor-sidebar select:hover,
-        .wc-editor-sidebar textarea:hover {
-          border-color: ${tokens.textSecondary};
-        }
+          .wc-editor-sidebar input:not([type="range"]):hover,
+          .wc-editor-sidebar select:hover,
+          .wc-editor-sidebar textarea:hover {
+            border-color: ${tokens.textSecondary};
+          }
 
-        .wc-editor-sidebar {
-          scrollbar-width: thin;
-          scrollbar-color: ${isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"} transparent;
-        }
-        .wc-editor-sidebar::-webkit-scrollbar {
-          width: 4px;
-        }
-        .wc-editor-sidebar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .wc-editor-sidebar::-webkit-scrollbar-thumb {
-          background: ${isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"};
-          border-radius: 999px;
-        }
-        .wc-editor-sidebar::-webkit-scrollbar-thumb:hover {
-          background: ${isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1"};
-        }
+          .wc-editor-sidebar,
+          .wc-editor-sidebar-body {
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
+          }
+          .wc-editor-sidebar::-webkit-scrollbar,
+          .wc-editor-sidebar-body::-webkit-scrollbar {
+            display: none !important;
+            width: 0px !important;
+            height: 0px !important;
+          }
 
         /* Range slider styling */
         .wc-editor-range,
@@ -13176,81 +13094,155 @@ export default function EditorSidebar({
         }
       `}</style>
 
-      {/* Sleek Segmented Pill Tabs */}
+      {/* FIXED UPPER HEADER: Pinned at top across all side editbar views */}
       <div
+        className="wc-editor-fixed-header"
         style={{
+          flexShrink: 0,
+          padding: "8px 10px 6px 10px",
+          background: tokens.surfaceBg,
           display: "flex",
-          gap: "2px",
-          padding: "2px",
-          background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-          borderRadius: "6px",
-          marginBottom: "8px",
-          boxSizing: "border-box",
+          flexDirection: "column",
+          gap: "6px",
+          borderBottom: `1px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"}`,
+          zIndex: 20,
         }}
       >
-        <button
-          type="button"
-          onClick={() => onTabChange("theme")}
+        {/* Sleek Segmented Pill Tabs */}
+        <div
           style={{
-            flex: 1,
-            padding: "4px 6px",
-            borderRadius: "4px",
-            border: "none",
-            cursor: "pointer",
-            background: selectedTab === "theme" ? tokens.accent : "transparent",
-            color: selectedTab === "theme" ? "#ffffff" : tokens.textMuted,
-            boxShadow: selectedTab === "theme" ? "0 1px 4px rgba(59,130,246,0.3)" : "none",
-            fontSize: "10.5px",
-            fontWeight: 700,
-            letterSpacing: "0.04em",
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "5px",
-            transition: "all 0.12s ease",
+            gap: "2px",
+            padding: "2px",
+            background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+            borderRadius: "6px",
+            boxSizing: "border-box",
           }}
         >
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
-            <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
-            <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
-            <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
-            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
-          </svg>
-          THEME
-        </button>
+          <button
+            type="button"
+            onClick={() => onTabChange("theme")}
+            style={{
+              flex: 1,
+              padding: "4px 6px",
+              borderRadius: "4px",
+              border: "none",
+              cursor: "pointer",
+              background: selectedTab === "theme" ? tokens.accent : "transparent",
+              color: selectedTab === "theme" ? "#ffffff" : tokens.textMuted,
+              boxShadow: selectedTab === "theme" ? "0 1px 4px rgba(59,130,246,0.3)" : "none",
+              fontSize: "10.5px",
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "5px",
+              transition: "all 0.12s ease",
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+              <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+              <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+              <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+              <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+            </svg>
+            THEME
+          </button>
 
-        <button
-          type="button"
-          onClick={() => onTabChange("block")}
-          style={{
-            flex: 1,
-            padding: "4px 6px",
-            borderRadius: "4px",
-            border: "none",
-            cursor: "pointer",
-            background: selectedTab === "block" ? tokens.accent : "transparent",
-            color: selectedTab === "block" ? "#ffffff" : tokens.textMuted,
-            boxShadow: selectedTab === "block" ? "0 1px 4px rgba(59,130,246,0.3)" : "none",
-            fontSize: "10.5px",
-            fontWeight: 700,
-            letterSpacing: "0.04em",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "5px",
-            transition: "all 0.12s ease",
-          }}
-        >
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="7" />
-            <rect x="14" y="3" width="7" height="7" />
-            <rect x="14" y="14" width="7" height="7" />
-            <rect x="3" y="14" width="7" height="7" />
-          </svg>
-          BLOCKS
-        </button>
+          <button
+            type="button"
+            onClick={() => onTabChange("block")}
+            style={{
+              flex: 1,
+              padding: "4px 6px",
+              borderRadius: "4px",
+              border: "none",
+              cursor: "pointer",
+              background: selectedTab === "block" ? tokens.accent : "transparent",
+              color: selectedTab === "block" ? "#ffffff" : tokens.textMuted,
+              boxShadow: selectedTab === "block" ? "0 1px 4px rgba(59,130,246,0.3)" : "none",
+              fontSize: "10.5px",
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "5px",
+              transition: "all 0.12s ease",
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            BLOCKS
+          </button>
+        </div>
+
+        {/* Dynamic Page & Inspector Breadcrumb Header (Pinned under Theme/Blocks in Block tab) */}
+        {selectedTab === "block" && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box", paddingTop: "2px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", minWidth: 0 }}>
+              {selectedBlock ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectBlock && onSelectBlock(null)}
+                  style={{
+                    border: "none",
+                    background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)",
+                    color: tokens.accent,
+                    padding: "2px 6px",
+                    borderRadius: "3px",
+                    fontSize: "9.5px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "2px",
+                    flexShrink: 0,
+                  }}
+                  title="Back to Page Tree"
+                >
+                  ← Tree
+                </button>
+              ) : (
+                <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textMuted }}>
+                  PAGE
+                </span>
+              )}
+              <span style={{ fontSize: "9px", color: tokens.textMuted }}>/</span>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {selectedBlockTitle}
+              </span>
+            </div>
+            {selectedBlock && (
+              <span style={{ fontSize: "8.5px", fontWeight: 800, padding: "1px 4px", borderRadius: "3px", background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)", color: tokens.accent, flexShrink: 0 }}>
+                EDITING
+              </span>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* SCROLLABLE EDITING BODY: Only this part moves */}
+      <div
+        className="wc-editor-sidebar-body"
+        onScroll={handleSidebarScroll}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          overflowX: "hidden",
+          padding: "8px 10px",
+          boxSizing: "border-box",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        }}
+      >
 
       {selectedTab === "theme" ? (() => {
         const currentTheme = siteDefinition.theme || {};
@@ -13785,157 +13777,6 @@ export default function EditorSidebar({
         </div>
       ); })() : (
         <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-          {/* Dynamic Page & Inspector Breadcrumb Header */}
-          <div style={{ paddingBottom: "4px", borderBottom: `1px solid ${tokens.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "4px", minWidth: 0 }}>
-              {selectedBlock ? (
-                <button
-                  type="button"
-                  onClick={() => onSelectBlock && onSelectBlock(null)}
-                  style={{
-                    border: "none",
-                    background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)",
-                    color: tokens.accent,
-                    padding: "2px 6px",
-                    borderRadius: "3px",
-                    fontSize: "9.5px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "2px",
-                    flexShrink: 0,
-                  }}
-                  title="Back to Page Tree"
-                >
-                  ← Tree
-                </button>
-              ) : (
-                <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textMuted }}>
-                  PAGE
-                </span>
-              )}
-              <span style={{ fontSize: "9px", color: tokens.textMuted }}>/</span>
-              <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {selectedBlock
-                  ? (isPlaceOrderBlock(selectedBlock) ||
-                     selectedBlock.id === "place_order_cta" ||
-                     selectedBlock.type === "place_order_cta" ||
-                     selectedBlock.type === "placeordercta" ||
-                     selectedBlock.id === "checkout_review" ||
-                     selectedBlock.type === "checkout_review" ||
-                     selectedBlockId === "place_order_cta" ||
-                     selectedBlockId === "checkout_review"
-                      ? "Review & Pay"
-                      : isProfileBlock(selectedBlock) ||
-                        selectedBlock.id === "profile_details" ||
-                        selectedBlock.type === "profile_details" ||
-                        selectedBlock.type === "profiledetails" ||
-                        selectedBlock.type === "profile" ||
-                        selectedBlockId === "profile_details" ||
-                        selectedBlockId === "profile"
-                      ? "Profile Details"
-                      : isSignInBlock(selectedBlock) ||
-                        selectedBlock.id === "signin_form" ||
-                        selectedBlock.type === "signin_form" ||
-                        selectedBlock.type === "signinform" ||
-                        selectedBlock.type === "login_form" ||
-                        selectedBlock.type === "login" ||
-                        selectedBlockId === "signin_form" ||
-                        selectedBlockId === "login"
-                      ? "Sign In Form"
-                      : isSignUpBlock(selectedBlock) ||
-                        selectedBlock.id === "signup_form" ||
-                        selectedBlock.type === "signup_form" ||
-                        selectedBlock.type === "signupform" ||
-                        selectedBlock.type === "register_form" ||
-                        selectedBlock.type === "signup" ||
-                        selectedBlockId === "signup_form" ||
-                        selectedBlockId === "signup"
-                      ? "Sign Up Form"
-                      : isOrdersBlock(selectedBlock) ||
-                        selectedBlock.id === "customer_orders" ||
-                        selectedBlock.type === "customer_orders" ||
-                        selectedBlock.type === "customerorders" ||
-                        selectedBlock.type === "orders" ||
-                        selectedBlock.type === "order_history" ||
-                        selectedBlock.type === "order_history_list" ||
-                        selectedBlockId === "customer_orders" ||
-                        selectedBlockId === "orders"
-                      ? "Order History"
-                      : isSupportBlock(selectedBlock) ||
-                        selectedBlock?.id === "customer_support" ||
-                        selectedBlock?.type === "customer_support" ||
-                        selectedBlock?.type === "customersupport" ||
-                        selectedBlock?.type === "support" ||
-                        selectedBlock?.type === "support_desk" ||
-                        selectedBlockId === "customer_support" ||
-                        selectedBlockId === "support"
-                      ? "Help & Support Desk"
-                      : isCheckoutSummaryBlock(selectedBlock) ||
-                        selectedBlock.id === "checkout_order_summary" ||
-                        selectedBlock.type === "checkout_order_summary" ||
-                        selectedBlock.type === "checkoutordersummary" ||
-                        selectedBlock.id === "order_summary" ||
-                        selectedBlock.type === "order_summary" ||
-                        selectedBlock.id === "ordersummary" ||
-                        selectedBlock.type === "ordersummary" ||
-                        selectedBlock.id === "checkout_summary" ||
-                        selectedBlock.type === "checkout_summary" ||
-                        selectedBlockId === "checkout_order_summary" ||
-                        selectedBlockId === "order_summary" ||
-                        selectedBlockId === "ordersummary" ||
-                        selectedBlockId === "checkout_summary" ||
-                        (selectedBlockId && selectedBlockId.includes("summary"))
-                      ? "Order Summary"
-                      : isDeliveryBlock(selectedBlock) || editableConfig?.displayName === "Delivery Form"
-                      ? (selectedBlock.type === "delivery_map_picker"
-                          ? "Map Location Picker"
-                          : selectedBlock.type === "delivery_address_form"
-                          ? "Add / Edit Address Form"
-                          : "Delivery Form")
-                      : isPaymentMethodsBlock(selectedBlock) ||
-                        selectedBlock.id === "payment_methods" ||
-                        selectedBlock.type === "payment_methods" ||
-                        selectedBlock.type === "paymentmethods" ||
-                        selectedBlockId === "payment_methods"
-                      ? "Payment Methods"
-                      : isCheckoutStepsBlock(selectedBlock) ||
-                        selectedBlock.id === "checkout_steps" ||
-                        selectedBlock.type === "checkout_steps" ||
-                        selectedBlockId === "checkout_steps"
-                      ? "Checkout Steps"
-                      : editableConfig?.displayName ||
-                        (selectedBlock.type === "product_grid" || selectedBlock.type === "productgrid"
-                          ? "Product Grid"
-                          : selectedBlock.type === "hero_banner" || selectedBlock.type === "herobanner" || selectedBlock.type === "hero"
-                          ? "Hero Banner"
-                          : selectedBlock.type === "navbar" || selectedBlock.type === "header"
-                          ? "Navbar"
-                          : selectedBlock.type === "footer"
-                          ? "Footer"
-                          : selectedBlock.type === "cart" ||
-                            selectedBlock.type === "cart_view" ||
-                            selectedBlock.type === "cartview" ||
-                            selectedBlock.type === "cart_sidebar" ||
-                            selectedBlock.type === "cartsidebar" ||
-                            selectedBlock.type === "cart_items" ||
-                            selectedBlock.type === "cartitems"
-                          ? "Cart Items"
-                          : isProductDetailBlock(selectedBlock) ||
-                            editableConfig?.displayName === "Product Detail"
-                          ? "Product Detail"
-                          : selectedBlock.type.toUpperCase()))
-                  : activePageTitle}
-              </span>
-            </div>
-            {selectedBlock && (
-              <span style={{ fontSize: "8.5px", fontWeight: 800, padding: "1px 4px", borderRadius: "3px", background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)", color: tokens.accent, flexShrink: 0 }}>
-                EDITING
-              </span>
-            )}
-          </div>
-
           {!selectedBlock ? (
             <PageBlocksTreeView
               siteDefinition={siteDefinition}
@@ -14263,6 +14104,27 @@ export default function EditorSidebar({
           )}
         </div>
       )}
-    </aside>
+        </div>
+      </aside>
+
+      {/* Floating zero-layout scroll indicator: never shifts content or reserves empty space */}
+      {thumbHeight > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            top: `${thumbTop}px`,
+            right: "2px",
+            width: "3px",
+            height: `${thumbHeight}px`,
+            borderRadius: "999px",
+            background: isDark ? "rgba(255, 255, 255, 0.35)" : "rgba(15, 23, 42, 0.35)",
+            opacity: isScrolling ? 1 : 0,
+            transition: "opacity 0.2s ease",
+            pointerEvents: "none",
+            zIndex: 99,
+          }}
+        />
+      )}
+    </div>
   );
 }
