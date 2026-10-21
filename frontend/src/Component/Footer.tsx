@@ -229,6 +229,10 @@ const Footer: React.FC<FooterProps> = (props) => {
     (theme as any)?.muted_text_color ||
     (isTextColorDark ? "rgba(15, 23, 42, 0.65)" : "rgba(255, 255, 255, 0.68)");
 
+  const footerBrandColor = props.footer_brand_color || props.brand_color || textColor;
+  const footerTaglineColor = props.footer_tagline_color || props.tagline_color || mutedText;
+  const footerCopyrightColor = props.footer_copyright_color || props.copyright_color || mutedText;
+
   const borderColor =
     footer_border_color ||
     props.border_color ||
@@ -493,13 +497,13 @@ const Footer: React.FC<FooterProps> = (props) => {
                   >
                     {brandName.charAt(0).toUpperCase()}
                   </div>
-                  <span style={{ fontWeight: 800, fontSize: isMobile ? "16px" : "18px", color: textColor, letterSpacing: "-0.02em" }}>
+                  <span style={{ fontWeight: 800, fontSize: isMobile ? "16px" : "18px", color: footerBrandColor, letterSpacing: "-0.02em" }}>
                     {brandName}
                   </span>
                 </div>
               )}
               {showTagline && tagline && (
-                <span style={{ fontSize: isMobile ? "12px" : "13.5px", color: mutedText, lineHeight: 1.5, maxWidth: isMobile ? "320px" : "100%" }}>
+                <span style={{ fontSize: isMobile ? "12px" : "13.5px", color: footerTaglineColor, lineHeight: 1.5, maxWidth: isMobile ? "320px" : "100%" }}>
                   {tagline}
                 </span>
               )}
@@ -556,7 +560,7 @@ const Footer: React.FC<FooterProps> = (props) => {
             }}
           >
             {showCopyright ? (
-              <div style={{ fontSize: "11.5px", color: mutedText, textAlign: isMobile ? "center" : "left", lineHeight: 1.5 }}>
+              <div style={{ fontSize: "11.5px", color: footerCopyrightColor, textAlign: isMobile ? "center" : "left", lineHeight: 1.5 }}>
                 {displayCopyright}
               </div>
             ) : <div />}
@@ -595,12 +599,12 @@ const Footer: React.FC<FooterProps> = (props) => {
         >
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", maxWidth: "480px" }}>
             {showBrand && (
-              <span style={{ fontWeight: 800, fontSize: isMobile ? "20px" : "24px", color: textColor, letterSpacing: "-0.03em" }}>
+              <span style={{ fontWeight: 800, fontSize: isMobile ? "20px" : "24px", color: footerBrandColor, letterSpacing: "-0.03em" }}>
                 {brandName}
               </span>
             )}
             {showTagline && tagline && (
-              <p style={{ margin: 0, fontSize: isMobile ? "13px" : "14px", color: mutedText, lineHeight: 1.5 }}>
+              <p style={{ margin: 0, fontSize: isMobile ? "13px" : "14px", color: footerTaglineColor, lineHeight: 1.5 }}>
                 {tagline}
               </p>
             )}
@@ -648,7 +652,7 @@ const Footer: React.FC<FooterProps> = (props) => {
           {renderSocials(true)}
 
           {showCopyright && (
-            <div style={{ fontSize: "11.5px", color: mutedText, marginTop: "4px" }}>
+            <div style={{ fontSize: "11.5px", color: footerCopyrightColor, marginTop: "4px" }}>
               {displayCopyright}
             </div>
           )}
@@ -677,12 +681,12 @@ const Footer: React.FC<FooterProps> = (props) => {
           {/* Brand & About */}
           <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: isMobile ? "100%" : "480px" }}>
             {showBrand && (
-              <span style={{ fontWeight: 800, fontSize: isMobile ? "18px" : "22px", color: textColor, letterSpacing: "-0.02em" }}>
+              <span style={{ fontWeight: 800, fontSize: isMobile ? "18px" : "22px", color: footerBrandColor, letterSpacing: "-0.02em" }}>
                 {brandName}
               </span>
             )}
             {showTagline && tagline && (
-              <p style={{ margin: 0, fontSize: "13.5px", color: mutedText, lineHeight: 1.6 }}>
+              <p style={{ margin: 0, fontSize: "13.5px", color: footerTaglineColor, lineHeight: 1.6 }}>
                 {tagline}
               </p>
             )}
@@ -740,7 +744,7 @@ const Footer: React.FC<FooterProps> = (props) => {
               paddingTop: "16px",
               textAlign: isMobile ? "left" : "center",
               fontSize: "12px",
-              color: mutedText,
+              color: footerCopyrightColor,
               lineHeight: 1.5,
             }}
           >
@@ -769,12 +773,12 @@ const Footer: React.FC<FooterProps> = (props) => {
           }}
         >
           {showBrand && (
-            <div style={{ fontSize: isMobile ? "22px" : "30px", fontWeight: 300, color: textColor, fontFamily: "serif", letterSpacing: "0.14em" }}>
+            <div style={{ fontSize: isMobile ? "22px" : "30px", fontWeight: 300, color: footerBrandColor, fontFamily: "serif", letterSpacing: "0.14em" }}>
               {brandName.toUpperCase()}
             </div>
           )}
           {showTagline && tagline && (
-            <p style={{ margin: 0, fontSize: isMobile ? "13px" : "14px", color: mutedText, fontFamily: "serif", fontStyle: "italic", letterSpacing: "0.04em", maxWidth: "480px", lineHeight: 1.6 }}>
+            <p style={{ margin: 0, fontSize: isMobile ? "13px" : "14px", color: footerTaglineColor, fontFamily: "serif", fontStyle: "italic", letterSpacing: "0.04em", maxWidth: "480px", lineHeight: 1.6 }}>
               {tagline}
             </p>
           )}
@@ -822,7 +826,7 @@ const Footer: React.FC<FooterProps> = (props) => {
           {renderSocials(true)}
 
           {showCopyright && (
-            <div style={{ fontSize: "11px", color: mutedText, letterSpacing: "0.08em", marginTop: "4px", borderTop: `1px solid ${borderColor}`, paddingTop: "14px", width: "100%" }}>
+            <div style={{ fontSize: "11px", color: footerCopyrightColor, letterSpacing: "0.08em", marginTop: "4px", borderTop: `1px solid ${borderColor}`, paddingTop: "14px", width: "100%" }}>
               {displayCopyright.toUpperCase()}
             </div>
           )}
@@ -874,11 +878,11 @@ const Footer: React.FC<FooterProps> = (props) => {
                 width: "fit-content",
               }}
             >
-              <span style={{ fontWeight: 800, fontSize: isMobile ? "15px" : "16px", color: neoTextColor }}>{brandName}</span>
+              <span style={{ fontWeight: 800, fontSize: isMobile ? "15px" : "16px", color: props.footer_brand_color || props.brand_color || neoTextColor }}>{brandName}</span>
             </div>
           )}
           {showTagline && tagline && (
-            <p style={{ margin: 0, fontSize: isMobile ? "12.5px" : "13px", color: mutedText, lineHeight: 1.5, textAlign: isMobile ? "center" : "left", maxWidth: "520px" }}>
+            <p style={{ margin: 0, fontSize: isMobile ? "12.5px" : "13px", color: footerTaglineColor, lineHeight: 1.5, textAlign: isMobile ? "center" : "left", maxWidth: "520px" }}>
               {tagline}
             </p>
           )}
@@ -954,8 +958,8 @@ const Footer: React.FC<FooterProps> = (props) => {
             textAlign: isMobile ? "center" : "left",
           }}
         >
-          {showCopyright && <span>{displayCopyright}</span>}
-          {showTagline && tagline && <span>{tagline}</span>}
+          {showCopyright && <span style={{ color: footerCopyrightColor }}>{displayCopyright}</span>}
+          {showTagline && tagline && <span style={{ color: footerTaglineColor }}>{tagline}</span>}
         </div>
       </div>
     </footer>

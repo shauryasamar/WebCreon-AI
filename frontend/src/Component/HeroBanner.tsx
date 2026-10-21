@@ -683,6 +683,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         theme?.text_color ||
         (hasSlideBgImage ? "#ffffff" : defaultTextColor)));
   const accentColor = currentSlide.hero_accent || currentSlide.accent_color || theme?.hero_accent || theme?.accent_color || (isDarkMode ? "#60a5fa" : "#2563eb");
+  const headlineTextColor = currentSlide.headline_color || (restProps as any).headline_color || slideTextColor;
+  const subheadlineTextColor = currentSlide.subheadline_color || (restProps as any).subheadline_color || slideTextColor;
+  const badgeBgColor = currentSlide.badge_bg_color || currentSlide.badge_color || (restProps as any).badge_bg_color || (restProps as any).badge_color || "#ef4444";
+  const badgeTextColor = currentSlide.badge_text_color || (restProps as any).badge_text_color || "#ffffff";
 
   // Dynamic Scale-based Sizing
   const horizontalPadding = isMobile
@@ -1030,8 +1034,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               {currentSlide.badge && (
                 <span
                   style={{
-                    background: "#ef4444",
-                    color: "#ffffff",
+                    background: badgeBgColor,
+                    color: badgeTextColor,
                     fontSize: badgeFontSize,
                     fontWeight: 800,
                     padding: "3px 9px",
@@ -1068,7 +1072,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 fontWeight: headlineFontWeight as any,
                 fontFamily: headlineFontFamily,
                 fontStyle: headlineFontStyle,
-                color: slideTextColor,
+                color: headlineTextColor,
                 lineHeight: 1.15,
                 margin: 0,
                 wordBreak: "break-word",
@@ -1083,7 +1087,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               <p
                 style={{
                   fontSize: resolvedSubheadlineFontSize,
-                  color: slideTextColor,
+                  color: subheadlineTextColor,
                   opacity: 0.92,
                   margin: 0,
                   lineHeight: 1.4,
@@ -1148,7 +1152,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               {(currentSlide.badge || currentSlide.coupon_code) && (
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: slideAlign === "center" ? "center" : slideAlign === "right" ? "flex-end" : "flex-start" }}>
                   {currentSlide.badge && (
-                    <span style={{ background: getBadgeBgFromColor(accentColor, 0.15), color: accentColor, fontSize: badgeFontSize, fontWeight: 800, padding: "3px 9px", borderRadius: "999px", width: "fit-content", textTransform: "uppercase" }}>
+                    <span style={{ background: (currentSlide.badge_color || currentSlide.badge_bg_color) ? badgeBgColor : getBadgeBgFromColor(accentColor, 0.15), color: (currentSlide.badge_color || currentSlide.badge_text_color) ? badgeTextColor : accentColor, fontSize: badgeFontSize, fontWeight: 800, padding: "3px 9px", borderRadius: "999px", width: "fit-content", textTransform: "uppercase" }}>
                       {currentSlide.badge}
                     </span>
                   )}
@@ -1176,7 +1180,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                   fontWeight: headlineFontWeight as any,
                   fontFamily: headlineFontFamily,
                   fontStyle: headlineFontStyle,
-                  color: slideTextColor,
+                  color: headlineTextColor,
                   lineHeight: 1.15,
                   margin: 0,
                   wordBreak: "break-word",
@@ -1189,7 +1193,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 <p
                   style={{
                     fontSize: resolvedSubheadlineFontSize,
-                    color: slideTextColor,
+                    color: subheadlineTextColor,
                     opacity: 0.9,
                     margin: 0,
                     lineHeight: 1.4,
@@ -1259,8 +1263,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 {currentSlide.badge && (
                   <span
                     style={{
-                      background: isDarkMode ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.08)",
-                      color: slideTextColor,
+                      background: (currentSlide.badge_color || currentSlide.badge_bg_color) ? badgeBgColor : (isDarkMode ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.08)"),
+                      color: (currentSlide.badge_color || currentSlide.badge_text_color) ? badgeTextColor : slideTextColor,
                       fontSize: badgeFontSize,
                       fontWeight: 800,
                       padding: "3px 10px",
@@ -1299,7 +1303,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 fontWeight: headlineFontWeight as any,
                 fontFamily: headlineFontFamily,
                 fontStyle: headlineFontStyle,
-                color: slideTextColor,
+                color: headlineTextColor,
                 lineHeight: 1.15,
                 margin: 0,
                 wordBreak: "break-word",
@@ -1313,7 +1317,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               <p
                 style={{
                   fontSize: resolvedSubheadlineFontSize,
-                  color: slideTextColor,
+                  color: subheadlineTextColor,
                   opacity: 0.92,
                   margin: 0,
                   lineHeight: 1.4,
@@ -1400,7 +1404,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 fontWeight: headlineFontWeight as any,
                 fontFamily: headlineFontFamily,
                 fontStyle: headlineFontStyle,
-                color: slideTextColor,
+                color: headlineTextColor,
                 lineHeight: 1.15,
                 margin: 0,
                 wordBreak: "break-word",
@@ -1414,7 +1418,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               <p
                 style={{
                   fontSize: resolvedSubheadlineFontSize,
-                  color: slideTextColor,
+                  color: subheadlineTextColor,
                   opacity: 0.92,
                   margin: 0,
                   lineHeight: 1.4,

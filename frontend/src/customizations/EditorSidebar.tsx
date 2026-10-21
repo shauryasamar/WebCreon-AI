@@ -1934,6 +1934,164 @@ const EditorSubTabs = ({
   );
 };
 
+interface TextColorInputRowProps {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChangeText: (text: string) => void;
+  colorValue?: string;
+  defaultColor?: string;
+  onChangeColor?: (color: string) => void;
+  isLightMode?: boolean;
+  multiline?: boolean;
+  rows?: number;
+  style?: React.CSSProperties;
+}
+
+const TextColorInputRow: React.FC<TextColorInputRowProps> = ({
+  label,
+  value,
+  placeholder,
+  onChangeText,
+  colorValue,
+  defaultColor,
+  onChangeColor,
+  isLightMode,
+  multiline = false,
+  rows = 2,
+  style,
+}) => {
+  const { isDark, tokens } = useAdminTheme();
+  const effectiveLightMode = isLightMode !== undefined ? isLightMode : !isDark;
+  const inputStyle = sharedInputStyle(effectiveLightMode);
+
+  const fallbackHex = effectiveLightMode ? "#0f172a" : "#f8fafc";
+  const resolvedHex = parseColorToValidHex6(colorValue || defaultColor, fallbackHex);
+  const displayHex = (colorValue || defaultColor || resolvedHex).startsWith("#")
+    ? (colorValue || defaultColor || resolvedHex).toUpperCase()
+    : resolvedHex.toUpperCase();
+
+  return (
+    <div style={{ display: "grid", gap: "2px", width: "100%", minWidth: 0, boxSizing: "border-box", ...style }}>
+      {/* Top Header Row: Label on Left, Uppercase Hex on Right */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          width: "100%",
+          lineHeight: 1,
+        }}
+      >
+        <label
+          style={{
+            fontSize: "9px",
+            fontWeight: 700,
+            color: "#64748b",
+            textTransform: "uppercase",
+            letterSpacing: "0.04em",
+          }}
+        >
+          {label}
+        </label>
+        {onChangeColor && (
+          <span
+            style={{
+              fontSize: "9.5px",
+              fontWeight: 700,
+              color: isDark ? tokens.textMuted : "#64748b",
+              fontFamily: "'Inter', monospace",
+              letterSpacing: "0.04em",
+            }}
+          >
+            {displayHex}
+          </span>
+        )}
+      </div>
+
+      {/* Input Row: Text on Left, Circular Color Swatch on Right Inside Input */}
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: multiline ? "flex-start" : "center",
+          width: "100%",
+          minWidth: 0,
+          boxSizing: "border-box",
+        }}
+      >
+        {multiline ? (
+          <textarea
+            rows={rows}
+            value={value || ""}
+            placeholder={placeholder}
+            onChange={(e) => onChangeText(e.target.value)}
+            style={{
+              ...inputStyle,
+              height: "auto",
+              minHeight: "42px",
+              resize: "vertical",
+              lineHeight: 1.4,
+              paddingRight: onChangeColor ? "32px" : "8px",
+            }}
+          />
+        ) : (
+          <input
+            type="text"
+            value={value || ""}
+            placeholder={placeholder}
+            onChange={(e) => onChangeText(e.target.value)}
+            style={{
+              ...inputStyle,
+              width: "100%",
+              paddingRight: onChangeColor ? "32px" : "8px",
+            }}
+          />
+        )}
+
+        {onChangeColor && (
+          <label
+            style={{
+              position: "absolute",
+              right: "6px",
+              top: multiline ? "8px" : "50%",
+              transform: multiline ? "none" : "translateY(-50%)",
+              width: "16px",
+              height: "16px",
+              borderRadius: "50%",
+              backgroundColor: resolvedHex,
+              border: `1.5px solid ${isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.2)"}`,
+              boxShadow: "0 1px 2px rgba(0,0,0,0.18), inset 0 0 0 1px rgba(255,255,255,0.15)",
+              cursor: "pointer",
+              display: "grid",
+              placeItems: "center",
+              overflow: "hidden",
+              flexShrink: 0,
+              zIndex: 2,
+            }}
+            title={`Change ${label} color (${displayHex})`}
+          >
+            <input
+              type="color"
+              value={resolvedHex}
+              onChange={(e) => onChangeColor(e.target.value)}
+              style={{
+                position: "absolute",
+                top: "-50%",
+                left: "-50%",
+                width: "200%",
+                height: "200%",
+                opacity: 0,
+                cursor: "pointer",
+              }}
+            />
+          </label>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const NumberStepperField = ({
   label,
   value,
@@ -2097,6 +2255,7 @@ const NumberStepperField = ({
         <input
           ref={attachWheel}
           type="number"
+          className="wc-no-spin"
           min={min}
           max={max}
           step={step}
@@ -2127,6 +2286,9 @@ const NumberStepperField = ({
             color: tokens.textPrimary,
             background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
             border: `1px solid ${tokens.border}`,
+            MozAppearance: "textfield",
+            WebkitAppearance: "none",
+            appearance: "textfield",
           }}
         />
 
@@ -2699,39 +2861,40 @@ function HeroSlidesEditor({
                     {/* TAB 1: CONTENT */}
                     {(slideSubTabs[idx] || "content") === "content" && (
                       <div style={{ display: "grid", gap: "5px" }}>
-                        <div style={{ display: "grid", gap: "2px" }}>
-                          <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Headline</label>
-                          <input
-                            type="text"
-                            value={slide.headline || ""}
-                            onChange={(e) => handleSlideChange(idx, "headline", e.target.value)}
-                            placeholder="Headline..."
-                            style={sharedInputStyle()}
-                          />
-                        </div>
+                        <TextColorInputRow
+                          label="Headline"
+                          value={slide.headline || ""}
+                          placeholder="Headline..."
+                          onChangeText={(val) => handleSlideChange(idx, "headline", val)}
+                          colorValue={slide.headline_color || slide.hero_text_color}
+                          defaultColor={siteDefinition.theme?.hero_text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                          onChangeColor={(val) => handleSlideChange(idx, "headline_color", val)}
+                        />
 
-                        <div style={{ display: "grid", gap: "2px" }}>
-                          <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Subheadline</label>
-                          <textarea
-                            rows={2}
-                            value={slide.subheadline || ""}
-                            onChange={(e) => handleSlideChange(idx, "subheadline", e.target.value)}
-                            placeholder="Supporting text..."
-                            style={{ ...sharedInputStyle(), height: "auto", minHeight: "36px", resize: "vertical", lineHeight: 1.3, padding: "4px 6px" }}
-                          />
-                        </div>
+                        <TextColorInputRow
+                          label="Subheadline"
+                          multiline
+                          value={slide.subheadline || ""}
+                          placeholder="Supporting text..."
+                          onChangeText={(val) => handleSlideChange(idx, "subheadline", val)}
+                          colorValue={slide.subheadline_color || slide.hero_text_color}
+                          defaultColor={siteDefinition.theme?.hero_text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                          onChangeColor={(val) => handleSlideChange(idx, "subheadline_color", val)}
+                        />
 
                         <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "5px" }}>
-                          <div style={{ display: "grid", gap: "2px" }}>
-                            <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Badge Tag</label>
-                            <input
-                              type="text"
-                              value={slide.badge || ""}
-                              onChange={(e) => handleSlideChange(idx, "badge", e.target.value)}
-                              placeholder="NEW, 50% OFF..."
-                              style={sharedInputStyle()}
-                            />
-                          </div>
+                          <TextColorInputRow
+                            label="Badge Tag"
+                            value={slide.badge || ""}
+                            placeholder="NEW, 50% OFF..."
+                            onChangeText={(val) => handleSlideChange(idx, "badge", val)}
+                            colorValue={slide.badge_color || slide.badge_bg_color}
+                            defaultColor="#ef4444"
+                            onChangeColor={(val) => {
+                              handleSlideChange(idx, "badge_color", val);
+                              handleSlideChange(idx, "badge_bg_color", val);
+                            }}
+                          />
 
                           <div style={{ display: "grid", gap: "2px" }}>
                             <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Align</label>
@@ -5068,38 +5231,36 @@ function FooterEditor({
               Brand Identity & Copy
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Brand Name</label>
-                <input
-                  type="text"
-                  value={brandName}
-                  placeholder="Website"
-                  onChange={(e) => updateProps({ brandName: e.target.value, brand_name: e.target.value })}
-                  style={sharedInputStyle(!isDark)}
-                />
-              </div>
+              <TextColorInputRow
+                label="Brand Name"
+                value={brandName}
+                placeholder="Website"
+                onChangeText={(val) => updateProps({ brandName: val, brand_name: val })}
+                colorValue={getVal("footer_brand_color", getVal("brand_color", footerTextColor))}
+                defaultColor={footerTextColor}
+                onChangeColor={(val) => updateProps({ footer_brand_color: val, brand_color: val })}
+              />
 
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Store Tagline</label>
-                <textarea
-                  rows={2}
-                  value={tagline}
-                  placeholder="Your premium shopping destination."
-                  onChange={(e) => updateProps({ tagline: e.target.value })}
-                  style={{ ...sharedInputStyle(!isDark), resize: "none" }}
-                />
-              </div>
+              <TextColorInputRow
+                label="Store Tagline"
+                multiline
+                value={tagline}
+                placeholder="Your premium shopping destination."
+                onChangeText={(val) => updateProps({ tagline: val })}
+                colorValue={getVal("footer_tagline_color", getVal("tagline_color", footerMutedColor))}
+                defaultColor={footerMutedColor}
+                onChangeColor={(val) => updateProps({ footer_tagline_color: val, tagline_color: val })}
+              />
 
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Copyright Notice</label>
-                <input
-                  type="text"
-                  value={copyrightText}
-                  placeholder="© 2026 Brand. All rights reserved."
-                  onChange={(e) => updateProps({ copyrightText: e.target.value, copyright_text: e.target.value })}
-                  style={sharedInputStyle(!isDark)}
-                />
-              </div>
+              <TextColorInputRow
+                label="Copyright Notice"
+                value={copyrightText}
+                placeholder="© 2026 Brand. All rights reserved."
+                onChangeText={(val) => updateProps({ copyrightText: val, copyright_text: val })}
+                colorValue={getVal("footer_copyright_color", getVal("copyright_color", footerMutedColor))}
+                defaultColor={footerMutedColor}
+                onChangeColor={(val) => updateProps({ footer_copyright_color: val, copyright_color: val })}
+              />
 
               <SectionDivider title="Element Visibility" />
 
@@ -5523,29 +5684,15 @@ function CartEditor({
               Cart Header & Empty State
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                  Cart Title
-                </label>
-                <input
-                  type="text"
-                  value={getStr("title", "Your cart")}
-                  placeholder="Your cart"
-                  onChange={(e) => updateProps({ title: e.target.value })}
-                  style={{
-                    width: "100%",
-                    height: "28px",
-                    padding: "0 8px",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    borderRadius: "4px",
-                    border: `1px solid ${tokens.border}`,
-                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                    color: tokens.textPrimary,
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
+              <TextColorInputRow
+                label="Cart Title"
+                value={getStr("title", "Your cart")}
+                placeholder="Your cart"
+                onChangeText={(val) => updateProps({ title: val })}
+                colorValue={p.text_color}
+                defaultColor={siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                onChangeColor={(val) => updateProps({ text_color: val, cart_text_color: val })}
+              />
 
               <div style={{ display: "grid", gap: "2px" }}>
                 <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
@@ -7131,27 +7278,25 @@ function ProfileEditor({
               Titles & Labels
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Section Title</label>
-                <input
-                  type="text"
-                  value={getStr("title", "")}
-                  placeholder="Customer Profile"
-                  onChange={(e) => updateProps({ title: e.target.value })}
-                  style={textInputStyle}
-                />
-              </div>
+              <TextColorInputRow
+                label="Section Title"
+                value={getStr("title", "")}
+                placeholder="Customer Profile"
+                onChangeText={(val) => updateProps({ title: val })}
+                colorValue={p.title_color}
+                defaultColor={siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a"}
+                onChangeColor={(val) => updateProps({ title_color: val })}
+              />
 
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Section Subtitle</label>
-                <input
-                  type="text"
-                  value={getStr("subtitle", "")}
-                  placeholder="Manage your account details and password."
-                  onChange={(e) => updateProps({ subtitle: e.target.value })}
-                  style={textInputStyle}
-                />
-              </div>
+              <TextColorInputRow
+                label="Section Subtitle"
+                value={getStr("subtitle", "")}
+                placeholder="Manage your account details and password."
+                onChangeText={(val) => updateProps({ subtitle: val })}
+                colorValue={p.subtext_color}
+                defaultColor={siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b"}
+                onChangeColor={(val) => updateProps({ subtext_color: val })}
+              />
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <div style={{ display: "grid", gap: "2px" }}>
@@ -7534,27 +7679,25 @@ function SignInEditor({
               Headings & Button Text
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Card Title</label>
-                <input
-                  type="text"
-                  value={getStr("title", "")}
-                  placeholder="Store Name"
-                  onChange={(e) => updateProps({ title: e.target.value })}
-                  style={textInputStyle}
-                />
-              </div>
+              <TextColorInputRow
+                label="Card Title"
+                value={getStr("title", "")}
+                placeholder="Store Name"
+                onChangeText={(val) => updateProps({ title: val })}
+                colorValue={p.title_color}
+                defaultColor={siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a"}
+                onChangeColor={(val) => updateProps({ title_color: val })}
+              />
 
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Subtitle Description</label>
-                <input
-                  type="text"
-                  value={getStr("subtitle", "")}
-                  placeholder="Sign in to your account"
-                  onChange={(e) => updateProps({ subtitle: e.target.value })}
-                  style={textInputStyle}
-                />
-              </div>
+              <TextColorInputRow
+                label="Subtitle Description"
+                value={getStr("subtitle", "")}
+                placeholder="Sign in to your account"
+                onChangeText={(val) => updateProps({ subtitle: val })}
+                colorValue={p.subtext_color}
+                defaultColor={siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b"}
+                onChangeColor={(val) => updateProps({ subtext_color: val })}
+              />
 
               <div style={{ display: "grid", gap: "2px" }}>
                 <label style={fieldLabelStyle}>Sign In Button Text</label>
@@ -7897,27 +8040,25 @@ function SignUpEditor({
               Headings & Button Text
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Card Title</label>
-                <input
-                  type="text"
-                  value={getStr("title", "")}
-                  placeholder="Store Name"
-                  onChange={(e) => updateProps({ title: e.target.value })}
-                  style={textInputStyle}
-                />
-              </div>
+              <TextColorInputRow
+                label="Card Title"
+                value={getStr("title", "")}
+                placeholder="Store Name"
+                onChangeText={(val) => updateProps({ title: val })}
+                colorValue={p.title_color}
+                defaultColor={siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a"}
+                onChangeColor={(val) => updateProps({ title_color: val })}
+              />
 
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Subtitle Description</label>
-                <input
-                  type="text"
-                  value={getStr("subtitle", "")}
-                  placeholder="Create your account"
-                  onChange={(e) => updateProps({ subtitle: e.target.value })}
-                  style={textInputStyle}
-                />
-              </div>
+              <TextColorInputRow
+                label="Subtitle Description"
+                value={getStr("subtitle", "")}
+                placeholder="Create your account"
+                onChangeText={(val) => updateProps({ subtitle: val })}
+                colorValue={p.subtext_color}
+                defaultColor={siteDefinition.theme?.mode === "dark" ? "#94a3b8" : "#64748b"}
+                onChangeColor={(val) => updateProps({ subtext_color: val })}
+              />
 
               <div style={{ display: "grid", gap: "2px" }}>
                 <label style={fieldLabelStyle}>Submit Button Text</label>
@@ -11853,6 +11994,10 @@ function NavbarEditor({
       patch.brandName = value;
       patch.brand_name = value;
     }
+    if (key === "brand_text_color" || key === "brandTextColor") {
+      patch.brand_text_color = value;
+      patch.brandTextColor = value;
+    }
     const nextDef = updateThemeValues(siteDefinition, patch);
     if (key === "brandName" || key === "brand_name") {
       if (!nextDef.site) nextDef.site = {} as any;
@@ -11865,6 +12010,19 @@ function NavbarEditor({
       if (!nextDef.footer) nextDef.footer = {};
       (nextDef.footer as any).brandName = value;
       (nextDef.footer as any).brand_name = value;
+    }
+    if (key === "brand_text_color" || key === "brandTextColor") {
+      if (!nextDef.theme) nextDef.theme = {} as any;
+      (nextDef.theme as any).brand_text_color = value;
+      (nextDef.theme as any).brandTextColor = value;
+      if (selectedBlock?.id) {
+        nextDef.pages = (nextDef.pages || []).map((page: any) => ({
+          ...page,
+          blocks: (page.blocks || []).map((b: any) =>
+            b.id === selectedBlock.id ? { ...b, props: { ...b.props, brand_text_color: value, brandTextColor: value } } : b
+          ),
+        }));
+      }
     }
     onSiteDefinitionChange(nextDef);
   };
@@ -12056,18 +12214,15 @@ function NavbarEditor({
               <>
                 <SectionDivider title="Typography" />
 
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                    Brand Name
-                  </label>
-                  <input
-                    type="text"
-                    value={brandName}
-                    placeholder="Enter brand name..."
-                    onChange={(e) => updateField("brandName", e.target.value)}
-                    style={sharedInputStyle(!isDark)}
-                  />
-                </div>
+                <TextColorInputRow
+                  label="Brand Name"
+                  value={brandName}
+                  placeholder="Enter brand name..."
+                  onChangeText={(val) => updateField("brandName", val)}
+                  colorValue={brandTextColor}
+                  defaultColor={isSiteDark ? "#f8fafc" : "#0f172a"}
+                  onChangeColor={(val) => updateField("brand_text_color", val)}
+                />
 
                 <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "6px" }}>
                   <div style={{ display: "grid", gap: "2px" }}>
@@ -12972,6 +13127,22 @@ export default function EditorSidebar({
           .wc-editor-sidebar select:hover,
           .wc-editor-sidebar textarea:hover {
             border-color: ${tokens.textSecondary};
+          }
+
+          /* Hide default browser up/down number spin buttons on hover and focus */
+          .wc-editor-sidebar input[type="number"]::-webkit-outer-spin-button,
+          .wc-editor-sidebar input[type="number"]::-webkit-inner-spin-button,
+          input.wc-no-spin::-webkit-outer-spin-button,
+          input.wc-no-spin::-webkit-inner-spin-button {
+            -webkit-appearance: none !important;
+            margin: 0 !important;
+            display: none !important;
+          }
+
+          .wc-editor-sidebar input[type="number"],
+          input.wc-no-spin {
+            -moz-appearance: textfield !important;
+            appearance: textfield !important;
           }
 
           .wc-editor-sidebar,

@@ -320,4 +320,20 @@ body,
 *::before,
 *::after {
   box-sizing: border-box;
-} */
+}
+
+/* Hide default browser up/down number spin buttons on hover and focus */
+.wc-editor-sidebar input[type="number"]::-webkit-outer-spin-button,
+.wc-editor-sidebar input[type="number"]::-webkit-inner-spin-button,
+input.wc-no-spin::-webkit-outer-spin-button,
+input.wc-no-spin::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+  display: none !important;
+}
+
+.wc-editor-sidebar input[type="number"],
+input.wc-no-spin {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
