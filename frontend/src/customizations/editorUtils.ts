@@ -159,6 +159,42 @@ type ThemeValues = EditorSiteDefinition["theme"];
 const GLOBAL_NAVBAR_BLOCK_ID = "global-navbar";
 const GLOBAL_FOOTER_BLOCK_ID = "global-footer";
 
+export function getEffectiveProductGridCardStyle(siteDef?: EditorSiteDefinition): string {
+  if (siteDef && Array.isArray(siteDef.pages)) {
+    for (const page of siteDef.pages) {
+      if (Array.isArray(page?.blocks)) {
+        for (const block of page.blocks) {
+          const t = String(block?.type || "").toLowerCase();
+          if (t === "product_grid" || t === "productgrid") {
+            const raw = String(block.props?.card_style || block.props?.cardStyle || "").toLowerCase().trim();
+            if (raw && raw !== "default" && raw !== "inherit" && raw !== "theme" && raw !== "auto") {
+              return raw;
+            }
+          }
+        }
+      }
+    }
+  }
+  const themeStyle = String((siteDef?.theme as any)?.product_grid_card_style || siteDef?.theme?.card_style || "").toLowerCase().trim();
+  if (themeStyle && themeStyle !== "default" && themeStyle !== "inherit" && themeStyle !== "auto") {
+    return themeStyle;
+  }
+  return "fashion";
+}
+
+export function formatCardPresetName(key?: string): string {
+  const map: Record<string, string> = {
+    grocery: "Grocery",
+    fashion: "Fashion",
+    electronics: "Electronics",
+    beauty: "Beauty",
+    books: "Books",
+  };
+  const clean = String(key || "").toLowerCase().trim();
+  return map[clean] || (clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : "Fashion");
+}
+
+
 const DEFAULT_LIGHT_THEME: Partial<ThemeValues> = {
   mode: "light",
   primary_bg: "#ffffff",

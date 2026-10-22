@@ -9,7 +9,9 @@ import {
   EditorSiteDefinition,
   FestivalThemeKey,
   findBlockById,
+  formatCardPresetName,
   getEditableConfigForBlock,
+  getEffectiveProductGridCardStyle,
   getSavedThemeSnapshots,
   getSiteStorageId,
   isColorDarkHex,
@@ -4473,7 +4475,7 @@ function ProductCarouselEditor({
   siteDefinition: EditorSiteDefinition;
 }) {
   const { isDark, tokens } = useAdminTheme();
-  const [activeTab, setActiveTab] = useState<"layout" | "styling">("layout");
+  const [activeTab, setActiveTab] = useState<"layout" | "styling" | "colors">("layout");
   const p = selectedBlock.props ?? {};
 
   const updateProps = (patch: Record<string, any>) => {
@@ -4491,7 +4493,16 @@ function ProductCarouselEditor({
     onSiteDefinitionChange(nextDef);
   };
 
-  const cardStyleKey = String(p.card_style || p.theme_card_style || "fashion").toLowerCase();
+  const defaultGridStyle = getEffectiveProductGridCardStyle(siteDefinition);
+  const rawCarouselCardStyle = String(p.card_style || p.cardStyle || "").toLowerCase().trim();
+  const cardStyleKey =
+    rawCarouselCardStyle &&
+    rawCarouselCardStyle !== "default" &&
+    rawCarouselCardStyle !== "inherit" &&
+    rawCarouselCardStyle !== "theme" &&
+    rawCarouselCardStyle !== "auto"
+      ? rawCarouselCardStyle
+      : defaultGridStyle;
   const isGrocery = cardStyleKey === "grocery";
   const minCardWidth = isGrocery ? 220 : 140;
   const maxCardWidth = isGrocery ? 320 : 280;
@@ -4540,34 +4551,44 @@ function ProductCarouselEditor({
         tabs={[
           { id: "layout", label: "Layout" },
           { id: "styling", label: "Styles" },
+          { id: "colors", label: "Colors" },
         ]}
         activeTab={activeTab}
         onChange={(val) => setActiveTab(val as any)}
       />
 
-      {/* ── Layout Tab ─────────────────────────────────────────────────────── */}
+      {/* ── 1. LAYOUT & STRUCTURE TAB ───────────────────────────────────────── */}
       {activeTab === "layout" && (
         <div style={{ display: "grid", gap: "8px" }}>
+          {/* Card Style Preset & Display Mode */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Card Style & Preset</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card Style & Display
+            </div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Card Style</label>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Card Style Preset</label>
                 <CustomSelectDropdown
                   value={p.card_style || p.cardStyle || "default"}
                   placeholder="Card Style"
                   options={[
-                    { label: `Store Theme Default (${(siteDefinition.theme?.card_style || "fashion").toUpperCase()})`, value: "default" },
-                    { label: "Grocery & Daily Needs (Horizontal Row)", value: "grocery" },
-                    { label: "Fashion & Apparel (3:4 Portrait)", value: "fashion" },
-                    { label: "Electronics & Tech (4:3 Landscape)", value: "electronics" },
-                    { label: "Beauty & Minimal (1:1 Rounded)", value: "beauty" },
-                    { label: "Standard Square (1:1)", value: "standard" },
-                    { label: "Books & Stationery (3:4 Portrait)", value: "books" },
+                    { label: `Default (${formatCardPresetName(defaultGridStyle)})`, value: "default" },
+                    { label: "Grocery", value: "grocery" },
+                    { label: "Fashion", value: "fashion" },
+                    { label: "Electronics", value: "electronics" },
+                    { label: "Beauty", value: "beauty" },
+                    { label: "Books", value: "books" },
                   ]}
                   onChange={(val) => {
                     if (val === "default") {
-                      updateProps({ card_style: val, cardStyle: val });
+                      updateProps({
+                        card_style: "default",
+                        cardStyle: "default",
+                        image_aspect_ratio: undefined,
+                        image_radius: undefined,
+                        image_corner_radius: undefined,
+                        card_radius: undefined,
+                      });
                     } else if (val === "fashion") {
                       updateProps({
                         card_style: val,
@@ -4626,69 +4647,37 @@ function ProductCarouselEditor({
                   }}
                 />
               </div>
-            </div>
-          </section>
 
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Layout & Card Size</div>
-            <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gap: "2px" }}>
                 <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Display Mode</label>
                 <SegmentedRow
                   value={p.layout || "carousel"}
                   onChange={(val) => updateProps({ layout: val })}
-                  options={[{ label: "Carousel", value: "carousel" }, { label: "Grid", value: "grid" }]}
+                  options={[
+                    { label: "Carousel", value: "carousel", icon: <IconModeCarousel /> },
+                    { label: "Grid", value: "grid", icon: <IconModeGrid /> },
+                  ]}
                 />
               </div>
+
               <NumberStepperField
-                label="Card Size" value={parsedCardWidth} min={minCardWidth} max={maxCardWidth} step={10} unit="px"
+                label="Card Size"
+                value={parsedCardWidth}
+                min={minCardWidth}
+                max={maxCardWidth}
+                step={10}
+                unit="px"
                 onChange={(val) => updateProps({ card_width: `${val}px` })}
               />
             </div>
           </section>
 
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Image Fitting</div>
-            <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Image Fit</label>
-                <SegmentedRow
-                  value={p.image_fit || "cover"}
-                  onChange={(val) => updateProps({ image_fit: val })}
-                  options={[{ label: "Cover", value: "cover" }, { label: "Contain", value: "contain" }]}
-                />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Aspect Ratio</label>
-                  <CustomSelectDropdown
-                    value={p.image_aspect_ratio || "3 / 4"}
-                    placeholder="Aspect Ratio"
-                    options={[
-                      { label: "1:1  Square", value: "1 / 1" },
-                      { label: "3:4  Portrait", value: "3 / 4" },
-                      { label: "4:3  Standard", value: "4 / 3" },
-                      { label: "16:9 Wide", value: "16 / 9" },
-                      { label: "2:3  Tall", value: "2 / 3" },
-                    ]}
-                    onChange={(val) => updateProps({ image_aspect_ratio: val })}
-                  />
-                </div>
-                <NumberStepperField
-                  label="Image Radius"
-                  value={parsedImageRadius}
-                  min={0}
-                  max={36}
-                  step={2}
-                  unit="px"
-                  onChange={(val) => updateProps({ image_radius: `${val}px`, image_corner_radius: `${val}px` })}
-                />
-              </div>
-            </div>
-          </section>
 
+          {/* Spacing & Bounds */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Spacing & Bounds</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Spacing & Bounds
+            </div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <div style={{ display: "grid", gap: "2px" }}>
@@ -4698,9 +4687,9 @@ function ProductCarouselEditor({
                     placeholder="Max Width"
                     options={[
                       { label: "Full Width (100%)", value: "full" },
-                      { label: "1440px", value: "1440px" },
-                      { label: "1280px", value: "1280px" },
-                      { label: "1200px", value: "1200px" },
+                      { label: "Extra Wide (1440px)", value: "1440px" },
+                      { label: "Wide (1280px)", value: "1280px" },
+                      { label: "Standard (1200px)", value: "1200px" },
                     ]}
                     onChange={(val) => updateProps({ max_width: val })}
                   />
@@ -4711,18 +4700,19 @@ function ProductCarouselEditor({
                     value={String(p.gap || p.grid_gap || "14px")}
                     placeholder="Gap"
                     options={[
-                      { label: "Compact 8px", value: "8px" },
-                      { label: "Default 14px", value: "14px" },
-                      { label: "Spacious 20px", value: "20px" },
-                      { label: "Wide 28px", value: "28px" },
+                      { label: "Compact (8px)", value: "8px" },
+                      { label: "Default (14px)", value: "14px" },
+                      { label: "Spacious (20px)", value: "20px" },
+                      { label: "Wide (28px)", value: "28px" },
                     ]}
                     onChange={(val) => updateProps({ gap: val, grid_gap: val })}
                   />
                 </div>
               </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <NumberStepperField
-                  label="Vertical Pad"
+                  label="Vertical Padding"
                   value={
                     p.padding_y !== undefined && p.padding_y !== null && String(p.padding_y).trim() !== ""
                       ? !isNaN(parseInt(String(p.padding_y), 10))
@@ -4737,8 +4727,12 @@ function ProductCarouselEditor({
                   onChange={(val) => updateProps({ padding_y: `${val}px` })}
                 />
                 <NumberStepperField
-                  label="Horiz. Pad" value={parseInt(String(p.padding_x || "16"), 10) || 16}
-                  min={4} max={48} step={4} unit="px"
+                  label="Horizontal Padding"
+                  value={parseInt(String(p.padding_x || "16"), 10) || 16}
+                  min={4}
+                  max={48}
+                  step={4}
+                  unit="px"
                   onChange={(val) => updateProps({ padding_x: `${val}px` })}
                 />
               </div>
@@ -4747,56 +4741,94 @@ function ProductCarouselEditor({
         </div>
       )}
 
-      {/* ── Styles Tab ─────────────────────────────────────────────────────── */}
+      {/* ── 2. TYPOGRAPHY & STYLES TAB ───────────────────────────────────────── */}
       {activeTab === "styling" && (
         <div style={{ display: "grid", gap: "8px" }}>
+          {/* Header Typography */}
           {(hasSectionTitle || hasSectionSubtitle) && (
             <section style={sectionCardStyle(isLightMode)}>
-              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Section Header</div>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Header Typography & Alignment
+              </div>
               <div style={{ display: "grid", gap: "6px" }}>
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Alignment</label>
-                  <SegmentedRow
-                    value={p.title_alignment || "left"}
-                    onChange={(val) => updateProps({ title_alignment: val })}
-                    options={[{ label: "Left", value: "left" }, { label: "Center", value: "center" }]}
-                  />
-                </div>
-                {hasSectionTitle && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                    <NumberStepperField
-                      label="Title Size" value={parsedTitleSize} min={14} max={36} step={1} unit="px"
-                      onChange={(val) => updateProps({ title_font_size: `${val}px` })}
+                <div style={{ display: "grid", gridTemplateColumns: hasSectionTitle ? "1fr 1fr" : "1fr", gap: "6px" }}>
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Alignment</label>
+                    <SegmentedRow
+                      value={p.title_alignment || "left"}
+                      onChange={(val) => updateProps({ title_alignment: val })}
+                      options={[
+                        { label: "", value: "left", title: "Left", icon: <IconAlignLeft /> },
+                        { label: "", value: "center", title: "Center", icon: <IconAlignCenter /> },
+                        { label: "", value: "right", title: "Right", icon: <IconAlignRight /> },
+                      ]}
                     />
+                  </div>
+                  {hasSectionTitle && (
                     <div style={{ display: "grid", gap: "2px" }}>
-                      <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Weight</label>
-                      <CustomSelectDropdown
-                        value={String(p.title_font_weight || "800")}
-                        placeholder="Weight"
+                      <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Letter Case</label>
+                      <SegmentedRow
+                        value={p.title_text_transform || "none"}
+                        onChange={(val) => updateProps({ title_text_transform: val })}
                         options={[
-                          { label: "SemiBold 600", value: "600" },
-                          { label: "Bold 700", value: "700" },
-                          { label: "ExtraBold 800", value: "800" },
-                          { label: "Black 900", value: "900" },
+                          { label: "", value: "none", title: "Normal Case", icon: <IconCaseNormal size={15} /> },
+                          { label: "", value: "uppercase", title: "Uppercase", icon: <IconCaseUppercase size={15} /> },
                         ]}
-                        onChange={(val) => updateProps({ title_font_weight: val })}
                       />
                     </div>
+                  )}
+                </div>
+
+                {hasSectionTitle && (
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Weight</label>
+                    <CustomSelectDropdown
+                      value={String(p.title_font_weight || "800")}
+                      placeholder="Weight"
+                      options={[
+                        { label: "Semi-Bold (600)", value: "600" },
+                        { label: "Bold (700)", value: "700" },
+                        { label: "Extra Bold (800)", value: "800" },
+                        { label: "Black (900)", value: "900" },
+                      ]}
+                      onChange={(val) => updateProps({ title_font_weight: val })}
+                    />
                   </div>
                 )}
-                {hasSectionSubtitle && (
-                  <NumberStepperField
-                    label="Subtitle Size" value={parsedSubtitleSize} min={10} max={20} step={1} unit="px"
-                    onChange={(val) => updateProps({ subtitle_font_size: `${val}px` })}
-                  />
-                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: (hasSectionTitle && hasSectionSubtitle) ? "1fr 1fr" : "1fr", gap: "6px" }}>
+                  {hasSectionTitle && (
+                    <NumberStepperField
+                      label="Title Size"
+                      value={parsedTitleSize}
+                      min={14}
+                      max={36}
+                      step={1}
+                      unit="px"
+                      onChange={(val) => updateProps({ title_font_size: `${val}px` })}
+                    />
+                  )}
+                  {hasSectionSubtitle && (
+                    <NumberStepperField
+                      label="Subtitle Size"
+                      value={parsedSubtitleSize}
+                      min={10}
+                      max={20}
+                      step={1}
+                      unit="px"
+                      onChange={(val) => updateProps({ subtitle_font_size: `${val}px` })}
+                    />
+                  )}
+                </div>
               </div>
             </section>
           )}
 
-          {/* Product Title / Card Text Styling */}
+          {/* Product Typography & Font */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Product Title & Font</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Product Title & Typography
+            </div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gap: "2px" }}>
                 <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Font Family</label>
@@ -4819,31 +4851,30 @@ function ProductCarouselEditor({
                 />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                <NumberStepperField
-                  label="Font Size"
-                  value={parsedProductNameSize}
-                  min={11}
-                  max={24}
-                  step={1}
-                  unit="px"
-                  onChange={(val) => updateProps({ product_name_font_size: `${val}px`, product_title_font_size: `${val}px` })}
+              <NumberStepperField
+                label="Title Size"
+                value={parsedProductNameSize}
+                min={11}
+                max={24}
+                step={1}
+                unit="px"
+                onChange={(val) => updateProps({ product_name_font_size: `${val}px`, product_title_font_size: `${val}px` })}
+              />
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Weight</label>
+                <CustomSelectDropdown
+                  value={String(p.product_name_font_weight || p.product_title_font_weight || "700")}
+                  placeholder="Weight"
+                  options={[
+                    { label: "Regular (400)", value: "400" },
+                    { label: "Medium (500)", value: "500" },
+                    { label: "Semi-Bold (600)", value: "600" },
+                    { label: "Bold (700)", value: "700" },
+                    { label: "Extra Bold (800)", value: "800" },
+                  ]}
+                  onChange={(val) => updateProps({ product_name_font_weight: val, product_title_font_weight: val })}
                 />
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Font Weight</label>
-                  <CustomSelectDropdown
-                    value={String(p.product_name_font_weight || p.product_title_font_weight || "700")}
-                    placeholder="Weight"
-                    options={[
-                      { label: "Regular 400", value: "400" },
-                      { label: "Medium 500", value: "500" },
-                      { label: "SemiBold 600", value: "600" },
-                      { label: "Bold 700", value: "700" },
-                      { label: "ExtraBold 800", value: "800" },
-                    ]}
-                    onChange={(val) => updateProps({ product_name_font_weight: val, product_title_font_weight: val })}
-                  />
-                </div>
               </div>
 
               <div style={{ display: "grid", gap: "2px" }}>
@@ -4857,18 +4888,19 @@ function ProductCarouselEditor({
             </div>
           </section>
 
+          {/* Card Visibility */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Card Visibility</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card Visibility
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
               {[
-                { label: "Title", key: "show_title" },
-                { label: "Subtitle", key: "show_subtitle" },
-                { label: "View All", key: "show_view_all" },
                 { label: "Badge", key: "show_discount_badge" },
                 { label: "Ratings", key: "show_ratings" },
                 { label: "Brand", key: "show_brand_name" },
                 { label: "Old Price", key: "show_original_price" },
-                { label: "Stock", key: "show_stock_badge" },
+                { label: "Title", key: "show_title" },
+                { label: "Subtitle", key: "show_subtitle" },
               ].map(({ label, key }) => (
                 <div key={key} style={{ display: "grid", gap: "2px" }}>
                   <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>{label}</label>
@@ -4882,14 +4914,62 @@ function ProductCarouselEditor({
             </div>
           </section>
 
+          {/* Image Fit & Card Styling */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Visual Effects & Colors</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Image Fit & Card Styling
+            </div>
             <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Image Fit</label>
+                <SegmentedRow
+                  value={p.image_fit || "cover"}
+                  onChange={(val) => updateProps({ image_fit: val })}
+                  options={[
+                    { label: "Cover", value: "cover", title: "Cover", icon: <IconFitCover /> },
+                    { label: "Contain", value: "contain", title: "Contain", icon: <IconFitContain /> },
+                  ]}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Aspect Ratio</label>
+                <CustomSelectDropdown
+                  value={p.image_aspect_ratio || "3 / 4"}
+                  placeholder="Aspect Ratio"
+                  options={[
+                    { label: "1:1 Square", value: "1 / 1" },
+                    { label: "3:4 Portrait", value: "3 / 4" },
+                    { label: "4:3 Standard", value: "4 / 3" },
+                    { label: "16:9 Wide", value: "16 / 9" },
+                    { label: "2:3 Tall", value: "2 / 3" },
+                  ]}
+                  onChange={(val) => updateProps({ image_aspect_ratio: val })}
+                />
+              </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <NumberStepperField
-                  label="Corner Radius" value={parsedCardRadius} min={0} max={48} step={2} unit="px"
+                  label="Card Radius"
+                  value={parsedCardRadius}
+                  min={0}
+                  max={36}
+                  step={2}
+                  unit="px"
                   onChange={(val) => updateProps({ card_radius: `${val}px` })}
                 />
+                <NumberStepperField
+                  label="Image Radius"
+                  value={parsedImageRadius}
+                  min={0}
+                  max={36}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ image_radius: `${val}px`, image_corner_radius: `${val}px` })}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: p.show_discount_badge !== false ? "1fr 1fr" : "1fr", gap: "6px" }}>
                 <div style={{ display: "grid", gap: "2px" }}>
                   <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Card Shadow</label>
                   <CustomSelectDropdown
@@ -4897,26 +4977,159 @@ function ProductCarouselEditor({
                     placeholder="Shadow"
                     options={[
                       { label: "None", value: "none" },
-                      { label: "Subtle", value: "subtle" },
-                      { label: "Soft", value: "soft" },
-                      { label: "Elevated", value: "elevated" },
+                      { label: "Subtle (Crisp)", value: "subtle" },
+                      { label: "Soft (Floating)", value: "soft" },
+                      { label: "Elevated (Deep)", value: "elevated" },
                     ]}
                     onChange={(val) => updateProps({ card_shadow: val })}
                   />
                 </div>
+
+                {p.show_discount_badge !== false && (
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Badge Tag Style
+                    </label>
+                    <CustomSelectDropdown
+                      value={p.badge_style || "pill"}
+                      placeholder="Badge Style"
+                      options={[
+                        { label: "Pill (Rounded)", value: "pill" },
+                        { label: "Corner Tag", value: "square" },
+                        { label: "Minimal Clean", value: "minimal" },
+                      ]}
+                      onChange={(val) => updateProps({ badge_style: val })}
+                    />
+                  </div>
+                )}
               </div>
-              <SectionDivider title="Theme Colors" />
-              <CompactColorRow label="Section BG" value={p.outer_bg_color || "transparent"} onChange={(val) => updateProps({ outer_bg_color: val })} />
-              <CompactColorRow label="Card BG" value={p.card_bg_color || siteDefinition.theme?.card_bg || "#ffffff"} onChange={(val) => updateProps({ card_bg_color: val })} />
-              <CompactColorRow label="Card Border" value={p.card_border_color || siteDefinition.theme?.card_border_color || "rgba(226,232,240,0.8)"} onChange={(val) => updateProps({ card_border_color: val })} />
-              <CompactColorRow label="Image BG" value={p.image_bg || (isLightMode ? "#f8fafc" : "rgba(255,255,255,0.04)")} onChange={(val) => updateProps({ image_bg: val })} />
-              <CompactColorRow label="Section Title" value={p.title_color || siteDefinition.theme?.text_color || "#0f172a"} onChange={(val) => updateProps({ title_color: val })} />
-              <CompactColorRow label="Product Title" value={p.product_name_color || p.product_title_color || p.title_color || siteDefinition.theme?.text_color || "#0f172a"} onChange={(val) => updateProps({ product_name_color: val, product_title_color: val, title_color: val })} />
-              <CompactColorRow label="Brand Label" value={p.brand_color || siteDefinition.theme?.muted_text_color || "#64748b"} onChange={(val) => updateProps({ brand_color: val })} />
-              <CompactColorRow label="Price Color" value={p.price_color || siteDefinition.theme?.text_color || "#0f172a"} onChange={(val) => updateProps({ price_color: val })} />
-              <CompactColorRow label="Old Price" value={p.original_price_color || siteDefinition.theme?.muted_text_color || "#94a3b8"} onChange={(val) => updateProps({ original_price_color: val })} />
-              <CompactColorRow label="Star Color" value={p.rating_star_color || "#d97706"} onChange={(val) => updateProps({ rating_star_color: val })} />
-              <CompactColorRow label="Accent" value={p.accent_color || siteDefinition.theme?.accent_color || ADMIN_BLUE} onChange={(val) => updateProps({ accent_color: val })} />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* ── 3. COLORS TAB ─────────────────────────────────────────────────────── */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Section 1: Section Header & Background */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              {hasSectionTitle || hasSectionSubtitle ? "Section Header & Background" : "Section Background"}
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Section Background"
+                value={p.outer_bg_color || "transparent"}
+                onChange={(val) => updateProps({ outer_bg_color: val })}
+              />
+              {hasSectionTitle && (
+                <CompactColorRow
+                  label="Section Title Color"
+                  value={p.title_color || siteDefinition.theme?.text_color || "#0f172a"}
+                  onChange={(val) => updateProps({ title_color: val })}
+                />
+              )}
+              {hasSectionSubtitle && (
+                <CompactColorRow
+                  label="Section Subtitle Color"
+                  value={p.subtitle_color || siteDefinition.theme?.muted_text_color || "#64748b"}
+                  onChange={(val) => updateProps({ subtitle_color: val })}
+                />
+              )}
+              {p.show_view_all !== false && (
+                <CompactColorRow
+                  label="View All Color"
+                  value={p.view_all_color || p.accent_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                  onChange={(val) => updateProps({ view_all_color: val })}
+                />
+              )}
+            </div>
+          </section>
+
+          {/* Section 2: Card Surface & Media */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card Surface & Media Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Card Background"
+                value={p.card_bg_color || siteDefinition.theme?.card_bg || "#ffffff"}
+                onChange={(val) => updateProps({ card_bg_color: val })}
+              />
+              <CompactColorRow
+                label="Card Border"
+                value={p.card_border_color || siteDefinition.theme?.card_border_color || "rgba(226,232,240,0.8)"}
+                onChange={(val) => updateProps({ card_border_color: val })}
+              />
+              <CompactColorRow
+                label="Image Background"
+                value={p.image_bg || (isLightMode ? "#f8fafc" : "rgba(255,255,255,0.04)")}
+                onChange={(val) => updateProps({ image_bg: val })}
+              />
+            </div>
+          </section>
+
+          {/* Section 3: Product Typography & Price Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Product Text & Price Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Product Title Color"
+                value={p.product_name_color || p.product_title_color || p.title_color || siteDefinition.theme?.text_color || "#0f172a"}
+                onChange={(val) => updateProps({ product_name_color: val, product_title_color: val })}
+              />
+              <CompactColorRow
+                label="Selling Price Color"
+                value={p.price_color || siteDefinition.theme?.text_color || "#0f172a"}
+                onChange={(val) => updateProps({ price_color: val })}
+              />
+              {p.show_original_price !== false && (
+                <CompactColorRow
+                  label="Original (Old) Price"
+                  value={p.original_price_color || siteDefinition.theme?.muted_text_color || "#94a3b8"}
+                  onChange={(val) => updateProps({ original_price_color: val })}
+                />
+              )}
+              {p.show_brand_name !== false && (
+                <CompactColorRow
+                  label="Brand Label Color"
+                  value={p.brand_color || siteDefinition.theme?.muted_text_color || "#64748b"}
+                  onChange={(val) => updateProps({ brand_color: val })}
+                />
+              )}
+            </div>
+          </section>
+
+          {/* Section 4: Badges & Ratings */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Badges & Ratings Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              {p.show_ratings !== false && (
+                <CompactColorRow
+                  label="Star Rating Color"
+                  value={p.rating_star_color || "#d97706"}
+                  onChange={(val) => updateProps({ rating_star_color: val })}
+                />
+              )}
+              {p.show_discount_badge !== false && (
+                <>
+                  <CompactColorRow
+                    label="Badge Background"
+                    value={p.badge_bg_color || p.badge_color || "#16a34a"}
+                    onChange={(val) => updateProps({ badge_bg_color: val, badge_color: val })}
+                  />
+                  <CompactColorRow
+                    label="Badge Text Color"
+                    value={p.badge_text_color || "#ffffff"}
+                    onChange={(val) => updateProps({ badge_text_color: val })}
+                  />
+                </>
+              )}
             </div>
           </section>
         </div>
@@ -4955,6 +5168,14 @@ function ProductGridEditor({
             : block
         ),
       }));
+    }
+    const incomingCardStyle = patch.card_style || patch.cardStyle;
+    if (incomingCardStyle) {
+      if (!nextDef.theme) nextDef.theme = {};
+      if (incomingCardStyle !== "default") {
+        nextDef.theme.card_style = incomingCardStyle;
+        nextDef.theme.product_grid_card_style = incomingCardStyle;
+      }
     }
     onSiteDefinitionChange(nextDef);
   };
@@ -4999,17 +5220,23 @@ function ProductGridEditor({
                   value={p.card_style || p.cardStyle || "default"}
                   placeholder="Card Style"
                   options={[
-                    { label: `Store Theme Default (${(siteDefinition.theme?.card_style || "fashion").toUpperCase()})`, value: "default" },
-                    { label: "Grocery & Daily Needs (Horizontal Row)", value: "grocery" },
-                    { label: "Fashion & Apparel (3:4 Portrait)", value: "fashion" },
-                    { label: "Electronics & Tech (4:3 Landscape)", value: "electronics" },
-                    { label: "Beauty & Minimal (1:1 Rounded)", value: "beauty" },
-                    { label: "Standard Square (1:1)", value: "standard" },
-                    { label: "Books & Stationery (3:4 Portrait)", value: "books" },
+                    { label: `Default (${formatCardPresetName(siteDefinition.theme?.card_style || "fashion")})`, value: "default" },
+                    { label: "Grocery", value: "grocery" },
+                    { label: "Fashion", value: "fashion" },
+                    { label: "Electronics", value: "electronics" },
+                    { label: "Beauty", value: "beauty" },
+                    { label: "Books", value: "books" },
                   ]}
                   onChange={(val) => {
                     if (val === "default") {
-                      updateProps({ card_style: val, cardStyle: val });
+                      updateProps({
+                        card_style: "default",
+                        cardStyle: "default",
+                        image_aspect_ratio: undefined,
+                        image_radius: undefined,
+                        image_corner_radius: undefined,
+                        card_radius: undefined,
+                      });
                     } else if (val === "fashion") {
                       updateProps({
                         card_style: val,
@@ -5142,45 +5369,6 @@ function ProductGridEditor({
             </div>
           </section>
 
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Image Fitting</div>
-            <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Image Fit</label>
-                <SegmentedRow
-                  value={p.image_fit || "cover"}
-                  onChange={(val) => updateProps({ image_fit: val })}
-                  options={[{ label: "Cover", value: "cover" }, { label: "Contain", value: "contain" }]}
-                />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Aspect Ratio</label>
-                  <CustomSelectDropdown
-                    value={p.image_aspect_ratio || "3 / 4"}
-                    placeholder="Aspect Ratio"
-                    options={[
-                      { label: "1:1  Square", value: "1 / 1" },
-                      { label: "3:4  Portrait", value: "3 / 4" },
-                      { label: "4:3  Standard", value: "4 / 3" },
-                      { label: "16:9 Wide", value: "16 / 9" },
-                      { label: "2:3  Tall", value: "2 / 3" },
-                    ]}
-                    onChange={(val) => updateProps({ image_aspect_ratio: val })}
-                  />
-                </div>
-                <NumberStepperField
-                  label="Image Radius"
-                  value={parsedImageRadius}
-                  min={0}
-                  max={36}
-                  step={2}
-                  unit="px"
-                  onChange={(val) => updateProps({ image_radius: `${val}px`, image_corner_radius: `${val}px` })}
-                />
-              </div>
-            </div>
-          </section>
         </div>
       )}
 
@@ -5212,31 +5400,29 @@ function ProductGridEditor({
                 />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                <NumberStepperField
-                  label="Font Size"
-                  value={parsedProductNameSize}
-                  min={11}
-                  max={24}
-                  step={1}
-                  unit="px"
-                  onChange={(val) => updateProps({ product_name_font_size: `${val}px`, product_title_font_size: `${val}px` })}
+              <NumberStepperField
+                label="Font Size"
+                value={parsedProductNameSize}
+                min={11}
+                max={24}
+                step={1}
+                unit="px"
+                onChange={(val) => updateProps({ product_name_font_size: `${val}px`, product_title_font_size: `${val}px` })}
+              />
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Font Weight</label>
+                <CustomSelectDropdown
+                  value={String(p.product_name_font_weight || p.product_title_font_weight || "700")}
+                  placeholder="Weight"
+                  options={[
+                    { label: "Regular (400)", value: "400" },
+                    { label: "Medium (500)", value: "500" },
+                    { label: "Semi-Bold (600)", value: "600" },
+                    { label: "Bold (700)", value: "700" },
+                    { label: "Extra Bold (800)", value: "800" },
+                  ]}
+                  onChange={(val) => updateProps({ product_name_font_weight: val, product_title_font_weight: val })}
                 />
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Font Weight</label>
-                  <CustomSelectDropdown
-                    value={String(p.product_name_font_weight || p.product_title_font_weight || "700")}
-                    placeholder="Weight"
-                    options={[
-                      { label: "Regular 400", value: "400" },
-                      { label: "Medium 500", value: "500" },
-                      { label: "SemiBold 600", value: "600" },
-                      { label: "Bold 700", value: "700" },
-                      { label: "ExtraBold 800", value: "800" },
-                    ]}
-                    onChange={(val) => updateProps({ product_name_font_weight: val, product_title_font_weight: val })}
-                  />
-                </div>
               </div>
 
               <div style={{ display: "grid", gap: "2px" }}>
@@ -5274,29 +5460,71 @@ function ProductGridEditor({
           </section>
 
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Visual Effects & Colors</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Image Fit & Card Styling</div>
             <div style={{ display: "grid", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Image Fit</label>
+                <SegmentedRow
+                  value={p.image_fit || "cover"}
+                  onChange={(val) => updateProps({ image_fit: val })}
+                  options={[{ label: "Cover", value: "cover" }, { label: "Contain", value: "contain" }]}
+                />
+              </div>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Aspect Ratio</label>
+                <CustomSelectDropdown
+                  value={p.image_aspect_ratio || "3 / 4"}
+                  placeholder="Aspect Ratio"
+                  options={[
+                    { label: "1:1 Square", value: "1 / 1" },
+                    { label: "3:4 Portrait", value: "3 / 4" },
+                    { label: "4:3 Standard", value: "4 / 3" },
+                    { label: "16:9 Wide", value: "16 / 9" },
+                    { label: "2:3 Tall", value: "2 / 3" },
+                  ]}
+                  onChange={(val) => updateProps({ image_aspect_ratio: val })}
+                />
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <NumberStepperField
-                  label="Corner Radius" value={parsedCardRadius} min={0} max={48} step={2} unit="px"
+                  label="Card Radius"
+                  value={parsedCardRadius}
+                  min={0}
+                  max={36}
+                  step={2}
+                  unit="px"
                   onChange={(val) => updateProps({ card_radius: `${val}px` })}
                 />
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Card Shadow</label>
-                  <CustomSelectDropdown
-                    value={p.card_shadow || "soft"}
-                    placeholder="Shadow"
-                    options={[
-                      { label: "None", value: "none" },
-                      { label: "Subtle", value: "subtle" },
-                      { label: "Soft", value: "soft" },
-                      { label: "Elevated", value: "elevated" },
-                    ]}
-                    onChange={(val) => updateProps({ card_shadow: val })}
-                  />
-                </div>
+                <NumberStepperField
+                  label="Image Radius"
+                  value={parsedImageRadius}
+                  min={0}
+                  max={36}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ image_radius: `${val}px`, image_corner_radius: `${val}px` })}
+                />
               </div>
-              <SectionDivider title="Theme Colors" />
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Card Shadow</label>
+                <CustomSelectDropdown
+                  value={p.card_shadow || "soft"}
+                  placeholder="Shadow"
+                  options={[
+                    { label: "None", value: "none" },
+                    { label: "Subtle", value: "subtle" },
+                    { label: "Soft", value: "soft" },
+                    { label: "Elevated", value: "elevated" },
+                  ]}
+                  onChange={(val) => updateProps({ card_shadow: val })}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Theme Colors</div>
+            <div style={{ display: "grid", gap: "6px" }}>
               <CompactColorRow label="Section BG" value={p.outer_bg_color || "transparent"} onChange={(val) => updateProps({ outer_bg_color: val })} />
               <CompactColorRow label="Card BG" value={p.card_bg_color || siteDefinition.theme?.card_bg || "#ffffff"} onChange={(val) => updateProps({ card_bg_color: val })} />
               <CompactColorRow label="Card Border" value={p.card_border_color || siteDefinition.theme?.card_border_color || "rgba(226,232,240,0.8)"} onChange={(val) => updateProps({ card_border_color: val })} />

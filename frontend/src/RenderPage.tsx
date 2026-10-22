@@ -693,6 +693,28 @@ const RenderPage: React.FC<RenderPageProps> = ({
     );
   }, [sectionTitleParam, currentSectionIdParam, resolvedBlocks, page]);
 
+  const effectiveProductGridCardStyle = useMemo(() => {
+    const blocks = Array.isArray(resolvedBlocks)
+      ? resolvedBlocks
+      : Array.isArray(page?.blocks)
+      ? page.blocks
+      : [];
+    for (const b of blocks) {
+      const t = String(b?.type || "").toLowerCase();
+      if (t === "product_grid" || t === "productgrid") {
+        const raw = String(b.props?.card_style || b.props?.cardStyle || "").toLowerCase().trim();
+        if (raw && raw !== "default" && raw !== "inherit" && raw !== "theme" && raw !== "auto") {
+          return raw;
+        }
+      }
+    }
+    const themeStyle = String((theme as any)?.product_grid_card_style || theme?.card_style || "").toLowerCase().trim();
+    if (themeStyle && themeStyle !== "default" && themeStyle !== "inherit" && themeStyle !== "auto") {
+      return themeStyle;
+    }
+    return "fashion";
+  }, [resolvedBlocks, page, theme]);
+
   const isDedicatedSectionOrSearchView = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return Boolean(
@@ -1384,6 +1406,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
       siteSlug,
       siteName,
       appBase,
+      product_grid_card_style: effectiveProductGridCardStyle,
       ...blockProps,
       theme: resolvedTheme,
       ...(overrides ?? {}),

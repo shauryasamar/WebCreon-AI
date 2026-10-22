@@ -2334,12 +2334,12 @@ export const AdminHomeSections: React.FC = () => {
                           value={activeSection.cardStyle || "default"}
                           onChange={(e) => setActiveSection({ ...activeSection, cardStyle: e.target.value as any })}
                         >
-                          <option value="default">Store Theme Default</option>
-                          <option value="fashion">Fashion (3:4 Portrait)</option>
-                          <option value="electronics">Electronics (4:3 Tech)</option>
-                          <option value="grocery">Grocery (2-Row Stacked)</option>
-                          <option value="beauty">Beauty (Rounded Minimal)</option>
-                          <option value="standard">Standard (1:1 Square)</option>
+                          <option value="default">Default</option>
+                          <option value="grocery">Grocery</option>
+                          <option value="fashion">Fashion</option>
+                          <option value="electronics">Electronics</option>
+                          <option value="beauty">Beauty</option>
+                          <option value="books">Books</option>
                         </AdminSelect>
                       </div>
                     )}

@@ -9,7 +9,7 @@ import {
   ComponentAsset,
   ComponentAssetCategory,
 } from "../customizations/assetsRegistry";
-import { updateThemeValues } from "../customizations/editorUtils";
+import { updateThemeValues, getEffectiveProductGridCardStyle } from "../customizations/editorUtils";
 
 type ControlItemKey =
   | "saved-sites"
@@ -1257,6 +1257,14 @@ export default function BuilderDrawerPanel({
         ...asset.patch.themePatch,
       };
     }
+    if (asset.category === "products" || targetType === "product_grid") {
+      const cardStyleValue = asset.patch.themePatch?.card_style || asset.patch.blockPatch?.card_style;
+      if (cardStyleValue) {
+        if (!nextDefinition.theme) nextDefinition.theme = {};
+        nextDefinition.theme.card_style = cardStyleValue;
+        nextDefinition.theme.product_grid_card_style = cardStyleValue;
+      }
+    }
 
     const mergedPatch = {
       ...(asset.patch.themePatch ?? {}),
@@ -1308,12 +1316,12 @@ export default function BuilderDrawerPanel({
 
           if (
             blockType === targetType ||
-            (targetType === "product_grid" && (blockType.includes("product") || blockType === "product_grid" || blockType === "product_carousel")) ||
+            (targetType === "product_grid" && (blockType === "product_grid" || blockType === "productgrid")) ||
             (targetType === "footer" && blockType.includes("footer")) ||
             (targetType === "navbar" && blockType.includes("nav"))
           ) {
             const currentProps = block.props ?? {};
-            const isProductBlock = targetType === "product_grid" || blockType.includes("product") || blockType === "product_grid" || blockType === "product_carousel";
+            const isProductBlock = targetType === "product_grid" || blockType === "product_grid" || blockType === "productgrid";
 
             // If applying a product card preset, clean out all stale manual layout/geometry overrides so the new preset applies freshly, but PRESERVE all theme colors!
             let baseProps = { ...currentProps };
@@ -1796,17 +1804,7 @@ export default function BuilderDrawerPanel({
               const heroBlock = (siteDefinition?.pages?.[0]?.blocks ?? []).find((b: any) => String(b.type || "").toLowerCase().includes("hero"));
               const activeSlidesList = Array.isArray(heroBlock?.props?.slides) ? heroBlock.props.slides : [];
 
-              const effectiveProductCardStyle = (() => {
-                const productBlock = (siteDefinition?.pages?.[0]?.blocks ?? []).find((b: any) => {
-                  const t = String(b.type || "").toLowerCase();
-                  return t.includes("product") || t === "product_grid" || t === "product_carousel";
-                });
-                const blockStyle = productBlock?.props?.card_style || productBlock?.props?.cardStyle;
-                if (blockStyle && blockStyle !== "default" && blockStyle !== "inherit" && blockStyle !== "theme" && blockStyle !== "auto") {
-                  return String(blockStyle).toLowerCase().trim();
-                }
-                return String(siteDefinition?.theme?.card_style || "fashion").toLowerCase().trim();
-              })();
+              const effectiveProductCardStyle = getEffectiveProductGridCardStyle(siteDefinition);
 
               return (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>

@@ -385,10 +385,15 @@ const ProductGrid: React.FC<ProductGridProps> = ({
     pageText = "#0f172a";
   }
 
-  let mutedText = original_price_color || (theme as any)?.original_price_color || (theme as any)?.muted_text_color;
+  let mutedText = (theme as any)?.muted_text_color || (theme as any)?.muted_text || defaultMutedText;
   if (!mutedText || (isCardDark && isColorDarkHex(mutedText)) || (!isCardDark && !isColorDarkHex(mutedText))) {
     mutedText = isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)";
   }
+
+  const resolvedOriginalPriceColor =
+    original_price_color ||
+    (theme as any)?.original_price_color ||
+    mutedText;
 
   const resolvedBrandCandidate =
     brand_color ||
@@ -400,7 +405,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
 
   const activeBrandColor = getAccessibleBrandColor(resolvedBrandCandidate, cardBg, isCardDark);
 
-  let faintText = activeBrandColor || (theme as any)?.muted_text_color || (theme as any)?.muted_text || defaultMutedText;
+  let faintText = (theme as any)?.muted_text_color || (theme as any)?.muted_text || defaultMutedText;
   if (!faintText || (isCardDark && isColorDarkHex(faintText)) || (!isCardDark && !isColorDarkHex(faintText))) {
     faintText = isCardDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.60)";
   }
@@ -809,11 +814,11 @@ const ProductGrid: React.FC<ProductGridProps> = ({
               (theme as any)?.price_color ||
               (theme as any)?.card_price_color;
 
-            let activePriceColor = getSafePriceColor(rawPriceCandidate, pageText, isCardDark, cardBg);
-            // Selling price should NEVER be red, and should NOT be the exact same color as the brand label
-            if (activePriceColor && activeBrandColor && activePriceColor.toLowerCase() === activeBrandColor.toLowerCase()) {
-              activePriceColor = pageText;
-            }
+            let activePriceColor = price_color
+              ? price_color
+              : rawPriceCandidate
+                ? getSafePriceColor(rawPriceCandidate, pageText, isCardDark, cardBg)
+                : pageText;
 
             const badgeCollections = (product.collections || []).filter((c: any) => c && c.is_badge);
 
@@ -1165,7 +1170,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                           <span
                             style={{
                               fontSize: isMobile ? "9.5px" : "11.5px",
-                              color: mutedText,
+                              color: resolvedOriginalPriceColor,
                               textDecoration: "line-through",
                               fontWeight: 500,
                               opacity: 0.82,
@@ -1315,7 +1320,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                           <span
                             style={{
                               fontSize: isMobile ? "9.5px" : "11.5px",
-                              color: mutedText,
+                              color: resolvedOriginalPriceColor,
                               textDecoration: "line-through",
                               fontWeight: 500,
                               opacity: 0.82,
@@ -1702,7 +1707,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                           <span
                             style={{
                               fontSize: isMobile ? "9.5px" : "11px",
-                              color: mutedText,
+                              color: resolvedOriginalPriceColor,
                               textDecoration: "line-through",
                               fontWeight: 500,
                               opacity: 0.82,
@@ -1807,7 +1812,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                         <span
                           style={{
                             fontSize: isMobile ? "10px" : "12px",
-                            color: mutedText,
+                            color: resolvedOriginalPriceColor,
                             textDecoration: "line-through",
                             fontWeight: 500,
                             opacity: 0.82,

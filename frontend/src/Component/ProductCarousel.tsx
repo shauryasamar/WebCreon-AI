@@ -83,13 +83,15 @@ export interface ProductCarouselProps {
   subtitle_color?: string;
   show_view_all?: boolean;
   view_all_text?: string;
-  viewAllLink?: string;
   view_all_link?: string;
+  view_all_color?: string;
+  viewAllLink?: string;
   // Layout
   layout?: "carousel" | "grid";
   grid_columns?: number | string;
   cardStyle?: string;
   card_style?: string;
+  product_grid_card_style?: string;
   card_width?: string | number;
   limit?: number;
   rules?: ProductCarouselFilterRules;
@@ -140,6 +142,9 @@ export interface ProductCarouselProps {
   show_brand_name?: boolean;
   badge_style?: "pill" | "square" | "minimal" | "hidden";
   accent_color?: string;
+  badge_bg_color?: string;
+  badge_color?: string;
+  badge_text_color?: string;
 }
 
 function formatAspectRatio(ratio?: string): string {
@@ -213,12 +218,14 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
   subtitle_color,
   show_view_all = true,
   view_all_text = "View All",
+  view_all_color,
   viewAllLink,
   view_all_link,
   layout = "carousel",
   grid_columns,
   cardStyle,
   card_style,
+  product_grid_card_style,
   card_width,
   limit = 10,
   rules,
@@ -267,6 +274,9 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
   show_brand_name = true,
   badge_style = "pill",
   accent_color,
+  badge_bg_color,
+  badge_color,
+  badge_text_color,
 }) => {
   const { products } = useCart();
   const { siteId, slug: siteSlug } = useParams();
@@ -329,8 +339,13 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
 
   const isLight = !isDark;
 
-  // Active Card Style Key (Inherits directly from theme asset selection: fashion | electronics | beauty | grocery | books)
+  // Active Card Style Key (Inherits directly from Product Grid style when default or omitted)
   const rawCarouselCardStyle = String(card_style || cardStyle || "").toLowerCase().trim();
+  const effectiveFallbackStyle =
+    product_grid_card_style ||
+    (theme as any)?.product_grid_card_style ||
+    theme?.card_style ||
+    "fashion";
   const cardStyleKey =
     rawCarouselCardStyle &&
     rawCarouselCardStyle !== "default" &&
@@ -338,7 +353,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
     rawCarouselCardStyle !== "theme" &&
     rawCarouselCardStyle !== "auto"
       ? rawCarouselCardStyle
-      : (theme?.card_style || "fashion").toLowerCase().trim();
+      : String(effectiveFallbackStyle).toLowerCase().trim();
 
   const cardBg = card_bg_color || defaultCardBg;
   const isCardDark = isColorDarkHex(cardBg);
@@ -365,10 +380,15 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
 
   const pageText = productCardTitleColor;
 
-  let mutedText = original_price_color || (theme as any)?.original_price_color || (theme as any)?.muted_text_color;
+  let mutedText = (theme as any)?.muted_text_color || (theme as any)?.muted_text || defaultMutedText;
   if (!mutedText || (isCardDark && isColorDarkHex(mutedText)) || (!isCardDark && !isColorDarkHex(mutedText))) {
     mutedText = isCardDark ? "rgba(248, 250, 252, 0.72)" : "rgba(15, 23, 42, 0.65)";
   }
+
+  const resolvedOriginalPriceColor =
+    original_price_color ||
+    (theme as any)?.original_price_color ||
+    mutedText;
 
   const resolvedBrandCandidate =
     brand_color ||
@@ -380,7 +400,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
 
   const activeBrandColor = getAccessibleBrandColor(resolvedBrandCandidate, cardBg, isCardDark);
 
-  let faintText = activeBrandColor || (theme as any)?.muted_text_color || (theme as any)?.muted_text || defaultMutedText;
+  let faintText = (theme as any)?.muted_text_color || (theme as any)?.muted_text || defaultMutedText;
   if (!faintText || (isCardDark && isColorDarkHex(faintText)) || (!isCardDark && !isColorDarkHex(faintText))) {
     faintText = isCardDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.60)";
   }
@@ -711,11 +731,11 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
     (theme as any)?.price_color ||
     (theme as any)?.card_price_color;
 
-  let activePriceColor = getSafePriceColor(rawPriceCandidate, pageText, isCardDark, cardBg);
-  // Selling price should NEVER be red, and should NOT be the exact same color as the brand label
-  if (activePriceColor && activeBrandColor && activePriceColor.toLowerCase() === activeBrandColor.toLowerCase()) {
-    activePriceColor = pageText;
-  }
+  let activePriceColor = price_color
+    ? price_color
+    : rawPriceCandidate
+      ? getSafePriceColor(rawPriceCandidate, pageText, isCardDark, cardBg)
+      : pageText;
 
   // Exact Card Renderer with Uniform Proportional Scaling (Width & Height scale together)
   const renderSingleProductCard = (
@@ -806,7 +826,29 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
     const isPreorder = isProductPreorderActive(product);
 
     const renderDiscountBadge = (isFrosted = true, badgePos: "top-right" | "top-left" = "top-right") => {
-      if (!show_discount_badge || product.normalizedDiscountPercent <= 0) return null;
+      if (!show_discount_badge || product.normalizedDiscountPercent <= 0 || badge_style === "hidden") return null;
+
+      const badgeRadius =
+        badge_style === "pill"
+          ? "999px"
+          : badge_style === "square"
+            ? "2px"
+            : badge_style === "minimal"
+              ? "4px"
+              : "6px";
+
+      const resolvedBadgeBg =
+        badge_bg_color ||
+        badge_color ||
+        (badge_style === "minimal" ? "rgba(22, 163, 74, 0.12)" : "linear-gradient(135deg, #16a34a, #15803d)");
+
+      const resolvedBadgeTextColor =
+        badge_text_color ||
+        (badge_style === "minimal" && !badge_bg_color && !badge_color ? "#16a34a" : "#ffffff");
+
+      const badgeBorder =
+        badge_style === "minimal" ? "1px solid rgba(22, 163, 74, 0.4)" : undefined;
+
       return (
         <div
           style={{
@@ -815,13 +857,14 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
             ...(badgePos === "top-left" ? { left: scalePx(6, 4) } : { right: scalePx(6, 4) }),
             zIndex: 3,
             padding: `${scalePx(3.5, 2.5)} ${scalePx(8, 6)}`,
-            borderRadius: "6px",
-            background: "linear-gradient(135deg, #16a34a, #15803d)",
-            color: "#ffffff",
+            borderRadius: badgeRadius,
+            background: resolvedBadgeBg,
+            color: resolvedBadgeTextColor,
+            border: badgeBorder,
             fontSize: scalePx(9.5, 8),
             fontWeight: 800,
             letterSpacing: "0.03em",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
+            boxShadow: badge_style === "minimal" ? "none" : "0 2px 6px rgba(0,0,0,0.18)",
             textTransform: "uppercase",
             whiteSpace: "nowrap",
           }}
@@ -1126,7 +1169,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                   <span
                     style={{
                       fontSize: scalePx(11.5, 9.5),
-                      color: mutedText,
+                      color: resolvedOriginalPriceColor,
                       textDecoration: "line-through",
                       fontWeight: 500,
                       opacity: 0.82,
@@ -1283,7 +1326,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                   <span
                     style={{
                       fontSize: scalePx(11.5, 9.5),
-                      color: mutedText,
+                      color: resolvedOriginalPriceColor,
                       textDecoration: "line-through",
                       fontWeight: 500,
                       opacity: 0.82,
@@ -1687,7 +1730,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                   <span
                     style={{
                       fontSize: scalePx(11, 9),
-                      color: mutedText,
+                      color: resolvedOriginalPriceColor,
                       textDecoration: "line-through",
                       fontWeight: 500,
                       opacity: 0.82,
@@ -1815,7 +1858,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 <span
                   style={{
                     fontSize: scalePx(11.5, 9.5),
-                    color: mutedText,
+                    color: resolvedOriginalPriceColor,
                     textDecoration: "line-through",
                     fontWeight: 500,
                     opacity: 0.82,
@@ -1943,14 +1986,24 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
             position: "relative",
             display: "flex",
             alignItems: "center",
-            justifyContent: title_alignment === "center" ? "center" : "space-between",
+            justifyContent:
+              title_alignment === "center"
+                ? "center"
+                : title_alignment === "right"
+                  ? "flex-end"
+                  : "space-between",
             marginBottom: isMobile ? "8px" : "11px",
             width: "100%",
           }}
         >
           <div
             style={{
-              textAlign: title_alignment === "center" ? "center" : "left",
+              textAlign:
+                title_alignment === "center"
+                  ? "center"
+                  : title_alignment === "right"
+                    ? "right"
+                    : "left",
               flex: 1,
               paddingRight:
                 title_alignment === "center" && show_view_all && effectiveViewAllLink
@@ -2021,7 +2074,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                 style={{
                   fontSize: isMobile ? "12px" : "13px",
                   fontWeight: 700,
-                  color: resolvedAccentColor,
+                  color: view_all_color || resolvedAccentColor,
                   textDecoration: "none",
                   whiteSpace: "nowrap",
                 }}
