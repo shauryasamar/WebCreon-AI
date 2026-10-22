@@ -6,6 +6,7 @@ import { resolveThemeTokens } from "../context/ThemeContext";
 import { getThumbnailUrl } from "../utils/imageOptimizer";
 import { getCustomerAuthHeaders, getCustomerToken } from "../utils/customerAuthFetch";
 import { useDeviceMode } from "../context/DeviceModeContext";
+import { AdminSelect } from "../Component/AdminSelect";
 
 
 type RefundInfo = {
@@ -1239,7 +1240,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
         headers: getCustomerAuthHeaders(siteId || siteSlug),
       });
 
-      if (response.status === 401) {
+      if (response.status === 401 || response.status === 403) {
         setOrders([]);
         setDetailMap({});
         setTotalOrders(0);
@@ -1290,7 +1291,13 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       }
     } catch (err) {
       console.error("Failed to load customer orders", err);
-      if (isInsideEditor) {
+      const curToken = getCustomerToken(siteId || siteSlug);
+      if (!curToken && !isInsideEditor) {
+        setOrders([]);
+        setDetailMap({});
+        setTotalOrders(0);
+        setIsUnauthenticated(true);
+      } else if (isInsideEditor) {
         setOrders(SAMPLE_PREVIEW_ORDERS);
         setTotalOrders(SAMPLE_PREVIEW_ORDERS.length);
         setTotalPages(1);
@@ -1300,6 +1307,23 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const handleAuthChanged = (e: Event) => {
+      const ce = e as CustomEvent<{ token?: string | null }>;
+      if (!ce.detail || !ce.detail.token) {
+        setOrders([]);
+        setDetailMap({});
+        setTotalOrders(0);
+        setTotalPages(1);
+        setIsUnauthenticated(true);
+      } else {
+        loadOrders();
+      }
+    };
+    window.addEventListener("wc_customer_auth_changed", handleAuthChanged);
+    return () => window.removeEventListener("wc_customer_auth_changed", handleAuthChanged);
+  }, [siteId, siteSlug]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage === currentPage) return;
@@ -3427,110 +3451,101 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                 isMobile ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
                   {/* Status Selector Dropdown */}
-                  <div style={{ position: "relative", width: "100%" }}>
-                    <select
-                      value={statusTab}
-                      onChange={(e) => {
-                        setStatusTab(e.target.value as any);
-                        setCurrentPage(1);
-                      }}
-                      style={{
-                        appearance: "none",
-                        width: "100%",
-                        padding: "9px 32px 9px 12px",
-                        borderRadius: "10px",
-                        border: `1px solid ${statusTab !== "all" ? accentColor : (isLight ? "rgba(15,23,42,0.14)" : "rgba(255,255,255,0.16)")}`,
-                        background: statusTab !== "all"
-                          ? (isLight ? `${accentColor}12` : `${accentColor}25`)
-                          : (isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)"),
-                        color: textPrimary,
-                        colorScheme: isCardDark ? "dark" : "light",
-                        fontSize: "12.5px",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        outline: "none",
-                      }}
-                    >
-                      <option value="all" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Status: All Orders ({statusCounts.all})</option>
-                      <option value="active" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Status: In Transit / Active ({statusCounts.active})</option>
-                      <option value="delivered" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Status: Delivered ({statusCounts.delivered})</option>
-                      <option value="returns" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Status: Returns & Refunds ({statusCounts.returns})</option>
-                      <option value="cancelled" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Status: Cancelled ({statusCounts.cancelled})</option>
-                    </select>
-                    <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                    </div>
-                  </div>
+                  <AdminSelect
+                    value={statusTab}
+                    onChange={(e: any) => {
+                      setStatusTab(e.target.value as any);
+                      setCurrentPage(1);
+                    }}
+                    isDark={isCardDark}
+                    themeMode={isCardDark ? "dark" : "light"}
+                    accentColor={accentColor}
+                    triggerBg={
+                      statusTab !== "all"
+                        ? (isLight ? `${accentColor}12` : `${accentColor}25`)
+                        : (isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)")
+                    }
+                    menuBg={cardBg || (isCardDark ? "#0f172a" : "#ffffff")}
+                    textColor={textPrimary}
+                    borderColor={
+                      statusTab !== "all"
+                        ? accentColor
+                        : (isLight ? "rgba(15,23,42,0.14)" : "rgba(255,255,255,0.16)")
+                    }
+                    style={{
+                      width: "100%",
+                      height: "38px",
+                      borderRadius: "10px",
+                      fontSize: "12.5px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    <option value="all">Status: All Orders ({statusCounts.all})</option>
+                    <option value="active">Status: In Transit / Active ({statusCounts.active})</option>
+                    <option value="delivered">Status: Delivered ({statusCounts.delivered})</option>
+                    <option value="returns">Status: Returns & Refunds ({statusCounts.returns})</option>
+                    <option value="cancelled">Status: Cancelled ({statusCounts.cancelled})</option>
+                  </AdminSelect>
 
                   {/* Date & Sort in 2 equal columns */}
                   <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-                    <div style={{ position: "relative", flex: 1, width: "50%" }}>
-                      <select
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <AdminSelect
                         value={dateFilter}
-                        onChange={(e) => {
+                        onChange={(e: any) => {
                           setDateFilter(e.target.value as any);
                           setCurrentPage(1);
                         }}
+                        isDark={isCardDark}
+                        themeMode={isCardDark ? "dark" : "light"}
+                        accentColor={accentColor}
+                        triggerBg={isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)"}
+                        menuBg={cardBg || (isCardDark ? "#0f172a" : "#ffffff")}
+                        textColor={textPrimary}
+                        borderColor={isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}
                         style={{
-                          appearance: "none",
                           width: "100%",
-                          padding: "8px 24px 8px 10px",
+                          height: "36px",
                           borderRadius: "10px",
-                          border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
-                          background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
-                          color: textPrimary,
-                          colorScheme: isCardDark ? "dark" : "light",
                           fontSize: "12px",
                           fontWeight: 600,
-                          cursor: "pointer",
-                          outline: "none",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
                         }}
                       >
-                        <option value="30_days" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Last 30 days</option>
-                        <option value="60_days" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Last 60 days</option>
-                        <option value="6_months" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Last 6 months</option>
-                        <option value="this_year" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>This year ({new Date().getFullYear()})</option>
-                        <option value="custom" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Custom dates...</option>
-                      </select>
-                      <div style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                      </div>
+                        <option value="30_days">Last 30 days</option>
+                        <option value="60_days">Last 60 days</option>
+                        <option value="6_months">Last 6 months</option>
+                        <option value="this_year">This year ({new Date().getFullYear()})</option>
+                        <option value="custom">Custom dates...</option>
+                      </AdminSelect>
                     </div>
 
-                    <div style={{ position: "relative", flex: 1, width: "50%" }}>
-                      <select
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <AdminSelect
                         value={sortBy}
-                        onChange={(e) => {
+                        onChange={(e: any) => {
                           setSortBy(e.target.value as any);
                           setCurrentPage(1);
                         }}
+                        isDark={isCardDark}
+                        themeMode={isCardDark ? "dark" : "light"}
+                        accentColor={accentColor}
+                        triggerBg={isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)"}
+                        menuBg={cardBg || (isCardDark ? "#0f172a" : "#ffffff")}
+                        textColor={textPrimary}
+                        borderColor={isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}
                         style={{
-                          appearance: "none",
                           width: "100%",
-                          padding: "8px 24px 8px 10px",
+                          height: "36px",
                           borderRadius: "10px",
-                          border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
-                          background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
-                          color: textPrimary,
-                          colorScheme: isCardDark ? "dark" : "light",
                           fontSize: "12px",
                           fontWeight: 600,
-                          cursor: "pointer",
-                          outline: "none",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
                         }}
                       >
-                        <option value="newest" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Newest first</option>
-                        <option value="oldest" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Oldest first</option>
-                        <option value="amount_high" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Total: High to Low</option>
-                        <option value="amount_low" style={{ background: isCardDark ? "#0f172a" : "#ffffff", color: textPrimary }}>Total: Low to High</option>
-                      </select>
-                      <div style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                      </div>
+                        <option value="newest">Newest first</option>
+                        <option value="oldest">Oldest first</option>
+                        <option value="amount_high">Total: High to Low</option>
+                        <option value="amount_low">Total: Low to High</option>
+                      </AdminSelect>
                     </div>
                   </div>
                 </div>
@@ -3543,66 +3558,60 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
                     gap: "8px",
                   }}
                 >
-                  <div style={{ position: "relative" }}>
-                    <select
-                      value={dateFilter}
-                      onChange={(e) => {
-                        setDateFilter(e.target.value as any);
-                        setCurrentPage(1);
-                      }}
-                      style={{
-                        appearance: "none",
-                        padding: "8px 28px 8px 12px",
-                        borderRadius: "10px",
-                        border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
-                        background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
-                        color: textPrimary,
-                        fontSize: "12.5px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        outline: "none",
-                      }}
-                    >
-                      <option value="30_days">Last 30 days (Default)</option>
-                      <option value="60_days">Last 60 days</option>
-                      <option value="6_months">Last 6 months</option>
-                      <option value="this_year">This year ({new Date().getFullYear()})</option>
-                      <option value="custom">Custom date range...</option>
-                    </select>
-                    <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                    </div>
-                  </div>
+                  <AdminSelect
+                    value={dateFilter}
+                    onChange={(e: any) => {
+                      setDateFilter(e.target.value as any);
+                      setCurrentPage(1);
+                    }}
+                    isDark={isCardDark}
+                    themeMode={isCardDark ? "dark" : "light"}
+                    accentColor={accentColor}
+                    triggerBg={isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)"}
+                    menuBg={cardBg || (isCardDark ? "#0f172a" : "#ffffff")}
+                    textColor={textPrimary}
+                    borderColor={isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}
+                    style={{
+                      height: "36px",
+                      borderRadius: "10px",
+                      fontSize: "12.5px",
+                      fontWeight: 600,
+                      minWidth: "190px",
+                    }}
+                  >
+                    <option value="30_days">Last 30 days (Default)</option>
+                    <option value="60_days">Last 60 days</option>
+                    <option value="6_months">Last 6 months</option>
+                    <option value="this_year">This year ({new Date().getFullYear()})</option>
+                    <option value="custom">Custom date range...</option>
+                  </AdminSelect>
 
-                  <div style={{ position: "relative" }}>
-                    <select
-                      value={sortBy}
-                      onChange={(e) => {
-                        setSortBy(e.target.value as any);
-                        setCurrentPage(1);
-                      }}
-                      style={{
-                        appearance: "none",
-                        padding: "8px 28px 8px 12px",
-                        borderRadius: "10px",
-                        border: `1px solid ${isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}`,
-                        background: isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)",
-                        color: textPrimary,
-                        fontSize: "12.5px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        outline: "none",
-                      }}
-                    >
-                      <option value="newest">Newest first</option>
-                      <option value="oldest">Oldest first</option>
-                      <option value="amount_high">Total: High to Low</option>
-                      <option value="amount_low">Total: Low to High</option>
-                    </select>
-                    <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: textMuted, display: "flex" }}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                    </div>
-                  </div>
+                  <AdminSelect
+                    value={sortBy}
+                    onChange={(e: any) => {
+                      setSortBy(e.target.value as any);
+                      setCurrentPage(1);
+                    }}
+                    isDark={isCardDark}
+                    themeMode={isCardDark ? "dark" : "light"}
+                    accentColor={accentColor}
+                    triggerBg={isLight ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.05)"}
+                    menuBg={cardBg || (isCardDark ? "#0f172a" : "#ffffff")}
+                    textColor={textPrimary}
+                    borderColor={isLight ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.14)"}
+                    style={{
+                      height: "36px",
+                      borderRadius: "10px",
+                      fontSize: "12.5px",
+                      fontWeight: 600,
+                      minWidth: "160px",
+                    }}
+                  >
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="amount_high">Total: High to Low</option>
+                    <option value="amount_low">Total: Low to High</option>
+                  </AdminSelect>
                 </div>
               )
             )}

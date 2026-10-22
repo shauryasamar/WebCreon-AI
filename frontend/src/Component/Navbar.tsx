@@ -1340,7 +1340,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const handleCustomerLogout = async () => {
     try {
-      await logout();
+      await logout(siteSlug || siteId);
     } catch (error) {
       console.error("Customer logout failed:", error);
     } finally {

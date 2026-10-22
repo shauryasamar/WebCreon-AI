@@ -15,8 +15,14 @@ export default function AdminLoginPage() {
   const location = useLocation();
   const state = (location.state || {}) as LocationState;
   const redirectTarget = state.from || "/admin/sites";
-  const { refreshAdmin, setAdmin } = useAdminAuth();
+  const { admin, loading, refreshAdmin, setAdmin } = useAdminAuth();
   const { isDark, tokens } = useAdminTheme();
+
+  useEffect(() => {
+    if (!loading && admin) {
+      navigate(redirectTarget, { replace: true });
+    }
+  }, [admin, loading, navigate, redirectTarget]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

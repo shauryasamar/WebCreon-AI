@@ -21,6 +21,13 @@ export type AdminSelectProps = {
   id?: string;
   required?: boolean;
   direction?: "auto" | "up" | "down";
+  themeMode?: "light" | "dark";
+  isDark?: boolean;
+  accentColor?: string;
+  triggerBg?: string;
+  menuBg?: string;
+  textColor?: string;
+  borderColor?: string;
 };
 
 export const AdminSelect: React.FC<AdminSelectProps> = ({
@@ -36,8 +43,27 @@ export const AdminSelect: React.FC<AdminSelectProps> = ({
   name,
   id,
   direction = "auto",
+  themeMode,
+  isDark: isDarkProp,
+  accentColor,
+  triggerBg,
+  menuBg,
+  textColor,
+  borderColor,
 }) => {
-  const { isDark, tokens } = useAdminTheme();
+  const { isDark: adminIsDark, tokens } = useAdminTheme();
+  const isDark = isDarkProp !== undefined
+    ? isDarkProp
+    : themeMode !== undefined
+    ? themeMode === "dark"
+    : adminIsDark;
+
+  const effectiveAccent = accentColor || tokens.accent || "#2563eb";
+  const effectiveText = textColor || (isDark ? "#f8fafc" : "#0f172a");
+  const effectiveMuted = isDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.6)";
+  const effectiveMenuBg = menuBg || (isDark ? "rgba(24, 24, 27, 0.98)" : "rgba(255, 255, 255, 0.98)");
+  const effectiveBorder = borderColor || (isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(15, 23, 42, 0.12)");
+
   const [open, setOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(direction === "up");
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
@@ -155,8 +181,9 @@ export const AdminSelect: React.FC<AdminSelectProps> = ({
       className={`wc-admin-select-container ${className}`}
       style={{
         position: "relative",
+        zIndex: open ? 999999 : undefined,
         width: width || (flex ? "auto" : "100%"),
-        minWidth: minWidth || "130px",
+        minWidth: minWidth !== undefined ? minWidth : (width ? "0px" : "120px"),
         maxWidth: maxWidth || "100%",
         flex: flex,
         boxSizing: "border-box",
@@ -177,12 +204,12 @@ export const AdminSelect: React.FC<AdminSelectProps> = ({
           paddingRight: "34px",
           borderRadius: borderRadius,
           border: open
-            ? `1px solid ${tokens.accent || "#3b82f6"}`
-            : isDark
-            ? "1px solid rgba(255, 255, 255, 0.12)"
-            : "1px solid var(--admin-border, rgba(15, 23, 42, 0.14))",
-          background: isDark ? tokens.elevatedSurfaceBg || "#1e293b" : "#ffffff",
-          color: selectedOption ? tokens.textPrimary : tokens.textMuted || "#64748b",
+            ? `1px solid ${effectiveAccent}`
+            : restStyle.border
+            ? String(restStyle.border)
+            : `1px solid ${effectiveBorder}`,
+          background: triggerBg || restStyle.background || (isDark ? tokens.elevatedSurfaceBg || "#1e293b" : "#ffffff"),
+          color: selectedOption ? effectiveText : effectiveMuted,
           fontSize: fontSize,
           fontWeight: 500,
           display: "flex",
@@ -192,7 +219,7 @@ export const AdminSelect: React.FC<AdminSelectProps> = ({
           textAlign: "left",
           outline: "none",
           boxShadow: open
-            ? `0 0 0 3px ${isDark ? "rgba(59, 130, 246, 0.25)" : "rgba(59, 130, 246, 0.15)"}`
+            ? `0 0 0 3px ${effectiveAccent}33`
             : "0 1px 2px rgba(0, 0, 0, 0.03)",
           transition: "all 0.15s cubic-bezier(0.16, 1, 0.3, 1)",
           boxSizing: "border-box",
@@ -229,7 +256,7 @@ export const AdminSelect: React.FC<AdminSelectProps> = ({
             transform: `translateY(-50%) rotate(${open ? "180deg" : "0deg"})`,
             width: "13px",
             height: "13px",
-            color: open ? (tokens.accent || "#3b82f6") : isDark ? "#94a3b8" : "#64748b",
+            color: open ? effectiveAccent : isDark ? "#94a3b8" : "#64748b",
             transition: "transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s ease",
             pointerEvents: "none",
             flexShrink: 0,
@@ -253,11 +280,11 @@ export const AdminSelect: React.FC<AdminSelectProps> = ({
             width: "max-content",
             maxWidth: "min(380px, 92vw)",
             zIndex: 999999,
-            background: isDark ? "rgba(24, 24, 27, 0.98)" : "rgba(255, 255, 255, 0.98)",
+            background: effectiveMenuBg,
             backdropFilter: "blur(12px)",
             WebkitBackdropFilter: "blur(12px)",
             borderRadius: "12px",
-            border: isDark ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid rgba(15, 23, 42, 0.10)",
+            border: `1px solid ${effectiveBorder}`,
             boxShadow: isDark
               ? "0 18px 45px -4px rgba(0, 0, 0, 0.85), 0 4px 14px -2px rgba(0, 0, 0, 0.5)"
               : "0 18px 45px -4px rgba(15, 23, 42, 0.16), 0 4px 14px -2px rgba(15, 23, 42, 0.08)",
@@ -289,7 +316,7 @@ export const AdminSelect: React.FC<AdminSelectProps> = ({
             }
           `}</style>
           {parsedOptions.length === 0 ? (
-            <div style={{ padding: "8px 12px", fontSize: "12px", color: tokens.textMuted || "#64748b" }}>
+            <div style={{ padding: "8px 12px", fontSize: "12px", color: effectiveMuted }}>
               No options
             </div>
           ) : (
@@ -315,18 +342,16 @@ export const AdminSelect: React.FC<AdminSelectProps> = ({
                     color: opt.disabled
                       ? (isDark ? "rgba(255, 255, 255, 0.3)" : "rgba(15, 23, 42, 0.3)")
                       : isSelected
-                      ? isDark
-                        ? "#93c5fd"
-                        : "#2563eb"
-                      : tokens.textPrimary,
+                      ? effectiveAccent
+                      : effectiveText,
                     background: isSelected
-                      ? isDark
-                        ? "rgba(59, 130, 246, 0.18)"
-                        : "#eff6ff"
+                      ? (isDark
+                        ? (effectiveAccent.startsWith("#") ? `${effectiveAccent}25` : "rgba(59, 130, 246, 0.18)")
+                        : (effectiveAccent.startsWith("#") ? `${effectiveAccent}14` : "rgba(59, 130, 246, 0.08)"))
                       : isHovered
-                      ? isDark
+                      ? (isDark
                         ? "rgba(255, 255, 255, 0.07)"
-                        : "rgba(15, 23, 42, 0.05)"
+                        : "rgba(15, 23, 42, 0.05)")
                       : "transparent",
                     cursor: opt.disabled ? "not-allowed" : "pointer",
                     transition: "all 0.12s ease",
@@ -342,7 +367,7 @@ export const AdminSelect: React.FC<AdminSelectProps> = ({
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke={isDark ? "#93c5fd" : "#2563eb"}
+                      stroke={effectiveAccent}
                       strokeWidth="2.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"

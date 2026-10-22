@@ -57,17 +57,6 @@ export default function CustomerLoginPage(props: CustomerLoginPageProps = {}) {
     useCustomerAuth();
   const { siteData, loadingSite } = usePublicSiteTheme(targetSlug);
 
-  if (loadingSite && !siteData && !propTheme) {
-    return (
-      <CustomerAuthSkeleton
-        siteSlug={targetSlug}
-        isSignup={false}
-        theme={propTheme}
-        siteName={propSiteName}
-      />
-    );
-  }
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -411,6 +400,17 @@ export default function CustomerLoginPage(props: CustomerLoginPageProps = {}) {
       setForgotLoading(false);
     }
   };
+
+  if (loadingSite && !siteData && !propTheme) {
+    return (
+      <CustomerAuthSkeleton
+        siteSlug={targetSlug}
+        isSignup={false}
+        theme={propTheme}
+        siteName={propSiteName}
+      />
+    );
+  }
 
   return (
     <div

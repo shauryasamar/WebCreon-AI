@@ -84,24 +84,52 @@ export function clearCustomerToken(siteIdOrSlug?: string): void {
   if (typeof window === "undefined") return;
   const clean = (siteIdOrSlug || "").trim().toLowerCase();
   const base = clean ? clean.split("-")[0] : "";
-  if (clean) {
-    try {
+  try {
+    if (clean) {
       localStorage.removeItem(`wc_customer_token_${clean}`);
       localStorage.removeItem(`wc_customer_token_${base}`);
+      localStorage.removeItem(`wc_customer_user_${clean}`);
+      localStorage.removeItem(`wc_customer_user_${base}`);
+      localStorage.removeItem(`wc_customer_orders_${clean}`);
+      localStorage.removeItem(`wc_customer_orders_${base}`);
       sessionStorage.removeItem(`wc_customer_token_${clean}`);
       sessionStorage.removeItem(`wc_customer_token_${base}`);
-    } catch {}
-  } else {
-    try {
-      localStorage.removeItem("wc_customer_token");
-      sessionStorage.removeItem("wc_customer_token");
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith("wc_customer_token_")) {
-          localStorage.removeItem(key);
-        }
+    }
+    // Also clear generic token and generic user
+    localStorage.removeItem("wc_customer_token");
+    localStorage.removeItem("wc_customer_user");
+    sessionStorage.removeItem("wc_customer_token");
+
+    if (!clean) {
+      clearAllCustomerAuth();
+    }
+  } catch {}
+}
+
+export function clearAllCustomerAuth(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem("wc_customer_token");
+    localStorage.removeItem("wc_customer_user");
+    sessionStorage.removeItem("wc_customer_token");
+
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.startsWith("wc_customer_token") ||
+          key.startsWith("wc_customer_user") ||
+          key.startsWith("wc_customer_orders_"))
+      ) {
+        localStorage.removeItem(key);
       }
-    } catch {}
-  }
+    }
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key && key.startsWith("wc_customer_token")) {
+        sessionStorage.removeItem(key);
+      }
+    }
+  } catch {}
 }
 

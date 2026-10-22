@@ -3126,7 +3126,7 @@ function BuilderPageContent() {
   }
 
   if (!isStoreRoute && !adminAuthenticated && adminAuthChecked) {
-    return null;
+    return <AdminWorkspaceSkeleton />;
   }
 
   if (isStoreRoute && !activeSiteDefinition && !loading) {

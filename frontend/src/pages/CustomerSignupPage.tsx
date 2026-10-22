@@ -54,17 +54,6 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
   const { signup, loginWithGoogle, loading: authLoading } = useCustomerAuth();
   const { siteData, loadingSite } = usePublicSiteTheme(targetSlug);
 
-  if (loadingSite && !siteData && !propTheme) {
-    return (
-      <CustomerAuthSkeleton
-        siteSlug={targetSlug}
-        isSignup={true}
-        theme={propTheme}
-        siteName={propSiteName}
-      />
-    );
-  }
-
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -300,6 +289,17 @@ export default function CustomerSignupPage(props: CustomerSignupPageProps = {}) 
       setError(message);
     }
   };
+
+  if (loadingSite && !siteData && !propTheme) {
+    return (
+      <CustomerAuthSkeleton
+        siteSlug={targetSlug}
+        isSignup={true}
+        theme={propTheme}
+        siteName={propSiteName}
+      />
+    );
+  }
 
   return (
     <div

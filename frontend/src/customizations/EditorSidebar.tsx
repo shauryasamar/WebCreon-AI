@@ -1791,7 +1791,7 @@ const SegmentedRow = ({
   value,
   onChange,
 }: {
-  options: { label: string; value: string; icon?: React.ReactNode }[];
+  options: { label: string; value: string; icon?: React.ReactNode; title?: string }[];
   value: string;
   onChange: (val: string) => void;
 }) => {
@@ -1822,12 +1822,13 @@ const SegmentedRow = ({
       {options.map((opt) => {
         const active = opt.value === value;
         const tooltip =
+          opt.title ||
           opt.label ||
           (opt.value === "on"
             ? "Enabled"
             : opt.value === "off"
               ? "Disabled"
-              : String(opt.value).replace(/_/g, " "));
+              : String(opt.value).charAt(0).toUpperCase() + String(opt.value).slice(1));
 
         return (
           <button
@@ -11959,27 +11960,27 @@ const IconStyleDuotone = ({ size = 13 }: { size?: number }) => (
   </svg>
 );
 
-const IconShapeRounded = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-    <rect x="3" y="3" width="10" height="10" rx="3" />
+const IconShapeRounded = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <rect x="2" y="2" width="12" height="12" rx="3.5" />
   </svg>
 );
 
-const IconShapeCircle = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-    <circle cx="8" cy="8" r="5.25" />
+const IconShapeCircle = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <circle cx="8" cy="8" r="6" />
   </svg>
 );
 
-const IconShapeSquare = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-    <rect x="3" y="3" width="10" height="10" rx="0.5" />
+const IconShapeSquare = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <rect x="2" y="2" width="12" height="12" rx="0.5" />
   </svg>
 );
 
-const IconShapeGhost = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2 2">
-    <rect x="3" y="3" width="10" height="10" rx="2" />
+const IconShapeGhost = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.5 2">
+    <rect x="2" y="2" width="12" height="12" rx="2.5" />
   </svg>
 );
 
@@ -12695,10 +12696,10 @@ function NavbarEditor({
                   value={navbarIconShape}
                   onChange={(val) => updateField("navbar_icon_shape", val)}
                   options={[
-                    { label: "Rounded", value: "rounded" },
-                    { label: "Circle", value: "circle" },
-                    { label: "Square", value: "square" },
-                    { label: "Ghost", value: "ghost" },
+                    { label: "", value: "rounded", title: "Rounded", icon: <IconShapeRounded /> },
+                    { label: "", value: "circle", title: "Circle", icon: <IconShapeCircle /> },
+                    { label: "", value: "square", title: "Square", icon: <IconShapeSquare /> },
+                    { label: "", value: "ghost", title: "Ghost", icon: <IconShapeGhost /> },
                   ]}
                 />
               </div>

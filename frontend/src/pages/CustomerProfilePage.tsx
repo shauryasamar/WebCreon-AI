@@ -323,8 +323,33 @@ export default function CustomerProfilePage({
       setPhone(user.phone || "");
       setGender(user.gender || "");
       setDob(user.dateOfBirth || "");
+    } else if (!isInsideEditor) {
+      setName("");
+      setEmail("");
+      setPhone("");
+      setGender("");
+      setDob("");
     }
-  }, [user]);
+  }, [user, isInsideEditor]);
+
+  useEffect(() => {
+    const handleAuthChanged = (e: Event) => {
+      const ce = e as CustomEvent<{ token?: string | null }>;
+      if (!ce.detail || !ce.detail.token) {
+        if (!isInsideEditor) {
+          setName("");
+          setEmail("");
+          setPhone("");
+          setGender("");
+          setDob("");
+        }
+      } else if (activeSlug) {
+        refreshMe(activeSlug);
+      }
+    };
+    window.addEventListener("wc_customer_auth_changed", handleAuthChanged);
+    return () => window.removeEventListener("wc_customer_auth_changed", handleAuthChanged);
+  }, [activeSlug, isInsideEditor, refreshMe]);
 
   // Theme setup
   const isHexId = (str?: string) => Boolean(str && /^[0-9a-fA-F]{24}$/.test(str.trim()));
@@ -620,7 +645,7 @@ export default function CustomerProfilePage({
   };
 
   const handleLogout = async () => {
-    await logout();
+    await logout(activeSlug);
     navigate(`/store/${activeSlug}/login`, { replace: true });
   };
 

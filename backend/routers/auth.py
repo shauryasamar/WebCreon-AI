@@ -27,6 +27,7 @@ from auth_utils import (
     generate_reset_token_and_otp,
     hash_password,
     hash_reset_token,
+    revoke_token,
     validate_password_strength,
     verify_google_id_token,
     verify_password,
@@ -1275,6 +1276,24 @@ def customer_logout(
     request: Request,
     website_name: Optional[str] = None,
 ):
+    tokens_to_revoke = set()
+
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        tokens_to_revoke.add(auth_header.replace("Bearer ", "").strip())
+
+    header_token = request.headers.get("X-Customer-Token")
+    if header_token:
+        tokens_to_revoke.add(header_token.strip())
+
+    for c_name, c_val in request.cookies.items():
+        if (c_name == CUSTOMER_COOKIE_NAME or c_name.startswith("customer_token_")) and c_val:
+            tokens_to_revoke.add(c_val.strip())
+            clear_auth_cookie(response, c_name)
+
+    for tok in tokens_to_revoke:
+        revoke_token(tok)
+
     clear_auth_cookie(response, CUSTOMER_COOKIE_NAME)
     target = website_name or request.headers.get("X-Site-Id")
     if target:

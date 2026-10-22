@@ -75,7 +75,37 @@ def create_support_agent_token(agent_id: str, site_id: str) -> str:
 
 
 
+import time
+
+_revoked_tokens: dict[str, float] = {}
+
+
+def revoke_token(token: Optional[str]) -> None:
+    """Marks a token as revoked so it can no longer be used for authentication."""
+    if not token:
+        return
+    try:
+        unverified = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM], options={"verify_exp": False})
+        exp = float(unverified.get("exp", time.time() + 86400))
+    except Exception:
+        exp = time.time() + 86400
+    _revoked_tokens[token] = exp
+
+
+def is_token_revoked(token: Optional[str]) -> bool:
+    """Checks whether a token has been explicitly revoked."""
+    if not token or token not in _revoked_tokens:
+        return False
+    exp = _revoked_tokens[token]
+    if time.time() > exp:
+        _revoked_tokens.pop(token, None)
+        return False
+    return True
+
+
 def decode_token(token: str) -> Optional[dict[str, Any]]:
+    if not token or is_token_revoked(token):
+        return None
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload

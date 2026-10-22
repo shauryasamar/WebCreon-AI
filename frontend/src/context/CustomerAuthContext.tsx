@@ -319,12 +319,14 @@ function clearTenantToken(websiteName?: string, siteId?: string, siteSlug?: stri
       } catch {}
     }
   });
-  if (!websiteName && !siteId && !siteSlug) {
-    try {
-      localStorage.removeItem("wc_customer_token");
-      localStorage.removeItem("wc_customer_user");
-    } catch {}
-  }
+
+  // Always remove generic fallback keys to prevent stale authentication leaks
+  try {
+    localStorage.removeItem("wc_customer_token");
+    localStorage.removeItem("wc_customer_user");
+    sessionStorage.removeItem("wc_customer_token");
+  } catch {}
+
   try {
     window.dispatchEvent(
       new CustomEvent("wc_customer_auth_changed", {
@@ -455,7 +457,7 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
           }
         );
 
-        if (response.status === 401) {
+        if (response.status === 401 || response.status === 403) {
           clearTenantToken(websiteName);
           setUser((prev) => {
             if (prev && (isSameTenant(prev.siteSlug, cleanTarget) || isSameTenant(prev.siteId, cleanTarget))) {
@@ -463,11 +465,6 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
             }
             return prev;
           });
-          return null;
-        }
-
-        if (response.status === 403) {
-          console.warn(`Customer /me returned 403 for ${websiteName}; preserving local customer state.`);
           return null;
         }
 
@@ -785,20 +782,48 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
 
     const target = websiteName || user?.siteSlug || user?.siteId;
+    const token = getTenantToken(target);
+    const headers: Record<string, string> = {};
+    if (target) headers["X-Site-Id"] = target;
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      headers["X-Customer-Token"] = token;
+    }
     try {
       await fetch(`${API_BASE_URL}/auth/customer/logout`, {
         method: "POST",
-        headers: target ? { "X-Site-Id": target } : {},
+        headers,
         credentials: "include",
       });
-      clearTenantToken(target, user?.siteId, user?.siteSlug);
-      setUser(null);
     } catch (error) {
       console.error("Error logging out customer:", error);
-      clearTenantToken(target, user?.siteId, user?.siteSlug);
-      setUser(null);
     } finally {
+      clearTenantToken(target, user?.siteId, user?.siteSlug);
+      try {
+        localStorage.removeItem("wc_customer_token");
+        localStorage.removeItem("wc_customer_user");
+        sessionStorage.removeItem("wc_customer_token");
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (
+            k &&
+            (k.startsWith("wc_customer_orders_") ||
+              k.startsWith("wc_customer_user_") ||
+              k.startsWith("wc_customer_token_"))
+          ) {
+            localStorage.removeItem(k);
+          }
+        }
+      } catch {}
+      setUser(null);
       setLoading(false);
+      try {
+        window.dispatchEvent(
+          new CustomEvent("wc_customer_auth_changed", {
+            detail: { token: null, siteId: user?.siteId, websiteName: target, siteSlug: user?.siteSlug },
+          })
+        );
+      } catch {}
     }
   }, [user]);
 

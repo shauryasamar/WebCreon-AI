@@ -1892,12 +1892,48 @@ function StandaloneStorePageRedirect({ slug: propSlug }: { slug?: string }) {
   return <RouteLoadingFallback />;
 }
 
+function AppWildcardRedirect() {
+  const location = useLocation();
+  const { admin, loading } = useAdminAuth();
+  const path = location.pathname.toLowerCase();
+
+  if (loading) {
+    return <RouteLoadingFallback />;
+  }
+
+  // 1. Any admin / builder / dashboard / seller route
+  if (
+    path.startsWith("/admin") ||
+    path.startsWith("/builder") ||
+    path.startsWith("/dashboard") ||
+    path.startsWith("/seller")
+  ) {
+    if (admin) {
+      return <Navigate to="/admin/sites" replace />;
+    }
+    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+  }
+
+  // 2. Any URL fragment that was intended as admin login (e.g. /admin/login<siteId>)
+  if (path.includes("login") && (path.includes("admin") || !path.includes("/store/"))) {
+    if (admin) {
+      return <Navigate to="/admin/sites" replace />;
+    }
+    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+  }
+
+  // 3. Fallback to standalone store page resolution
+  return <StandaloneStorePageRedirect />;
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
         <Route path="/" element={<Navigate to="/admin/login" replace />} />
+        <Route path="/admin" element={<Navigate to="/admin/sites" replace />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin/login/*" element={<AdminLoginPage />} />
         <Route path="/admin/signup" element={<AdminSignupPage />} />
         <Route path="/admin/reset-password" element={<AdminResetPasswordPage />} />
         <Route path="/admin/accept-invite" element={<AdminAcceptInvitePage />} />
@@ -1931,8 +1967,12 @@ function AppRoutes() {
 
         <Route element={<RequireAdminAuth />}>
           <Route path="/admin/sites" element={<AdminSitesPage />} />
+          <Route path="/builder" element={<Navigate to="/admin/sites" replace />} />
           <Route path="/builder/:siteId/*" element={<BuilderPage />} />
         </Route>
+
+        {/* Catch-all Wildcard Route to eliminate blank screens on direct paste or unrecognized URLs */}
+        <Route path="*" element={<AppWildcardRedirect />} />
       </Routes>
     </Suspense>
   );

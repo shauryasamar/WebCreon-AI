@@ -12,6 +12,7 @@ import {
 import { isColorDarkHex, resolveThemeTokens } from "../context/ThemeContext";
 import { GoogleMapPicker, GeoPickerResult, geocodeAddressText } from "./GoogleMapPicker";
 import { useDeviceMode } from "../context/DeviceModeContext";
+import { AdminSelect } from "./AdminSelect";
 
 type ThemeInput =
   | "dark"
@@ -1375,13 +1376,15 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
             <div
               style={{
                 minWidth: 0,
-                overflow: "hidden",
+                overflow: "visible",
                 order: isMobile && showForm ? 1 : 2,
               }}
             >
               <div
                 style={{
                   minWidth: 0,
+                  overflow: "visible",
+                  position: "relative",
                   border: `1px solid ${form_border_color || palette.border}`,
                   borderRadius: `${resolvedFormCardRadius}px`,
                   background: form_panel_bg || palette.panelBg,
@@ -1691,20 +1694,32 @@ export const DeliveryForm: React.FC<DeliveryFormProps> = ({
                     />
                   </div>
 
-                  <div>
-                    <label htmlFor="delivery-label" style={labelStyle}>
+                  <div style={{ position: "relative", zIndex: 20 }}>
+                    <label htmlFor="delivery-label" style={{ ...labelStyle, color: form_label_color || labelStyle.color }}>
                       Address Type
                     </label>
-                    <select
+                    <AdminSelect
                       id="delivery-label"
                       value={draftAddress.label || "Home"}
                       onChange={handleDraftChange("label")}
-                      style={inputBaseStyle}
+                      isDark={isDark}
+                      themeMode={isDark ? "dark" : "light"}
+                      accentColor={resolvedAccent}
+                      triggerBg={form_input_bg || palette.inputBg}
+                      menuBg={form_panel_bg || palette.cardBg || (isDark ? "#18181b" : "#ffffff")}
+                      textColor={form_input_text || palette.inputText}
+                      borderColor={form_border_color || palette.border}
+                      style={{
+                        width: "100%",
+                        height: "42px",
+                        borderRadius: `${resolvedFieldRadius}px`,
+                        fontSize: "13px",
+                      }}
                     >
                       <option value="Home">Home</option>
                       <option value="Office">Office</option>
                       <option value="Other">Other</option>
-                    </select>
+                    </AdminSelect>
                   </div>
 
                   <label
