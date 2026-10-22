@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, ChangeEvent } from "react";
 import { API_BASE_URL } from "../config/api";
-import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminAuth, getAdminAuthHeaders } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
 import { resolveAvatarUrl } from "./UserAvatar";
 import { GlassToast } from "./GlassToast";
@@ -151,6 +151,7 @@ export default function AdminProfileSettings() {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/admin/avatar`, {
         method: "POST",
+        headers: getAdminAuthHeaders(),
         credentials: "include",
         body: formData,
       });
@@ -185,7 +186,7 @@ export default function AdminProfileSettings() {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/admin/profile`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: getAdminAuthHeaders({ "Content-Type": "application/json" }),
         credentials: "include",
         body: JSON.stringify({
           name: name.trim(),

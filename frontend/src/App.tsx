@@ -10,7 +10,7 @@ import {
   useParams,
 } from "react-router-dom";
 import { CustomerAuthProvider } from "./context/CustomerAuthContext";
-import { AdminAuthProvider, useAdminAuth } from "./context/AdminAuthContext";
+import { AdminAuthProvider, useAdminAuth, getAdminAuthHeaders } from "./context/AdminAuthContext";
 import { AdminThemeProvider, useAdminTheme } from "./context/ThemeContext";
 import { CartProvider } from "./CartContext";
 import { API_BASE_URL } from "./config/api";
@@ -279,7 +279,9 @@ function AdminSitesPage() {
 
   const loadSavedSites = async () => {
     try {
+      const headers = getAdminAuthHeaders();
       const response = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
+        headers,
         credentials: "include",
       });
 
@@ -1868,7 +1870,8 @@ function StandaloneStorePageRedirect({ slug: propSlug }: { slug?: string }) {
 
     const resolveStore = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/admin/sites`, { credentials: "include" });
+        const headers = getAdminAuthHeaders();
+        const res = await fetch(`${API_BASE_URL}/admin/sites`, { headers, credentials: "include" });
         if (res.ok) {
           const sites = await res.json();
           if (Array.isArray(sites) && sites.length > 0) {

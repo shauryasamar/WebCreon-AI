@@ -9,7 +9,7 @@ import React, {
 } from "react";
 import { API_BASE_URL } from "./config/api";
 import { getThumbnailUrl } from "./utils/imageOptimizer";
-import { getCustomerAuthHeaders, getCustomerToken } from "./utils/customerAuthFetch";
+import { getCustomerAuthHeaders, getCustomerToken, clearCustomerToken } from "./utils/customerAuthFetch";
 
 export type ProductVariantValue = {
   value: string;
@@ -296,14 +296,58 @@ const consolidateCartList = (items: CartItem[]): CartItem[] => {
   return Array.from(map.values());
 };
 
+const sanitizeGuestCartItem = (item: CartItem): CartItem => ({
+  id: item.id,
+  name: item.name,
+  slug: item.slug,
+  description: "",
+  price: Number(item.price) || 0,
+  compare_price: item.compare_price ? Number(item.compare_price) : null,
+  image: item.image || (Array.isArray(item.images) && item.images[0] ? item.images[0] : undefined),
+  images: item.image ? [item.image] : (Array.isArray(item.images) && item.images[0] ? [item.images[0]] : []),
+  selectedVariantValue: item.selectedVariantValue ?? null,
+  selectedVariantLabel: item.selectedVariantLabel ?? null,
+  quantity: Math.max(1, Number(item.quantity) || 1),
+  is_cod_allowed: item.is_cod_allowed !== undefined ? Boolean(item.is_cod_allowed) : null,
+  category: item.category ?? null,
+  category_id: item.category_id ?? null,
+  category_name: item.category_name ?? null,
+});
+
+const cleanOldStorageOnQuotaExceeded = (): void => {
+  if (typeof window === "undefined") return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key) continue;
+      if (
+        key.startsWith("wc_site_snapshot_") ||
+        key.startsWith("wc_theme_") ||
+        key.startsWith("webnirmaan_saved_themes_") ||
+        key.startsWith("wc_customer_orders_")
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const k of keysToRemove) {
+      window.localStorage.removeItem(k);
+    }
+  } catch {}
+};
+
 const readGuestCart = (siteId?: string): CartItem[] => {
   if (typeof window === "undefined") return [];
 
+  const storageKey = buildGuestStorageKey(siteId);
   try {
-    const raw = window.localStorage.getItem(buildGuestStorageKey(siteId));
+    let raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      raw = window.sessionStorage.getItem(storageKey);
+    }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? consolidateCartList(parsed) : [];
+    return Array.isArray(parsed) ? consolidateCartList(parsed.map(sanitizeGuestCartItem)) : [];
   } catch {
     return [];
   }
@@ -311,13 +355,37 @@ const readGuestCart = (siteId?: string): CartItem[] => {
 
 const writeGuestCart = (siteId: string | undefined, items: CartItem[]) => {
   if (typeof window === "undefined") return;
-  const consolidated = consolidateCartList(items);
-  window.localStorage.setItem(buildGuestStorageKey(siteId), JSON.stringify(consolidated));
+  const sanitized = items.map(sanitizeGuestCartItem);
+  const consolidated = consolidateCartList(sanitized);
+  const storageKey = buildGuestStorageKey(siteId);
+  const serialized = JSON.stringify(consolidated);
+
+  try {
+    window.localStorage.setItem(storageKey, serialized);
+  } catch (err: any) {
+    if (err && (err.name === "QuotaExceededError" || err.code === 22 || err.code === 1014 || String(err).includes("quota"))) {
+      cleanOldStorageOnQuotaExceeded();
+      try {
+        window.localStorage.setItem(storageKey, serialized);
+        return;
+      } catch {}
+    }
+    // Fallback to sessionStorage if localStorage is completely exhausted
+    try {
+      window.sessionStorage.setItem(storageKey, serialized);
+    } catch {}
+  }
 };
 
 const clearGuestCartStorage = (siteId?: string) => {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(buildGuestStorageKey(siteId));
+  const storageKey = buildGuestStorageKey(siteId);
+  try {
+    window.localStorage.removeItem(storageKey);
+  } catch {}
+  try {
+    window.sessionStorage.removeItem(storageKey);
+  } catch {}
 };
 
 const buildCouponStorageKey = (siteId?: string) =>
@@ -374,26 +442,6 @@ const detectCurrentSiteId = (explicitSiteId?: string): string | undefined => {
     if (qSite) return qSite;
   } catch {}
 
-  try {
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const key = window.localStorage.key(i);
-      if (key && key.startsWith("wc_customer_token_")) {
-        const tenant = key.replace("wc_customer_token_", "");
-        if (tenant) return tenant;
-      }
-    }
-  } catch {}
-
-  try {
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const key = window.localStorage.key(i);
-      if (key && key.startsWith("guest_cart:")) {
-        const tenant = key.replace("guest_cart:", "");
-        if (tenant && tenant !== "default") return tenant;
-      }
-    }
-  } catch {}
-
   return undefined;
 };
 
@@ -430,11 +478,9 @@ export function CartProvider({
 
     window.addEventListener("wc_customer_auth_changed", checkTenant);
     window.addEventListener("popstate", checkTenant);
-    window.addEventListener("focus", checkTenant);
     return () => {
       window.removeEventListener("wc_customer_auth_changed", checkTenant);
       window.removeEventListener("popstate", checkTenant);
-      window.removeEventListener("focus", checkTenant);
     };
   }, [siteId, internalSiteId]);
 
@@ -619,6 +665,7 @@ export function CartProvider({
       });
 
       if (res.status === 401 || res.status === 403) {
+        clearCustomerToken(resolvedSiteId);
         loadGuestCartIntoState();
         return;
       }
@@ -716,7 +763,7 @@ export function CartProvider({
       const safeQuantity = Math.max(1, quantity);
       const hasToken = Boolean(getCustomerToken(targetSiteKey));
 
-      if (!hasToken || !resolvedSiteId) {
+      const addToGuestCart = () => {
         const existingItems = readGuestCart(targetSiteKey);
         const key = buildCartItemKey(product.id, selectedVariantValue);
 
@@ -744,6 +791,10 @@ export function CartProvider({
         writeGuestCart(targetSiteKey, consolidated);
         setCartItems(consolidated);
         setCartItemIds({});
+      };
+
+      if (!hasToken || !resolvedSiteId) {
+        addToGuestCart();
         return;
       }
 
@@ -761,6 +812,12 @@ export function CartProvider({
           }),
         });
 
+        if (res.status === 401 || res.status === 403) {
+          clearCustomerToken(targetSiteKey);
+          addToGuestCart();
+          return;
+        }
+
         if (!res.ok) {
           throw new Error("Failed to add item to cart");
         }
@@ -769,7 +826,8 @@ export function CartProvider({
         clearGuestCartStorage(resolvedSiteId);
         applyCartResponse(data);
       } catch (error) {
-        console.error("Failed to add item to cart", error);
+        console.error("Failed to add item to cart via API, falling back to local cart:", error);
+        addToGuestCart();
       }
     },
     [applyCartResponse, resolvedSiteId]

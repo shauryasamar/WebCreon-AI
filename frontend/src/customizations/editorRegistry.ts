@@ -152,30 +152,30 @@ const navbarBrandFontFamilyField = {
   target: "theme" as const,
   defaultValue: "modern_sans",
   options: [
-    { label: "Inter (Modern Clean - Default)", value: "modern_sans" },
-    { label: "Syne (Avant-Garde High Fashion)", value: "syne_avantgarde" },
-    { label: "Unbounded (Ultra-Wide Modern Luxury)", value: "unbounded_logo" },
-    { label: "Syncopate (Architectural Wide Emblem)", value: "syncopate_wide" },
-    { label: "Italiana (Italian Luxury Boutique)", value: "italiana_couture" },
-    { label: "Tenor Sans (Modern Chic Runway Fashion)", value: "tenor_runway" },
-    { label: "Marcellus (Timeless Roman Apothecary)", value: "marcellus_roman" },
-    { label: "Instrument Serif (Modern Editorial)", value: "instrument_serif" },
-    { label: "Cinzel (Royal Roman Heritage)", value: "cinzel_display" },
-    { label: "Playfair Display (Haute Couture Editorial)", value: "playfair_serif" },
-    { label: "Cormorant Garamond (Fine Literature)", value: "cormorant_serif" },
-    { label: "Plus Jakarta Sans (Crisp Neo-Grotesque Tech)", value: "plus_jakarta" },
-    { label: "DM Sans (Minimalist Scandinavian)", value: "dm_sans" },
-    { label: "Outfit (Contemporary Geometric)", value: "outfit_geometric" },
-    { label: "Montserrat (Bold Architectural)", value: "montserrat_bold" },
-    { label: "Poppins (Clean Friendly Modern)", value: "poppins_rounded" },
-    { label: "Bricolage Grotesque (Trendy Parisian)", value: "bricolage_grotesque" },
-    { label: "Space Grotesk (Brutalist Minimalist)", value: "space_grotesk" },
-    { label: "Bebas Neue (Heavy Urban Streetwear)", value: "bebas_neue" },
-    { label: "Michroma (Sleek Aerodynamic Tech)", value: "michroma_aerotech" },
-    { label: "Orbitron (Futuristic Cyberpunk)", value: "orbitron_scifi" },
-    { label: "Audiowide (Next-Gen Hardware)", value: "audiowide_future" },
-    { label: "Righteous (Retro 80s Synthwave)", value: "righteous_retro" },
-    { label: "Parisienne (French Luxury Signature)", value: "parisienne_script" },
+    { label: "Inter", value: "modern_sans" },
+    { label: "Syne", value: "syne_avantgarde" },
+    { label: "Unbounded", value: "unbounded_logo" },
+    { label: "Syncopate", value: "syncopate_wide" },
+    { label: "Bodoni Moda", value: "bodoni_moda" },
+    { label: "Urbanist", value: "urbanist_runway" },
+    { label: "Lora", value: "lora_serif" },
+    { label: "Fraunces", value: "fraunces_editorial" },
+    { label: "Cinzel", value: "cinzel_display" },
+    { label: "Playfair Display", value: "playfair_serif" },
+    { label: "Cormorant Garamond", value: "cormorant_serif" },
+    { label: "Plus Jakarta Sans", value: "plus_jakarta" },
+    { label: "DM Sans", value: "dm_sans" },
+    { label: "Outfit", value: "outfit_geometric" },
+    { label: "Montserrat", value: "montserrat_bold" },
+    { label: "Poppins", value: "poppins_rounded" },
+    { label: "Bricolage Grotesque", value: "bricolage_grotesque" },
+    { label: "Space Grotesk", value: "space_grotesk" },
+    { label: "Oswald", value: "oswald_bold" },
+    { label: "Chakra Petch", value: "chakra_petch" },
+    { label: "Orbitron", value: "orbitron_scifi" },
+    { label: "Oxanium", value: "oxanium_future" },
+    { label: "Epilogue", value: "epilogue_retro" },
+    { label: "Parisienne", value: "parisienne_script" },
   ],
   helpText: "Choose a curated typography family for the brand name.",
 };
@@ -187,13 +187,13 @@ const navbarBrandFontWeightField = {
   target: "theme" as const,
   defaultValue: "700",
   options: [
-    { label: "Light (300)", value: "300" },
-    { label: "Regular (400)", value: "400" },
-    { label: "Medium (500)", value: "500" },
-    { label: "Semi-Bold (600)", value: "600" },
-    { label: "Bold (700)", value: "700" },
-    { label: "Extra Bold (800)", value: "800" },
-    { label: "Black / Heavy (900)", value: "900" },
+    { label: "300 - Light", value: "300" },
+    { label: "400 - Regular", value: "400" },
+    { label: "500 - Medium", value: "500" },
+    { label: "600 - SemiBold", value: "600" },
+    { label: "700 - Bold", value: "700" },
+    { label: "800 - ExtraBold", value: "800" },
+    { label: "900 - Black", value: "900" },
   ],
   helpText: "Stroke thickness and weight for the brand name text.",
 };
@@ -229,6 +229,22 @@ const navbarBrandTextColorField = {
   type: "color" as const,
   target: "theme" as const,
   helpText: "Custom text color specifically for the brand name.",
+};
+
+const navbarBrandAvatarBgField = {
+  key: "brand_avatar_bg",
+  label: "Avatar Initials Background",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Background color of the initials avatar box when no image logo is uploaded.",
+};
+
+const navbarBrandAvatarBorderField = {
+  key: "brand_avatar_border",
+  label: "Avatar Initials Border",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Border color of the initials avatar box when no image logo is uploaded.",
 };
 
 const navbarLogoSizeField = {
@@ -335,6 +351,62 @@ const navbarSearchMutedTextColorField = {
   type: "color" as const,
   target: "theme" as const,
   helpText: "Color of the placeholder hint and clear icon in the search bar.",
+};
+
+const navbarSearchBgColorField = {
+  key: "search_bg_color",
+  label: "Search Container Background",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Fill background color of the search bar capsule.",
+};
+
+const navbarSearchBorderColorField = {
+  key: "search_border_color",
+  label: "Search Container Border",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Border outline color of the search bar capsule.",
+};
+
+const navbarCartBadgeBgField = {
+  key: "cart_badge_bg",
+  label: "Badge Background",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Background color of the counter badge on cart and notification icons.",
+};
+
+const navbarCartBadgeTextColorField = {
+  key: "cart_badge_text_color",
+  label: "Badge Text Color",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Text color inside the counter badge.",
+};
+
+const navbarProfileDropdownBgField = {
+  key: "profile_dropdown_bg",
+  label: "Dropdown Background",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Background color of the account and mobile dropdown menus.",
+};
+
+const navbarProfileDropdownBorderField = {
+  key: "profile_dropdown_border",
+  label: "Dropdown Border",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Border outline color of the account and mobile dropdown menus.",
+};
+
+const navbarProfileDropdownTextField = {
+  key: "profile_dropdown_text",
+  label: "Dropdown Text Color",
+  type: "color" as const,
+  target: "theme" as const,
+  helpText: "Text color inside the account and mobile dropdown menus.",
 };
 
 const navbarVariantField = {
@@ -2222,6 +2294,8 @@ export const editorRegistry: EditorRegistry = {
       navbarBrandFontStyleField,
       navbarBrandFontSizeField,
       navbarBrandTextColorField,
+      navbarBrandAvatarBgField,
+      navbarBrandAvatarBorderField,
       navbarLogoSizeField,
       navbarLogoFitField,
       navbarLogoZoomField,
@@ -2231,6 +2305,13 @@ export const editorRegistry: EditorRegistry = {
       navbarSearchHeightField,
       navbarSearchTextColorField,
       navbarSearchMutedTextColorField,
+      navbarSearchBgColorField,
+      navbarSearchBorderColorField,
+      navbarCartBadgeBgField,
+      navbarCartBadgeTextColorField,
+      navbarProfileDropdownBgField,
+      navbarProfileDropdownBorderField,
+      navbarProfileDropdownTextField,
       navbarVariantField,
       navbarPositionField,
       navbarHeightField,

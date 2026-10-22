@@ -14,6 +14,7 @@ import {
 } from "./FestiveGraphics";
 import { API_BASE_URL } from "../config/api";
 import { NotificationCenter } from "./NotificationCenter";
+import { ensureStoreFontLoaded } from "../utils/fontLoader";
 
 export type NavbarTheme = {
   name?: string;
@@ -65,6 +66,7 @@ export type NavbarTheme = {
   search_muted_text_color?: string;
   search_bg_color?: string;
   search_border_color?: string;
+  search_icon_color?: string;
   [key: string]: any;
 };
 
@@ -496,15 +498,23 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const navbarPaddingX = theme?.navbar_padding_x;
   const navbarPaddingY = theme?.navbar_padding_y;
 
-  const brandDisplayMode = (props as any).brand_display_mode || theme?.brand_display_mode || "both";
-  const brandAlignment = (props as any).brand_alignment || theme?.brand_alignment || "left";
-  const brandLayoutDirection = (props as any).brand_layout_direction || theme?.brand_layout_direction || "row";
-  const brandFontFamily = (props as any).brand_font_family || theme?.brand_font_family || "modern_sans";
-  const brandFontWeight = (props as any).brand_font_weight || theme?.brand_font_weight || "700";
-  const brandFontStyle = (props as any).brand_font_style || theme?.brand_font_style || "normal";
-  const brandFontSizeNum = Number((props as any).brand_font_size || theme?.brand_font_size || 15);
+  const brandDisplayMode = theme?.brand_display_mode || (props as any).brand_display_mode || "both";
+  const brandAlignment = theme?.brand_alignment || (props as any).brand_alignment || "left";
+  const brandLayoutDirection = theme?.brand_layout_direction || (props as any).brand_layout_direction || "row";
+  const brandFontFamily = theme?.brand_font_family || (props as any).brand_font_family || "modern_sans";
+  const rawBrandFontWeight = theme?.brand_font_weight || (props as any).brand_font_weight || "700";
+  const parsedWeight = parseInt(String(rawBrandFontWeight).replace(/\D+/g, "") || "700", 10);
+  const brandFontWeight = isNaN(parsedWeight) ? 700 : parsedWeight;
+  const brandFontStyle = theme?.brand_font_style || (props as any).brand_font_style || "normal";
+  const brandFontSizeNum = Number(theme?.brand_font_size || (props as any).brand_font_size || 15);
   const brandCustomTextColor = (props as any).brand_text_color || theme?.brand_text_color;
-  const brandTextColor = brandCustomTextColor || textColor;
+  const brandTextColor = brandCustomTextColor || defaultTextColor;
+
+  useEffect(() => {
+    if (brandFontFamily) {
+      ensureStoreFontLoaded(brandFontFamily);
+    }
+  }, [brandFontFamily]);
 
   const logoSizeNum = Number(
     (props as any).logo_size ||
@@ -526,62 +536,70 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     switch (fontKey) {
       // Modern High-Concept & Luxury Sans
       case "syne_avantgarde":
-        return "'Syne', 'Outfit', sans-serif";
+        return "'Syne', sans-serif";
       case "unbounded_logo":
-        return "'Unbounded', 'Syne', sans-serif";
+        return "'Unbounded', sans-serif";
       case "syncopate_wide":
         return "'Syncopate', 'Montserrat', sans-serif";
+      case "urbanist_runway":
       case "tenor_runway":
-        return "'Tenor Sans', 'Inter', sans-serif";
+        return "'Urbanist', 'Inter', sans-serif";
       case "dm_sans":
-        return "'DM Sans', 'Inter', sans-serif";
+        return "'DM Sans', sans-serif";
       case "outfit_geometric":
       case "outfit_tech":
       case "geometric":
-        return "'Outfit', 'Poppins', 'Montserrat', sans-serif";
+        return "'Outfit', sans-serif";
       case "jakarta_sans":
       case "plus_jakarta":
         return "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
       case "montserrat_bold":
         return "'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
       case "poppins_rounded":
-        return "'Poppins', 'Outfit', sans-serif";
+        return "'Poppins', sans-serif";
       case "bricolage_grotesque":
         return "'Bricolage Grotesque', sans-serif";
       case "space_grotesk":
-        return "'Space Grotesk', 'Inter', sans-serif";
+        return "'Space Grotesk', sans-serif";
 
       // Italian, French & Royal Heritage Serifs
+      case "bodoni_moda":
       case "italiana_couture":
-        return "'Italiana', 'Playfair Display', serif";
+        return "'Bodoni Moda', 'Playfair Display', serif";
+      case "lora_serif":
       case "marcellus_roman":
-        return "'Marcellus', 'Cinzel', serif";
+        return "'Lora', serif";
       case "cinzel_display":
       case "bold_display":
-        return "'Cinzel', 'Trajan Pro', serif";
+        return "'Cinzel', serif";
       case "playfair_serif":
       case "elegant_serif":
-        return "'Playfair Display', 'Georgia', serif";
+        return "'Playfair Display', serif";
+      case "fraunces_editorial":
       case "instrument_serif":
-        return "'Instrument Serif', 'Playfair Display', serif";
+        return "'Fraunces', serif";
       case "cormorant_serif":
-        return "'Cormorant Garamond', 'Garamond', serif";
+        return "'Cormorant Garamond', serif";
 
       // Modern Streetwear & Bold Impact
+      case "oswald_bold":
       case "bebas_neue":
-        return "'Bebas Neue', 'Impact', sans-serif";
+        return "'Oswald', sans-serif";
 
       // Tech, EV & Cyber
+      case "chakra_petch":
       case "michroma_aerotech":
-        return "'Michroma', 'Orbitron', sans-serif";
+        return "'Chakra Petch', 'Orbitron', sans-serif";
       case "orbitron_scifi":
         return "'Orbitron', sans-serif";
+      case "oxanium_future":
       case "audiowide_future":
-        return "'Audiowide', 'Orbitron', cursive";
+        return "'Oxanium', cursive";
 
       // Retro & Signature
+      case "epilogue_retro":
       case "righteous_retro":
-        return "'Righteous', cursive";
+        return "'Epilogue', sans-serif";
       case "parisienne_script":
         return "'Parisienne', cursive";
 
@@ -701,11 +719,11 @@ const Navbar: React.FC<NavbarProps> = (props) => {
       ? "1px solid rgba(15,23,42,0.08)"
       : "1px solid rgba(255,255,255,0.08)";
 
-  const outerBorder = hasCustomNavbarBorder
-    ? `1px solid ${theme!.navbar_border_color!}`
+  const outerBorder = customBorderColor
+    ? `1px solid ${customBorderColor}`
     : defaultOuterBorder;
-  const shellBorder = hasCustomNavbarBorder
-    ? `1px solid ${theme!.navbar_border_color!}`
+  const shellBorder = customBorderColor
+    ? `1px solid ${customBorderColor}`
     : defaultShellBorder;
 
 
@@ -715,11 +733,9 @@ const Navbar: React.FC<NavbarProps> = (props) => {
       : light
         ? lightSoftSurface
         : darkSoftSurface;
-  const softBorder = hasCustomNavbarBorder
-    ? `1px solid ${theme!.navbar_border_color!}`
-    : light
-      ? "1px solid rgba(15,23,42,0.07)"
-      : "1px solid rgba(255,255,255,0.08)";
+  const softBorder = light
+    ? "1px solid rgba(15,23,42,0.07)"
+    : "1px solid rgba(255,255,255,0.08)";
   const iconButtonBg = softSurface;
 
   const effectiveShellBg = shellBg && shellBg !== "transparent" ? shellBg : (outerBackground && outerBackground !== "transparent" ? outerBackground : (light ? "#ffffff" : "#0f172a"));
@@ -734,6 +750,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const searchIconSize = Math.max(13, Math.min(18, Math.round(searchHeightNum * 0.38)));
   const searchCustomTextColor = (props as any).search_text_color || theme?.search_text_color;
   const searchCustomMutedColor = (props as any).search_muted_text_color || theme?.search_muted_text_color;
+  const searchCustomIconColor = (props as any).search_icon_color || theme?.search_icon_color;
   const searchCustomBg = (props as any).search_bg_color || theme?.search_bg_color;
   const searchCustomBorder = (props as any).search_border_color || theme?.search_border_color;
 
@@ -747,6 +764,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
       : "1px solid rgba(15, 23, 42, 0.12)");
   const searchTextColor = searchCustomTextColor || (isSearchBgDark ? "#ffffff" : "#0f172a");
   const searchPlaceholderColor = searchCustomMutedColor || (isSearchBgDark ? "rgba(255, 255, 255, 0.55)" : "rgba(15, 23, 42, 0.45)");
+  const searchBarIconColor = searchCustomIconColor || searchCustomMutedColor || searchTextColor;
   const effectiveShowSearch = Boolean(showSearch);
 
 
@@ -791,11 +809,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     ? "transparent"
     : (iconCustomBg || (light ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.06)"));
 
+  const defaultIconBorder = light ? "1px solid rgba(15,23,42,0.08)" : "1px solid rgba(255,255,255,0.08)";
   const resolvedIconBorder = !iconBorderEnabled || iconShape === "ghost"
     ? "none"
-    : (iconCustomBorderColor ? `1px solid ${iconCustomBorderColor}` : softBorder);
+    : (iconCustomBorderColor ? `1px solid ${iconCustomBorderColor}` : defaultIconBorder);
 
-  const resolvedIconColor = iconCustomColor || textColor;
+  const defaultIconColor = light ? "#0f172a" : "#f8fafc";
+  const resolvedIconColor = iconCustomColor || defaultIconColor;
 
   const actionButtonStyle: React.CSSProperties = {
     width: `${iconButtonSizeNum}px`,
@@ -1611,6 +1631,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     Boolean(theme?.primary_bg && isColorDarkHex(theme.primary_bg));
 
   const resolvedProfileDropdownBg =
+    (props as any)?.profile_dropdown_bg ||
     (theme as any)?.profile_dropdown_bg ||
     (theme as any)?.profile?.dropdown_bg ||
     (theme as any)?.profile?.profile_dropdown_bg ||
@@ -1619,9 +1640,11 @@ const Navbar: React.FC<NavbarProps> = (props) => {
     (isSiteThemeDark ? (theme?.card_bg || "#0f172a") : "#ffffff");
 
   const resolvedNotificationBg =
+    (props as any)?.notification_dropdown_bg ||
+    (props as any)?.notification_drawer_bg ||
+    (theme as any)?.notification_dropdown_bg ||
     (theme as any)?.notification_drawer_bg ||
     (theme as any)?.notification_bg ||
-    (theme as any)?.notification_dropdown_bg ||
     theme?.dialog_bg ||
     theme?.surface_bg ||
     (isSiteThemeDark ? (theme?.card_bg || "#0f172a") : "#ffffff");
@@ -1629,16 +1652,22 @@ const Navbar: React.FC<NavbarProps> = (props) => {
   const resolvedDialogBg = resolvedProfileDropdownBg;
 
   const resolvedProfileDropdownBorder =
+    (props as any)?.profile_dropdown_border ||
     (theme as any)?.profile_dropdown_border ||
     (theme as any)?.profile?.dropdown_border ||
     (theme as any)?.profile?.profile_dropdown_border ||
     (theme as any)?.border_color ||
     (isSiteThemeDark ? "rgba(255,255,255,0.12)" : "#e2e8f0");
 
-  const resolvedDialogBorder =
+  const resolvedNotificationBorder =
+    (props as any)?.notification_dropdown_border ||
+    (props as any)?.notification_border_color ||
+    (theme as any)?.notification_dropdown_border ||
     (theme as any)?.notification_border_color ||
     (theme as any)?.border_color ||
     (isSiteThemeDark ? "rgba(255,255,255,0.12)" : "#e2e8f0");
+
+  const resolvedDialogBorder = resolvedNotificationBorder;
 
   const isDialogDark = isColorDarkHex(resolvedProfileDropdownBg);
   const dropdownBg = resolvedProfileDropdownBg;
@@ -1646,6 +1675,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
   const isDropdownLight = !isDialogDark;
   const dropdownTextColor =
+    (props as any)?.profile_dropdown_text ||
     (theme as any)?.profile_dropdown_text ||
     (theme as any)?.profile?.dropdown_text ||
     (theme as any)?.profile?.profile_dropdown_text ||
@@ -2349,7 +2379,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       position: "relative",
                     }}
                   >
-                    <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: searchTextColor, strokeWidth: 2, fill: "none", flexShrink: 0 }}>
+                    <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", stroke: searchBarIconColor, strokeWidth: 2, fill: "none", flexShrink: 0 }}>
                       <circle cx="11" cy="11" r="7" />
                       <path d="M20 20L16.65 16.65" />
                     </svg>
@@ -2564,10 +2594,10 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     isDark={isColorDarkHex(resolvedNotificationBg)}
                     accentColor={accentColor || "#2563eb"}
                     dialogBg={resolvedNotificationBg}
-                    borderColor={resolvedDialogBorder}
+                    borderColor={resolvedNotificationBorder}
                     onUnreadCountChange={handleUnreadCountChange}
                     isMobile={isMobile}
-                    theme={theme}
+                    theme={{ ...theme, ...props }}
                   />
                 );
               }
@@ -2602,10 +2632,10 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     isDark={isColorDarkHex(resolvedNotificationBg)}
                     accentColor={accentColor || "#2563eb"}
                     dialogBg={resolvedNotificationBg}
-                    borderColor={resolvedDialogBorder}
+                    borderColor={resolvedNotificationBorder}
                     onUnreadCountChange={handleUnreadCountChange}
                     isMobile={isMobile}
-                    theme={theme}
+                    theme={{ ...theme, ...props }}
                   />
                 </div>
               );
@@ -2662,8 +2692,8 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     width: `${Math.min(mobileLogoSize, 36)}px`,
                     height: `${Math.min(mobileLogoSize, 36)}px`,
                     borderRadius: "10px",
-                    background: light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)",
-                    border: softBorder,
+                    background: (props as any).brand_avatar_bg || theme?.brand_avatar_bg || (light ? "rgba(15,23,42,0.05)" : "rgba(255,255,255,0.08)"),
+                    border: (props as any).brand_avatar_border || theme?.brand_avatar_border || (light ? "1px solid rgba(15,23,42,0.08)" : "1px solid rgba(255,255,255,0.08)"),
                     color: brandTextColor,
                     display: "grid",
                     placeItems: "center",
@@ -2683,17 +2713,18 @@ const Navbar: React.FC<NavbarProps> = (props) => {
               if (!showText) return null;
 
               const isCinzel = brandFontFamily === "cinzel_display" || brandFontFamily === "bold_display";
-              const isSerif = brandFontFamily === "playfair_serif" || brandFontFamily === "elegant_serif" || brandFontFamily === "cormorant_serif" || brandFontFamily === "italiana_couture" || brandFontFamily === "marcellus_roman" || brandFontFamily === "instrument_serif";
-              const isUppercaseDisplay = isCinzel || brandFontFamily === "bebas_neue" || brandFontFamily === "orbitron_scifi" || brandFontFamily === "michroma_aerotech" || brandFontFamily === "syncopate_wide";
-              const isWideTracked = isUppercaseDisplay || brandFontFamily === "unbounded_logo" || brandFontFamily === "syne_avantgarde" || brandFontFamily === "tenor_runway" || brandFontFamily === "space_grotesk" || brandFontFamily === "montserrat_bold";
+              const isSerif = brandFontFamily === "playfair_serif" || brandFontFamily === "elegant_serif" || brandFontFamily === "cormorant_serif" || brandFontFamily === "italiana_couture" || brandFontFamily === "bodoni_moda" || brandFontFamily === "marcellus_roman" || brandFontFamily === "lora_serif" || brandFontFamily === "instrument_serif" || brandFontFamily === "fraunces_editorial";
+              const isUppercaseDisplay = isCinzel || brandFontFamily === "bebas_neue" || brandFontFamily === "oswald_bold" || brandFontFamily === "orbitron_scifi" || brandFontFamily === "michroma_aerotech" || brandFontFamily === "chakra_petch" || brandFontFamily === "syncopate_wide";
+              const isWideTracked = isUppercaseDisplay || brandFontFamily === "unbounded_logo" || brandFontFamily === "syne_avantgarde" || brandFontFamily === "tenor_runway" || brandFontFamily === "urbanist_runway" || brandFontFamily === "space_grotesk" || brandFontFamily === "montserrat_bold" || brandFontFamily === "oxanium_future";
 
               return (
                 <span
                   style={{
                     fontFamily: resolvedBrandFontFamily,
                     fontSize: isMobile ? `${Math.max(13, Math.min(16, Math.round(brandFontSizeNum * 0.85)))}px` : `${brandFontSizeNum}px`,
-                    fontWeight: Number(brandFontWeight) || brandFontWeight || 700,
+                    fontWeight: brandFontWeight,
                     fontStyle: brandFontStyle === "italic" ? "italic" : "normal",
+                    fontSynthesis: "style weight",
                     letterSpacing: isWideTracked ? "0.06em" : isSerif ? "0.025em" : "normal",
                     textTransform: isUppercaseDisplay ? "uppercase" : "none",
                     color: brandTextColor,
@@ -2799,7 +2830,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     )}
                     <button
                       type="submit"
-                      style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)", color: textColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                      style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: light ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.2)", color: searchBarIconColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
                     >
                       <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                         <circle cx="11" cy="11" r="7" />
@@ -2927,13 +2958,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
               return (
                 <div style={glassContainerStyle}>
-                  <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto", justifyContent: "flex-start", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", flexShrink: 0 }}>
                     {renderGlassBrand()}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: searchPlacement === "left" ? "flex-start" : searchPlacement === "right" ? "flex-end" : "center", flex: "0 1 auto", width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0, marginLeft: searchPlacement === "left" ? "16px" : "auto", marginRight: searchPlacement === "right" ? "16px" : "auto", boxSizing: "border-box" }}>
                     {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderGlassSearch()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
                     {renderGlassActions()}
                   </div>
                 </div>
@@ -3146,13 +3177,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
               return (
                 <div style={marketplaceContainerStyle}>
-                  <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto", justifyContent: "flex-start", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", flexShrink: 0 }}>
                     {renderMarketplaceBrand()}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: searchPlacement === "left" ? "flex-start" : searchPlacement === "right" ? "flex-end" : "center", flex: "0 1 auto", width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0, marginLeft: searchPlacement === "left" ? "16px" : "auto", marginRight: searchPlacement === "right" ? "16px" : "auto", boxSizing: "border-box" }}>
                     {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderMarketplaceSearch()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
                     {renderMarketplaceActions()}
                   </div>
                 </div>
@@ -3264,7 +3295,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     )}
                     <button
                       type="submit"
-                      style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: "transparent", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                      style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: "transparent", color: searchBarIconColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
                     >
                       <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 1.8, fill: "none" }}>
                         <circle cx="11" cy="11" r="7" />
@@ -3385,13 +3416,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
               return (
                 <div style={luxuryContainerStyle}>
-                  <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto", justifyContent: "flex-start", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", flexShrink: 0 }}>
                     {renderLuxuryBrand()}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: searchPlacement === "left" ? "flex-start" : searchPlacement === "right" ? "flex-end" : "center", flex: "0 1 auto", width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0, marginLeft: searchPlacement === "left" ? "16px" : "auto", marginRight: searchPlacement === "right" ? "16px" : "auto", boxSizing: "border-box" }}>
                     {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderLuxurySearch()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
                     {renderLuxuryActions()}
                   </div>
                 </div>
@@ -3400,9 +3431,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
             if (layoutType === "neo_modern") {
               const customNavBg = (props as any).navbar_bg || theme?.navbar_bg;
-              const customTextColor = (props as any).navbar_text_color || theme?.navbar_text_color;
               const neoBg = customNavBg || (light ? "#f0f4f9" : "#1e293b");
-              const neoTextColor = customTextColor || (light ? "#0f172a" : "#ffffff");
               const outerShadow = light
                 ? "6px 6px 14px rgba(166,180,200,0.4), -6px -6px 14px rgba(255,255,255,0.9)"
                 : "6px 6px 14px rgba(0,0,0,0.5), -6px -6px 14px rgba(255,255,255,0.05)";
@@ -3448,7 +3477,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                           borderRadius: "10px",
                           background: neoBg,
                           boxShadow: buttonShadow,
-                          color: brandCustomTextColor || neoTextColor,
+                          color: brandTextColor,
                           display: "grid",
                           placeItems: "center",
                           fontSize: "12px",
@@ -3460,7 +3489,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                       </div>
                     )}
                     {renderBrandText({
-                      color: brandCustomTextColor || neoTextColor,
+                      color: brandTextColor,
                     })}
                   </button>
                 );
@@ -3520,7 +3549,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                     )}
                     <button
                       type="submit"
-                      style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: neoTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                      style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: neoBg, boxShadow: buttonShadow, color: searchBarIconColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
                     >
                       <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                         <circle cx="11" cy="11" r="7" />
@@ -3644,13 +3673,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
               return (
                 <div style={neoContainerStyle}>
-                  <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto", justifyContent: "flex-start", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", flexShrink: 0 }}>
                     {renderNeoBrand()}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: searchPlacement === "left" ? "flex-start" : searchPlacement === "right" ? "flex-end" : "center", flex: "0 1 auto", width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0, marginLeft: searchPlacement === "left" ? "16px" : "auto", marginRight: searchPlacement === "right" ? "16px" : "auto", boxSizing: "border-box" }}>
                     {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderNeoSearch()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
                     {renderNeoActions()}
                   </div>
                 </div>
@@ -3744,7 +3773,7 @@ const Navbar: React.FC<NavbarProps> = (props) => {
                   )}
                   <button
                     type="submit"
-                    style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)", color: searchTextColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
+                    style={{ width: `${searchButtonSize}px`, height: `${searchButtonSize}px`, borderRadius: "999px", border: "none", background: isSearchBgDark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.08)", color: searchBarIconColor, display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 }}
                   >
                     <svg viewBox="0 0 24 24" style={{ width: `${searchIconSize}px`, height: `${searchIconSize}px`, stroke: "currentColor", strokeWidth: 2, fill: "none" }}>
                       <circle cx="11" cy="11" r="7" />
@@ -3863,13 +3892,13 @@ const Navbar: React.FC<NavbarProps> = (props) => {
 
             return (
               <div style={defaultContainerStyle}>
-                <div style={{ display: "flex", alignItems: "center", flex: "0 0 auto", justifyContent: "flex-start", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", flexShrink: 0 }}>
                   {renderDefaultBrand()}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: searchPlacement === "left" ? "flex-start" : searchPlacement === "right" ? "flex-end" : "center", flex: "0 1 auto", width: "100%", maxWidth: `${searchMaxWidthNum}px`, minWidth: 0, marginLeft: searchPlacement === "left" ? "16px" : "auto", marginRight: searchPlacement === "right" ? "16px" : "auto", boxSizing: "border-box" }}>
                   {effectiveShowSearch && !isMobile && searchDisplayMode === "bar" && renderDefaultSearch()}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: "0 0 auto", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
                   {renderDefaultActions()}
                 </div>
               </div>

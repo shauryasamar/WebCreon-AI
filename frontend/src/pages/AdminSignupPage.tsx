@@ -1,7 +1,7 @@
 import React, { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
-import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminAuth, setAdminToken } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
 import WebCreonAnimatedLogo from "../Component/WebCreonAnimatedLogo";
 import AdminThemeToggle from "../Component/AdminThemeToggle";
@@ -9,7 +9,7 @@ import { AdminSelect } from "../Component/AdminSelect";
 
 export default function AdminSignupPage() {
   const navigate = useNavigate();
-  const { refreshAdmin } = useAdminAuth();
+  const { refreshAdmin, setAdmin } = useAdminAuth();
   const { isDark, tokens } = useAdminTheme();
 
   const [name, setName] = useState("");
@@ -39,10 +39,17 @@ export default function AdminSignupPage() {
         }),
       });
 
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
         setError(data?.detail || "Google authentication failed");
         return;
+      }
+
+      if (data?.token) {
+        setAdminToken(data.token);
+      }
+      if (data?.admin) {
+        setAdmin(data.admin, data.token);
       }
 
       await refreshAdmin();
@@ -147,10 +154,17 @@ export default function AdminSignupPage() {
         }),
       });
 
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
         setError(data?.detail || "Registration failed");
         return;
+      }
+
+      if (data?.token) {
+        setAdminToken(data.token);
+      }
+      if (data?.admin) {
+        setAdmin(data.admin, data.token);
       }
 
       await refreshAdmin();

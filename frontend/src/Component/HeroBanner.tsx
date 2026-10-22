@@ -46,6 +46,14 @@ export type HeroSlide = {
     rating?: string;
     image_url?: string;
     product_href?: string;
+    card_bg?: string;
+    background_color?: string;
+    badge_color?: string;
+    title_color?: string;
+    text_color?: string;
+    price_color?: string;
+    original_price_color?: string;
+    [key: string]: any;
   };
   trust_badges?: string[];
   background_image?: string;
@@ -85,6 +93,26 @@ export type HeroBannerProps = {
     label: string;
     href: string;
     show?: boolean;
+    button_bg?: string;
+    button_color?: string;
+    color?: string;
+    [key: string]: any;
+  };
+  product_card?: {
+    title: string;
+    price: string;
+    original_price?: string;
+    rating?: string;
+    image_url?: string;
+    product_href?: string;
+    card_bg?: string;
+    background_color?: string;
+    badge_color?: string;
+    title_color?: string;
+    text_color?: string;
+    price_color?: string;
+    original_price_color?: string;
+    [key: string]: any;
   };
   background_image?: string;
   background_color?: string;
@@ -996,9 +1024,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             style={{
               padding: ctaPadding,
               borderRadius: "999px",
-              border: isDarkMode ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(15,23,42,0.15)",
-              background: "transparent",
-              color: slideTextColor,
+              border: (currentSlide.secondary_cta?.button_bg && currentSlide.secondary_cta.button_bg !== "transparent")
+                ? "none"
+                : (isDarkMode ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(15,23,42,0.15)"),
+              background: currentSlide.secondary_cta?.button_bg || "transparent",
+              color: currentSlide.secondary_cta?.button_color || currentSlide.secondary_cta?.color || slideTextColor,
               fontSize: ctaFontSize,
               fontWeight: 600,
               textDecoration: "none",
@@ -1128,7 +1158,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         );
 
       case "product_launch":
-        const pCard = currentSlide.product_card || {
+        const pCard: NonNullable<HeroSlide["product_card"]> = currentSlide.product_card || {
           title: "Next-Gen Smartwatch Pro",
           price: "$199",
           original_price: "$299",
@@ -1216,7 +1246,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 onClick={(e) => handleCtaClick(e, pCard.product_href || currentSlide.primary_cta?.href || "/products")}
                 style={{
                   textDecoration: "none",
-                  background: isDarkMode ? "rgba(30,41,59,0.9)" : "rgba(255,255,255,0.9)",
+                  background: pCard.card_bg || pCard.background_color || (isDarkMode ? "rgba(30,41,59,0.9)" : "rgba(255,255,255,0.9)"),
                   backdropFilter: "blur(16px)",
                   padding: `${Math.round(12 * hScale)}px`,
                   borderRadius: "12px",
@@ -1227,12 +1257,12 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                   display: "block",
                 }}
               >
-                <div style={{ fontSize: "9px", fontWeight: 800, color: accentColor, textTransform: "uppercase" }}>Featured Product</div>
-                <div style={{ fontSize: `${(0.85 * hScale).toFixed(2)}rem`, fontWeight: 700, color: isDarkMode ? "#ffffff" : "#0f172a", marginTop: "2px" }}>{pCard.title}</div>
+                <div style={{ fontSize: "9px", fontWeight: 800, color: pCard.badge_color || accentColor, textTransform: "uppercase" }}>Featured Product</div>
+                <div style={{ fontSize: `${(0.85 * hScale).toFixed(2)}rem`, fontWeight: 700, color: pCard.title_color || pCard.text_color || (isDarkMode ? "#ffffff" : "#0f172a"), marginTop: "2px" }}>{pCard.title}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
-                  <span style={{ fontSize: `${(0.95 * hScale).toFixed(2)}rem`, fontWeight: 800, color: isDarkMode ? "#ffffff" : "#0f172a" }}>{pCard.price}</span>
+                  <span style={{ fontSize: `${(0.95 * hScale).toFixed(2)}rem`, fontWeight: 800, color: pCard.price_color || pCard.text_color || (isDarkMode ? "#ffffff" : "#0f172a") }}>{pCard.price}</span>
                   {pCard.original_price && (
-                    <span style={{ fontSize: "11px", color: "#94a3b8", textDecoration: "line-through" }}>{pCard.original_price}</span>
+                    <span style={{ fontSize: "11px", color: pCard.original_price_color || "#94a3b8", textDecoration: "line-through" }}>{pCard.original_price}</span>
                   )}
                 </div>
               </a>
@@ -1365,8 +1395,12 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 {currentSlide.badge && (
                   <span
                     style={{
-                      background: isDarkMode ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.08)",
-                      color: slideTextColor,
+                      background: (currentSlide.badge_color || currentSlide.badge_bg_color)
+                        ? badgeBgColor
+                        : (isDarkMode ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.08)"),
+                      color: (currentSlide.badge_color || currentSlide.badge_text_color)
+                        ? badgeTextColor
+                        : slideTextColor,
                       fontSize: badgeFontSize,
                       fontWeight: 800,
                       padding: "3px 10px",

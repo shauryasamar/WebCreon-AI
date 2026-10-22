@@ -512,6 +512,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
       : (dialogBg || (isDark ? "#0f172a" : "#ffffff")));
   const isPanelDark = isColorDarkHex(resolvedBg);
   const resolvedBorder =
+    (theme as any)?.notification_dropdown_border ||
     (theme as any)?.notification_border_color ||
     (theme as any)?.border_color ||
     (isMobileEffective

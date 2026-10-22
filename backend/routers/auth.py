@@ -324,7 +324,8 @@ def admin_signup(
 
     response = JSONResponse(
         content={
-            "admin": serialize_admin(admin)
+            "admin": serialize_admin(admin),
+            "token": token,
         }
     )
     set_auth_cookie(response, ADMIN_COOKIE_NAME, token)
@@ -446,6 +447,7 @@ def admin_login(
     response = JSONResponse(
         content={
             "admin": serialize_admin(admin, session),
+            "token": token,
             "sites": [
                 {
                     "id": str(s[0]),
@@ -548,6 +550,7 @@ def admin_google_auth(
     response = JSONResponse(
         content={
             "admin": serialize_admin(admin),
+            "token": token,
             "sites": [
                 {
                     "id": str(s[0]),
@@ -818,9 +821,15 @@ def get_admin_me(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Admin not found",
         )
-    return {
-        "admin": serialize_admin(admin_obj, session)
-    }
+    token = create_admin_token(str(admin_obj.id))
+    response = JSONResponse(
+        content={
+            "admin": serialize_admin(admin_obj, session),
+            "token": token,
+        }
+    )
+    set_auth_cookie(response, ADMIN_COOKIE_NAME, token)
+    return response
 
 
 @router.get("/admin/sites")
@@ -1188,21 +1197,55 @@ def customer_login(
     return response
 
 
+def resolve_customer_site(website_name: str, auth_site_id: Optional[str], session: Session) -> Site:
+    site = None
+    if auth_site_id:
+        try:
+            site = session.get(Site, UUID(str(auth_site_id)))
+        except Exception:
+            site = None
+
+    target = (website_name or "").strip().lower()
+    if site:
+        site_slug = (site.slug or "").lower()
+        site_id_str = str(site.id).lower()
+        base_slug = site_slug.split("-")[0]
+        base_target = target.split("-")[0]
+        if (
+            target in (site_slug, site_id_str, base_slug)
+            or (base_target and base_target == base_slug)
+            or site_slug.startswith(f"{target}-")
+            or target.startswith(f"{site_slug}-")
+        ):
+            return site
+
+    site = resolve_site_by_slug_or_404(website_name, session)
+    if auth_site_id and str(site.id) != str(auth_site_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer token does not match requested site",
+        )
+    return site
+
+
 @router.get("/customer/me/{website_name}")
 def customer_me(
     website_name: str,
     auth_user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    site = resolve_site_by_slug_or_404(website_name, session)
+    site = resolve_customer_site(website_name, auth_user.get("siteId"), session)
 
-    if str(site.id) != auth_user["siteId"]:
+    user_id_raw = auth_user.get("userId")
+    try:
+        user_uuid = UUID(str(user_id_raw))
+    except (ValueError, TypeError):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Customer token does not match requested site",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid customer ID in token",
         )
 
-    user = session.get(User, auth_user["userId"])
+    user = session.get(User, user_uuid)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1215,9 +1258,15 @@ def customer_me(
             detail="Customer account is inactive",
         )
 
-    return {
-        "user": serialize_customer(user, site)
-    }
+    new_token = create_customer_token(str(user.id), str(site.id))
+    response = JSONResponse(
+        content={
+            "user": serialize_customer(user, site),
+            "token": new_token,
+        }
+    )
+    set_customer_tenant_cookies(response, site, website_name, new_token)
+    return response
 
 
 @router.post("/customer/logout")
@@ -1245,13 +1294,7 @@ def customer_delete_account(
     auth_user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    site = resolve_site_by_slug_or_404(website_name, session)
-
-    if str(site.id) != auth_user["siteId"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Customer token does not match requested site",
-        )
+    site = resolve_customer_site(website_name, auth_user.get("siteId"), session)
 
     try:
         user_uuid = UUID(str(auth_user["userId"]))
@@ -1324,13 +1367,7 @@ def customer_update_profile(
     auth_user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    site = resolve_site_by_slug_or_404(website_name, session)
-
-    if str(site.id) != auth_user["siteId"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Customer token does not match requested site",
-        )
+    site = resolve_customer_site(website_name, auth_user.get("siteId"), session)
 
     user = session.get(User, auth_user["userId"])
     if not user or not user.is_active:
@@ -1365,13 +1402,7 @@ def customer_change_password(
     auth_user=Depends(authenticate_customer),
     session: Session = Depends(get_session),
 ):
-    site = resolve_site_by_slug_or_404(website_name, session)
-
-    if str(site.id) != auth_user["siteId"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Customer token does not match requested site",
-        )
+    site = resolve_customer_site(website_name, auth_user.get("siteId"), session)
 
     user = session.get(User, auth_user["userId"])
     if not user or not user.is_active:

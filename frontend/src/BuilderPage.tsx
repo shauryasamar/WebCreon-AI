@@ -21,7 +21,7 @@ import { DeviceModeProvider } from "./context/DeviceModeContext";
 import BuilderTopControlBar from "./Component/BuilderTopControlBar";
 import BuilderControlPanel from "./Component/BuilderControlPanel";
 import type { AdminNavKey, SettingsNavKey } from "./Component/BuilderDrawerPanel";
-import { useAdminAuth } from "./context/AdminAuthContext";
+import { useAdminAuth, getAdminAuthHeaders } from "./context/AdminAuthContext";
 import { useAdminTheme } from "./context/ThemeContext";
 
 // Direct imports for instant, 60fps zero-jitter workspace interactions
@@ -266,6 +266,15 @@ function getFooterEditorProps(siteDefinition: SiteDefinition) {
 
 export const siteSlugMemoryCache = new Map<string, SavedSite>();
 
+function pruneSiteSlugMemoryCache() {
+  if (siteSlugMemoryCache.size > 20) {
+    const keys = Array.from(siteSlugMemoryCache.keys());
+    for (let i = 0; i < keys.length - 15; i++) {
+      siteSlugMemoryCache.delete(keys[i]);
+    }
+  }
+}
+
 import {
   getSavedSitesMemoryCache,
   setSavedSitesMemoryCache,
@@ -366,7 +375,9 @@ async function resolveSiteBySlug(
     }
 
     try {
+      const headers = getAdminAuthHeaders();
       const adminResponse = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
+        headers,
         credentials: "include",
       });
 
@@ -1303,6 +1314,15 @@ function BuilderPageContent() {
   const lastHistoryPushTimeRef = useRef<number>(0);
   const baselineSiteDefinitionRef = useRef<SiteDefinition | null>(null);
   const [historyActionToast, setHistoryActionToast] = useState<string | null>(null);
+  const saveSnapshotTimeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveSnapshotTimeoutRef.current) {
+        clearTimeout(saveSnapshotTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Set baseline definition once site loads
   useEffect(() => {
@@ -1503,15 +1523,12 @@ function BuilderPageContent() {
       if (!skipHistory) {
         const currentActive = draftSiteDefinition || activeSiteDefinition || publishedSiteDefinition || siteDefinition;
         if (currentActive) {
-          const currentStr = JSON.stringify(currentActive);
-          const nextStr = JSON.stringify(next);
-          if (currentStr !== nextStr) {
-            const now = Date.now();
-            if (now - lastHistoryPushTimeRef.current > 500) {
-              setUndoStack((prev) => [...prev.slice(-49), currentActive]);
-              setRedoStack([]);
-              lastHistoryPushTimeRef.current = now;
-            }
+          const now = Date.now();
+          if (now - lastHistoryPushTimeRef.current > 500) {
+            // Keep up to 20 snapshots in undoStack to prevent heavy memory leaks and browser tab crashes
+            setUndoStack((prev) => [...prev.slice(-19), currentActive]);
+            setRedoStack([]);
+            lastHistoryPushTimeRef.current = now;
           }
         }
       }
@@ -1545,22 +1562,27 @@ function BuilderPageContent() {
 
       if (currentSlug) {
         siteSlugMemoryCache.set(currentSlug, updatedSnapshot);
-        try {
-          localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(updatedSnapshot));
-        } catch (_) { }
       }
-
       if (currentId) {
         siteSlugMemoryCache.set(currentId, updatedSnapshot);
-        try {
-          localStorage.setItem(`wc_site_snapshot_${currentId}`, JSON.stringify(updatedSnapshot));
-        } catch (_) { }
-        if (typeof window !== "undefined") {
-          try {
-            sessionStorage.setItem(`wc_client_draft_${currentId}`, JSON.stringify(next));
-          } catch (_) {}
-        }
       }
+      pruneSiteSlugMemoryCache();
+
+      // Debounce disk serialization to avoid pegging CPU/memory on rapid drag/color updates
+      if (saveSnapshotTimeoutRef.current) {
+        clearTimeout(saveSnapshotTimeoutRef.current);
+      }
+      saveSnapshotTimeoutRef.current = setTimeout(() => {
+        try {
+          if (currentSlug) {
+            localStorage.setItem(`wc_site_snapshot_${currentSlug}`, JSON.stringify(updatedSnapshot));
+          }
+          if (currentId) {
+            localStorage.setItem(`wc_site_snapshot_${currentId}`, JSON.stringify(updatedSnapshot));
+            sessionStorage.setItem(`wc_client_draft_${currentId}`, JSON.stringify(next));
+          }
+        } catch (_) {}
+      }, 350);
     },
     [siteSlug, siteSlugParam, resolvedSiteId, siteId, publishedSiteDefinition, draftSiteDefinition, activeSiteDefinition, siteDefinition]
   );
@@ -1758,13 +1780,14 @@ function BuilderPageContent() {
     setTimeout(() => setHistoryActionToast(null), 3000);
   }, [publishedSiteDefinition, siteDefinition, draftSiteDefinition, activeSiteDefinition, siteSlug, siteSlugParam, resolvedSiteId, siteId]);
 
-  // Keep undoStack and redoStack persisted in sessionStorage so they survive accidental reloads
+  // Keep undoStack and redoStack persisted in sessionStorage so they survive accidental reloads (bounded to 5 states max)
   useEffect(() => {
     const sId = resolvedSiteId || siteId;
     if (typeof window !== "undefined" && sId) {
       try {
         if (undoStack.length > 0) {
-          sessionStorage.setItem(`wc_undo_stack_${sId}`, JSON.stringify(undoStack));
+          const trimmed = undoStack.slice(-5);
+          sessionStorage.setItem(`wc_undo_stack_${sId}`, JSON.stringify(trimmed));
         } else {
           sessionStorage.removeItem(`wc_undo_stack_${sId}`);
         }
@@ -1777,7 +1800,8 @@ function BuilderPageContent() {
     if (typeof window !== "undefined" && sId) {
       try {
         if (redoStack.length > 0) {
-          sessionStorage.setItem(`wc_redo_stack_${sId}`, JSON.stringify(redoStack));
+          const trimmed = redoStack.slice(-5);
+          sessionStorage.setItem(`wc_redo_stack_${sId}`, JSON.stringify(trimmed));
         } else {
           sessionStorage.removeItem(`wc_redo_stack_${sId}`);
         }
@@ -2001,9 +2025,10 @@ function BuilderPageContent() {
 
     const fetchCounts = async () => {
       try {
+        const headers = getAdminAuthHeaders();
         const res = await fetch(
           `${API_BASE_URL}/orders/admin/${currentSiteId}/pending-counts`,
-          { credentials: "include" }
+          { headers, credentials: "include" }
         );
         if (res.ok) {
           const data = await res.json();
@@ -2032,7 +2057,9 @@ function BuilderPageContent() {
       setSavedSitesLoading(true);
     }
     try {
+      const headers = getAdminAuthHeaders();
       const response = await fetch(`${API_BASE_URL}/auth/admin/sites`, {
+        headers,
         credentials: "include",
       });
       if (!response.ok) {
@@ -2976,8 +3003,10 @@ function BuilderPageContent() {
 
   const handleLogout = async () => {
     try {
+      const headers = getAdminAuthHeaders();
       await fetch(`${API_BASE_URL}/auth/admin/logout`, {
         method: "POST",
+        headers,
         credentials: "include",
       });
     } catch (error) {

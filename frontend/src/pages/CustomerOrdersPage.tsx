@@ -802,8 +802,12 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [propTheme, restPropsJson]);
 
-  const siteId = propSiteId || customProps.siteId || "";
-  const siteSlug = propSiteSlug || customProps.siteSlug || "";
+  const urlTenant =
+    typeof window !== "undefined" && window.location.pathname.startsWith("/store/")
+      ? window.location.pathname.split("/")[2]
+      : "";
+  const siteSlug = propSiteSlug || customProps.siteSlug || urlTenant || "";
+  const siteId = propSiteId || customProps.siteId || siteSlug || "";
   const theme = propTheme || customProps.theme;
   const [liveCrmOverride, setLiveCrmOverride] = useState<boolean | null>(null);
 
@@ -1232,7 +1236,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     try {
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders`, {
         credentials: "include",
-        headers: getCustomerAuthHeaders(siteId),
+        headers: getCustomerAuthHeaders(siteId || siteSlug),
       });
 
       if (response.status === 401) {
@@ -1314,6 +1318,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
     try {
       const response = await fetch(`${API_BASE_URL}/returns/${siteId}/my-returns`, {
         credentials: "include",
+        headers: getCustomerAuthHeaders(siteId || siteSlug),
       });
       if (response.ok) {
         const data = await response.json();
@@ -1444,7 +1449,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       setDetailLoadingId(orderId);
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/my-orders/${orderId}`, {
         credentials: "include",
-        headers: getCustomerAuthHeaders(siteId),
+        headers: getCustomerAuthHeaders(siteId || siteSlug),
       });
 
       if (!response.ok) {
@@ -1564,7 +1569,7 @@ const CustomerOrdersPage: React.FC<CustomerOrdersPageProps> = ({
       const response = await fetch(`${API_BASE_URL}/orders/${siteId}/${orderId}/cancel`, {
         method: "POST",
         credentials: "include",
-        headers: getCustomerAuthHeaders(siteId, {
+        headers: getCustomerAuthHeaders(siteId || siteSlug, {
           "Content-Type": "application/json",
         }),
         body: JSON.stringify({

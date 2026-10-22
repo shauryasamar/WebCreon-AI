@@ -189,14 +189,12 @@ def authenticate_customer(
                         payload = p
                         break
 
-    # 5. Fifth priority: Generic customer_token cookie ONLY IF it matches target site (or target site unknown)
+    # 5. Fifth priority: Generic customer_token cookie
     if not payload and customer_token:
         p = decode_token(customer_token)
         if p and p.get("tokenType") == "customer":
-            p_site = str(p.get("siteId", "")).lower()
-            if not target_site_str or p_site == target_site_str:
-                token = customer_token
-                payload = p
+            token = customer_token
+            payload = p
 
     if not token or not payload:
         raise _unauthorized("Customer authentication required")

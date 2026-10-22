@@ -12,6 +12,7 @@ import {
   getEditableConfigForBlock,
   getSavedThemeSnapshots,
   getSiteStorageId,
+  isColorDarkHex,
   saveThemeSnapshot,
   ThemeMode,
   updateBlockFieldValue,
@@ -26,6 +27,90 @@ import {
 } from "../utils/pendingAssetRegistry";
 import { API_BASE_URL } from "../config/api";
 import { AdminSelect } from "../Component/AdminSelect";
+import { ensureStoreFontLoaded } from "../utils/fontLoader";
+import { ThemedColorSwatch } from "./ThemedColorPicker";
+
+const IconAlignLeft = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <line x1="2.5" y1="4.5" x2="10.5" y2="4.5" />
+    <line x1="2.5" y1="8" x2="13.5" y2="8" />
+    <line x1="2.5" y1="11.5" x2="7.5" y2="11.5" />
+  </svg>
+);
+
+const IconAlignCenter = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <line x1="2.5" y1="4.5" x2="13.5" y2="4.5" />
+    <line x1="4.5" y1="8" x2="11.5" y2="8" />
+    <line x1="6" y1="11.5" x2="10" y2="11.5" />
+  </svg>
+);
+
+const IconAlignRight = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <line x1="5.5" y1="4.5" x2="13.5" y2="4.5" />
+    <line x1="2.5" y1="8" x2="13.5" y2="8" />
+    <line x1="8.5" y1="11.5" x2="13.5" y2="11.5" />
+  </svg>
+);
+
+const IconDirectionRow = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <rect x="3" y="3.5" width="4.25" height="9" rx="1.5" />
+    <rect x="8.75" y="3.5" width="4.25" height="9" rx="1.5" />
+  </svg>
+);
+
+const IconDirectionColumn = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <rect x="3.5" y="3" width="9" height="4.25" rx="1.5" />
+    <rect x="3.5" y="8.75" width="9" height="4.25" rx="1.5" />
+  </svg>
+);
+
+const IconFitContain = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <rect x="2" y="2" width="12" height="12" rx="2" strokeOpacity="0.45" />
+    <rect x="3.75" y="5.25" width="8.5" height="5.5" rx="1" />
+  </svg>
+);
+
+const IconFitCover = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+    <rect x="4" y="4" width="8" height="8" rx="1" />
+    <path d="M4 2v2M12 2v2M4 12v2M12 12v2M2 4h2M2 12h2M12 4h2M12 12h2" />
+  </svg>
+);
+
+const IconFitFill = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2" width="12" height="12" rx="2" strokeOpacity="0.45" />
+    <path d="M4 6V4h2" />
+    <path d="M12 6V4h-2" />
+    <path d="M4 10v2h2" />
+    <path d="M12 10v2h-2" />
+    <line x1="4" y1="4" x2="6.5" y2="6.5" />
+    <line x1="12" y1="4" x2="9.5" y2="6.5" />
+    <line x1="4" y1="12" x2="6.5" y2="9.5" />
+    <line x1="12" y1="12" x2="9.5" y2="9.5" />
+  </svg>
+);
+
+const IconFontNormal = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3.5" y1="3.5" x2="12.5" y2="3.5" />
+    <line x1="8" y1="3.5" x2="8" y2="12.5" />
+    <line x1="5.5" y1="12.5" x2="10.5" y2="12.5" />
+  </svg>
+);
+
+const IconFontItalic = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+    <line x1="6.5" y1="3.5" x2="12" y2="3.5" />
+    <line x1="4" y1="12.5" x2="9.5" y2="12.5" />
+    <line x1="9.5" y1="3.5" x2="6.5" y2="12.5" />
+  </svg>
+);
 
 function PageBlocksTreeView({
   siteDefinition: _siteDefinition,
@@ -395,9 +480,9 @@ function PageBlocksTreeView({
           );
         })}
       </div>
-      </div>
-    );
-  }
+    </div>
+  );
+}
 
 export type EditorTab = "theme" | "block";
 
@@ -465,10 +550,10 @@ const getFontPreviewFamily = (val: string) => {
   if (val.includes("syne")) return "'Syne', sans-serif";
   if (val.includes("unbounded")) return "'Unbounded', sans-serif";
   if (val.includes("syncopate")) return "'Syncopate', sans-serif";
-  if (val.includes("italiana")) return "'Italiana', serif";
-  if (val.includes("tenor")) return "'Tenor Sans', sans-serif";
-  if (val.includes("marcellus")) return "'Marcellus', serif";
-  if (val.includes("instrument")) return "'Instrument Serif', serif";
+  if (val.includes("bodoni") || val.includes("italiana")) return "'Bodoni Moda', serif";
+  if (val.includes("urbanist") || val.includes("tenor")) return "'Urbanist', sans-serif";
+  if (val.includes("lora") || val.includes("marcellus")) return "'Lora', serif";
+  if (val.includes("fraunces") || val.includes("instrument")) return "'Fraunces', serif";
   if (val.includes("cinzel")) return "'Cinzel', serif";
   if (val.includes("playfair")) return "'Playfair Display', serif";
   if (val.includes("cormorant")) return "'Cormorant Garamond', serif";
@@ -479,11 +564,11 @@ const getFontPreviewFamily = (val: string) => {
   if (val.includes("poppins")) return "'Poppins', sans-serif";
   if (val.includes("bricolage")) return "'Bricolage Grotesque', sans-serif";
   if (val.includes("space_grotesk")) return "'Space Grotesk', sans-serif";
-  if (val.includes("bebas")) return "'Bebas Neue', sans-serif";
-  if (val.includes("michroma")) return "'Michroma', sans-serif";
+  if (val.includes("oswald") || val.includes("bebas")) return "'Oswald', sans-serif";
+  if (val.includes("chakra") || val.includes("michroma")) return "'Chakra Petch', sans-serif";
   if (val.includes("orbitron")) return "'Orbitron', sans-serif";
-  if (val.includes("audiowide")) return "'Audiowide', cursive";
-  if (val.includes("righteous")) return "'Righteous', cursive";
+  if (val.includes("oxanium") || val.includes("audiowide")) return "'Oxanium', cursive";
+  if (val.includes("epilogue") || val.includes("righteous")) return "'Epilogue', sans-serif";
   if (val.includes("parisienne")) return "'Parisienne', cursive";
   return "'Inter', sans-serif";
 };
@@ -493,7 +578,7 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
   defaultValue,
   options,
   placeholder = "Select an option",
-  closeOnSelect = false,
+  closeOnSelect = true,
   onChange,
 }) => {
   const { isDark, tokens } = useAdminTheme();
@@ -514,7 +599,7 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
   }, [open]);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (
         containerRef.current &&
         !containerRef.current.contains(event.target as Node)
@@ -522,17 +607,30 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
         setOpen(false);
       }
     };
+    const handleBlur = () => {
+      setOpen(false);
+    };
     if (open) {
-      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside, true);
+      document.addEventListener("touchstart", handleClickOutside, true);
+      window.addEventListener("blur", handleBlur);
     }
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside, true);
+      document.removeEventListener("touchstart", handleClickOutside, true);
+      window.removeEventListener("blur", handleBlur);
     };
   }, [open]);
 
+  const normalizedValue = String(value ?? "").trim();
+  const numericOnly = normalizedValue.replace(/\D+/g, "");
+
   const selectedOption =
-    options.find((o) => o.value === value) ||
-    options.find((o) => o.value === defaultValue) ||
+    options.find((o) => String(o.value) === normalizedValue) ||
+    options.find((o) => o.label === normalizedValue) ||
+    (numericOnly ? options.find((o) => String(o.value) === numericOnly) : undefined) ||
+    (numericOnly ? options.find((o) => o.label.startsWith(numericOnly)) : undefined) ||
+    options.find((o) => String(o.value) === String(defaultValue)) ||
     (options.length > 0 ? options[0] : undefined);
 
   const isFontDropdown = options.some((o) =>
@@ -547,13 +645,13 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
         style={{
           width: "100%",
           height: "28px",
-          padding: "3px 8px",
-          paddingRight: "22px",
+          padding: "2px 6px",
+          paddingRight: "18px",
           borderRadius: "5px",
           border: open ? `1px solid ${tokens.accent}` : `1px solid ${tokens.border}`,
           background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-          color: selectedOption ? tokens.textPrimary : tokens.textMuted,
-          fontSize: "11.5px",
+          color: selectedOption ? (isDark ? "#f8fafc" : "#0f172a") : (isDark ? "#94a3b8" : "#64748b"),
+          fontSize: "11px",
           fontWeight: 500,
           fontFamily: isFontDropdown && selectedOption ? getFontPreviewFamily(selectedOption.value) : "'Inter', -apple-system, sans-serif",
           display: "flex",
@@ -567,8 +665,20 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
           boxSizing: "border-box",
         }}
       >
-        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
-          {selectedOption ? selectedOption.label : placeholder}
+        <span
+          style={{
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            flex: 1,
+            minWidth: 0,
+            display: "inline-block",
+            color: selectedOption ? (isDark ? "#f8fafc" : "#0f172a") : (isDark ? "#94a3b8" : "#64748b"),
+            fontSize: "11px",
+            lineHeight: "20px",
+          }}
+        >
+          {selectedOption ? selectedOption.label : (placeholder || "Select")}
         </span>
         <svg
           viewBox="0 0 24 24"
@@ -617,14 +727,17 @@ const CustomSelectDropdown: React.FC<CustomSelectDropdownProps> = ({
             <div style={{ padding: "4px 6px", fontSize: "10.5px", color: tokens.textMuted }}>No options</div>
           ) : (
             options.map((opt) => {
-              const isSelected = opt.value === value;
+              const isSelected =
+                String(opt.value) === normalizedValue ||
+                opt.label === normalizedValue ||
+                (numericOnly !== "" && String(opt.value) === numericOnly);
               const optionFontFamily = isFontDropdown ? getFontPreviewFamily(opt.value) : undefined;
               return (
                 <div
                   key={opt.value}
                   onClick={() => {
                     onChange(opt.value);
-                    if (closeOnSelect) {
+                    if (closeOnSelect !== false) {
                       setOpen(false);
                     }
                   }}
@@ -874,7 +987,7 @@ function JsonFieldControl({
                 const formatted = JSON.stringify(JSON.parse(rawValue), null, 2);
                 setRawValue(formatted);
                 setError(null);
-              } catch (_) {}
+              } catch (_) { }
             }}
             style={{
               background: "transparent",
@@ -1301,73 +1414,45 @@ function CompactColorRow({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "3.5px 7px",
-        minHeight: "29px",
+        padding: "5px 10px",
+        minHeight: "32px",
         background: isDark ? tokens.surfaceBg : "#f8fafc",
-        borderRadius: "4px",
-        border: `1px solid ${tokens.border}`,
+        borderRadius: "6px",
+        border: `1px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0"}`,
         boxSizing: "border-box",
         width: "100%",
         maxWidth: "100%",
         minWidth: 0,
-        gap: "6px",
+        gap: "8px",
+        transition: "border-color 0.15s ease, background 0.15s ease",
       }}
     >
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "7px",
+          gap: "8px",
           minWidth: 0,
           flex: "1 1 0%",
           overflow: "hidden",
         }}
       >
-        <label
-          style={{
-            position: "relative",
-            width: "18px",
-            height: "18px",
-            borderRadius: "4px",
-            backgroundColor: isTransparent ? "transparent" : (rawStr || placeholder || defaultFallbackHex),
-            backgroundImage: isTransparent
-              ? "linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)"
-              : undefined,
-            backgroundSize: isTransparent ? "6px 6px" : undefined,
-            backgroundPosition: isTransparent ? "0 0, 0 3px, 3px -3px, -3px 0px" : undefined,
-            border: `1px solid ${isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)"}`,
-            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
-            cursor: "pointer",
-            flexShrink: 0,
-            overflow: "hidden",
-            display: "grid",
-            placeItems: "center",
-          }}
-          title={`Choose ${label}`}
-        >
-          <input
-            type="color"
-            value={pickerHexVal}
-            onChange={(e) => onChange(e.target.value)}
-            style={{
-              position: "absolute",
-              top: "-50%",
-              left: "-50%",
-              width: "200%",
-              height: "200%",
-              opacity: 0,
-              cursor: "pointer",
-            }}
-          />
-        </label>
+        <ThemedColorSwatch
+          value={rawStr || placeholder || defaultFallbackHex}
+          onChange={onChange}
+          label={label}
+          placeholder={placeholder}
+          size={16}
+          borderRadius="50%"
+        />
         <span
           style={{
             display: "block",
             minWidth: 0,
             flex: "1 1 0%",
             fontSize: "11px",
-            fontWeight: 600,
-            color: tokens.textPrimary,
+            fontWeight: 500,
+            color: isDark ? "#94a3b8" : "#475569",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -1389,19 +1474,19 @@ function CompactColorRow({
           onChange(raw);
         }}
         style={{
-          width: "74px",
-          minWidth: "74px",
+          width: "68px",
+          minWidth: "68px",
           height: "22px",
-          textAlign: "center",
+          textAlign: "right",
           fontFamily: "'Inter', monospace",
-          fontSize: "10.5px",
-          fontWeight: 700,
-          color: tokens.textPrimary,
-          borderRadius: "4px",
-          border: `1px solid ${tokens.border}`,
-          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+          fontSize: "11px",
+          fontWeight: 800,
+          letterSpacing: "0.02em",
+          color: isDark ? "#f8fafc" : "#0f172a",
+          background: "transparent",
+          border: "none",
           outline: "none",
-          padding: "0 4px",
+          padding: "0",
           boxSizing: "border-box",
           flexShrink: 0,
         }}
@@ -1457,44 +1542,15 @@ function ModernColorPicker({
           boxShadow: isDark ? "none" : "0 1px 2px rgba(0,0,0,0.02)",
         }}
       >
-        {/* Interactive Swatch & Native Spectrum Trigger */}
-        <label
-          style={{
-            position: "relative",
-            width: "20px",
-            height: "20px",
-            borderRadius: "4px",
-            backgroundColor: isTransparent ? "transparent" : (rawStr || placeholder || defaultFallbackHex),
-            backgroundImage: isTransparent
-              ? "linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)"
-              : undefined,
-            backgroundSize: isTransparent ? "6px 6px" : undefined,
-            backgroundPosition: isTransparent ? "0 0, 0 3px, 3px -3px, -3px 0px" : undefined,
-            border: `1px solid ${isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)"}`,
-            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
-            cursor: "pointer",
-            flexShrink: 0,
-            overflow: "hidden",
-            display: "grid",
-            placeItems: "center",
-          }}
-          title="Click to choose color"
-        >
-          <input
-            type="color"
-            value={pickerHexVal}
-            onChange={(e) => onChange(e.target.value)}
-            style={{
-              position: "absolute",
-              top: "-50%",
-              left: "-50%",
-              width: "200%",
-              height: "200%",
-              opacity: 0,
-              cursor: "pointer",
-            }}
-          />
-        </label>
+        {/* Interactive Swatch & Themed Popover Trigger */}
+        <ThemedColorSwatch
+          value={rawStr || placeholder || defaultFallbackHex}
+          onChange={onChange}
+          label={label}
+          placeholder={placeholder}
+          size={20}
+          borderRadius="4px"
+        />
 
         {/* Clean Uppercase HEX Input */}
         <input
@@ -1551,8 +1607,8 @@ function renderFieldControl(
       currentValue !== undefined && currentValue !== null && String(currentValue).trim() !== ""
         ? String(currentValue)
         : field.defaultValue !== undefined && field.defaultValue !== null
-        ? String(field.defaultValue)
-        : field.placeholder || "";
+          ? String(field.defaultValue)
+          : field.placeholder || "";
 
     return (
       <input
@@ -1570,8 +1626,8 @@ function renderFieldControl(
       currentValue !== undefined && currentValue !== null && String(currentValue).trim() !== ""
         ? String(currentValue)
         : field.defaultValue !== undefined && field.defaultValue !== null
-        ? String(field.defaultValue)
-        : field.placeholder || "";
+          ? String(field.defaultValue)
+          : field.placeholder || "";
 
     return (
       <textarea
@@ -1596,8 +1652,8 @@ function renderFieldControl(
       currentValue !== undefined && currentValue !== null && currentValue !== ""
         ? String(currentValue)
         : field.defaultValue !== undefined
-        ? String(field.defaultValue)
-        : "";
+          ? String(field.defaultValue)
+          : "";
 
     return (
       <div style={{ position: "relative", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -1770,8 +1826,8 @@ const SegmentedRow = ({
           (opt.value === "on"
             ? "Enabled"
             : opt.value === "off"
-            ? "Disabled"
-            : String(opt.value).replace(/_/g, " "));
+              ? "Disabled"
+              : String(opt.value).replace(/_/g, " "));
 
         return (
           <button
@@ -2050,42 +2106,26 @@ const TextColorInputRow: React.FC<TextColorInputRowProps> = ({
         )}
 
         {onChangeColor && (
-          <label
+          <div
             style={{
               position: "absolute",
               right: "6px",
               top: multiline ? "8px" : "50%",
               transform: multiline ? "none" : "translateY(-50%)",
-              width: "16px",
-              height: "16px",
-              borderRadius: "50%",
-              backgroundColor: resolvedHex,
-              border: `1.5px solid ${isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.2)"}`,
-              boxShadow: "0 1px 2px rgba(0,0,0,0.18), inset 0 0 0 1px rgba(255,255,255,0.15)",
-              cursor: "pointer",
-              display: "grid",
-              placeItems: "center",
-              overflow: "hidden",
-              flexShrink: 0,
               zIndex: 2,
+              display: "flex",
+              alignItems: "center",
             }}
-            title={`Change ${label} color (${displayHex})`}
           >
-            <input
-              type="color"
+            <ThemedColorSwatch
               value={resolvedHex}
-              onChange={(e) => onChangeColor(e.target.value)}
-              style={{
-                position: "absolute",
-                top: "-50%",
-                left: "-50%",
-                width: "200%",
-                height: "200%",
-                opacity: 0,
-                cursor: "pointer",
-              }}
+              onChange={onChangeColor}
+              label={label}
+              placeholder={defaultColor || fallbackHex}
+              size={16}
+              borderRadius="50%"
             />
-          </label>
+          </div>
         )}
       </div>
     </div>
@@ -2390,8 +2430,8 @@ function HeroSlidesEditor({
     typeof currentProps.banner_height === "number"
       ? currentProps.banner_height
       : !isNaN(Number(currentProps.banner_height)) && Number(currentProps.banner_height) > 0
-      ? Number(currentProps.banner_height)
-      : 380;
+        ? Number(currentProps.banner_height)
+        : 380;
 
   const bannerWidthVal = currentProps.banner_width ?? "100%";
 
@@ -2399,8 +2439,8 @@ function HeroSlidesEditor({
     typeof currentProps.border_radius === "number"
       ? currentProps.border_radius
       : !isNaN(Number(currentProps.border_radius))
-      ? Number(currentProps.border_radius)
-      : 16;
+        ? Number(currentProps.border_radius)
+        : 16;
 
   let slides: any[] = Array.isArray(currentProps.slides) ? currentProps.slides : [];
   if (slides.length === 0) {
@@ -2651,7 +2691,7 @@ function HeroSlidesEditor({
                     width: "9px",
                     height: "9px",
                     borderRadius: "999px",
-              background: "#ffffff",
+                    background: "#ffffff",
                     boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
                     transition: "left 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
                   }}
@@ -2706,6 +2746,60 @@ function HeroSlidesEditor({
             const primaryStyle = slide.primary_cta?.style || "solid";
             const textAlign = slide.text_alignment || "left";
             const overlayOpacity = typeof slide.background_overlay_opacity === "number" ? Math.round(slide.background_overlay_opacity * 100) : 35;
+
+            // Exactly mirror HeroBanner color resolution so sidebar color swatches stay 100% in sync with banner
+            const siteTheme = siteDefinition.theme || {};
+            const isSiteDarkMode = siteTheme.mode === "dark";
+            const hasSlideBgImg = Boolean(slide.background_image);
+            const defaultSiteTextColor = isSiteDarkMode ? "#f8fafc" : "#0f172a";
+
+            const resolvedSlideTextColor =
+              slide.hero_text_color ||
+              slide.text_color ||
+              (isSiteDarkMode
+                ? (siteTheme.hero_text_color || siteTheme.text_color || "#f8fafc")
+                : (siteTheme.hero_text_color || siteTheme.text_color || (hasSlideBgImg ? "#ffffff" : defaultSiteTextColor)));
+
+            const resolvedHeadlineColor = slide.headline_color || resolvedSlideTextColor;
+            const resolvedSubheadlineColor = slide.subheadline_color || resolvedSlideTextColor;
+            const resolvedBadgeBgColor = slide.badge_bg_color || slide.badge_color || "#ef4444";
+            const resolvedBadgeTextColor = slide.badge_text_color || "#ffffff";
+
+            const resolvedAccentColor =
+              slide.primary_cta?.button_bg ||
+              slide.hero_accent ||
+              slide.accent_color ||
+              siteTheme.hero_accent ||
+              siteTheme.accent_color ||
+              (isSiteDarkMode ? "#60a5fa" : "#2563eb");
+
+            const resolvedPrimaryBtnBg = slide.primary_cta?.button_bg || resolvedAccentColor;
+            const resolvedPrimaryBtnTextColor =
+              slide.primary_cta?.button_color ||
+              slide.primary_cta?.color ||
+              (primaryStyle === "outline" ? resolvedPrimaryBtnBg : "#ffffff");
+
+            const resolvedSecondaryBtnBg = slide.secondary_cta?.button_bg || "transparent";
+            const resolvedSecondaryBtnTextColor =
+              slide.secondary_cta?.button_color ||
+              slide.secondary_cta?.color ||
+              resolvedSlideTextColor;
+
+            const resolvedSlideBgColor =
+              slide.background_color ||
+              slide.hero_bg ||
+              siteTheme.hero_bg ||
+              (isSiteDarkMode ? (siteTheme.secondary_bg || "#1a1c21") : (siteTheme.primary_bg || "#f8fafc"));
+
+            const resolvedCardBg =
+              slide.product_card?.card_bg ||
+              slide.product_card?.background_color ||
+              (isSiteDarkMode ? "rgba(30,41,59,0.9)" : "rgba(255,255,255,0.9)");
+
+            const resolvedCardTextColor =
+              slide.product_card?.title_color ||
+              slide.product_card?.text_color ||
+              (isSiteDarkMode ? "#ffffff" : "#0f172a");
 
             return (
               <div
@@ -2861,13 +2955,29 @@ function HeroSlidesEditor({
                     {/* TAB 1: CONTENT */}
                     {(slideSubTabs[idx] || "content") === "content" && (
                       <div style={{ display: "grid", gap: "5px" }}>
+                        <div style={{ display: "grid", gap: "2px" }}>
+                          <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                            Banner Type
+                          </label>
+                          <CustomSelectDropdown
+                            value={slide.variant || "standard"}
+                            onChange={(val) => handleSlideChange(idx, "variant", val)}
+                            options={[
+                              { value: "standard", label: "Standard Banner" },
+                              { value: "flash_sale", label: "Flash Sale (Timer & Coupon)" },
+                              { value: "product_launch", label: "Product Launch (Showcase Card)" },
+                              { value: "minimal_brand", label: "Minimal Brand (Trust Badges)" },
+                            ]}
+                          />
+                        </div>
+
                         <TextColorInputRow
                           label="Headline"
                           value={slide.headline || ""}
                           placeholder="Headline..."
                           onChangeText={(val) => handleSlideChange(idx, "headline", val)}
-                          colorValue={slide.headline_color || slide.hero_text_color}
-                          defaultColor={siteDefinition.theme?.hero_text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                          colorValue={slide.headline_color}
+                          defaultColor={resolvedHeadlineColor}
                           onChangeColor={(val) => handleSlideChange(idx, "headline_color", val)}
                         />
 
@@ -2877,37 +2987,33 @@ function HeroSlidesEditor({
                           value={slide.subheadline || ""}
                           placeholder="Supporting text..."
                           onChangeText={(val) => handleSlideChange(idx, "subheadline", val)}
-                          colorValue={slide.subheadline_color || slide.hero_text_color}
-                          defaultColor={siteDefinition.theme?.hero_text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                          colorValue={slide.subheadline_color}
+                          defaultColor={resolvedSubheadlineColor}
                           onChangeColor={(val) => handleSlideChange(idx, "subheadline_color", val)}
                         />
 
-                        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "5px" }}>
-                          <TextColorInputRow
-                            label="Badge Tag"
-                            value={slide.badge || ""}
-                            placeholder="NEW, 50% OFF..."
-                            onChangeText={(val) => handleSlideChange(idx, "badge", val)}
-                            colorValue={slide.badge_color || slide.badge_bg_color}
-                            defaultColor="#ef4444"
-                            onChangeColor={(val) => {
-                              handleSlideChange(idx, "badge_color", val);
-                              handleSlideChange(idx, "badge_bg_color", val);
-                            }}
-                          />
+                        <TextColorInputRow
+                          label="Badge Tag"
+                          value={slide.badge || ""}
+                          placeholder="NEW, 50% OFF..."
+                          onChangeText={(val) => handleSlideChange(idx, "badge", val)}
+                          colorValue={slide.badge_color || slide.badge_bg_color}
+                          defaultColor={resolvedBadgeBgColor}
+                          onChangeColor={(val) => {
+                            handleSlideChange(idx, "badge_color", val);
+                            handleSlideChange(idx, "badge_bg_color", val);
+                          }}
+                        />
 
-                          <div style={{ display: "grid", gap: "2px" }}>
-                            <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Align</label>
-                            <SegmentedRow
-                              value={textAlign === "right" ? "left" : textAlign}
-                              onChange={(val) => handleSlideChange(idx, "text_alignment", val)}
-                              options={[
-                                { label: "Left", value: "left" },
-                                { label: "Center", value: "center" },
-                              ]}
+                        {Boolean(slide.badge) && (
+                          <div style={{ marginTop: "-2px" }}>
+                            <CompactColorRow
+                              label="Badge Text Color"
+                              value={slide.badge_text_color || resolvedBadgeTextColor}
+                              onChange={(val) => handleSlideChange(idx, "badge_text_color", val)}
                             />
                           </div>
-                        </div>
+                        )}
 
                         {/* Flash Sale Countdown */}
                         {slide.variant === "flash_sale" && (
@@ -2958,12 +3064,18 @@ function HeroSlidesEditor({
                         {/* Product Launch Card */}
                         {slide.variant === "product_launch" && (
                           <div style={{ display: "grid", gap: "4px", padding: "5px", background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc", border: `1px solid ${tokens.border}`, borderRadius: "5px" }}>
-                            <input
-                              type="text"
+                            <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Showcase Card</div>
+                            <TextColorInputRow
+                              label="Product Title"
                               placeholder="Product Title"
                               value={slide.product_card?.title || ""}
-                              onChange={(e) => handleSlideChange(idx, "product_card.title", e.target.value)}
-                              style={sharedInputStyle()}
+                              onChangeText={(val) => handleSlideChange(idx, "product_card.title", val)}
+                              colorValue={slide.product_card?.title_color || slide.product_card?.text_color}
+                              defaultColor={resolvedCardTextColor}
+                              onChangeColor={(val) => {
+                                handleSlideChange(idx, "product_card.title_color", val);
+                                handleSlideChange(idx, "product_card.text_color", val);
+                              }}
                             />
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
                               <input
@@ -2979,6 +3091,39 @@ function HeroSlidesEditor({
                                 value={slide.product_card?.original_price || ""}
                                 onChange={(e) => handleSlideChange(idx, "product_card.original_price", e.target.value)}
                                 style={sharedInputStyle()}
+                              />
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: "4px" }}>
+                              <input
+                                type="text"
+                                placeholder="Rating (4.9 ⭐)"
+                                value={slide.product_card?.rating || ""}
+                                onChange={(e) => handleSlideChange(idx, "product_card.rating", e.target.value)}
+                                style={sharedInputStyle()}
+                              />
+                              <input
+                                type="text"
+                                placeholder="Product URL (/products)"
+                                value={slide.product_card?.product_href || ""}
+                                onChange={(e) => handleSlideChange(idx, "product_card.product_href", e.target.value)}
+                                style={sharedInputStyle()}
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Coupon Code (e.g. LAUNCH20)"
+                              value={slide.coupon_code || ""}
+                              onChange={(e) => handleSlideChange(idx, "coupon_code", e.target.value)}
+                              style={sharedInputStyle()}
+                            />
+                            <div style={{ marginTop: "2px" }}>
+                              <CompactColorRow
+                                label="Card Background"
+                                value={slide.product_card?.card_bg || slide.product_card?.background_color || resolvedCardBg}
+                                onChange={(val) => {
+                                  handleSlideChange(idx, "product_card.card_bg", val);
+                                  handleSlideChange(idx, "product_card.background_color", val);
+                                }}
                               />
                             </div>
                           </div>
@@ -3143,7 +3288,23 @@ function HeroSlidesEditor({
                           </div>
                         </div>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" }}>
+                        {/* Alignment & Style in 2-column row */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: "5px" }}>
+                          <div style={{ display: "grid", gap: "2px" }}>
+                            <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                              Alignment
+                            </label>
+                            <SegmentedRow
+                              value={textAlign}
+                              onChange={(val) => handleSlideChange(idx, "text_alignment", val)}
+                              options={[
+                                { label: "", value: "left", icon: <IconAlignLeft /> },
+                                { label: "", value: "center", icon: <IconAlignCenter /> },
+                                { label: "", value: "right", icon: <IconAlignRight /> },
+                              ]}
+                            />
+                          </div>
+
                           <div style={{ display: "grid", gap: "2px" }}>
                             <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                               Style
@@ -3152,12 +3313,15 @@ function HeroSlidesEditor({
                               value={slide.headline_font_style || "normal"}
                               onChange={(val) => handleSlideChange(idx, "headline_font_style", val)}
                               options={[
-                                { label: "Normal", value: "normal" },
-                                { label: "Italic", value: "italic" },
+                                { label: "", value: "normal", icon: <IconFontNormal /> },
+                                { label: "", value: "italic", icon: <IconFontItalic /> },
                               ]}
                             />
                           </div>
+                        </div>
 
+                        {/* Font Sizes in 2-column row */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" }}>
                           <NumberStepperField
                             label="Headline Size"
                             value={Number(slide.headline_font_size || 28)}
@@ -3167,39 +3331,45 @@ function HeroSlidesEditor({
                             unit="px"
                             onChange={(val) => handleSlideChange(idx, "headline_font_size", val)}
                           />
-                        </div>
 
-                        <NumberStepperField
-                          label="Subheadline Size"
-                          value={Number(slide.subheadline_font_size || 14)}
-                          min={10}
-                          max={28}
-                          step={1}
-                          unit="px"
-                          onChange={(val) => handleSlideChange(idx, "subheadline_font_size", val)}
-                        />
+                          <NumberStepperField
+                            label="Subheadline Size"
+                            value={Number(slide.subheadline_font_size || 14)}
+                            min={10}
+                            max={28}
+                            step={1}
+                            unit="px"
+                            onChange={(val) => handleSlideChange(idx, "subheadline_font_size", val)}
+                          />
+                        </div>
 
                         <SectionDivider title="Colors" />
 
                         <CompactColorRow
                           label="Background Color"
-                          value={slide.background_color || slide.hero_bg || siteDefinition.theme?.hero_bg || siteDefinition.theme?.primary_bg || (siteDefinition.theme?.mode === "dark" ? "#0f172a" : "#ffffff")}
+                          value={slide.background_color || slide.hero_bg || resolvedSlideBgColor}
                           onChange={(val) => handleSlideChange(idx, "background_color", val)}
                         />
 
                         <CompactColorRow
                           label="Text Color"
-                          value={slide.hero_text_color || slide.text_color || siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                          value={slide.hero_text_color || slide.text_color || resolvedSlideTextColor}
                           onChange={(val) => handleSlideChange(idx, "hero_text_color", val)}
                         />
 
                         <CompactColorRow
                           label="Accent / CTA Color"
-                          value={slide.primary_cta?.button_bg || slide.hero_accent || slide.accent_color || siteDefinition.theme?.accent_color || "#2563eb"}
+                          value={slide.primary_cta?.button_bg || slide.hero_accent || resolvedAccentColor}
                           onChange={(val) => {
                             handleSlideChange(idx, "hero_accent", val);
                             handleSlideChange(idx, "primary_cta.button_bg", val);
                           }}
+                        />
+
+                        <CompactColorRow
+                          label="Badge Text Color"
+                          value={slide.badge_text_color || resolvedBadgeTextColor}
+                          onChange={(val) => handleSlideChange(idx, "badge_text_color", val)}
                         />
 
                         {/* Festive Motif Position & Opacity (when festival theme is enabled) */}
@@ -3213,9 +3383,9 @@ function HeroSlidesEditor({
                                 value={slide.festive_position || siteDefinition.theme?.hero_festive_position || "right"}
                                 onChange={(val) => handleSlideChange(idx, "festive_position", val)}
                                 options={[
-                                  { label: "Left", value: "left" },
-                                  { label: "Center", value: "center" },
-                                  { label: "Right", value: "right" },
+                                  { label: "", value: "left", icon: <IconAlignLeft /> },
+                                  { label: "", value: "center", icon: <IconAlignCenter /> },
+                                  { label: "", value: "right", icon: <IconAlignRight /> },
                                 ]}
                               />
                             </div>
@@ -3289,9 +3459,9 @@ function HeroSlidesEditor({
                                 value={slide.image_fit || "cover"}
                                 onChange={(val) => handleSlideChange(idx, "image_fit", val)}
                                 options={[
-                                  { label: "Cover", value: "cover" },
-                                  { label: "Contain", value: "contain" },
-                                  { label: "Fill", value: "fill" },
+                                  { label: "Cover", value: "cover", icon: <IconFitCover /> },
+                                  { label: "Contain", value: "contain", icon: <IconFitContain /> },
+                                  { label: "Fill", value: "fill", icon: <IconFitFill /> },
                                 ]}
                               />
                             </div>
@@ -3334,9 +3504,9 @@ function HeroSlidesEditor({
                                 value={slide.image_position || "center"}
                                 onChange={(val) => handleSlideChange(idx, "image_position", val)}
                                 options={[
-                                  { label: "Left", value: "left" },
-                                  { label: "Center", value: "center" },
-                                  { label: "Right", value: "right" },
+                                  { label: "", value: "left", icon: <IconAlignLeft /> },
+                                  { label: "", value: "center", icon: <IconAlignCenter /> },
+                                  { label: "", value: "right", icon: <IconAlignRight /> },
                                 ]}
                               />
                             </div>
@@ -3392,7 +3562,7 @@ function HeroSlidesEditor({
                                   width: "8px",
                                   height: "8px",
                                   borderRadius: "999px",
-              background: "#ffffff",
+                                  background: "#ffffff",
                                   transition: "left 0.15s ease",
                                 }}
                               />
@@ -3421,22 +3591,40 @@ function HeroSlidesEditor({
                                 value={primaryStyle}
                                 onChange={(val) => handleSlideChange(idx, "primary_cta.style", val)}
                                 options={[
-                                  { label: "Solid", value: "solid" },
-                                  { label: "Outline", value: "outline" },
-                                  { label: "Glass", value: "glass" },
+                                  {
+                                    label: "Solid",
+                                    value: "solid",
+                                    icon: (
+                                      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                                        <rect x="2" y="3.5" width="12" height="9" rx="2.5" />
+                                      </svg>
+                                    ),
+                                  },
+                                  {
+                                    label: "Outline",
+                                    value: "outline",
+                                    icon: (
+                                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                        <rect x="2" y="3.5" width="12" height="9" rx="2.5" />
+                                      </svg>
+                                    ),
+                                  },
+                                  {
+                                    label: "Glass",
+                                    value: "glass",
+                                    icon: (
+                                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+                                        <rect x="2" y="3.5" width="12" height="9" rx="2.5" strokeDasharray="2 1.5" />
+                                      </svg>
+                                    ),
+                                  },
                                 ]}
                               />
                               {primaryStyle !== "glass" && (
                                 <div style={{ marginTop: "3px" }}>
                                   <CompactColorRow
                                     label="Button Color"
-                                    value={
-                                      slide.primary_cta?.button_bg ||
-                                      slide.hero_accent ||
-                                      slide.accent_color ||
-                                      siteDefinition.theme?.accent_color ||
-                                      "#2563eb"
-                                    }
+                                    value={slide.primary_cta?.button_bg || resolvedPrimaryBtnBg}
                                     onChange={(val) => {
                                       handleSlideChange(idx, "primary_cta.button_bg", val);
                                       handleSlideChange(idx, "hero_accent", val);
@@ -3444,6 +3632,20 @@ function HeroSlidesEditor({
                                   />
                                 </div>
                               )}
+                              <div style={{ marginTop: "3px" }}>
+                                <CompactColorRow
+                                  label="Button Text Color"
+                                  value={
+                                    slide.primary_cta?.button_color ||
+                                    slide.primary_cta?.color ||
+                                    resolvedPrimaryBtnTextColor
+                                  }
+                                  onChange={(val) => {
+                                    handleSlideChange(idx, "primary_cta.button_color", val);
+                                    handleSlideChange(idx, "primary_cta.color", val);
+                                  }}
+                                />
+                              </div>
                             </div>
                           )}
                         </div>
@@ -3473,7 +3675,7 @@ function HeroSlidesEditor({
                                   width: "8px",
                                   height: "8px",
                                   borderRadius: "999px",
-              background: "#ffffff",
+                                  background: "#ffffff",
                                   transition: "left 0.15s ease",
                                 }}
                               />
@@ -3481,20 +3683,39 @@ function HeroSlidesEditor({
                           </div>
 
                           {showSecondary && (
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px", marginTop: "2px" }}>
-                              <input
-                                type="text"
-                                placeholder="Label"
-                                value={slide.secondary_cta?.label || ""}
-                                onChange={(e) => handleSlideChange(idx, "secondary_cta.label", e.target.value)}
-                                style={sharedInputStyle()}
+                            <div style={{ display: "grid", gap: "3px", marginTop: "2px" }}>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px" }}>
+                                <input
+                                  type="text"
+                                  placeholder="Label"
+                                  value={slide.secondary_cta?.label || ""}
+                                  onChange={(e) => handleSlideChange(idx, "secondary_cta.label", e.target.value)}
+                                  style={sharedInputStyle()}
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="URL (/categories)"
+                                  value={slide.secondary_cta?.href || ""}
+                                  onChange={(e) => handleSlideChange(idx, "secondary_cta.href", e.target.value)}
+                                  style={sharedInputStyle()}
+                                />
+                              </div>
+                              <CompactColorRow
+                                label="Button Color"
+                                value={slide.secondary_cta?.button_bg || resolvedSecondaryBtnBg}
+                                onChange={(val) => handleSlideChange(idx, "secondary_cta.button_bg", val)}
                               />
-                              <input
-                                type="text"
-                                placeholder="URL (/categories)"
-                                value={slide.secondary_cta?.href || ""}
-                                onChange={(e) => handleSlideChange(idx, "secondary_cta.href", e.target.value)}
-                                style={sharedInputStyle()}
+                              <CompactColorRow
+                                label="Text Color"
+                                value={
+                                  slide.secondary_cta?.button_color ||
+                                  slide.secondary_cta?.color ||
+                                  resolvedSecondaryBtnTextColor
+                                }
+                                onChange={(val) => {
+                                  handleSlideChange(idx, "secondary_cta.button_color", val);
+                                  handleSlideChange(idx, "secondary_cta.color", val);
+                                }}
                               />
                             </div>
                           )}
@@ -5526,8 +5747,8 @@ function CartEditor({
     currentCartMaxWidth === "100%" || currentCartMaxWidth === "full" || currentCartMaxWidth === "100" || !p.max_width
       ? "100%"
       : currentCartMaxWidth.endsWith("px")
-      ? currentCartMaxWidth
-      : `${currentCartMaxWidth}px`;
+        ? currentCartMaxWidth
+        : `${currentCartMaxWidth}px`;
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -5610,8 +5831,8 @@ function CartEditor({
                   p.show_promo !== undefined
                     ? Boolean(p.show_promo)
                     : siteDefinition.theme?.show_promo !== undefined
-                    ? Boolean(siteDefinition.theme.show_promo)
-                    : true;
+                      ? Boolean(siteDefinition.theme.show_promo)
+                      : true;
                 return (
                   <div
                     onClick={() => updateProps({ show_promo: !isChecked })}
@@ -6487,17 +6708,16 @@ function CompactToggleRow({
             ? "rgba(59,130,246,0.12)"
             : tokens.elevatedSurfaceBg
           : checked
-          ? "rgba(37,99,235,0.05)"
-          : "#f8fafc",
-        border: `1px solid ${
-          isDark
+            ? "rgba(37,99,235,0.05)"
+            : "#f8fafc",
+        border: `1px solid ${isDark
             ? checked
               ? "rgba(59,130,246,0.3)"
               : tokens.border
             : checked
-            ? "#bfdbfe"
-            : "#e2e8f0"
-        }`,
+              ? "#bfdbfe"
+              : "#e2e8f0"
+          }`,
         cursor: "pointer",
         transition: "all 0.15s ease",
         userSelect: "none",
@@ -6513,8 +6733,8 @@ function CompactToggleRow({
                 ? tokens.accent
                 : tokens.textPrimary
               : checked
-              ? "#1e40af"
-              : "#334155",
+                ? "#1e40af"
+                : "#334155",
             lineHeight: 1.2,
           }}
         >
@@ -6534,8 +6754,8 @@ function CompactToggleRow({
           background: checked
             ? tokens.accent
             : isDark
-            ? "rgba(255,255,255,0.15)"
-            : "#cbd5e1",
+              ? "rgba(255,255,255,0.15)"
+              : "#cbd5e1",
           position: "relative",
           transition: "background 0.2s ease",
           flexShrink: 0,
@@ -6546,7 +6766,7 @@ function CompactToggleRow({
             width: "12px",
             height: "12px",
             borderRadius: "50%",
-              background: "#ffffff",
+            background: "#ffffff",
             position: "absolute",
             top: "2px",
             left: checked ? "14px" : "2px",
@@ -9318,8 +9538,8 @@ function PlaceOrderEditor({
     currentMaxWidth === "100%" || currentMaxWidth === "full"
       ? "100%"
       : currentMaxWidth.endsWith("px")
-      ? currentMaxWidth
-      : `${currentMaxWidth}px`;
+        ? currentMaxWidth
+        : `${currentMaxWidth}px`;
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -9881,8 +10101,8 @@ function CheckoutOrderSummaryEditor({
                   p.show_promo !== undefined
                     ? Boolean(p.show_promo)
                     : siteDefinition.theme?.show_promo !== undefined
-                    ? Boolean(siteDefinition.theme.show_promo)
-                    : true;
+                      ? Boolean(siteDefinition.theme.show_promo)
+                      : true;
                 return (
                   <div
                     onClick={() => updateProps({ show_promo: !isPromoChecked })}
@@ -10314,8 +10534,8 @@ function DeliveryFormEditor({
     currentMaxWidth === "100%" || currentMaxWidth === "full"
       ? "100%"
       : currentMaxWidth.endsWith("px")
-      ? currentMaxWidth
-      : `${currentMaxWidth}px`;
+        ? currentMaxWidth
+        : `${currentMaxWidth}px`;
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -11032,10 +11252,10 @@ function ProductDetailEditor({
     const raw = Array.isArray(p.trust_badges) && p.trust_badges.length > 0
       ? [...p.trust_badges]
       : [
-          { id: "delivery", title: "Delivery", subtitle: p.delivery_text || "Fast ship" },
-          { id: "returns", title: "Returns", subtitle: "Auto Policy" },
-          { id: "quality", title: "Quality", subtitle: p.quality_text || "Curated pick" },
-        ];
+        { id: "delivery", title: "Delivery", subtitle: p.delivery_text || "Fast ship" },
+        { id: "returns", title: "Returns", subtitle: "Auto Policy" },
+        { id: "quality", title: "Quality", subtitle: p.quality_text || "Curated pick" },
+      ];
 
     // Ensure Returns badge is always present and never lost
     const hasReturns = raw.some((b: any) => b.id === "returns" || (b.title || "").trim().toLowerCase() === "returns");
@@ -11384,7 +11604,7 @@ function ProductDetailEditor({
                                 width: "9px",
                                 height: "9px",
                                 borderRadius: "999px",
-              background: "#ffffff",
+                                background: "#ffffff",
                                 transition: "left 0.15s ease",
                               }}
                             />
@@ -11546,16 +11766,16 @@ function ProductDetailEditor({
                     p.max_width === "full" || p.max_width === "100%"
                       ? "full"
                       : p.max_width === "1440" || p.max_width === "1440px"
-                      ? "1440px"
-                      : p.max_width === "1280" || p.max_width === "1280px"
-                      ? "1280px"
-                      : p.max_width === "1200" || p.max_width === "1200px"
-                      ? "1200px"
-                      : p.max_width === "1000" || p.max_width === "1000px"
-                      ? "1000px"
-                      : p.max_width
-                      ? String(p.max_width)
-                      : "full"
+                        ? "1440px"
+                        : p.max_width === "1280" || p.max_width === "1280px"
+                          ? "1280px"
+                          : p.max_width === "1200" || p.max_width === "1200px"
+                            ? "1200px"
+                            : p.max_width === "1000" || p.max_width === "1000px"
+                              ? "1000px"
+                              : p.max_width
+                                ? String(p.max_width)
+                                : "full"
                   }
                   placeholder="Max Width"
                   options={[
@@ -11684,72 +11904,6 @@ const IconDisplayName = ({ size = 13 }: { size?: number }) => (
   </svg>
 );
 
-const IconAlignLeft = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-    <line x1="2.5" y1="4.5" x2="10.5" y2="4.5" />
-    <line x1="2.5" y1="8" x2="13.5" y2="8" />
-    <line x1="2.5" y1="11.5" x2="7.5" y2="11.5" />
-  </svg>
-);
-
-const IconAlignCenter = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-    <line x1="2.5" y1="4.5" x2="13.5" y2="4.5" />
-    <line x1="4.5" y1="8" x2="11.5" y2="8" />
-    <line x1="6" y1="11.5" x2="10" y2="11.5" />
-  </svg>
-);
-
-const IconAlignRight = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-    <line x1="5.5" y1="4.5" x2="13.5" y2="4.5" />
-    <line x1="2.5" y1="8" x2="13.5" y2="8" />
-    <line x1="8.5" y1="11.5" x2="13.5" y2="11.5" />
-  </svg>
-);
-
-const IconDirectionRow = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-    <rect x="3" y="3.5" width="4.25" height="9" rx="1.5" />
-    <rect x="8.75" y="3.5" width="4.25" height="9" rx="1.5" />
-  </svg>
-);
-
-const IconDirectionColumn = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-    <rect x="3.5" y="3" width="9" height="4.25" rx="1.5" />
-    <rect x="3.5" y="8.75" width="9" height="4.25" rx="1.5" />
-  </svg>
-);
-
-const IconFitContain = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-    <rect x="2" y="2" width="12" height="12" rx="2" strokeOpacity="0.45" />
-    <rect x="3.75" y="5.25" width="8.5" height="5.5" rx="1" />
-  </svg>
-);
-
-const IconFitCover = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-    <rect x="4" y="4" width="8" height="8" rx="1" />
-    <path d="M4 2v2M12 2v2M4 12v2M12 12v2M2 4h2M2 12h2M12 4h2M12 12h2" />
-  </svg>
-);
-
-const IconFitFill = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="2" width="12" height="12" rx="2" strokeOpacity="0.45" />
-    <path d="M4 6V4h2" />
-    <path d="M12 6V4h-2" />
-    <path d="M4 10v2h2" />
-    <path d="M12 10v2h-2" />
-    <line x1="4" y1="4" x2="6.5" y2="6.5" />
-    <line x1="12" y1="4" x2="9.5" y2="6.5" />
-    <line x1="4" y1="12" x2="6.5" y2="9.5" />
-    <line x1="12" y1="12" x2="9.5" y2="9.5" />
-  </svg>
-);
-
 const IconSearchBar = ({ size = 13 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
     <circle cx="6.75" cy="6.75" r="4.25" />
@@ -11762,22 +11916,6 @@ const IconSearchIconOnly = ({ size = 13 }: { size?: number }) => (
     <circle cx="8" cy="8" r="5.75" />
     <line x1="8" y1="5.25" x2="8" y2="8.25" />
     <circle cx="8" cy="10.75" r="0.65" fill="currentColor" stroke="none" />
-  </svg>
-);
-
-const IconFontNormal = ({ size = 14 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="3.5" y1="3.5" x2="12.5" y2="3.5" />
-    <line x1="8" y1="3.5" x2="8" y2="12.5" />
-    <line x1="5.5" y1="12.5" x2="10.5" y2="12.5" />
-  </svg>
-);
-
-const IconFontItalic = ({ size = 14 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-    <line x1="6.5" y1="3.5" x2="12" y2="3.5" />
-    <line x1="4" y1="12.5" x2="9.5" y2="12.5" />
-    <line x1="9.5" y1="3.5" x2="6.5" y2="12.5" />
   </svg>
 );
 
@@ -11998,6 +12136,17 @@ function NavbarEditor({
       patch.brand_text_color = value;
       patch.brandTextColor = value;
     }
+    if (key === "notification_dropdown_bg") {
+      patch.notification_drawer_bg = value;
+      patch.notification_bg = value;
+    }
+    if (key === "notification_dropdown_border") {
+      patch.notification_border_color = value;
+    }
+    if (key === "notification_dropdown_text") {
+      patch.notification_drawer_text = value;
+      patch.notification_text = value;
+    }
     const nextDef = updateThemeValues(siteDefinition, patch);
     if (key === "brandName" || key === "brand_name") {
       if (!nextDef.site) nextDef.site = {} as any;
@@ -12011,18 +12160,13 @@ function NavbarEditor({
       (nextDef.footer as any).brandName = value;
       (nextDef.footer as any).brand_name = value;
     }
-    if (key === "brand_text_color" || key === "brandTextColor") {
-      if (!nextDef.theme) nextDef.theme = {} as any;
-      (nextDef.theme as any).brand_text_color = value;
-      (nextDef.theme as any).brandTextColor = value;
-      if (selectedBlock?.id) {
-        nextDef.pages = (nextDef.pages || []).map((page: any) => ({
-          ...page,
-          blocks: (page.blocks || []).map((b: any) =>
-            b.id === selectedBlock.id ? { ...b, props: { ...b.props, brand_text_color: value, brandTextColor: value } } : b
-          ),
-        }));
-      }
+    if (selectedBlock?.id) {
+      nextDef.pages = (nextDef.pages || []).map((page: any) => ({
+        ...page,
+        blocks: (page.blocks || []).map((b: any) =>
+          b.id === selectedBlock.id ? { ...b, props: { ...b.props, ...patch, [key]: value } } : b
+        ),
+      }));
     }
     onSiteDefinitionChange(nextDef);
   };
@@ -12047,11 +12191,35 @@ function NavbarEditor({
   const logoSize = Number(getVal("logo_size", theme.logo_size || 34));
   const logoZoom = Number(getVal("logo_zoom", theme.logo_zoom || 100));
   const logoFit = getVal("logo_fit", theme.logo_fit || "contain");
-  const brandFontFamily = getVal("brand_font_family", theme.font_family || "sans_modern");
-  const brandFontWeight = String(getVal("brand_font_weight", "700"));
+  const rawBrandFontFamily = getVal("brand_font_family", theme.font_family || "sans_modern");
+  const FONT_KEY_MIGRATION: Record<string, string> = {
+    italiana_couture: "bodoni_moda",
+    italiana: "bodoni_moda",
+    tenor_runway: "urbanist_runway",
+    tenor_sans: "urbanist_runway",
+    marcellus_roman: "lora_serif",
+    marcellus: "lora_serif",
+    instrument_serif: "fraunces_editorial",
+    bebas_neue: "oswald_bold",
+    michroma_aerotech: "chakra_petch",
+    michroma: "chakra_petch",
+    audiowide_future: "oxanium_future",
+    audiowide: "oxanium_future",
+    righteous_retro: "epilogue_retro",
+    righteous: "epilogue_retro",
+  };
+  const brandFontFamily = FONT_KEY_MIGRATION[rawBrandFontFamily] || rawBrandFontFamily;
+  const rawBrandFontWeight = getVal("brand_font_weight", "700");
+  const brandFontWeight = String(rawBrandFontWeight).replace(/\D+/g, "") || "700";
   const brandFontStyle = getVal("brand_font_style", "normal");
   const brandFontSize = Number(getVal("brand_font_size", 18));
-  const brandTextColor = getVal("brand_text_color", theme.brand_text_color || theme.navbar_text_color || theme.text_color || (isSiteDark ? "#f8fafc" : "#0f172a"));
+  const brandTextColor = getVal("brand_text_color", theme.brand_text_color || (isSiteDark ? "#f8fafc" : "#0f172a"));
+
+  useEffect(() => {
+    if (brandFontFamily) {
+      ensureStoreFontLoaded(brandFontFamily);
+    }
+  }, [brandFontFamily]);
 
   const searchDisplayMode = getVal("search_display_mode", "bar");
   const searchPlacement = getVal("search_placement", "center");
@@ -12059,6 +12227,7 @@ function NavbarEditor({
   const searchHeight = Number(getVal("search_height", 38));
   const searchTextColor = getVal("search_text_color", theme.text_color || (isSiteDark ? "#f8fafc" : "#0f172a"));
   const searchMutedTextColor = getVal("search_muted_text_color", isSiteDark ? "#94a3b8" : "#64748b");
+  const searchIconColor = getVal("search_icon_color", theme.search_icon_color || searchMutedTextColor || (isSiteDark ? "#94a3b8" : "#64748b"));
 
   const navbarVariant = getVal("navbar_variant", "glassmorphism");
   const navbarPosition = getVal("navbar_position", "sticky");
@@ -12082,7 +12251,7 @@ function NavbarEditor({
   const navbarIconGap = Number(getVal("navbar_icon_gap", 8));
   const navbarIconBorderEnabled = getVal("navbar_icon_border_enabled", true) !== false;
   const navbarIconBgEnabled = getVal("navbar_icon_bg_enabled", true) !== false;
-  const navbarIconColor = getVal("navbar_icon_color", theme.navbar_icon_color || theme.navbar_text_color || theme.text_color || (isDark ? "#f8fafc" : "#0f172a"));
+  const navbarIconColor = getVal("navbar_icon_color", theme.navbar_icon_color || (isDark ? "#f8fafc" : "#0f172a"));
   const navbarIconBgColor = getVal("navbar_icon_bg_color", theme.navbar_icon_bg_color || (isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.04)"));
   const navbarIconBorderColor = getVal("navbar_icon_border_color", theme.navbar_icon_border_color || (isDark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.08)"));
 
@@ -12091,6 +12260,19 @@ function NavbarEditor({
   const navbarOuterBg = getVal("navbar_outer_bg", theme.navbar_outer_bg || "transparent");
   const navbarTextColorVal = getVal("navbar_text_color", theme.navbar_text_color || theme.text_color || (isDark ? "#f8fafc" : "#0f172a"));
   const navbarBorderColor = getVal("navbar_border_color", isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(226, 232, 240, 0.8)");
+
+  const searchBgColor = getVal("search_bg_color", theme.search_bg_color || (isSiteDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.06)"));
+  const searchBorderColor = getVal("search_border_color", theme.search_border_color || (isSiteDark ? "rgba(255, 255, 255, 0.18)" : "rgba(15, 23, 42, 0.12)"));
+  const cartBadgeBg = getVal("cart_badge_bg", theme.cart_badge_bg || theme.accent_color || "#ef4444");
+  const cartBadgeTextColor = getVal("cart_badge_text_color", theme.cart_badge_text_color || "#ffffff");
+
+  const profileDropdownBg = getVal("profile_dropdown_bg", theme.profile_dropdown_bg || (isSiteDark ? "#0f172a" : "#ffffff"));
+  const profileDropdownBorder = getVal("profile_dropdown_border", theme.profile_dropdown_border || (isSiteDark ? "rgba(255,255,255,0.12)" : "rgba(226, 232, 240, 0.8)"));
+  const profileDropdownText = getVal("profile_dropdown_text", theme.profile_dropdown_text || (isSiteDark ? "#ffffff" : "#0f172a"));
+
+  const notificationDropdownBg = getVal("notification_dropdown_bg", theme.notification_dropdown_bg || theme.notification_drawer_bg || (isSiteDark ? "#0f172a" : "#ffffff"));
+  const notificationDropdownBorder = getVal("notification_dropdown_border", theme.notification_dropdown_border || theme.notification_border_color || (isSiteDark ? "rgba(255,255,255,0.12)" : "rgba(226, 232, 240, 0.8)"));
+  const notificationDropdownText = getVal("notification_dropdown_text", theme.notification_dropdown_text || theme.notification_drawer_text || (isSiteDark ? "#ffffff" : "#0f172a"));
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -12224,8 +12406,8 @@ function NavbarEditor({
                   onChangeColor={(val) => updateField("brand_text_color", val)}
                 />
 
-                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "6px" }}>
-                  <div style={{ display: "grid", gap: "2px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", width: "100%", boxSizing: "border-box" }}>
+                  <div style={{ display: "grid", gap: "2px", minWidth: 0 }}>
                     <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                       Font
                     </label>
@@ -12233,36 +12415,36 @@ function NavbarEditor({
                       value={brandFontFamily}
                       placeholder="Select Font"
                       options={[
-                        { label: "Inter (Modern Clean - Default)", value: "sans_modern" },
-                        { label: "Syne (Avant-Garde High Fashion)", value: "syne_avantgarde" },
-                        { label: "Unbounded (Ultra-Wide Modern Luxury)", value: "unbounded_logo" },
-                        { label: "Syncopate (Architectural Wide Emblem)", value: "syncopate_wide" },
-                        { label: "Italiana (Italian Luxury Boutique)", value: "italiana_couture" },
-                        { label: "Tenor Sans (Modern Chic Runway Fashion)", value: "tenor_runway" },
-                        { label: "Marcellus (Timeless Roman Apothecary)", value: "marcellus_roman" },
-                        { label: "Instrument Serif (Modern Editorial)", value: "instrument_serif" },
-                        { label: "Cinzel (Royal Roman Heritage)", value: "cinzel_display" },
-                        { label: "Playfair Display (Haute Couture Editorial)", value: "playfair_serif" },
-                        { label: "Cormorant Garamond (Fine Literature)", value: "cormorant_serif" },
-                        { label: "Plus Jakarta Sans (Crisp Neo-Grotesque Tech)", value: "plus_jakarta" },
-                        { label: "DM Sans (Minimalist Scandinavian)", value: "dm_sans" },
-                        { label: "Outfit (Contemporary Geometric)", value: "outfit_geometric" },
-                        { label: "Montserrat (Bold Architectural)", value: "montserrat_bold" },
-                        { label: "Poppins (Clean Friendly Modern)", value: "poppins_rounded" },
-                        { label: "Bricolage Grotesque (Trendy Parisian)", value: "bricolage_grotesque" },
-                        { label: "Space Grotesk (Brutalist Minimalist)", value: "space_grotesk" },
-                        { label: "Bebas Neue (Heavy Urban Streetwear)", value: "bebas_neue" },
-                        { label: "Michroma (Sleek Aerodynamic Tech)", value: "michroma_aerotech" },
-                        { label: "Orbitron (Futuristic Cyberpunk)", value: "orbitron_scifi" },
-                        { label: "Audiowide (Next-Gen Hardware)", value: "audiowide_future" },
-                        { label: "Righteous (Retro 80s Synthwave)", value: "righteous_retro" },
-                        { label: "Parisienne (French Luxury Signature)", value: "parisienne_script" },
+                        { label: "Inter", value: "sans_modern" },
+                        { label: "Syne", value: "syne_avantgarde" },
+                        { label: "Unbounded", value: "unbounded_logo" },
+                        { label: "Syncopate", value: "syncopate_wide" },
+                        { label: "Bodoni Moda", value: "bodoni_moda" },
+                        { label: "Urbanist", value: "urbanist_runway" },
+                        { label: "Lora", value: "lora_serif" },
+                        { label: "Fraunces", value: "fraunces_editorial" },
+                        { label: "Cinzel", value: "cinzel_display" },
+                        { label: "Playfair Display", value: "playfair_serif" },
+                        { label: "Cormorant Garamond", value: "cormorant_serif" },
+                        { label: "Plus Jakarta Sans", value: "plus_jakarta" },
+                        { label: "DM Sans", value: "dm_sans" },
+                        { label: "Outfit", value: "outfit_geometric" },
+                        { label: "Montserrat", value: "montserrat_bold" },
+                        { label: "Poppins", value: "poppins_rounded" },
+                        { label: "Bricolage Grotesque", value: "bricolage_grotesque" },
+                        { label: "Space Grotesk", value: "space_grotesk" },
+                        { label: "Oswald", value: "oswald_bold" },
+                        { label: "Chakra Petch", value: "chakra_petch" },
+                        { label: "Orbitron", value: "orbitron_scifi" },
+                        { label: "Oxanium", value: "oxanium_future" },
+                        { label: "Epilogue", value: "epilogue_retro" },
+                        { label: "Parisienne", value: "parisienne_script" },
                       ]}
                       onChange={(val) => updateField("brand_font_family", val)}
                     />
                   </div>
 
-                  <div style={{ display: "grid", gap: "2px" }}>
+                  <div style={{ display: "grid", gap: "2px", minWidth: 0 }}>
                     <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                       Weight
                     </label>
@@ -12270,13 +12452,13 @@ function NavbarEditor({
                       value={brandFontWeight}
                       placeholder="Weight"
                       options={[
-                        { label: "300 Light", value: "300" },
-                        { label: "400 Regular", value: "400" },
-                        { label: "500 Medium", value: "500" },
-                        { label: "600 Semi", value: "600" },
-                        { label: "700 Bold", value: "700" },
-                        { label: "800 Extra", value: "800" },
-                        { label: "900 Black", value: "900" },
+                        { label: "300 - Light", value: "300" },
+                        { label: "400 - Regular", value: "400" },
+                        { label: "500 - Medium", value: "500" },
+                        { label: "600 - SemiBold", value: "600" },
+                        { label: "700 - Bold", value: "700" },
+                        { label: "800 - ExtraBold", value: "800" },
+                        { label: "900 - Black", value: "900" },
                       ]}
                       onChange={(val) => updateField("brand_font_weight", val)}
                     />
@@ -12690,11 +12872,13 @@ function NavbarEditor({
               onChange={(val) => updateField("navbar_bg", val)}
             />
 
-            <CompactColorRow
-              label="Outer Background (Floating)"
-              value={navbarOuterBg}
-              onChange={(val) => updateField("navbar_outer_bg", val)}
-            />
+            {(navbarVariant === "soft" || (navbarVariant === "floating" && navbarPosition === "static")) && (
+              <CompactColorRow
+                label="Outer Background"
+                value={navbarOuterBg}
+                onChange={(val) => updateField("navbar_outer_bg", val)}
+              />
+            )}
 
             <CompactColorRow
               label="Border Color"
@@ -12703,18 +12887,12 @@ function NavbarEditor({
             />
 
             <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>
-              Brand & Text
+              Brand Name
             </span>
             <CompactColorRow
               label="Brand Name Color"
               value={brandTextColor}
               onChange={(val) => updateField("brand_text_color", val)}
-            />
-
-            <CompactColorRow
-              label="Text & Icons Color"
-              value={navbarTextColorVal}
-              onChange={(val) => updateField("navbar_text_color", val)}
             />
 
             <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>
@@ -12739,18 +12917,97 @@ function NavbarEditor({
             />
 
             <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>
-              Search Colors
+              Cart & Notification Badges
             </span>
             <CompactColorRow
-              label="Search Input Text"
-              value={searchTextColor}
-              onChange={(val) => updateField("search_text_color", val)}
+              label="Badge Background"
+              value={cartBadgeBg}
+              onChange={(val) => updateField("cart_badge_bg", val)}
             />
 
             <CompactColorRow
-              label="Search Placeholder / Icon"
-              value={searchMutedTextColor}
-              onChange={(val) => updateField("search_muted_text_color", val)}
+              label="Badge Text Color"
+              value={cartBadgeTextColor}
+              onChange={(val) => updateField("cart_badge_text_color", val)}
+            />
+
+            {searchDisplayMode === "bar" && (
+              <>
+                <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>
+                  Search Bar Colors
+                </span>
+                <CompactColorRow
+                  label="Search Background"
+                  value={searchBgColor}
+                  onChange={(val) => updateField("search_bg_color", val)}
+                />
+
+                <CompactColorRow
+                  label="Search Border Color"
+                  value={searchBorderColor}
+                  onChange={(val) => updateField("search_border_color", val)}
+                />
+
+                <CompactColorRow
+                  label="Search Input Text"
+                  value={searchTextColor}
+                  onChange={(val) => updateField("search_text_color", val)}
+                />
+
+                <CompactColorRow
+                  label="Search Icon Color"
+                  value={searchIconColor}
+                  onChange={(val) => updateField("search_icon_color", val)}
+                />
+
+                <CompactColorRow
+                  label="Search Placeholder"
+                  value={searchMutedTextColor}
+                  onChange={(val) => updateField("search_muted_text_color", val)}
+                />
+              </>
+            )}
+
+            <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>
+              Account & Mobile Dropdown
+            </span>
+            <CompactColorRow
+              label="Dropdown Background"
+              value={profileDropdownBg}
+              onChange={(val) => updateField("profile_dropdown_bg", val)}
+            />
+
+            <CompactColorRow
+              label="Dropdown Border"
+              value={profileDropdownBorder}
+              onChange={(val) => updateField("profile_dropdown_border", val)}
+            />
+
+            <CompactColorRow
+              label="Dropdown Text Color"
+              value={profileDropdownText}
+              onChange={(val) => updateField("profile_dropdown_text", val)}
+            />
+
+            <span style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "4px" }}>
+              Notification Dropdown
+            </span>
+            <CompactColorRow
+              label="Notification Background"
+              value={notificationDropdownBg}
+              onChange={(val) => updateField("notification_dropdown_bg", val)}
+            />
+
+            <CompactColorRow
+              label="Notification Border"
+              value={notificationDropdownBorder}
+              onChange={(val) => updateField("notification_dropdown_border", val)}
+            />
+
+            <CompactColorRow
+              label="Notification Text Color"
+              value={notificationDropdownText}
+              onChange={(val) => updateField("notification_dropdown_text", val)}
             />
           </div>
         </section>
@@ -12888,25 +13145,25 @@ export default function EditorSidebar({
       ? (_rawSelectedBlock || { id: "checkout_steps", type: "checkout_steps", props: {} })
       : (selectedBlockId === "checkout_order_summary" || selectedBlockId === "order_summary" || selectedBlockId === "ordersummary")
         ? { id: "checkout_order_summary", type: "checkout_order_summary", props: _rawSelectedBlock?.props ?? {} }
-      : (selectedBlockId === "place_order_cta" || selectedBlockId === "checkout_review")
-        ? (_rawSelectedBlock || { id: "place_order_cta", type: "place_order_cta", props: {} })
-      : (selectedBlockId === "profile_details" || selectedBlockId === "profile" || selectedBlockId === "profiledetails" || selectedBlockId === "customer_profile")
-        ? (_rawSelectedBlock || { id: "profile_details", type: "profile_details", props: {} })
-      : (selectedBlockId === "signin_form" || selectedBlockId === "login" || selectedBlockId === "signinform" || selectedBlockId === "login_form")
-        ? (_rawSelectedBlock || { id: "signin_form", type: "signin_form", props: {} })
-      : (selectedBlockId === "signup_form" || selectedBlockId === "signup" || selectedBlockId === "signupform" || selectedBlockId === "register_form")
-        ? (_rawSelectedBlock || { id: "signup_form", type: "signup_form", props: {} })
-      : (selectedBlockId === "customer_orders" || selectedBlockId === "orders" || selectedBlockId === "order_history" || selectedBlockId === "order_history_list" || selectedBlockId === "customerorders")
-        ? (_rawSelectedBlock || { id: "customer_orders", type: "customer_orders", props: {} })
-      : (selectedBlockId === "customer_support" || selectedBlockId === "support" || selectedBlockId === "customersupport" || selectedBlockId === "support_desk" || selectedBlockId === "helpdesk")
-        ? (_rawSelectedBlock || { id: "customer_support", type: "customer_support", props: {} })
-      : (selectedBlockId === "cart_items" || selectedBlockId === "cart" || selectedBlockId === "cart_view" || selectedBlockId === "cart_sidebar" || selectedBlockId === "cartitems" || selectedBlockId === "cartsidebar")
-        ? (_rawSelectedBlock || { id: "cart_items", type: "cart_items", props: {} })
-      : (selectedBlockId === "navbar" || selectedBlockId === "header")
-        ? (_rawSelectedBlock || { id: "navbar", type: "navbar", props: {} })
-      : (selectedBlockId === "footer")
-        ? (_rawSelectedBlock || { id: "footer", type: "footer", props: {} })
-      : _rawSelectedBlock;
+        : (selectedBlockId === "place_order_cta" || selectedBlockId === "checkout_review")
+          ? (_rawSelectedBlock || { id: "place_order_cta", type: "place_order_cta", props: {} })
+          : (selectedBlockId === "profile_details" || selectedBlockId === "profile" || selectedBlockId === "profiledetails" || selectedBlockId === "customer_profile")
+            ? (_rawSelectedBlock || { id: "profile_details", type: "profile_details", props: {} })
+            : (selectedBlockId === "signin_form" || selectedBlockId === "login" || selectedBlockId === "signinform" || selectedBlockId === "login_form")
+              ? (_rawSelectedBlock || { id: "signin_form", type: "signin_form", props: {} })
+              : (selectedBlockId === "signup_form" || selectedBlockId === "signup" || selectedBlockId === "signupform" || selectedBlockId === "register_form")
+                ? (_rawSelectedBlock || { id: "signup_form", type: "signup_form", props: {} })
+                : (selectedBlockId === "customer_orders" || selectedBlockId === "orders" || selectedBlockId === "order_history" || selectedBlockId === "order_history_list" || selectedBlockId === "customerorders")
+                  ? (_rawSelectedBlock || { id: "customer_orders", type: "customer_orders", props: {} })
+                  : (selectedBlockId === "customer_support" || selectedBlockId === "support" || selectedBlockId === "customersupport" || selectedBlockId === "support_desk" || selectedBlockId === "helpdesk")
+                    ? (_rawSelectedBlock || { id: "customer_support", type: "customer_support", props: {} })
+                    : (selectedBlockId === "cart_items" || selectedBlockId === "cart" || selectedBlockId === "cart_view" || selectedBlockId === "cart_sidebar" || selectedBlockId === "cartitems" || selectedBlockId === "cartsidebar")
+                      ? (_rawSelectedBlock || { id: "cart_items", type: "cart_items", props: {} })
+                      : (selectedBlockId === "navbar" || selectedBlockId === "header")
+                        ? (_rawSelectedBlock || { id: "navbar", type: "navbar", props: {} })
+                        : (selectedBlockId === "footer")
+                          ? (_rawSelectedBlock || { id: "footer", type: "footer", props: {} })
+                          : _rawSelectedBlock;
   const editableConfig = selectedBlock
     ? getEditableConfigForBlock(selectedBlock.type)
     : null;
@@ -13265,1016 +13522,1029 @@ export default function EditorSidebar({
         }
       `}</style>
 
-      {/* FIXED UPPER HEADER: Pinned at top across all side editbar views */}
-      <div
-        className="wc-editor-fixed-header"
-        style={{
-          flexShrink: 0,
-          padding: "8px 10px 6px 10px",
-          background: tokens.surfaceBg,
-          display: "flex",
-          flexDirection: "column",
-          gap: "6px",
-          borderBottom: `1px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"}`,
-          zIndex: 20,
-        }}
-      >
-        {/* Sleek Segmented Pill Tabs */}
+        {/* FIXED UPPER HEADER: Pinned at top across all side editbar views */}
         <div
+          className="wc-editor-fixed-header"
           style={{
+            flexShrink: 0,
+            padding: "8px 10px 6px 10px",
+            background: tokens.surfaceBg,
             display: "flex",
-            gap: "2px",
-            padding: "2px",
-            background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-            borderRadius: "6px",
-            boxSizing: "border-box",
+            flexDirection: "column",
+            gap: "6px",
+            borderBottom: `1px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"}`,
+            zIndex: 20,
           }}
         >
-          <button
-            type="button"
-            onClick={() => onTabChange("theme")}
+          {/* Sleek Segmented Pill Tabs */}
+          <div
             style={{
-              flex: 1,
-              padding: "4px 6px",
-              borderRadius: "4px",
-              border: "none",
-              cursor: "pointer",
-              background: selectedTab === "theme" ? tokens.accent : "transparent",
-              color: selectedTab === "theme" ? "#ffffff" : tokens.textMuted,
-              boxShadow: selectedTab === "theme" ? "0 1px 4px rgba(59,130,246,0.3)" : "none",
-              fontSize: "10.5px",
-              fontWeight: 700,
-              letterSpacing: "0.04em",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "5px",
-              transition: "all 0.12s ease",
+              gap: "2px",
+              padding: "2px",
+              background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+              borderRadius: "6px",
+              boxSizing: "border-box",
             }}
           >
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
-              <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
-              <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
-              <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
-              <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
-            </svg>
-            THEME
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onTabChange("block")}
-            style={{
-              flex: 1,
-              padding: "4px 6px",
-              borderRadius: "4px",
-              border: "none",
-              cursor: "pointer",
-              background: selectedTab === "block" ? tokens.accent : "transparent",
-              color: selectedTab === "block" ? "#ffffff" : tokens.textMuted,
-              boxShadow: selectedTab === "block" ? "0 1px 4px rgba(59,130,246,0.3)" : "none",
-              fontSize: "10.5px",
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "5px",
-              transition: "all 0.12s ease",
-            }}
-          >
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-            </svg>
-            BLOCKS
-          </button>
-        </div>
-
-        {/* Dynamic Page & Inspector Breadcrumb Header (Pinned under Theme/Blocks in Block tab) */}
-        {selectedTab === "block" && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box", paddingTop: "2px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "4px", minWidth: 0 }}>
-              {selectedBlock ? (
-                <button
-                  type="button"
-                  onClick={() => onSelectBlock && onSelectBlock(null)}
-                  style={{
-                    border: "none",
-                    background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)",
-                    color: tokens.accent,
-                    padding: "2px 6px",
-                    borderRadius: "3px",
-                    fontSize: "9.5px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "2px",
-                    flexShrink: 0,
-                  }}
-                  title="Back to Page Tree"
-                >
-                  ← Tree
-                </button>
-              ) : (
-                <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textMuted }}>
-                  PAGE
-                </span>
-              )}
-              <span style={{ fontSize: "9px", color: tokens.textMuted }}>/</span>
-              <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {selectedBlockTitle}
-              </span>
-            </div>
-            {selectedBlock && (
-              <span style={{ fontSize: "8.5px", fontWeight: 800, padding: "1px 4px", borderRadius: "3px", background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)", color: tokens.accent, flexShrink: 0 }}>
-                EDITING
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* SCROLLABLE EDITING BODY: Only this part moves */}
-      <div
-        className="wc-editor-sidebar-body"
-        onScroll={handleSidebarScroll}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: "auto",
-          overflowX: "hidden",
-          padding: "8px 10px",
-          boxSizing: "border-box",
-          scrollbarWidth: "none",
-          msOverflowStyle: "none",
-        }}
-      >
-
-      {selectedTab === "theme" ? (() => {
-        const currentTheme = siteDefinition.theme || {};
-        const rawActiveSnapId =
-          appliedSnapshotId !== undefined && appliedSnapshotId !== null
-            ? appliedSnapshotId
-            : (currentTheme.active_snapshot_id || null);
-
-        const activeSnapId = savedSnapshots.some((s: any) => s.id === rawActiveSnapId)
-          ? rawActiveSnapId
-          : null;
-
-        const isSnapshotActive = Boolean(activeSnapId);
-        const isLightSelected = !isSnapshotActive && currentTheme.mode === "light";
-        const isDarkSelected = !isSnapshotActive && currentTheme.mode === "dark";
-
-        return (
-        <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-          {/* Saved Snapshots Section */}
-          <section style={{ ...sectionCardStyle(isLightMode), boxSizing: "border-box", overflow: "visible" }}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textMuted }}>
-              SAVED SNAPSHOTS
-            </div>
-            
-            <div style={{ display: "flex", gap: "4px", width: "100%", boxSizing: "border-box" }}>
-              <input
-                type="text"
-                placeholder="Snapshot name..."
-                value={snapshotName}
-                onChange={(e) => setSnapshotName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleSaveSnapshot();
-                  }
-                }}
-                style={{ ...sharedInputStyle(isLightMode), flex: 1, minWidth: 0, height: "26px", fontSize: "11px" }}
-              />
-              <button
-                type="button"
-                onClick={handleSaveSnapshot}
-                style={{
-                  padding: "0 10px",
-                  height: "26px",
-                  borderRadius: "4px",
-                  border: "none",
-                  background: snapshotFeedback ? "#10b981" : tokens.accent,
-                  color: "#ffffff",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  flexShrink: 0,
-                  transition: "all 0.15s ease",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {snapshotFeedback || "+ Save"}
-              </button>
-            </div>
-
-            {savedSnapshots.length === 0 ? (
-              <div style={{ fontSize: "10.5px", color: tokens.textMuted, textAlign: "center", padding: "6px 0" }}>
-                No snapshots yet. Enter a name & click + Save.
-              </div>
-            ) : (
-              <>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "3.5px",
-                    marginTop: "3px",
-                    width: "100%",
-                    boxSizing: "border-box",
-                    maxHeight: showAllSnapshots ? "250px" : "none",
-                    overflowY: showAllSnapshots ? "auto" : "visible",
-                    paddingRight: showAllSnapshots ? "2px" : "0",
-                  }}
-                >
-                  {(showAllSnapshots ? savedSnapshots : savedSnapshots.slice(0, 3)).map((snap: any) => {
-                    const th = snap.theme || {};
-                    const isCurrentActive = snap.id === activeSnapId;
-
-                    return (
-                      <div
-                        key={snap.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "4px 6px",
-                          minHeight: "29px",
-                          borderRadius: "4px",
-                          background: isCurrentActive
-                            ? (isDark ? "rgba(16, 185, 129, 0.15)" : "#f0fdf4")
-                            : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
-                          border: isCurrentActive ? "1.5px solid #10b981" : `1px solid ${tokens.border}`,
-                          boxShadow: isCurrentActive ? "0 1px 3px rgba(16,185,129,0.12)" : "none",
-                          gap: "6px",
-                          width: "100%",
-                          boxSizing: "border-box",
-                          flexShrink: 0,
-                          transition: "all 0.15s ease",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "5px", flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", gap: "2px", alignItems: "center", flexShrink: 0 }}>
-                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.primary_bg || "#ffffff", border: `1px solid ${tokens.border}` }} title={`Primary: ${th.primary_bg || '#ffffff'}`} />
-                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.accent_color || "#2563eb", border: `1px solid ${tokens.border}` }} title={`Accent: ${th.accent_color || '#2563eb'}`} />
-                            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.navbar_bg || "#0f172a", border: `1px solid ${tokens.border}` }} title={`Navbar: ${th.navbar_bg || '#0f172a'}`} />
-                          </div>
-                          <span style={{ fontSize: "10.5px", fontWeight: isCurrentActive ? 700 : 600, color: isCurrentActive ? (isDark ? "#34d399" : "#065f46") : tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
-                            {snap.name}
-                          </span>
-                        </div>
-                        <div style={{ display: "flex", gap: "3px", alignItems: "center", flexShrink: 0 }}>
-                          {isCurrentActive ? (
-                            <span
-                              style={{
-                                padding: "2px 7px",
-                                height: "20px",
-                                borderRadius: "3px",
-                                background: "#10b981",
-                                color: "#ffffff",
-                                fontSize: "9.5px",
-                                fontWeight: 700,
-                                whiteSpace: "nowrap",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: "2px",
-                              }}
-                            >
-                              ✓ Applied
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleApplySnapshot(snap.id)}
-                              style={{
-                                padding: "2px 7px",
-                                height: "20px",
-                                borderRadius: "3px",
-                                border: "none",
-                                background: tokens.accent,
-                                color: "#ffffff",
-                                fontSize: "9.5px",
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                whiteSpace: "nowrap",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                              }}
-                            >
-                              Apply
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSnapshot(snap.id)}
-                            style={{
-                              width: "20px",
-                              height: "20px",
-                              borderRadius: "3px",
-                              border: "none",
-                              background: "rgba(239,68,68,0.12)",
-                              color: "#ef4444",
-                              fontSize: "12px",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              padding: 0,
-                            }}
-                            title="Delete Snapshot"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {savedSnapshots.length > 3 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllSnapshots(!showAllSnapshots)}
-                    style={{
-                      width: "100%",
-                      padding: "4px 6px",
-                      borderRadius: "4px",
-                      border: `1px dashed ${tokens.border}`,
-                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                      color: tokens.accent,
-                      fontSize: "10px",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      textAlign: "center",
-                      marginTop: "3px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "4px",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    {showAllSnapshots
-                      ? `▲ Show less (3 of ${savedSnapshots.length})`
-                      : `▼ View all snapshots (${savedSnapshots.length})`}
-                  </button>
-                )}
-              </>
-            )}
-          </section>
-
-          {/* Appearance & Mode Section */}
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textMuted }}>
-              APPEARANCE & MODE
-            </div>
-
-            <div
+            <button
+              type="button"
+              onClick={() => onTabChange("theme")}
               style={{
+                flex: 1,
+                padding: "4px 6px",
+                borderRadius: "4px",
+                border: "none",
+                cursor: "pointer",
+                background: selectedTab === "theme" ? tokens.accent : "transparent",
+                color: selectedTab === "theme" ? "#ffffff" : tokens.textMuted,
+                boxShadow: selectedTab === "theme" ? "0 1px 4px rgba(59,130,246,0.3)" : "none",
+                fontSize: "10.5px",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
                 display: "flex",
                 alignItems: "center",
-                gap: "3px",
-                padding: "2px",
-                background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
-                borderRadius: "5px",
-                border: `1px solid ${tokens.border}`,
+                justifyContent: "center",
+                gap: "5px",
+                transition: "all 0.12s ease",
               }}
             >
-              <button
-                type="button"
-                onClick={() => handleApplyThemeMode("light")}
-                style={{
-                  flex: 1,
-                  padding: "4px 6px",
-                  borderRadius: "4px",
-                  border: "none",
-                  cursor: "pointer",
-                  background:
-                    isLightSelected
-                      ? (isDark ? tokens.surfaceBg : "#ffffff")
-                      : "transparent",
-                  color:
-                    isLightSelected ? tokens.textPrimary : tokens.textMuted,
-                  boxShadow: isLightSelected ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.06)") : "none",
-                  fontSize: "10.5px",
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "4px",
-                  transition: "all 0.12s ease",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isLightSelected) {
-                    e.currentTarget.style.color = tokens.textPrimary;
-                    e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isLightSelected) {
-                    e.currentTarget.style.color = tokens.textMuted;
-                    e.currentTarget.style.background = "transparent";
-                  }
-                }}
-              >
-                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="5" />
-                  <line x1="12" y1="1" x2="12" y2="3" />
-                  <line x1="12" y1="21" x2="12" y2="23" />
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                  <line x1="1" y1="12" x2="3" y2="12" />
-                  <line x1="21" y1="12" x2="23" y2="12" />
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                </svg>
-                Light
-              </button>
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+                <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+                <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+                <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+                <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+              </svg>
+              THEME
+            </button>
 
-              {/* Vertical Separator Divider */}
-              <div
-                style={{
-                  width: "1px",
-                  height: "14px",
-                  background: isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.12)",
-                  alignSelf: "center",
-                  flexShrink: 0,
-                  borderRadius: "1px",
-                }}
-              />
+            <button
+              type="button"
+              onClick={() => onTabChange("block")}
+              style={{
+                flex: 1,
+                padding: "4px 6px",
+                borderRadius: "4px",
+                border: "none",
+                cursor: "pointer",
+                background: selectedTab === "block" ? tokens.accent : "transparent",
+                color: selectedTab === "block" ? "#ffffff" : tokens.textMuted,
+                boxShadow: selectedTab === "block" ? "0 1px 4px rgba(59,130,246,0.3)" : "none",
+                fontSize: "10.5px",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+                transition: "all 0.12s ease",
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+              </svg>
+              BLOCKS
+            </button>
+          </div>
 
-              <button
-                type="button"
-                onClick={() => handleApplyThemeMode("dark")}
-                style={{
-                  flex: 1,
-                  padding: "4px 6px",
-                  borderRadius: "4px",
-                  border: "none",
-                  cursor: "pointer",
-                  background:
-                    isDarkSelected
-                      ? (isDark ? tokens.surfaceBg : "#000000")
-                      : "transparent",
-                  color:
-                    isDarkSelected ? (isDark ? tokens.accent : "#ffffff") : tokens.textMuted,
-                  boxShadow: isDarkSelected ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.25)") : "none",
-                  fontSize: "10.5px",
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "4px",
-                  transition: "all 0.12s ease",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isDarkSelected) {
-                    e.currentTarget.style.color = tokens.textPrimary;
-                    e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isDarkSelected) {
-                    e.currentTarget.style.color = tokens.textMuted;
-                    e.currentTarget.style.background = "transparent";
-                  }
-                }}
-              >
-                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                </svg>
-                Dark
-              </button>
-            </div>
-          </section>
-
-          {/* Festival Themes Section */}
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              FESTIVAL THEME
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
-              {[
-                {
-                  key: "none",
-                  label: "Default",
-                  icon: (
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="9" />
-                      <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" />
-                    </svg>
-                  ),
-                },
-                {
-                  key: "diwali",
-                  label: "Diwali",
-                  icon: (
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2c0 4.5-4 7-4 11a6 6 0 0 0 12 0c0-4-4-6.5-4-11z" />
-                      <circle cx="12" cy="15" r="1.5" fill="currentColor" />
-                    </svg>
-                  ),
-                },
-                {
-                  key: "holi",
-                  label: "Holi",
-                  icon: (
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="9" />
-                      <circle cx="9" cy="9.5" r="1.5" fill="currentColor" />
-                      <circle cx="15" cy="9.5" r="1.5" fill="currentColor" />
-                      <circle cx="12" cy="15" r="1.5" fill="currentColor" />
-                    </svg>
-                  ),
-                },
-                {
-                  key: "durga_puja",
-                  label: "Durga Puja",
-                  icon: (
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2v20M12 2l-3.5 4v4.5a3.5 3.5 0 0 0 7 0V6L12 2zM5 8c0 2.5 2.5 4.5 7 4.5s7-2 7-4.5" />
-                    </svg>
-                  ),
-                },
-                {
-                  key: "rakhi",
-                  label: "Rakhi",
-                  icon: (
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="5" />
-                      <line x1="2" y1="12" x2="7" y2="12" />
-                      <line x1="17" y1="12" x2="22" y2="12" />
-                      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-                    </svg>
-                  ),
-                },
-                {
-                  key: "eid",
-                  label: "Eid",
-                  icon: (
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                      <circle cx="15.5" cy="7.5" r="1.2" fill="currentColor" />
-                    </svg>
-                  ),
-                },
-                {
-                  key: "christmas",
-                  label: "Christmas",
-                  icon: (
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2l3.5 5h-2l3.5 5.5h-2.5l4 6.5H4.5l4-6.5h-2.5l3.5-5.5h-2l3.5-5z" />
-                      <line x1="12" y1="19" x2="12" y2="22" />
-                    </svg>
-                  ),
-                },
-              ].map((item) => {
-                const active = (siteDefinition.theme?.festival_theme || "none") === item.key;
-                return (
+          {/* Dynamic Page & Inspector Breadcrumb Header (Pinned under Theme/Blocks in Block tab) */}
+          {selectedTab === "block" && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", boxSizing: "border-box", paddingTop: "2px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px", minWidth: 0 }}>
+                {selectedBlock ? (
                   <button
-                    key={item.key}
                     type="button"
-                    onClick={() => onSiteDefinitionChange(applyFestivalTheme(siteDefinition, item.key as any))}
+                    onClick={() => onSelectBlock && onSelectBlock(null)}
+                    style={{
+                      border: "none",
+                      background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)",
+                      color: tokens.accent,
+                      padding: "2px 6px",
+                      borderRadius: "3px",
+                      fontSize: "9.5px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "2px",
+                      flexShrink: 0,
+                    }}
+                    title="Back to Page Tree"
+                  >
+                    ← Tree
+                  </button>
+                ) : (
+                  <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textMuted }}>
+                    PAGE
+                  </span>
+                )}
+                <span style={{ fontSize: "9px", color: tokens.textMuted }}>/</span>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {selectedBlockTitle}
+                </span>
+              </div>
+              {selectedBlock && (
+                <span style={{ fontSize: "8.5px", fontWeight: 800, padding: "1px 4px", borderRadius: "3px", background: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)", color: tokens.accent, flexShrink: 0 }}>
+                  EDITING
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* SCROLLABLE EDITING BODY: Only this part moves */}
+        <div
+          className="wc-editor-sidebar-body"
+          onScroll={handleSidebarScroll}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            overflowX: "hidden",
+            padding: "8px 10px",
+            boxSizing: "border-box",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+          }}
+        >
+
+          {selectedTab === "theme" ? (() => {
+            const currentTheme = siteDefinition.theme || {};
+            const rawActiveSnapId =
+              appliedSnapshotId !== undefined && appliedSnapshotId !== null
+                ? appliedSnapshotId
+                : (currentTheme.active_snapshot_id || null);
+
+            const activeSnapId = savedSnapshots.some((s: any) => s.id === rawActiveSnapId)
+              ? rawActiveSnapId
+              : null;
+
+            const isSnapshotActive = Boolean(activeSnapId);
+            const isLightSelected = !isSnapshotActive && currentTheme.mode === "light";
+            const isDarkSelected = !isSnapshotActive && currentTheme.mode === "dark";
+
+            return (
+              <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+                {/* Saved Snapshots Section */}
+                <section style={{ ...sectionCardStyle(isLightMode), boxSizing: "border-box", overflow: "visible" }}>
+                  <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textMuted }}>
+                    SAVED SNAPSHOTS
+                  </div>
+
+                  <div style={{ display: "flex", gap: "4px", width: "100%", boxSizing: "border-box" }}>
+                    <input
+                      type="text"
+                      placeholder="Snapshot name..."
+                      value={snapshotName}
+                      onChange={(e) => setSnapshotName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleSaveSnapshot();
+                        }
+                      }}
+                      style={{ ...sharedInputStyle(isLightMode), flex: 1, minWidth: 0, height: "26px", fontSize: "11px" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveSnapshot}
+                      style={{
+                        padding: "0 10px",
+                        height: "26px",
+                        borderRadius: "4px",
+                        border: "none",
+                        background: snapshotFeedback ? "#10b981" : tokens.accent,
+                        color: "#ffffff",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        flexShrink: 0,
+                        transition: "all 0.15s ease",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {snapshotFeedback || "+ Save"}
+                    </button>
+                  </div>
+
+                  {savedSnapshots.length === 0 ? (
+                    <div style={{ fontSize: "10.5px", color: tokens.textMuted, textAlign: "center", padding: "6px 0" }}>
+                      No snapshots yet. Enter a name & click + Save.
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "3.5px",
+                          marginTop: "3px",
+                          width: "100%",
+                          boxSizing: "border-box",
+                          maxHeight: showAllSnapshots ? "250px" : "none",
+                          overflowY: showAllSnapshots ? "auto" : "visible",
+                          paddingRight: showAllSnapshots ? "2px" : "0",
+                        }}
+                      >
+                        {(showAllSnapshots ? savedSnapshots : savedSnapshots.slice(0, 3)).map((snap: any) => {
+                          const th = snap.theme || {};
+                          const isCurrentActive = snap.id === activeSnapId;
+
+                          return (
+                            <div
+                              key={snap.id}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "4px 6px",
+                                minHeight: "29px",
+                                borderRadius: "4px",
+                                background: isCurrentActive
+                                  ? (isDark ? "rgba(16, 185, 129, 0.15)" : "#f0fdf4")
+                                  : (isDark ? tokens.elevatedSurfaceBg : "#f8fafc"),
+                                border: isCurrentActive ? "1.5px solid #10b981" : `1px solid ${tokens.border}`,
+                                boxShadow: isCurrentActive ? "0 1px 3px rgba(16,185,129,0.12)" : "none",
+                                gap: "6px",
+                                width: "100%",
+                                boxSizing: "border-box",
+                                flexShrink: 0,
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "5px", flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", gap: "2px", alignItems: "center", flexShrink: 0 }}>
+                                  <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.primary_bg || "#ffffff", border: `1px solid ${tokens.border}` }} title={`Primary: ${th.primary_bg || '#ffffff'}`} />
+                                  <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.accent_color || "#2563eb", border: `1px solid ${tokens.border}` }} title={`Accent: ${th.accent_color || '#2563eb'}`} />
+                                  <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: th.navbar_bg || "#0f172a", border: `1px solid ${tokens.border}` }} title={`Navbar: ${th.navbar_bg || '#0f172a'}`} />
+                                </div>
+                                <span style={{ fontSize: "10.5px", fontWeight: isCurrentActive ? 700 : 600, color: isCurrentActive ? (isDark ? "#34d399" : "#065f46") : tokens.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
+                                  {snap.name}
+                                </span>
+                              </div>
+                              <div style={{ display: "flex", gap: "3px", alignItems: "center", flexShrink: 0 }}>
+                                {isCurrentActive ? (
+                                  <span
+                                    style={{
+                                      padding: "2px 7px",
+                                      height: "20px",
+                                      borderRadius: "3px",
+                                      background: "#10b981",
+                                      color: "#ffffff",
+                                      fontSize: "9.5px",
+                                      fontWeight: 700,
+                                      whiteSpace: "nowrap",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      gap: "2px",
+                                    }}
+                                  >
+                                    ✓ Applied
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApplySnapshot(snap.id)}
+                                    style={{
+                                      padding: "2px 7px",
+                                      height: "20px",
+                                      borderRadius: "3px",
+                                      border: "none",
+                                      background: tokens.accent,
+                                      color: "#ffffff",
+                                      fontSize: "9.5px",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                      whiteSpace: "nowrap",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                  >
+                                    Apply
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSnapshot(snap.id)}
+                                  style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    borderRadius: "3px",
+                                    border: "none",
+                                    background: "rgba(239,68,68,0.12)",
+                                    color: "#ef4444",
+                                    fontSize: "12px",
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    padding: 0,
+                                  }}
+                                  title="Delete Snapshot"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {savedSnapshots.length > 3 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllSnapshots(!showAllSnapshots)}
+                          style={{
+                            width: "100%",
+                            padding: "4px 6px",
+                            borderRadius: "4px",
+                            border: `1px dashed ${tokens.border}`,
+                            background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                            color: tokens.accent,
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            textAlign: "center",
+                            marginTop: "3px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "4px",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {showAllSnapshots
+                            ? `▲ Show less (3 of ${savedSnapshots.length})`
+                            : `▼ View all snapshots (${savedSnapshots.length})`}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </section>
+
+                {/* Appearance & Mode Section */}
+                <section style={sectionCardStyle(isLightMode)}>
+                  <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: tokens.textMuted }}>
+                    APPEARANCE & MODE
+                  </div>
+
+                  <div
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: "6px",
-                      padding: "5px 8px",
-                      borderRadius: "6px",
-                      border: active
-                        ? "1px solid #2563eb"
-                        : isLightMode ? "1px solid #e2e8f0" : "1px solid rgba(255,255,255,0.08)",
-                      background: active
-                        ? (isLightMode ? "#eff6ff" : "rgba(37,99,235,0.18)")
-                        : (isLightMode ? "#ffffff" : "rgba(255,255,255,0.03)"),
-                      cursor: "pointer",
-                      textAlign: "left",
-                      fontSize: "10.5px",
-                      fontWeight: active ? 700 : 500,
-                      color: active
-                        ? (isLightMode ? "#1e40af" : "#93c5fd")
-                        : (isLightMode ? "#334155" : "#cbd5e1"),
-                      transition: "all 0.12s ease",
-                      gridColumn: item.key === "none" ? "1 / -1" : "span 1",
+                      gap: "3px",
+                      padding: "2px",
+                      background: isDark ? tokens.elevatedSurfaceBg : "#f1f5f9",
+                      borderRadius: "5px",
+                      border: `1px solid ${tokens.border}`,
                     }}
                   >
-                    <span style={{ display: "flex", alignItems: "center", flexShrink: 0, opacity: active ? 1 : 0.75 }}>
-                      {item.icon}
-                    </span>
-                    <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyThemeMode("light")}
+                      style={{
+                        flex: 1,
+                        padding: "4px 6px",
+                        borderRadius: "4px",
+                        border: "none",
+                        cursor: "pointer",
+                        background:
+                          isLightSelected
+                            ? (isDark ? tokens.surfaceBg : "#ffffff")
+                            : "transparent",
+                        color:
+                          isLightSelected ? tokens.textPrimary : tokens.textMuted,
+                        boxShadow: isLightSelected ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.06)") : "none",
+                        fontSize: "10.5px",
+                        fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "4px",
+                        transition: "all 0.12s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isLightSelected) {
+                          e.currentTarget.style.color = tokens.textPrimary;
+                          e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isLightSelected) {
+                          e.currentTarget.style.color = tokens.textMuted;
+                          e.currentTarget.style.background = "transparent";
+                        }
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="5" />
+                        <line x1="12" y1="1" x2="12" y2="3" />
+                        <line x1="12" y1="21" x2="12" y2="23" />
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                        <line x1="1" y1="12" x2="3" y2="12" />
+                        <line x1="21" y1="12" x2="23" y2="12" />
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                      </svg>
+                      Light
+                    </button>
 
-            {/* Festive Motif Position (For Hero Banner) */}
-            {(siteDefinition.theme?.festival_theme && siteDefinition.theme.festival_theme !== "none") && (
-              <>
-                <div style={{ marginTop: "8px", display: "grid", gap: "3px" }}>
-                  <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                    Hero Banner Motif Position
-                  </label>
-                  <SegmentedRow
-                    value={siteDefinition.theme?.hero_festive_position || siteDefinition.theme?.festive_position || "right"}
-                    onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { hero_festive_position: val, festive_position: val }))}
-                    options={[
-                      { label: "Left", value: "left" },
-                      { label: "Center", value: "center" },
-                      { label: "Right", value: "right" },
-                    ]}
-                  />
+                    {/* Vertical Separator Divider */}
+                    <div
+                      style={{
+                        width: "1px",
+                        height: "14px",
+                        background: isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.12)",
+                        alignSelf: "center",
+                        flexShrink: 0,
+                        borderRadius: "1px",
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => handleApplyThemeMode("dark")}
+                      style={{
+                        flex: 1,
+                        padding: "4px 6px",
+                        borderRadius: "4px",
+                        border: "none",
+                        cursor: "pointer",
+                        background:
+                          isDarkSelected
+                            ? (isDark ? tokens.surfaceBg : "#000000")
+                            : "transparent",
+                        color:
+                          isDarkSelected ? (isDark ? tokens.accent : "#ffffff") : tokens.textMuted,
+                        boxShadow: isDarkSelected ? (isDark ? "0 1px 3px rgba(0,0,0,0.3)" : "0 1px 2px rgba(0,0,0,0.25)") : "none",
+                        fontSize: "10.5px",
+                        fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "4px",
+                        transition: "all 0.12s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isDarkSelected) {
+                          e.currentTarget.style.color = tokens.textPrimary;
+                          e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isDarkSelected) {
+                          e.currentTarget.style.color = tokens.textMuted;
+                          e.currentTarget.style.background = "transparent";
+                        }
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                      </svg>
+                      Dark
+                    </button>
+                  </div>
+                </section>
+
+                {/* Festival Themes Section */}
+                <section style={sectionCardStyle(isLightMode)}>
+                  <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                    FESTIVAL THEME
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
+                    {[
+                      {
+                        key: "none",
+                        label: "Default",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="9" />
+                            <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" />
+                          </svg>
+                        ),
+                      },
+                      {
+                        key: "diwali",
+                        label: "Diwali",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2c0 4.5-4 7-4 11a6 6 0 0 0 12 0c0-4-4-6.5-4-11z" />
+                            <circle cx="12" cy="15" r="1.5" fill="currentColor" />
+                          </svg>
+                        ),
+                      },
+                      {
+                        key: "holi",
+                        label: "Holi",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="9" />
+                            <circle cx="9" cy="9.5" r="1.5" fill="currentColor" />
+                            <circle cx="15" cy="9.5" r="1.5" fill="currentColor" />
+                            <circle cx="12" cy="15" r="1.5" fill="currentColor" />
+                          </svg>
+                        ),
+                      },
+                      {
+                        key: "durga_puja",
+                        label: "Durga Puja",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2v20M12 2l-3.5 4v4.5a3.5 3.5 0 0 0 7 0V6L12 2zM5 8c0 2.5 2.5 4.5 7 4.5s7-2 7-4.5" />
+                          </svg>
+                        ),
+                      },
+                      {
+                        key: "rakhi",
+                        label: "Rakhi",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="5" />
+                            <line x1="2" y1="12" x2="7" y2="12" />
+                            <line x1="17" y1="12" x2="22" y2="12" />
+                            <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                          </svg>
+                        ),
+                      },
+                      {
+                        key: "eid",
+                        label: "Eid",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                            <circle cx="15.5" cy="7.5" r="1.2" fill="currentColor" />
+                          </svg>
+                        ),
+                      },
+                      {
+                        key: "christmas",
+                        label: "Christmas",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2l3.5 5h-2l3.5 5.5h-2.5l4 6.5H4.5l4-6.5h-2.5l3.5-5.5h-2l3.5-5z" />
+                            <line x1="12" y1="19" x2="12" y2="22" />
+                          </svg>
+                        ),
+                      },
+                    ].map((item) => {
+                      const active = (siteDefinition.theme?.festival_theme || "none") === item.key;
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => onSiteDefinitionChange(applyFestivalTheme(siteDefinition, item.key as any))}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "5px 8px",
+                            borderRadius: "6px",
+                            border: active
+                              ? "1px solid #2563eb"
+                              : isLightMode ? "1px solid #e2e8f0" : "1px solid rgba(255,255,255,0.08)",
+                            background: active
+                              ? (isLightMode ? "#eff6ff" : "rgba(37,99,235,0.18)")
+                              : (isLightMode ? "#ffffff" : "rgba(255,255,255,0.03)"),
+                            cursor: "pointer",
+                            textAlign: "left",
+                            fontSize: "10.5px",
+                            fontWeight: active ? 700 : 500,
+                            color: active
+                              ? (isLightMode ? "#1e40af" : "#93c5fd")
+                              : (isLightMode ? "#334155" : "#cbd5e1"),
+                            transition: "all 0.12s ease",
+                            gridColumn: item.key === "none" ? "1 / -1" : "span 1",
+                          }}
+                        >
+                          <span style={{ display: "flex", alignItems: "center", flexShrink: 0, opacity: active ? 1 : 0.75 }}>
+                            {item.icon}
+                          </span>
+                          <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Festive Motif Position (For Hero Banner) */}
+                  {(siteDefinition.theme?.festival_theme && siteDefinition.theme.festival_theme !== "none") && (
+                    <>
+                      <div style={{ marginTop: "8px", display: "grid", gap: "3px" }}>
+                        <label style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                          Hero Banner Motif Position
+                        </label>
+                        <SegmentedRow
+                          value={siteDefinition.theme?.hero_festive_position || siteDefinition.theme?.festive_position || "right"}
+                          onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { hero_festive_position: val, festive_position: val }))}
+                          options={[
+                            { label: "Left", value: "left" },
+                            { label: "Center", value: "center" },
+                            { label: "Right", value: "right" },
+                          ]}
+                        />
+                      </div>
+
+                      {/* Hero Banner Motif Opacity */}
+                      <div style={{ marginTop: "6px" }}>
+                        <NumberStepperField
+                          label="Hero Motif Opacity"
+                          value={siteDefinition.theme?.hero_festive_opacity !== undefined ? siteDefinition.theme.hero_festive_opacity : (siteDefinition.theme?.festive_opacity !== undefined ? siteDefinition.theme.festive_opacity : 100)}
+                          min={0}
+                          max={100}
+                          step={5}
+                          unit="%"
+                          onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { hero_festive_opacity: val, festive_opacity: val }))}
+                        />
+                      </div>
+                    </>
+                  )}
+                </section>
+
+                {/* Brand Palette Section */}
+                <section style={sectionCardStyle(isLightMode)}>
+                  <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b", marginBottom: "4px" }}>
+                    BRAND PALETTE
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100%", boxSizing: "border-box" }}>
+                    <CompactColorRow
+                      label="Brand Accent Color"
+                      value={siteDefinition.theme?.accent_color || (siteDefinition.theme?.mode === "dark" ? "#3b82f6" : "#2563eb")}
+                      onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { accent_color: val, brand_color: val }))}
+                    />
+
+                    <CompactColorRow
+                      label="Primary Background"
+                      value={siteDefinition.theme?.primary_bg || (siteDefinition.theme?.mode === "dark" ? "#121316" : "#ffffff")}
+                      onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { primary_bg: val }))}
+                    />
+
+                    <CompactColorRow
+                      label="Card / Surface BG"
+                      value={siteDefinition.theme?.card_bg || siteDefinition.theme?.secondary_bg || (siteDefinition.theme?.mode === "dark" ? "#22252b" : "#ffffff")}
+                      onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { card_bg: val, card_bg_color: val, secondary_bg: val }))}
+                    />
+
+                    <CompactColorRow
+                      label="Primary Text Color"
+                      value={siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
+                      onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { text_color: val, card_text_color: val, product_name_color: val }))}
+                    />
+
+                    <CompactColorRow
+                      label="Muted Text Color"
+                      value={siteDefinition.theme?.muted_text_color || (siteDefinition.theme?.mode === "dark" ? "rgba(248, 250, 252, 0.72)" : "#64748b")}
+                      onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { muted_text_color: val, muted_text: val }))}
+                    />
+
+                    <CompactColorRow
+                      label="Border & Divider"
+                      value={siteDefinition.theme?.border_color || siteDefinition.theme?.card_border_color || (siteDefinition.theme?.mode === "dark" ? "rgba(255, 255, 255, 0.12)" : "#e2e8f0")}
+                      onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { border_color: val, card_border_color: val, form_border_color: val }))}
+                    />
+                  </div>
+                </section>
+              </div>
+            );
+          })() : (
+            <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+              {!selectedBlock ? (
+                <PageBlocksTreeView
+                  siteDefinition={siteDefinition}
+                  onSelectBlock={onSelectBlock}
+                  onSelectPage={onSelectPage}
+                  isLightMode={isLightMode}
+                />
+              ) : !editableConfig && !hasSpecialEditor ? (
+                <div style={sectionCardStyle(isLightMode)}>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: tokens.textPrimary }}>{selectedBlock.type}</div>
+                  <p style={{ margin: 0, fontSize: "10.5px", color: tokens.textMuted, lineHeight: 1.4 }}>
+                    This block does not have configurable properties.
+                  </p>
                 </div>
-
-                {/* Hero Banner Motif Opacity */}
-                <div style={{ marginTop: "6px" }}>
-                  <NumberStepperField
-                    label="Hero Motif Opacity"
-                    value={siteDefinition.theme?.hero_festive_opacity !== undefined ? siteDefinition.theme.hero_festive_opacity : (siteDefinition.theme?.festive_opacity !== undefined ? siteDefinition.theme.festive_opacity : 100)}
-                    min={0}
-                    max={100}
-                    step={5}
-                    unit="%"
-                    onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { hero_festive_opacity: val, festive_opacity: val }))}
-                  />
-                </div>
-              </>
-            )}
-          </section>
-
-          {/* Brand Palette Section */}
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b", marginBottom: "4px" }}>
-              BRAND PALETTE
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100%", boxSizing: "border-box" }}>
-              <CompactColorRow
-                label="Accent Color"
-                value={siteDefinition.theme?.accent_color || "#2563eb"}
-                onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { accent_color: val }))}
-              />
-
-              <CompactColorRow
-                label="Text Color"
-                value={siteDefinition.theme?.text_color || (siteDefinition.theme?.mode === "dark" ? "#f8fafc" : "#0f172a")}
-                onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { text_color: val }))}
-              />
-
-              <CompactColorRow
-                label="Primary Background"
-                value={siteDefinition.theme?.primary_bg || (siteDefinition.theme?.mode === "dark" ? "#121316" : "#ffffff")}
-                onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { primary_bg: val }))}
-              />
-
-              <CompactColorRow
-                label="Secondary Background"
-                value={siteDefinition.theme?.secondary_bg || (siteDefinition.theme?.mode === "dark" ? "#1a1c21" : "#f8fafc")}
-                onChange={(val) => onSiteDefinitionChange(updateThemeValues(siteDefinition, { secondary_bg: val }))}
-              />
-            </div>
-          </section>
-        </div>
-      ); })() : (
-        <div style={{ display: "grid", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-          {!selectedBlock ? (
-            <PageBlocksTreeView
-              siteDefinition={siteDefinition}
-              onSelectBlock={onSelectBlock}
-              onSelectPage={onSelectPage}
-              isLightMode={isLightMode}
-            />
-          ) : !editableConfig && !hasSpecialEditor ? (
-            <div style={sectionCardStyle(isLightMode)}>
-              <div style={{ fontSize: "11px", fontWeight: 700, color: tokens.textPrimary }}>{selectedBlock.type}</div>
-              <p style={{ margin: 0, fontSize: "10.5px", color: tokens.textMuted, lineHeight: 1.4 }}>
-                This block does not have configurable properties.
-              </p>
-            </div>
-          ) : (
-            <>
-              {selectedBlock.type === "hero_banner" || selectedBlock.type === "herobanner" || selectedBlock.type === "hero" || selectedBlock.type === "banner" ? (
-                <HeroSlidesEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : selectedBlock.type === "navbar" || selectedBlock.type === "header" || selectedBlockId === "navbar" || selectedBlockId === "header" ? (
-                <NavbarEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : selectedBlock.type === "section_group_carousel" ||
-                selectedBlock.type === "sectiongroupcarousel" ||
-                selectedBlock.type === "category_story_carousel" ||
-                selectedBlock.type === "category_carousel" ||
-                selectedBlock.type === "section_carousel" ||
-                selectedBlock.type === "story_carousel" ||
-                selectedBlock.type === "category_grid" ||
-                selectedBlock.type === "categorygrid" ? (
-                <SectionGroupCarouselEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                /> 
-              ) : selectedBlock.type === "product_grid" ||
-                selectedBlock.type === "productgrid" ? (
-                <ProductGridEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : selectedBlock.type === "product_carousel" ||
-                selectedBlock.type === "productcarousel" ||
-                selectedBlock.type === "products_carousel" ||
-                selectedBlock.type === "featured_products" ||
-                selectedBlock.type === "collection_products" ? (
-                <ProductCarouselEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : selectedBlock.type === "footer" || selectedBlockId === "footer" ? (
-                <FooterEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : selectedBlock.type === "cart" ||
-                selectedBlock.type === "cart_view" ||
-                selectedBlock.type === "cartview" ||
-                selectedBlock.type === "cart_sidebar" ||
-                selectedBlock.type === "cartsidebar" ||
-                selectedBlock.type === "cart_items" ||
-                selectedBlock.type === "cartitems" ? (
-                <CartEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : isProductDetailBlock(selectedBlock) ||
-                editableConfig?.displayName === "Product Detail" ? (
-                <ProductDetailEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : isCheckoutStepsBlock(selectedBlock) ||
-                selectedBlock.id === "checkout_steps" ||
-                selectedBlock.type === "checkout_steps" ||
-                selectedBlock.type === "checkoutsteps" ||
-                selectedBlockId === "checkout_steps" ? (
-                <CheckoutStepsEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : isCheckoutSummaryBlock(selectedBlock) ||
-                selectedBlock.id === "checkout_order_summary" ||
-                selectedBlock.type === "checkout_order_summary" ||
-                selectedBlock.type === "checkoutordersummary" ||
-                selectedBlock.id === "order_summary" ||
-                selectedBlock.type === "order_summary" ||
-                selectedBlock.id === "ordersummary" ||
-                selectedBlock.type === "ordersummary" ||
-                selectedBlock.id === "checkout_summary" ||
-                selectedBlock.type === "checkout_summary" ||
-                selectedBlockId === "checkout_order_summary" ||
-                selectedBlockId === "order_summary" ||
-                selectedBlockId === "ordersummary" ||
-                selectedBlockId === "checkout_summary" ||
-                (selectedBlockId && selectedBlockId.includes("summary")) ? (
-                <CheckoutOrderSummaryEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : isDeliveryBlock(selectedBlock) ||
-                editableConfig?.displayName === "Delivery Form" ||
-                selectedBlock.type === "delivery_form" ||
-                selectedBlock.type === "deliveryform" ||
-                selectedBlock.type === "delivery_map_picker" ||
-                selectedBlock.type === "delivery_address_form" ? (
-                <DeliveryFormEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : isPaymentMethodsBlock(selectedBlock) ||
-                selectedBlock.id === "payment_methods" ||
-                selectedBlock.type === "payment_methods" ||
-                selectedBlock.type === "paymentmethods" ||
-                selectedBlockId === "payment_methods" ? (
-                <PaymentMethodsEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : isPlaceOrderBlock(selectedBlock) ||
-                selectedBlock.id === "place_order_cta" ||
-                selectedBlock.type === "place_order_cta" ||
-                selectedBlock.type === "placeordercta" ||
-                selectedBlock.id === "checkout_review" ||
-                selectedBlock.type === "checkout_review" ||
-                selectedBlockId === "place_order_cta" ||
-                selectedBlockId === "checkout_review" ? (
-                <PlaceOrderEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : isProfileBlock(selectedBlock) ||
-                selectedBlock.id === "profile_details" ||
-                selectedBlock.type === "profile_details" ||
-                selectedBlock.type === "profiledetails" ||
-                selectedBlock.type === "profile" ||
-                selectedBlockId === "profile_details" ||
-                selectedBlockId === "profile" ? (
-                <ProfileEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : isSignInBlock(selectedBlock) ||
-                selectedBlock.id === "signin_form" ||
-                selectedBlock.type === "signin_form" ||
-                selectedBlock.type === "signinform" ||
-                selectedBlock.type === "login_form" ||
-                selectedBlock.type === "login" ||
-                selectedBlockId === "signin_form" ||
-                selectedBlockId === "login" ? (
-                <SignInEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : isSignUpBlock(selectedBlock) ||
-                selectedBlock.id === "signup_form" ||
-                selectedBlock.type === "signup_form" ||
-                selectedBlock.type === "signupform" ||
-                selectedBlock.type === "register_form" ||
-                selectedBlock.type === "signup" ||
-                selectedBlockId === "signup_form" ||
-                selectedBlockId === "signup" ? (
-                <SignUpEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : isOrdersBlock(selectedBlock) ||
-                selectedBlock.id === "customer_orders" ||
-                selectedBlock.type === "customer_orders" ||
-                selectedBlock.type === "customerorders" ||
-                selectedBlock.type === "orders" ||
-                selectedBlock.type === "order_history" ||
-                selectedBlock.type === "order_history_list" ||
-                selectedBlockId === "customer_orders" ||
-                selectedBlockId === "orders" ? (
-                <OrdersEditor
-                  selectedBlock={selectedBlock}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
-              ) : isSupportBlock(selectedBlock) ||
-                selectedBlock?.id === "customer_support" ||
-                selectedBlock?.type === "customer_support" ||
-                selectedBlock?.type === "customersupport" ||
-                selectedBlock?.type === "support" ||
-                selectedBlock?.type === "support_desk" ||
-                selectedBlockId === "customer_support" ||
-                selectedBlockId === "support" ? (
-                <SupportEditor
-                  selectedBlock={selectedBlock || { id: "customer_support", type: "customer_support", props: {} }}
-                  isLightMode={isLightMode}
-                  textColor={textColor}
-                  accentColor={accentColor}
-                  onSiteDefinitionChange={onSiteDefinitionChange}
-                  siteDefinition={siteDefinition}
-                />
               ) : (
-                fieldGroups.map((group) => (
-                  <section key={group.title} style={sectionCardStyle(isLightMode)}>
-                    <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-                      {group.title}
-                    </div>
+                <>
+                  {selectedBlock.type === "hero_banner" || selectedBlock.type === "herobanner" || selectedBlock.type === "hero" || selectedBlock.type === "banner" ? (
+                    <HeroSlidesEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : selectedBlock.type === "navbar" || selectedBlock.type === "header" || selectedBlockId === "navbar" || selectedBlockId === "header" ? (
+                    <NavbarEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : selectedBlock.type === "section_group_carousel" ||
+                    selectedBlock.type === "sectiongroupcarousel" ||
+                    selectedBlock.type === "category_story_carousel" ||
+                    selectedBlock.type === "category_carousel" ||
+                    selectedBlock.type === "section_carousel" ||
+                    selectedBlock.type === "story_carousel" ||
+                    selectedBlock.type === "category_grid" ||
+                    selectedBlock.type === "categorygrid" ? (
+                    <SectionGroupCarouselEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : selectedBlock.type === "product_grid" ||
+                    selectedBlock.type === "productgrid" ? (
+                    <ProductGridEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : selectedBlock.type === "product_carousel" ||
+                    selectedBlock.type === "productcarousel" ||
+                    selectedBlock.type === "products_carousel" ||
+                    selectedBlock.type === "featured_products" ||
+                    selectedBlock.type === "collection_products" ? (
+                    <ProductCarouselEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : selectedBlock.type === "footer" || selectedBlockId === "footer" ? (
+                    <FooterEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : selectedBlock.type === "cart" ||
+                    selectedBlock.type === "cart_view" ||
+                    selectedBlock.type === "cartview" ||
+                    selectedBlock.type === "cart_sidebar" ||
+                    selectedBlock.type === "cartsidebar" ||
+                    selectedBlock.type === "cart_items" ||
+                    selectedBlock.type === "cartitems" ? (
+                    <CartEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : isProductDetailBlock(selectedBlock) ||
+                    editableConfig?.displayName === "Product Detail" ? (
+                    <ProductDetailEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : isCheckoutStepsBlock(selectedBlock) ||
+                    selectedBlock.id === "checkout_steps" ||
+                    selectedBlock.type === "checkout_steps" ||
+                    selectedBlock.type === "checkoutsteps" ||
+                    selectedBlockId === "checkout_steps" ? (
+                    <CheckoutStepsEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : isCheckoutSummaryBlock(selectedBlock) ||
+                    selectedBlock.id === "checkout_order_summary" ||
+                    selectedBlock.type === "checkout_order_summary" ||
+                    selectedBlock.type === "checkoutordersummary" ||
+                    selectedBlock.id === "order_summary" ||
+                    selectedBlock.type === "order_summary" ||
+                    selectedBlock.id === "ordersummary" ||
+                    selectedBlock.type === "ordersummary" ||
+                    selectedBlock.id === "checkout_summary" ||
+                    selectedBlock.type === "checkout_summary" ||
+                    selectedBlockId === "checkout_order_summary" ||
+                    selectedBlockId === "order_summary" ||
+                    selectedBlockId === "ordersummary" ||
+                    selectedBlockId === "checkout_summary" ||
+                    (selectedBlockId && selectedBlockId.includes("summary")) ? (
+                    <CheckoutOrderSummaryEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : isDeliveryBlock(selectedBlock) ||
+                    editableConfig?.displayName === "Delivery Form" ||
+                    selectedBlock.type === "delivery_form" ||
+                    selectedBlock.type === "deliveryform" ||
+                    selectedBlock.type === "delivery_map_picker" ||
+                    selectedBlock.type === "delivery_address_form" ? (
+                    <DeliveryFormEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : isPaymentMethodsBlock(selectedBlock) ||
+                    selectedBlock.id === "payment_methods" ||
+                    selectedBlock.type === "payment_methods" ||
+                    selectedBlock.type === "paymentmethods" ||
+                    selectedBlockId === "payment_methods" ? (
+                    <PaymentMethodsEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : isPlaceOrderBlock(selectedBlock) ||
+                    selectedBlock.id === "place_order_cta" ||
+                    selectedBlock.type === "place_order_cta" ||
+                    selectedBlock.type === "placeordercta" ||
+                    selectedBlock.id === "checkout_review" ||
+                    selectedBlock.type === "checkout_review" ||
+                    selectedBlockId === "place_order_cta" ||
+                    selectedBlockId === "checkout_review" ? (
+                    <PlaceOrderEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : isProfileBlock(selectedBlock) ||
+                    selectedBlock.id === "profile_details" ||
+                    selectedBlock.type === "profile_details" ||
+                    selectedBlock.type === "profiledetails" ||
+                    selectedBlock.type === "profile" ||
+                    selectedBlockId === "profile_details" ||
+                    selectedBlockId === "profile" ? (
+                    <ProfileEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : isSignInBlock(selectedBlock) ||
+                    selectedBlock.id === "signin_form" ||
+                    selectedBlock.type === "signin_form" ||
+                    selectedBlock.type === "signinform" ||
+                    selectedBlock.type === "login_form" ||
+                    selectedBlock.type === "login" ||
+                    selectedBlockId === "signin_form" ||
+                    selectedBlockId === "login" ? (
+                    <SignInEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : isSignUpBlock(selectedBlock) ||
+                    selectedBlock.id === "signup_form" ||
+                    selectedBlock.type === "signup_form" ||
+                    selectedBlock.type === "signupform" ||
+                    selectedBlock.type === "register_form" ||
+                    selectedBlock.type === "signup" ||
+                    selectedBlockId === "signup_form" ||
+                    selectedBlockId === "signup" ? (
+                    <SignUpEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : isOrdersBlock(selectedBlock) ||
+                    selectedBlock.id === "customer_orders" ||
+                    selectedBlock.type === "customer_orders" ||
+                    selectedBlock.type === "customerorders" ||
+                    selectedBlock.type === "orders" ||
+                    selectedBlock.type === "order_history" ||
+                    selectedBlock.type === "order_history_list" ||
+                    selectedBlockId === "customer_orders" ||
+                    selectedBlockId === "orders" ? (
+                    <OrdersEditor
+                      selectedBlock={selectedBlock}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : isSupportBlock(selectedBlock) ||
+                    selectedBlock?.id === "customer_support" ||
+                    selectedBlock?.type === "customer_support" ||
+                    selectedBlock?.type === "customersupport" ||
+                    selectedBlock?.type === "support" ||
+                    selectedBlock?.type === "support_desk" ||
+                    selectedBlockId === "customer_support" ||
+                    selectedBlockId === "support" ? (
+                    <SupportEditor
+                      selectedBlock={selectedBlock || { id: "customer_support", type: "customer_support", props: {} }}
+                      isLightMode={isLightMode}
+                      textColor={textColor}
+                      accentColor={accentColor}
+                      onSiteDefinitionChange={onSiteDefinitionChange}
+                      siteDefinition={siteDefinition}
+                    />
+                  ) : (
+                    fieldGroups.map((group) => (
+                      <section key={group.title} style={sectionCardStyle(isLightMode)}>
+                        <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                          {group.title}
+                        </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
-                      {group.items.map((field) => {
-                        const isFullWidth =
-                          field.type !== "number" &&
-                          !field.key.includes("height") &&
-                          !field.key.includes("width") &&
-                          !field.key.includes("radius") &&
-                          !field.key.includes("padding") &&
-                          !field.key.includes("gap") &&
-                          !field.key.includes("columns");
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+                          {group.items.map((field) => {
+                            const isFullWidth =
+                              field.type !== "number" &&
+                              !field.key.includes("height") &&
+                              !field.key.includes("width") &&
+                              !field.key.includes("radius") &&
+                              !field.key.includes("padding") &&
+                              !field.key.includes("gap") &&
+                              !field.key.includes("columns");
 
-                        const currentValue =
-                          field.target === "theme"
-                            ? siteDefinition.theme?.[
+                            const currentValue =
+                              field.target === "theme"
+                                ? siteDefinition.theme?.[
                                 field.key as keyof typeof siteDefinition.theme
-                              ]
-                            : selectedBlock.props?.[field.key];
+                                ]
+                                : selectedBlock.props?.[field.key];
 
-                        return (
-                          <div
-                            key={field.key}
-                            style={{
-                              gridColumn: isFullWidth ? "1 / -1" : "span 1",
-                              display: "grid",
-                              gap: "2px",
-                              width: "100%",
-                              minWidth: 0,
-                              boxSizing: "border-box",
-                            }}
-                          >
-                            {field.type !== "checkbox" ? (
-                              <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                                {field.label}
-                              </label>
-                            ) : null}
+                            return (
+                              <div
+                                key={field.key}
+                                style={{
+                                  gridColumn: isFullWidth ? "1 / -1" : "span 1",
+                                  display: "grid",
+                                  gap: "2px",
+                                  width: "100%",
+                                  minWidth: 0,
+                                  boxSizing: "border-box",
+                                }}
+                              >
+                                {field.type !== "checkbox" ? (
+                                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                                    {field.label}
+                                  </label>
+                                ) : null}
 
-                            {renderFieldControl(
-                              field,
-                              currentValue,
-                              textColor,
-                              isLightMode,
-                              (value) => handleFieldChange(field, value)
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-                ))
+                                {renderFieldControl(
+                                  field,
+                                  currentValue,
+                                  textColor,
+                                  isLightMode,
+                                  (value) => handleFieldChange(field, value)
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ))
+                  )}
+                </>
               )}
-            </>
+            </div>
           )}
-        </div>
-      )}
         </div>
       </aside>
 

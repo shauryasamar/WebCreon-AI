@@ -146,21 +146,100 @@ function evictBulkyLocalStorageCaches() {
   } catch {}
 }
 
+function isSameTenant(tenantA?: string | null, tenantB?: string | null): boolean {
+  if (!tenantA || !tenantB) return false;
+  const a = tenantA.trim().toLowerCase();
+  const b = tenantB.trim().toLowerCase();
+  if (a === b) return true;
+  const baseA = a.split("-")[0];
+  const baseB = b.split("-")[0];
+  if (baseA && baseB && baseA === baseB) return true;
+  if (baseA && baseA === b) return true;
+  if (baseB && baseB === a) return true;
+  return false;
+}
+
 function getTenantToken(websiteName?: string): string | null {
-  if (typeof window === "undefined" || !websiteName) return null;
-  const clean = websiteName.trim().toLowerCase();
-  const base = clean.split("-")[0];
+  if (typeof window === "undefined") return null;
+  const clean = websiteName ? websiteName.trim().toLowerCase() : "";
+  const base = clean ? clean.split("-")[0] : "";
   try {
+    if (clean) {
+      const direct =
+        localStorage.getItem(`wc_customer_token_${clean}`) ||
+        localStorage.getItem(`wc_customer_token_${base}`) ||
+        sessionStorage.getItem(`wc_customer_token_${clean}`) ||
+        sessionStorage.getItem(`wc_customer_token_${base}`);
+      if (direct) return direct;
+
+      // Scan all stored keys for partial match or prefix match
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("wc_customer_token_")) {
+          const storedTenant = k.replace("wc_customer_token_", "").toLowerCase();
+          if (
+            storedTenant === clean ||
+            storedTenant === base ||
+            (base && storedTenant.split("-")[0] === base) ||
+            clean.startsWith(storedTenant) ||
+            storedTenant.startsWith(clean)
+          ) {
+            const val = localStorage.getItem(k);
+            if (val) return val;
+          }
+        }
+      }
+    }
+
     return (
-      localStorage.getItem(`wc_customer_token_${clean}`) ||
-      localStorage.getItem(`wc_customer_token_${base}`) ||
-      sessionStorage.getItem(`wc_customer_token_${clean}`) ||
-      sessionStorage.getItem(`wc_customer_token_${base}`) ||
+      localStorage.getItem("wc_customer_token") ||
+      sessionStorage.getItem("wc_customer_token") ||
       null
     );
   } catch {
     return null;
   }
+}
+
+function saveCustomerUserCache(userData: CustomerUser, websiteName?: string) {
+  if (typeof window === "undefined" || !userData) return;
+  try {
+    const serialized = JSON.stringify(userData);
+    const keys = new Set<string>();
+    if (websiteName) {
+      const clean = websiteName.trim().toLowerCase();
+      keys.add(clean);
+      keys.add(clean.split("-")[0]);
+    }
+    if (userData.siteId) keys.add(userData.siteId.trim().toLowerCase());
+    if (userData.siteSlug) {
+      const cleanSlug = userData.siteSlug.trim().toLowerCase();
+      keys.add(cleanSlug);
+      keys.add(cleanSlug.split("-")[0]);
+    }
+    keys.forEach((k) => {
+      if (k) localStorage.setItem(`wc_customer_user_${k}`, serialized);
+    });
+    localStorage.setItem("wc_customer_user", serialized);
+  } catch {}
+}
+
+function getCustomerUserCache(websiteName?: string): CustomerUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    if (websiteName) {
+      const clean = websiteName.trim().toLowerCase();
+      const base = clean.split("-")[0];
+      const raw =
+        localStorage.getItem(`wc_customer_user_${clean}`) ||
+        localStorage.getItem(`wc_customer_user_${base}`) ||
+        localStorage.getItem("wc_customer_user");
+      if (raw) return JSON.parse(raw);
+    }
+    const generic = localStorage.getItem("wc_customer_user");
+    if (generic) return JSON.parse(generic);
+  } catch {}
+  return null;
 }
 
 function setTenantToken(websiteName: string, token: string, siteId?: string, siteSlug?: string) {
@@ -197,11 +276,15 @@ function setTenantToken(websiteName: string, token: string, siteId?: string, sit
     }
   });
   try {
-    window.dispatchEvent(
-      new CustomEvent("wc_customer_auth_changed", {
-        detail: { token, siteId, websiteName, siteSlug },
-      })
-    );
+    const prevToken = localStorage.getItem("wc_customer_token");
+    if (prevToken !== token) {
+      localStorage.setItem("wc_customer_token", token);
+      window.dispatchEvent(
+        new CustomEvent("wc_customer_auth_changed", {
+          detail: { token, siteId, websiteName, siteSlug },
+        })
+      );
+    }
   } catch {}
 }
 
@@ -225,6 +308,7 @@ function clearTenantToken(websiteName?: string, siteId?: string, siteSlug?: stri
     if (k) {
       try {
         localStorage.removeItem(`wc_customer_token_${k}`);
+        localStorage.removeItem(`wc_customer_user_${k}`);
       } catch {}
       try {
         sessionStorage.removeItem(`wc_customer_token_${k}`);
@@ -235,6 +319,12 @@ function clearTenantToken(websiteName?: string, siteId?: string, siteSlug?: stri
       } catch {}
     }
   });
+  if (!websiteName && !siteId && !siteSlug) {
+    try {
+      localStorage.removeItem("wc_customer_token");
+      localStorage.removeItem("wc_customer_user");
+    } catch {}
+  }
   try {
     window.dispatchEvent(
       new CustomEvent("wc_customer_auth_changed", {
@@ -244,8 +334,36 @@ function clearTenantToken(websiteName?: string, siteId?: string, siteSlug?: stri
   } catch {}
 }
 
+// Global deduplication and rate-limiting maps to prevent duplicate concurrent /me requests
+const inFlightMe = new Map<string, Promise<CustomerUser | null>>();
+const lastMeChecked = new Map<string, number>();
+
 export function CustomerAuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<CustomerUser | null>(null);
+  const [user, setUser] = useState<CustomerUser | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const path = window.location.pathname;
+      const parts = path.split("/");
+      const tenant = (parts[1] === "store" || parts[1] === "builder") ? parts[2] : null;
+      if (tenant) {
+        const clean = tenant.trim().toLowerCase();
+        const base = clean.split("-")[0];
+        const cached =
+          localStorage.getItem(`wc_customer_user_${clean}`) ||
+          localStorage.getItem(`wc_customer_user_${base}`) ||
+          localStorage.getItem("wc_customer_user");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && (isSameTenant(parsed.siteSlug, tenant) || isSameTenant(parsed.siteId, tenant))) {
+            return parsed;
+          }
+        }
+      }
+      const generic = localStorage.getItem("wc_customer_user");
+      if (generic) return JSON.parse(generic);
+    } catch {}
+    return null;
+  });
   const [loading, setLoading] = useState(false);
 
   const clearUser = useCallback((targetTenant?: string) => {
@@ -256,12 +374,9 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     const cleanTarget = targetTenant.trim().toLowerCase();
     setUser((prev) => {
       if (prev) {
-        const prevSlug = (prev.siteSlug || "").trim().toLowerCase();
-        const prevId = (prev.siteId || "").trim().toLowerCase();
         if (
-          prevSlug === cleanTarget ||
-          prevId === cleanTarget ||
-          prevSlug.split("-")[0] === cleanTarget
+          isSameTenant(prev.siteSlug, cleanTarget) ||
+          isSameTenant(prev.siteId, cleanTarget)
         ) {
           return null;
         }
@@ -277,16 +392,30 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
-    // Clear in-memory user only if switching away to another tenant
     const cleanTarget = websiteName.trim().toLowerCase();
+
+    // Deduplicate in-flight requests for the exact same store
+    if (inFlightMe.has(cleanTarget)) {
+      return inFlightMe.get(cleanTarget)!;
+    }
+
+    // 30-second rate-limit guard: if already fetched recently, return cached customer profile
+    const now = Date.now();
+    const lastTime = lastMeChecked.get(cleanTarget) || 0;
+    if (now - lastTime < 30000) {
+      const cached = getCustomerUserCache(websiteName);
+      if (cached && (isSameTenant(cached.siteSlug, cleanTarget) || isSameTenant(cached.siteId, cleanTarget))) {
+        setUser(cached);
+        return cached;
+      }
+    }
+
+    // Clear in-memory user only if switching away to an entirely DIFFERENT store
     setUser((prev) => {
       if (prev) {
-        const prevSlug = (prev.siteSlug || "").trim().toLowerCase();
-        const prevId = (prev.siteId || "").trim().toLowerCase();
         if (
-          prevSlug !== cleanTarget &&
-          prevId !== cleanTarget &&
-          prevSlug.split("-")[0] !== cleanTarget
+          !isSameTenant(prev.siteSlug, cleanTarget) &&
+          !isSameTenant(prev.siteId, cleanTarget)
         ) {
           return null;
         }
@@ -295,69 +424,74 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     });
 
     const token = getTenantToken(websiteName);
-    const hasCustomerCookie = typeof document !== "undefined" && document.cookie.includes("customer_token");
-    if (!token && !hasCustomerCookie) {
-      setUser(null);
+    if (!token) {
+      // If no token found for this store, preserve in-memory user if already authenticated for it
+      setUser((prev) => {
+        if (prev && (isSameTenant(prev.siteSlug, cleanTarget) || isSameTenant(prev.siteId, cleanTarget))) {
+          return prev;
+        }
+        return null;
+      });
       setLoading(false);
       return null;
     }
 
-    setLoading(true);
-
-    try {
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-        headers["X-Customer-Token"] = token;
-      }
-      headers["X-Site-Id"] = websiteName;
-
-      const response = await fetch(
-        `${API_BASE_URL}/auth/customer/me/${websiteName}`,
-        {
-          method: "GET",
-          headers,
-          credentials: "include",
+    const fetchPromise = (async (): Promise<CustomerUser | null> => {
+      setLoading(true);
+      try {
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+          headers["X-Customer-Token"] = token;
         }
-      );
+        headers["X-Site-Id"] = websiteName;
 
-      if (response.status === 401 || response.status === 403) {
-        clearTenantToken(websiteName);
-        setUser((prev) => {
-          if (prev) {
-            const prevSlug = (prev.siteSlug || "").trim().toLowerCase();
-            const prevId = (prev.siteId || "").trim().toLowerCase();
-            if (
-              prevSlug === cleanTarget ||
-              prevId === cleanTarget ||
-              prevSlug.split("-")[0] === cleanTarget
-            ) {
+        const response = await fetch(
+          `${API_BASE_URL}/auth/customer/me/${websiteName}`,
+          {
+            method: "GET",
+            headers,
+            credentials: "include",
+          }
+        );
+
+        if (response.status === 401) {
+          clearTenantToken(websiteName);
+          setUser((prev) => {
+            if (prev && (isSameTenant(prev.siteSlug, cleanTarget) || isSameTenant(prev.siteId, cleanTarget))) {
               return null;
             }
-          }
-          return prev;
-        });
+            return prev;
+          });
+          return null;
+        }
+
+        if (response.status === 403) {
+          console.warn(`Customer /me returned 403 for ${websiteName}; preserving local customer state.`);
+          return null;
+        }
+
+        const data = await parseJsonSafely(response);
+
+        if (!response.ok || !data?.user) {
+          return null;
+        }
+
+        lastMeChecked.set(cleanTarget, Date.now());
+        saveCustomerUserCache(data.user, websiteName);
+
+        setUser(data.user);
+        return data.user as CustomerUser;
+      } catch {
         return null;
+      } finally {
+        setLoading(false);
+        inFlightMe.delete(cleanTarget);
       }
+    })();
 
-      const data = await parseJsonSafely(response);
-
-      if (!response.ok || !data?.user) {
-        setUser(null);
-        return null;
-      }
-
-      if (data?.token) {
-        setTenantToken(websiteName, data.token, data.user?.siteId, data.user?.siteSlug);
-      }
-
-      setUser(data.user);
-      return data.user as CustomerUser;
-    } catch {
-      return null;
-    } finally {
-      setLoading(false);
-    }
+    inFlightMe.set(cleanTarget, fetchPromise);
+    return fetchPromise;
   }, []);
 
   const signup = useCallback(
@@ -384,9 +518,10 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (data?.token) {
-          setTenantToken(websiteName, data.token);
-          if (data.user?.siteSlug) setTenantToken(data.user.siteSlug, data.token);
-          if (data.user?.siteId) setTenantToken(data.user.siteId, data.token);
+          setTenantToken(websiteName, data.token, data.user?.siteId, data.user?.siteSlug);
+        }
+        if (data?.user) {
+          saveCustomerUserCache(data.user, websiteName);
         }
 
         setUser(data.user);
@@ -422,9 +557,10 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (data?.token) {
-          setTenantToken(websiteName, data.token);
-          if (data.user?.siteSlug) setTenantToken(data.user.siteSlug, data.token);
-          if (data.user?.siteId) setTenantToken(data.user.siteId, data.token);
+          setTenantToken(websiteName, data.token, data.user?.siteId, data.user?.siteSlug);
+        }
+        if (data?.user) {
+          saveCustomerUserCache(data.user, websiteName);
         }
 
         setUser(data.user);
@@ -460,9 +596,10 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (data?.token) {
-          setTenantToken(websiteName, data.token);
-          if (data.user?.siteSlug) setTenantToken(data.user.siteSlug, data.token);
-          if (data.user?.siteId) setTenantToken(data.user.siteId, data.token);
+          setTenantToken(websiteName, data.token, data.user?.siteId, data.user?.siteSlug);
+        }
+        if (data?.user) {
+          saveCustomerUserCache(data.user, websiteName);
         }
 
         setUser(data.user);
@@ -540,9 +677,10 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (data?.token) {
-          setTenantToken(websiteName, data.token);
-          if (data.user?.siteSlug) setTenantToken(data.user.siteSlug, data.token);
-          if (data.user?.siteId) setTenantToken(data.user.siteId, data.token);
+          setTenantToken(websiteName, data.token, data.user?.siteId, data.user?.siteSlug);
+        }
+        if (data?.user) {
+          saveCustomerUserCache(data.user, websiteName);
         }
 
         setUser(data.user);
@@ -586,7 +724,10 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
           );
         }
 
-        setUser(data.user);
+        if (data?.user) {
+          saveCustomerUserCache(data.user, websiteName);
+          setUser(data.user);
+        }
         return data.user as CustomerUser;
       } finally {
         setLoading(false);
@@ -628,6 +769,7 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (data?.user) {
+          saveCustomerUserCache(data.user, websiteName);
           setUser(data.user);
         }
 
@@ -649,15 +791,11 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
         headers: target ? { "X-Site-Id": target } : {},
         credentials: "include",
       });
-      if (target) clearTenantToken(target);
-      if (user?.siteSlug) clearTenantToken(user.siteSlug);
-      if (user?.siteId) clearTenantToken(user.siteId);
+      clearTenantToken(target, user?.siteId, user?.siteSlug);
       setUser(null);
     } catch (error) {
       console.error("Error logging out customer:", error);
-      if (target) clearTenantToken(target);
-      if (user?.siteSlug) clearTenantToken(user.siteSlug);
-      if (user?.siteId) clearTenantToken(user.siteId);
+      clearTenantToken(target, user?.siteId, user?.siteSlug);
       setUser(null);
     } finally {
       setLoading(false);
@@ -685,15 +823,11 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       if (!response.ok) {
         throw new Error(getErrorMessage(data, "Failed to delete account."));
       }
-      if (target) clearTenantToken(target);
-      if (user?.siteSlug) clearTenantToken(user.siteSlug);
-      if (user?.siteId) clearTenantToken(user.siteId);
+      clearTenantToken(target, user?.siteId, user?.siteSlug);
       setUser(null);
     } catch (error) {
       console.error("Error deleting customer account:", error);
-      if (target) clearTenantToken(target);
-      if (user?.siteSlug) clearTenantToken(user.siteSlug);
-      if (user?.siteId) clearTenantToken(user.siteId);
+      clearTenantToken(target, user?.siteId, user?.siteSlug);
       setUser(null);
       throw error;
     } finally {
@@ -703,63 +837,22 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
 
   // Sync customer authentication across tabs automatically
   useEffect(() => {
-    // Snapshot the token at the time we last checked so we can detect real changes on focus.
-    let lastSeenToken: string | null = null;
-
-    const getCurrentTenant = (): string | null => {
-      const path = window.location.pathname;
-      if (user?.siteSlug) return user.siteSlug;
-      if (user?.siteId) return user.siteId;
-      if (path.startsWith("/builder/")) {
-        const parts = path.split("/");
-        return parts[2] || null;
-      }
-      if (path.startsWith("/store/")) {
-        const parts = path.split("/");
-        return parts[2] || null;
-      }
-      return null;
-    };
-
-    // Initialize snapshot
-    const initTenant = getCurrentTenant();
-    if (initTenant) lastSeenToken = getTenantToken(initTenant);
-
     const handleStorage = (event: StorageEvent) => {
       if (event.key && event.key.startsWith("wc_customer_token_")) {
         const tenantKey = event.key.replace("wc_customer_token_", "");
-        lastSeenToken = event.newValue;
         if (event.newValue) {
           refreshMe(tenantKey);
         } else {
-          clearUser(tenantKey);
-        }
-      }
-    };
-
-    const handleFocus = () => {
-      // Only re-validate if the token in localStorage has actually changed
-      // since we last checked — avoids unnecessary /me calls on every focus.
-      const tenant = getCurrentTenant();
-      if (!tenant) return;
-      const currentToken = getTenantToken(tenant);
-      if (currentToken !== lastSeenToken) {
-        lastSeenToken = currentToken;
-        if (currentToken) {
-          refreshMe(tenant);
-        } else {
-          clearUser(tenant);
+          setUser(null);
         }
       }
     };
 
     window.addEventListener("storage", handleStorage);
-    window.addEventListener("focus", handleFocus);
     return () => {
       window.removeEventListener("storage", handleStorage);
-      window.removeEventListener("focus", handleFocus);
     };
-  }, [user?.siteSlug, user?.siteId, refreshMe, clearUser]);
+  }, []);
 
   const value = useMemo(
     () => ({

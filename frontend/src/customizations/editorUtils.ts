@@ -167,6 +167,8 @@ const DEFAULT_LIGHT_THEME: Partial<ThemeValues> = {
   text_color: "#0f172a",
   muted_text_color: "rgba(15,23,42,0.65)",
   accent_color: "#2563eb",
+  accent_text_color: "#ffffff",
+  border_color: "rgba(15,23,42,0.08)",
   navbar_bg: "#ffffff",
   navbar_outer_bg: "#ffffff",
   navbar_text_color: "#0f172a",
@@ -244,6 +246,8 @@ const DEFAULT_DARK_THEME: Partial<ThemeValues> = {
   text_color: "#f8fafc",
   muted_text_color: "rgba(248, 250, 252, 0.72)",
   accent_color: "#3b82f6",
+  accent_text_color: "#ffffff",
+  border_color: "rgba(255, 255, 255, 0.1)",
   navbar_bg: "#121316",
   navbar_outer_bg: "#121316",
   navbar_text_color: "#f8fafc",
@@ -2514,6 +2518,15 @@ export function updateBlockProps(
   const isGlobalThemeChange = isGlobalPatch || Boolean(
     (nextPatch.primary_bg && nextPatch.accent_color) ||
     (nextPatch.primary_bg && nextPatch.card_bg) ||
+    nextPatch.accent_color !== undefined ||
+    nextPatch.accent_text_color !== undefined ||
+    nextPatch.primary_bg !== undefined ||
+    nextPatch.card_bg !== undefined ||
+    nextPatch.secondary_bg !== undefined ||
+    nextPatch.text_color !== undefined ||
+    nextPatch.muted_text_color !== undefined ||
+    nextPatch.border_color !== undefined ||
+    nextPatch.card_border_color !== undefined ||
     nextPatch.visual_style ||
     nextPatch.palette_id ||
     nextPatch.id
@@ -2530,6 +2543,7 @@ export function updateBlockProps(
     const textColor = nextPatch.text_color || siteDefinition.theme?.text_color || baseDefaults.text_color;
     const mutedText = nextPatch.muted_text_color || nextPatch.muted_text || siteDefinition.theme?.muted_text_color || baseDefaults.muted_text_color;
     const accentColor = nextPatch.accent_color || siteDefinition.theme?.accent_color || baseDefaults.accent_color;
+    const accentTextColor = nextPatch.accent_text_color || siteDefinition.theme?.accent_text_color || (isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a");
     const defaultNeutralBorder = isDark ? "rgba(255, 255, 255, 0.12)" : "#e2e8f0";
     const borderColor = nextPatch.card_border_color || nextPatch.border_color || siteDefinition.theme?.card_border_color || siteDefinition.theme?.border_color || defaultNeutralBorder;
     const navbarBorder = nextPatch.navbar_border_color || borderColor;
@@ -2554,7 +2568,7 @@ export function updateBlockProps(
       product_detail_bg: cardBg,
       product_detail_text: textColor,
       product_detail_btn_bg: accentColor,
-      product_detail_btn_text: "#ffffff",
+      product_detail_btn_text: accentTextColor,
       badge_bg_color: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)",
       badge_border_color: isDark ? "rgba(59,130,246,0.3)" : "rgba(37,99,235,0.2)",
       product_detail_badge_bg: isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)",
@@ -2566,7 +2580,7 @@ export function updateBlockProps(
       delivery_form_input_border: borderColor,
       form_border_color: borderColor,
       delivery_form_btn_bg: accentColor,
-      delivery_form_btn_text: "#ffffff",
+      delivery_form_btn_text: accentTextColor,
       delivery_form_input_bg: primaryBg,
       delivery_form_input_text: textColor,
       payment_bg: cardBg,
@@ -2577,7 +2591,7 @@ export function updateBlockProps(
       place_order_bg: cardBg,
       place_order_card_bg: cardBg,
       place_order_btn_bg: accentColor,
-      place_order_btn_text: "#ffffff",
+      place_order_btn_text: accentTextColor,
       place_order_text: textColor,
       place_order_border: borderColor,
       checkout_steps_bg: cardBg,
@@ -2606,6 +2620,8 @@ export function updateBlockProps(
       card_text_color: textColor,
       product_name_color: textColor,
       card_border_color: borderColor,
+      border_color: borderColor,
+      accent_text_color: accentTextColor,
       brand_color: accentColor,
       price_color: getSafePriceColor(undefined, textColor, isDark, cardBg),
     };

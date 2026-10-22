@@ -14,7 +14,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import cast, String
 from sqlmodel import Session, delete, func, or_, select
 
-from auth_middleware import authenticate_admin, authenticate_customer, check_admin_has_permission, enforce_site_ownership
+from auth_middleware import authenticate_admin, authenticate_customer, check_admin_has_permission, enforce_site_ownership, resolve_site_by_slug_or_404
 from db.database import get_session
 from routers.audit_logs import log_activity
 
@@ -3090,10 +3090,8 @@ def _resolve_site_uuid(site_id_or_slug: str, session: Session) -> UUID:
     try:
         return UUID(str(site_id_or_slug))
     except (ValueError, TypeError):
-        site = session.exec(select(Site).where(Site.slug == str(site_id_or_slug))).first()
-        if site:
-            return site.id
-        raise HTTPException(status_code=404, detail="Store not found")
+        site = resolve_site_by_slug_or_404(str(site_id_or_slug), session)
+        return site.id
 
 
 @router.get("/{site_id}/my-orders")

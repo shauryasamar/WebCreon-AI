@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
-import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminAuth, getAdminAuthHeaders } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
 import { GlassToast } from "./GlassToast";
 import { AccessDeniedView } from "./AccessDeniedView";
@@ -231,12 +231,13 @@ export default function AdminUsersAndRoles({ siteId: propSiteId }: { siteId?: st
       if (!isSilent) setLoading(true);
       const userUrl = `${API_BASE_URL}/users-roles/users`;
 
+      const authHeaders = getAdminAuthHeaders();
       const [usersRes, rolesRes, catalogRes, sitesRes, billingRes] = await Promise.all([
-        fetch(userUrl, { credentials: "include" }),
-        fetch(`${API_BASE_URL}/users-roles/roles`, { credentials: "include" }),
-        fetch(`${API_BASE_URL}/users-roles/permissions-catalog`, { credentials: "include" }),
-        fetch(`${API_BASE_URL}/auth/admin/sites`, { credentials: "include" }).catch(() => null),
-        fetch(`${API_BASE_URL}/api/billing/websites`, { credentials: "include" }).catch(() => null),
+        fetch(userUrl, { headers: authHeaders, credentials: "include" }),
+        fetch(`${API_BASE_URL}/users-roles/roles`, { headers: authHeaders, credentials: "include" }),
+        fetch(`${API_BASE_URL}/users-roles/permissions-catalog`, { headers: authHeaders, credentials: "include" }),
+        fetch(`${API_BASE_URL}/auth/admin/sites`, { headers: authHeaders, credentials: "include" }).catch(() => null),
+        fetch(`${API_BASE_URL}/api/billing/websites`, { headers: authHeaders, credentials: "include" }).catch(() => null),
       ]);
 
       let loadedUsers = usersAndRolesMemoryCache?.users || [];

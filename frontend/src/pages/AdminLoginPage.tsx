@@ -1,7 +1,7 @@
 import React, { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
-import { useAdminAuth } from "../context/AdminAuthContext";
+import { useAdminAuth, setAdminToken } from "../context/AdminAuthContext";
 import { useAdminTheme } from "../context/ThemeContext";
 import WebCreonAnimatedLogo from "../Component/WebCreonAnimatedLogo";
 import AdminThemeToggle from "../Component/AdminThemeToggle";
@@ -15,7 +15,7 @@ export default function AdminLoginPage() {
   const location = useLocation();
   const state = (location.state || {}) as LocationState;
   const redirectTarget = state.from || "/admin/sites";
-  const { refreshAdmin } = useAdminAuth();
+  const { refreshAdmin, setAdmin } = useAdminAuth();
   const { isDark, tokens } = useAdminTheme();
 
   const [email, setEmail] = useState("");
@@ -48,6 +48,13 @@ export default function AdminLoginPage() {
       if (!response.ok) {
         setError(data?.detail || "Google authentication failed");
         return;
+      }
+
+      if (data?.token) {
+        setAdminToken(data.token);
+      }
+      if (data?.admin) {
+        setAdmin(data.admin, data.token);
       }
 
       const authedUser = await refreshAdmin();
@@ -157,6 +164,13 @@ export default function AdminLoginPage() {
       if (!response.ok) {
         setError(data?.detail || "Invalid email or password");
         return;
+      }
+
+      if (data?.token) {
+        setAdminToken(data.token);
+      }
+      if (data?.admin) {
+        setAdmin(data.admin, data.token);
       }
 
       const authedUser = await refreshAdmin();

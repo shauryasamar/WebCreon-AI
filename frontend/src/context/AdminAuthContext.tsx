@@ -30,7 +30,7 @@ type AdminAuthContextType = {
   loading: boolean;
   isOwner: boolean;
   hasPermission: (permissionKey: string) => boolean;
-  setAdmin: (admin: AdminUser | null) => void;
+  setAdmin: (admin: AdminUser | null, token?: string | null) => void;
   refreshAdmin: () => Promise<AdminUser | null>;
   logoutAdmin: () => Promise<void>;
   deleteAdminAccount: () => Promise<void>;
@@ -38,7 +38,44 @@ type AdminAuthContextType = {
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
-const ADMIN_STORAGE_KEY = "wc_admin_profile";
+export const ADMIN_STORAGE_KEY = "wc_admin_profile";
+export const ADMIN_TOKEN_KEY = "wc_admin_token";
+
+export function getAdminToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return (
+      localStorage.getItem(ADMIN_TOKEN_KEY) ||
+      sessionStorage.getItem(ADMIN_TOKEN_KEY) ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function setAdminToken(token: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (token) {
+      localStorage.setItem(ADMIN_TOKEN_KEY, token);
+      sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
+      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    }
+  } catch {}
+}
+
+export function getAdminAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
+  const token = getAdminToken();
+  const headers: Record<string, string> = { ...extraHeaders };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    headers["X-Admin-Token"] = token;
+  }
+  return headers;
+}
 
 function getCachedAdmin(): AdminUser | null {
   if (typeof window === "undefined") return null;
@@ -57,12 +94,15 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [admin, setAdminState] = useState<AdminUser | null>(getCachedAdmin);
   const [loading, setLoading] = useState<boolean>(() => !getCachedAdmin());
 
-  const setAdmin = useCallback((next: AdminUser | null) => {
+  const setAdmin = useCallback((next: AdminUser | null, token?: string | null) => {
     setAdminState(next);
     try {
       if (typeof window !== "undefined") {
         if (next) {
           localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(next));
+          if (token !== undefined) {
+            setAdminToken(token);
+          }
           if (next.themePreference && (next.themePreference === "light" || next.themePreference === "dark" || next.themePreference === "system")) {
             const currentSaved = localStorage.getItem("app_theme_mode");
             if (currentSaved !== next.themePreference) {
@@ -73,6 +113,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           }
         } else {
           localStorage.removeItem(ADMIN_STORAGE_KEY);
+          setAdminToken(null);
         }
       }
     } catch {}
@@ -80,20 +121,32 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const refreshAdmin = useCallback(async (): Promise<AdminUser | null> => {
     try {
+      const headers = getAdminAuthHeaders();
       const response = await fetch(`${API_BASE_URL}/auth/admin/me`, {
+        headers,
         credentials: "include",
       });
       if (response.ok) {
         const data = await response.json();
         if (data && data.admin) {
-          setAdmin(data.admin);
+          if (data.token) {
+            setAdminToken(data.token);
+          }
+          setAdmin(data.admin, data.token || undefined);
           return data.admin;
         }
       }
-      setAdmin(null);
-      return null;
+      if (response.status === 401 || response.status === 403) {
+        setAdmin(null);
+        return null;
+      }
+      // If server returned 5xx or unexpected status, keep cached session if available
+      return getCachedAdmin();
     } catch (err) {
       console.error("Failed to fetch admin profile", err);
+      // Network failure or temporary glitch: retain cached profile if available
+      const cached = getCachedAdmin();
+      if (cached) return cached;
       setAdmin(null);
       return null;
     } finally {
@@ -103,8 +156,10 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const logoutAdmin = useCallback(async () => {
     try {
+      const headers = getAdminAuthHeaders();
       await fetch(`${API_BASE_URL}/auth/admin/logout`, {
         method: "POST",
+        headers,
         credentials: "include",
       });
     } catch (err) {
@@ -112,11 +167,15 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       try {
         if (typeof window !== "undefined") {
+          setAdminToken(null);
           Object.keys(sessionStorage).forEach((key) => {
             if (
               key.startsWith("webnirmaan_copilot_chat_") ||
               key.startsWith("webnirmaan_onboarding_") ||
-              key.startsWith("wc_onboarding_")
+              key.startsWith("wc_onboarding_") ||
+              key.startsWith("wc_undo_stack_") ||
+              key.startsWith("wc_redo_stack_") ||
+              key.startsWith("wc_client_draft_")
             ) {
               sessionStorage.removeItem(key);
             }
@@ -191,8 +250,10 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   );
 
   const deleteAdminAccount = useCallback(async () => {
+    const headers = getAdminAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/auth/admin/account`, {
       method: "DELETE",
+      headers,
       credentials: "include",
     });
     if (!response.ok) {
@@ -203,6 +264,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // Only clear local session and auth state on successful deletion
     try {
       if (typeof window !== "undefined") {
+        setAdminToken(null);
         Object.keys(sessionStorage).forEach((key) => {
           if (
             key.startsWith("webnirmaan_copilot_chat_") ||
