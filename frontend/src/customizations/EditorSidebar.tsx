@@ -1709,8 +1709,8 @@ function renderFieldControl(
           gap: "6px",
           padding: "3px 6px",
           borderRadius: "4px",
-          border: `1px solid ${isDark ? (isChecked ? "rgba(59,130,246,0.3)" : "rgba(255,255,255,0.08)") : "#e2e8f0"}`,
-          background: isDark ? (isChecked ? "rgba(59,130,246,0.12)" : "#242429") : (isChecked ? "rgba(37,99,235,0.04)" : "#ffffff"),
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}`,
+          background: isDark ? "#242429" : "#ffffff",
           cursor: "pointer",
           userSelect: "none",
           transition: "all 0.12s ease",
@@ -1718,7 +1718,7 @@ function renderFieldControl(
           width: "100%",
         }}
       >
-        <span style={{ fontSize: "10.5px", fontWeight: 500, color: isChecked ? (isDark ? "#ffffff" : "#0f172a") : (isDark ? "#a1a1aa" : "#475569") }}>
+        <span style={{ fontSize: "10.5px", fontWeight: 500, color: isDark ? "#ffffff" : "#0f172a" }}>
           {field.label}
         </span>
         <div
@@ -1727,7 +1727,7 @@ function renderFieldControl(
             width: "24px",
             height: "14px",
             borderRadius: "999px",
-            background: isChecked ? (isDark ? "#3b82f6" : "#2563eb") : (isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"),
+            background: isChecked ? "#10b981" : (isDark ? "rgba(255,255,255,0.18)" : "#cbd5e1"),
             transition: "background 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
             flexShrink: 0,
           }}
@@ -2640,8 +2640,10 @@ function HeroSlidesEditor({
                   fontWeight: 700,
                   padding: "1px 5px",
                   borderRadius: "3px",
-                  background: autoPlay ? (isDark ? "rgba(59,130,246,0.18)" : "rgba(37,99,235,0.08)") : (isDark ? "rgba(255,255,255,0.06)" : "rgba(100,116,139,0.08)"),
-                  color: autoPlay ? tokens.accent : tokens.textMuted,
+                  background: autoPlay
+                    ? (isDark ? "rgba(16,185,129,0.15)" : "rgba(16,185,129,0.1)")
+                    : (isDark ? "rgba(255,255,255,0.06)" : "rgba(100,116,139,0.08)"),
+                  color: autoPlay ? "#10b981" : tokens.textMuted,
                   fontVariantNumeric: "tabular-nums",
                   flexShrink: 0,
                   lineHeight: 1.2,
@@ -2661,8 +2663,8 @@ function HeroSlidesEditor({
                 padding: "0 8px",
                 height: "26px",
                 borderRadius: "4px",
-                border: `1px solid ${isDark ? (autoPlay ? "rgba(59,130,246,0.3)" : tokens.border) : "#cbd5e1"}`,
-                background: isDark ? (autoPlay ? "rgba(59,130,246,0.12)" : tokens.elevatedSurfaceBg) : (autoPlay ? "rgba(37,99,235,0.04)" : "#ffffff"),
+                border: `1px solid ${isDark ? tokens.border : "#cbd5e1"}`,
+                background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
                 cursor: "pointer",
                 userSelect: "none",
                 transition: "all 0.12s ease",
@@ -2679,7 +2681,7 @@ function HeroSlidesEditor({
                   width: "22px",
                   height: "13px",
                   borderRadius: "999px",
-                  background: autoPlay ? tokens.accent : (isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"),
+                  background: autoPlay ? "#10b981" : (isDark ? "rgba(255,255,255,0.18)" : "#cbd5e1"),
                   transition: "background 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
                   flexShrink: 0,
                 }}
@@ -3734,6 +3736,94 @@ function HeroSlidesEditor({
   );
 }
 
+const IconCardPortrait = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <rect x="4.5" y="2" width="7" height="12" rx="1.5" />
+  </svg>
+);
+
+const IconCardSquare = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" />
+  </svg>
+);
+
+const IconCardWide = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <rect x="2" y="4.5" width="12" height="7" rx="1.5" />
+  </svg>
+);
+
+const IconCardCircle = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <circle cx="8" cy="8" r="5.75" />
+  </svg>
+);
+
+const IconCardPill = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <rect x="2" y="4.5" width="12" height="7" rx="3.5" />
+  </svg>
+);
+
+const IconModeCarousel = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <rect x="4.25" y="2" width="7.5" height="12" rx="1.5" />
+    <path d="M1.5 4.5v7M14.5 4.5v7" strokeLinecap="round" opacity="0.45" />
+  </svg>
+);
+
+const IconModeGrid = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <rect x="2.5" y="2.5" width="4.75" height="4.75" rx="1" />
+    <rect x="8.75" y="2.5" width="4.75" height="4.75" rx="1" />
+    <rect x="2.5" y="8.75" width="4.75" height="4.75" rx="1" />
+    <rect x="8.75" y="8.75" width="4.75" height="4.75" rx="1" />
+  </svg>
+);
+
+const IconTextPosBottom = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+    <line x1="5" y1="10.5" x2="11" y2="10.5" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const IconTextPosTop = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+    <line x1="5" y1="5.5" x2="11" y2="5.5" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const IconTextPosCenter = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+    <line x1="5" y1="8" x2="11" y2="8" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const IconTextPosBelow = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <rect x="3" y="2" width="10" height="7.5" rx="1.5" />
+    <line x1="4.5" y1="12.5" x2="11.5" y2="12.5" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const IconCaseNormal = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2.5 12L5.5 4L8.5 12M3.5 9.5H7.5" />
+    <path d="M10.5 7.5A2.2 2.2 0 0 1 12.8 9.7V12M12.8 9.8A1.8 1.8 0 1 1 10.5 11" />
+  </svg>
+);
+
+const IconCaseUppercase = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 12L5 4L8 12M3 9.5H7" />
+    <path d="M8.5 12L11.5 4L14.5 12M9.5 9.5H13.5" />
+  </svg>
+);
+
 function SectionGroupCarouselEditor({
   selectedBlock,
   isLightMode,
@@ -3751,7 +3841,7 @@ function SectionGroupCarouselEditor({
 }) {
   const { isDark, tokens } = useAdminTheme();
   const currentProps = selectedBlock.props ?? {};
-  const [activeTab, setActiveTab] = useState<"layout" | "styling">("layout");
+  const [activeTab, setActiveTab] = useState<"layout" | "styling" | "colors">("layout");
 
   const updateProps = (patch: Record<string, any>) => {
     const nextDef = JSON.parse(JSON.stringify(siteDefinition));
@@ -3826,12 +3916,25 @@ function SectionGroupCarouselEditor({
   const parsedSubtitleSize = parseInt(String(currentProps.subtitle_font_size || "13"), 10) || 13;
   const parsedCardTitleSize = parseInt(String(currentProps.card_title_size || "15"), 10) || 15;
 
+  const hasSectionTitle = Boolean(
+    (currentProps.show_title !== false) &&
+    currentProps.title &&
+    String(currentProps.title).trim().length > 0
+  );
+
+  const hasSectionSubtitle = Boolean(
+    (currentProps.show_subtitle !== false) &&
+    currentProps.subtitle &&
+    String(currentProps.subtitle).trim().length > 0
+  );
+
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       <EditorSubTabs
         tabs={[
           { id: "layout", label: "Layout" },
           { id: "styling", label: "Styles" },
+          { id: "colors", label: "Colors" },
         ]}
         activeTab={activeTab}
         onChange={(val) => setActiveTab(val as any)}
@@ -3855,11 +3958,11 @@ function SectionGroupCarouselEditor({
                   value={cardShape}
                   onChange={handleShapePresetChange}
                   options={[
-                    { label: "Portrait", value: "portrait" },
-                    { label: "Square", value: "square" },
-                    { label: "Wide", value: "horizontal" },
-                    { label: "Circle", value: "circle" },
-                    { label: "Pill", value: "pill" },
+                    { label: "", value: "portrait", title: "Portrait", icon: <IconCardPortrait /> },
+                    { label: "", value: "square", title: "Square", icon: <IconCardSquare /> },
+                    { label: "", value: "horizontal", title: "Wide", icon: <IconCardWide /> },
+                    { label: "", value: "circle", title: "Circle", icon: <IconCardCircle /> },
+                    { label: "", value: "pill", title: "Pill", icon: <IconCardPill /> },
                   ]}
                 />
               </div>
@@ -3894,24 +3997,8 @@ function SectionGroupCarouselEditor({
                   value={layout}
                   onChange={(val) => updateProps({ layout: val })}
                   options={[
-                    { label: "Carousel", value: "carousel" },
-                    { label: "Grid", value: "grid" },
-                  ]}
-                />
-              </div>
-
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                  Card Text Placement
-                </label>
-                <SegmentedRow
-                  value={currentProps.card_text_position || "bottom_overlay"}
-                  onChange={(val) => updateProps({ card_text_position: val })}
-                  options={[
-                    { label: "Bottom", value: "bottom_overlay" },
-                    { label: "Top", value: "top_overlay" },
-                    { label: "Center", value: "center_overlay" },
-                    { label: "Below", value: "below_card" },
+                    { label: "Carousel", value: "carousel", icon: <IconModeCarousel /> },
+                    { label: "Grid", value: "grid", icon: <IconModeGrid /> },
                   ]}
                 />
               </div>
@@ -3997,82 +4084,92 @@ function SectionGroupCarouselEditor({
       {activeTab === "styling" && (
         <div style={{ display: "grid", gap: "8px" }}>
           {/* Header Typography */}
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Header Typography & Alignment
-            </div>
-
-            <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                  Title Alignment
-                </label>
-                <SegmentedRow
-                  value={currentProps.title_alignment || "left"}
-                  onChange={(val) => updateProps({ title_alignment: val })}
-                  options={[
-                    { label: "Left", value: "left" },
-                    { label: "Center", value: "center" },
-                    { label: "Right", value: "right" },
-                  ]}
-                />
+          {(hasSectionTitle || hasSectionSubtitle) && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Header Typography & Alignment
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                <NumberStepperField
-                  label="Title Size"
-                  value={parsedTitleSize}
-                  min={14}
-                  max={36}
-                  step={1}
-                  unit="px"
-                  onChange={(val) => updateProps({ title_font_size: `${val}px` })}
-                />
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                    Title Weight
-                  </label>
-                  <CustomSelectDropdown
-                    value={String(currentProps.title_font_weight || "800")}
-                    placeholder="Weight"
-                    options={[
-                      { label: "Semi-Bold (600)", value: "600" },
-                      { label: "Bold (700)", value: "700" },
-                      { label: "Extra Bold (800)", value: "800" },
-                      { label: "Black (900)", value: "900" },
-                    ]}
-                    onChange={(val) => updateProps({ title_font_weight: val })}
-                  />
-                </div>
-              </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: hasSectionTitle ? "1fr 1fr" : "1fr", gap: "6px" }}>
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Title Alignment
+                    </label>
+                    <SegmentedRow
+                      value={currentProps.title_alignment || "left"}
+                      onChange={(val) => updateProps({ title_alignment: val })}
+                      options={[
+                        { label: "", value: "left", title: "Left", icon: <IconAlignLeft /> },
+                        { label: "", value: "center", title: "Center", icon: <IconAlignCenter /> },
+                        { label: "", value: "right", title: "Right", icon: <IconAlignRight /> },
+                      ]}
+                    />
+                  </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                    Letter Case
-                  </label>
-                  <SegmentedRow
-                    value={currentProps.title_text_transform || "none"}
-                    onChange={(val) => updateProps({ title_text_transform: val })}
-                    options={[
-                      { label: "Normal", value: "none" },
-                      { label: "Caps", value: "uppercase" },
-                    ]}
-                  />
+                  {hasSectionTitle && (
+                    <div style={{ display: "grid", gap: "2px" }}>
+                      <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                        Letter Case
+                      </label>
+                      <SegmentedRow
+                        value={currentProps.title_text_transform || "none"}
+                        onChange={(val) => updateProps({ title_text_transform: val })}
+                        options={[
+                          { label: "", value: "none", title: "Normal Case", icon: <IconCaseNormal size={15} /> },
+                          { label: "", value: "uppercase", title: "Uppercase", icon: <IconCaseUppercase size={15} /> },
+                        ]}
+                      />
+                    </div>
+                  )}
                 </div>
 
-                <NumberStepperField
-                  label="Subtitle Size"
-                  value={parsedSubtitleSize}
-                  min={10}
-                  max={20}
-                  step={1}
-                  unit="px"
-                  onChange={(val) => updateProps({ subtitle_font_size: `${val}px` })}
-                />
+                {hasSectionTitle && (
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Title Weight
+                    </label>
+                    <CustomSelectDropdown
+                      value={String(currentProps.title_font_weight || "800")}
+                      placeholder="Weight"
+                      options={[
+                        { label: "Semi-Bold (600)", value: "600" },
+                        { label: "Bold (700)", value: "700" },
+                        { label: "Extra Bold (800)", value: "800" },
+                        { label: "Black (900)", value: "900" },
+                      ]}
+                      onChange={(val) => updateProps({ title_font_weight: val })}
+                    />
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: (hasSectionTitle && hasSectionSubtitle) ? "1fr 1fr" : "1fr", gap: "6px" }}>
+                  {hasSectionTitle && (
+                    <NumberStepperField
+                      label="Title Size"
+                      value={parsedTitleSize}
+                      min={14}
+                      max={36}
+                      step={1}
+                      unit="px"
+                      onChange={(val) => updateProps({ title_font_size: `${val}px` })}
+                    />
+                  )}
+                  {hasSectionSubtitle && (
+                    <NumberStepperField
+                      label="Subtitle Size"
+                      value={parsedSubtitleSize}
+                      min={10}
+                      max={20}
+                      step={1}
+                      unit="px"
+                      onChange={(val) => updateProps({ subtitle_font_size: `${val}px` })}
+                    />
+                  )}
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* Card Typography & Badge */}
           <section style={sectionCardStyle(isLightMode)}>
@@ -4081,16 +4178,50 @@ function SectionGroupCarouselEditor({
             </div>
 
             <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                <NumberStepperField
-                  label="Card Title Size"
-                  value={parsedCardTitleSize}
-                  min={11}
-                  max={24}
-                  step={1}
-                  unit="px"
-                  onChange={(val) => updateProps({ card_title_size: `${val}px` })}
+              {cardShape !== "circle" && (
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                    Card Text Placement
+                  </label>
+                  <SegmentedRow
+                    value={currentProps.card_text_position || "bottom_overlay"}
+                    onChange={(val) => updateProps({ card_text_position: val })}
+                    options={[
+                      { label: "Bottom", value: "bottom_overlay", title: "Bottom Overlay", icon: <IconTextPosBottom /> },
+                      { label: "Top", value: "top_overlay", title: "Top Overlay", icon: <IconTextPosTop /> },
+                      { label: "Center", value: "center_overlay", title: "Center Overlay", icon: <IconTextPosCenter /> },
+                      { label: "Below", value: "below_card", title: "Below Card", icon: <IconTextPosBelow /> },
+                    ]}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Card Text Align
+                </label>
+                <SegmentedRow
+                  value={currentProps.card_title_align || "left"}
+                  onChange={(val) => updateProps({ card_title_align: val })}
+                  options={[
+                    { label: "", value: "left", title: "Left", icon: <IconAlignLeft /> },
+                    { label: "", value: "center", title: "Center", icon: <IconAlignCenter /> },
+                    { label: "", value: "right", title: "Right", icon: <IconAlignRight /> },
+                  ]}
                 />
+              </div>
+
+              <NumberStepperField
+                label="Card Title Size"
+                value={parsedCardTitleSize}
+                min={11}
+                max={24}
+                step={1}
+                unit="px"
+                onChange={(val) => updateProps({ card_title_size: `${val}px` })}
+              />
+
+              <div style={{ display: "grid", gridTemplateColumns: (cardShape !== "circle" && currentProps.show_badges !== false) ? "1fr 1fr" : "1fr", gap: "6px" }}>
                 <div style={{ display: "grid", gap: "2px" }}>
                   <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                     Card Title Weight
@@ -4107,48 +4238,38 @@ function SectionGroupCarouselEditor({
                     onChange={(val) => updateProps({ card_title_weight: val })}
                   />
                 </div>
+
+                {cardShape !== "circle" && currentProps.show_badges !== false && (
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Badge Tag Style
+                    </label>
+                    <CustomSelectDropdown
+                      value={currentProps.badge_style || "pill"}
+                      placeholder="Badge Style"
+                      options={[
+                        { label: "Pill (Rounded)", value: "pill" },
+                        { label: "Corner Tag", value: "square" },
+                        { label: "Minimal Clean", value: "minimal" },
+                      ]}
+                      onChange={(val) => updateProps({ badge_style: val })}
+                    />
+                  </div>
+                )}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                    Card Text Align
-                  </label>
-                  <SegmentedRow
-                    value={currentProps.card_title_align || "left"}
-                    onChange={(val) => updateProps({ card_title_align: val })}
-                    options={[
-                      { label: "Left", value: "left" },
-                      { label: "Center", value: "center" },
-                      { label: "Right", value: "right" },
-                    ]}
-                  />
-                </div>
-
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                    Badge Tag Style
-                  </label>
-                  <CustomSelectDropdown
-                    value={currentProps.badge_style || "pill"}
-                    placeholder="Badge Style"
-                    options={[
-                      { label: "Pill (Rounded)", value: "pill" },
-                      { label: "Corner Tag", value: "square" },
-                      { label: "Minimal Clean", value: "minimal" },
-                      { label: "Hidden", value: "hidden" },
-                    ]}
-                    onChange={(val) => updateProps({ badge_style: val })}
-                  />
-                </div>
-              </div>
+              <CompactToggleRow
+                label={cardShape === "circle" ? "Show Story Subtitle" : "Show Card Badge"}
+                checked={currentProps.show_badges !== false}
+                onChange={(val) => updateProps({ show_badges: val })}
+              />
             </div>
           </section>
 
-          {/* Visual Effects & Colors */}
+          {/* Card Visual Effects */}
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Visual Styling & Colors
+              Visual Effects & Card Styling
             </div>
 
             <div style={{ display: "grid", gap: "6px" }}>
@@ -4160,13 +4281,13 @@ function SectionGroupCarouselEditor({
                   value={currentProps.image_fit || "cover"}
                   onChange={(val) => updateProps({ image_fit: val })}
                   options={[
-                    { label: "Cover", value: "cover" },
-                    { label: "Contain", value: "contain" },
+                    { label: "Cover", value: "cover", title: "Cover", icon: <IconFitCover /> },
+                    { label: "Contain", value: "contain", title: "Contain", icon: <IconFitContain /> },
                   ]}
                 />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              {cardShape !== "circle" && (
                 <NumberStepperField
                   label="Corner Radius"
                   value={
@@ -4182,64 +4303,154 @@ function SectionGroupCarouselEditor({
                   unit="px"
                   onChange={(val) => updateProps({ card_radius: `${val}px` })}
                 />
+              )}
 
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                    Card Shadow
-                  </label>
-                  <CustomSelectDropdown
-                    value={currentProps.card_shadow || "subtle"}
-                    placeholder="Shadow"
-                    options={[
-                      { label: "None", value: "none" },
-                      { label: "Subtle (Crisp)", value: "subtle" },
-                      { label: "Soft (Floating)", value: "soft" },
-                      { label: "Elevated (Deep)", value: "elevated" },
-                    ]}
-                    onChange={(val) => updateProps({ card_shadow: val })}
-                  />
-                </div>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Card Shadow
+                </label>
+                <CustomSelectDropdown
+                  value={currentProps.card_shadow || "subtle"}
+                  placeholder="Shadow"
+                  options={[
+                    { label: "None", value: "none" },
+                    { label: "Subtle (Crisp)", value: "subtle" },
+                    { label: "Soft (Floating)", value: "soft" },
+                    { label: "Elevated (Deep)", value: "elevated" },
+                  ]}
+                  onChange={(val) => updateProps({ card_shadow: val })}
+                />
               </div>
+            </div>
+          </section>
+        </div>
+      )}
 
-              <SectionDivider title="Theme Colors" />
+      {/* 3. COLORS TAB */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Section 1: Section Header Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              {hasSectionTitle || hasSectionSubtitle ? "Section Header Colors" : "Section Background"}
+            </div>
 
+            <div style={{ display: "grid", gap: "6px" }}>
               <CompactColorRow
                 label="Section Background"
                 value={currentProps.outer_bg_color || "transparent"}
                 onChange={(val) => updateProps({ outer_bg_color: val })}
               />
 
-              <CompactColorRow
-                label="Card Background"
-                value={currentProps.card_bg_color || siteDefinition.theme?.card_bg || "#ffffff"}
-                onChange={(val) => updateProps({ card_bg_color: val })}
-              />
+              {hasSectionTitle && (
+                <CompactColorRow
+                  label="Section Title Color"
+                  value={currentProps.title_color || siteDefinition.theme?.text_color || "#0f172a"}
+                  onChange={(val) => updateProps({ title_color: val })}
+                />
+              )}
 
-              <CompactColorRow
-                label="Card Border Color"
-                value={currentProps.card_border_color || siteDefinition.theme?.card_border_color || "rgba(226, 232, 240, 0.8)"}
-                onChange={(val) => updateProps({ card_border_color: val })}
-              />
-
-              <CompactColorRow
-                label="Title Color"
-                value={currentProps.title_color || siteDefinition.theme?.text_color || "#0f172a"}
-                onChange={(val) => updateProps({ title_color: val })}
-              />
-
-              <CompactColorRow
-                label="Subtitle Color"
-                value={currentProps.subtitle_color || siteDefinition.theme?.muted_text_color || "#64748b"}
-                onChange={(val) => updateProps({ subtitle_color: val })}
-              />
-
-              <CompactColorRow
-                label="Accent & Ring Color"
-                value={currentProps.accent_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
-                onChange={(val) => updateProps({ accent_color: val })}
-              />
+              {hasSectionSubtitle && (
+                <CompactColorRow
+                  label="Section Subtitle Color"
+                  value={currentProps.subtitle_color || siteDefinition.theme?.muted_text_color || "#64748b"}
+                  onChange={(val) => updateProps({ subtitle_color: val })}
+                />
+              )}
             </div>
           </section>
+
+          {/* Section 2: Card & Story Colors (Smart & Conditional) */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              {cardShape === "circle" ? "Story Avatar Colors" : "Card Surface & Typography"}
+            </div>
+
+            <div style={{ display: "grid", gap: "6px" }}>
+              {cardShape === "circle" ? (
+                <>
+                  <CompactColorRow
+                    label="Story Ring Color"
+                    value={currentProps.accent_color || currentProps.card_border_color || siteDefinition.theme?.accent_color || ADMIN_BLUE}
+                    onChange={(val) => updateProps({ accent_color: val, card_border_color: val })}
+                  />
+
+                  <CompactColorRow
+                    label="Circle Background Color"
+                    value={currentProps.card_bg_color || siteDefinition.theme?.card_bg || "#ffffff"}
+                    onChange={(val) => updateProps({ card_bg_color: val })}
+                  />
+
+                  <CompactColorRow
+                    label="Story Title Color"
+                    value={currentProps.card_title_color || currentProps.title_color || siteDefinition.theme?.text_color || "#0f172a"}
+                    onChange={(val) => updateProps({ card_title_color: val })}
+                  />
+
+                  {currentProps.show_badges !== false && (
+                    <CompactColorRow
+                      label="Story Subtitle Color"
+                      value={currentProps.card_subtitle_color || siteDefinition.theme?.muted_text_color || "#64748b"}
+                      onChange={(val) => updateProps({ card_subtitle_color: val })}
+                    />
+                  )}
+                </>
+              ) : (
+                <>
+                  <CompactColorRow
+                    label="Card Background"
+                    value={currentProps.card_bg_color || siteDefinition.theme?.card_bg || "#ffffff"}
+                    onChange={(val) => updateProps({ card_bg_color: val })}
+                  />
+
+                  <CompactColorRow
+                    label="Card Border Color"
+                    value={currentProps.card_border_color || siteDefinition.theme?.card_border_color || "rgba(226, 232, 240, 0.8)"}
+                    onChange={(val) => updateProps({ card_border_color: val })}
+                  />
+
+                  <CompactColorRow
+                    label={currentProps.card_text_position === "below_card" ? "Card Title Color" : "Card Title (Overlay)"}
+                    value={
+                      currentProps.card_title_color ||
+                      (currentProps.card_text_position === "below_card"
+                        ? siteDefinition.theme?.text_color || "#0f172a"
+                        : "#ffffff")
+                    }
+                    onChange={(val) => updateProps({ card_title_color: val })}
+                  />
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* Section 3: Tag & Badge Colors (Shown only when Show Card Badge is ON and not circle) */}
+          {cardShape !== "circle" && currentProps.show_badges !== false && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Card Badge Colors
+              </div>
+
+              <div style={{ display: "grid", gap: "6px" }}>
+                <CompactColorRow
+                  label="Badge Background"
+                  value={
+                    currentProps.badge_bg_color ||
+                    currentProps.accent_color ||
+                    siteDefinition.theme?.accent_color ||
+                    ADMIN_BLUE
+                  }
+                  onChange={(val) => updateProps({ badge_bg_color: val })}
+                />
+
+                <CompactColorRow
+                  label="Badge Text Color"
+                  value={currentProps.badge_text_color || "#ffffff"}
+                  onChange={(val) => updateProps({ badge_text_color: val })}
+                />
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>
@@ -4310,6 +4521,18 @@ function ProductCarouselEditor({
     const num = typeof v === "number" ? v : parseInt(String(v), 10);
     return isNaN(num) ? 18 : num;
   })();
+
+  const hasSectionTitle = Boolean(
+    (p.show_title !== false) &&
+    p.title &&
+    String(p.title).trim().length > 0
+  );
+
+  const hasSectionSubtitle = Boolean(
+    (p.show_subtitle !== false) &&
+    p.subtitle &&
+    String(p.subtitle).trim().length > 0
+  );
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -4527,43 +4750,49 @@ function ProductCarouselEditor({
       {/* ── Styles Tab ─────────────────────────────────────────────────────── */}
       {activeTab === "styling" && (
         <div style={{ display: "grid", gap: "8px" }}>
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Section Header</div>
-            <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Alignment</label>
-                <SegmentedRow
-                  value={p.title_alignment || "left"}
-                  onChange={(val) => updateProps({ title_alignment: val })}
-                  options={[{ label: "Left", value: "left" }, { label: "Center", value: "center" }]}
-                />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                <NumberStepperField
-                  label="Title Size" value={parsedTitleSize} min={14} max={36} step={1} unit="px"
-                  onChange={(val) => updateProps({ title_font_size: `${val}px` })}
-                />
+          {(hasSectionTitle || hasSectionSubtitle) && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Section Header</div>
+              <div style={{ display: "grid", gap: "6px" }}>
                 <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Weight</label>
-                  <CustomSelectDropdown
-                    value={String(p.title_font_weight || "800")}
-                    placeholder="Weight"
-                    options={[
-                      { label: "SemiBold 600", value: "600" },
-                      { label: "Bold 700", value: "700" },
-                      { label: "ExtraBold 800", value: "800" },
-                      { label: "Black 900", value: "900" },
-                    ]}
-                    onChange={(val) => updateProps({ title_font_weight: val })}
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Alignment</label>
+                  <SegmentedRow
+                    value={p.title_alignment || "left"}
+                    onChange={(val) => updateProps({ title_alignment: val })}
+                    options={[{ label: "Left", value: "left" }, { label: "Center", value: "center" }]}
                   />
                 </div>
+                {hasSectionTitle && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                    <NumberStepperField
+                      label="Title Size" value={parsedTitleSize} min={14} max={36} step={1} unit="px"
+                      onChange={(val) => updateProps({ title_font_size: `${val}px` })}
+                    />
+                    <div style={{ display: "grid", gap: "2px" }}>
+                      <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Weight</label>
+                      <CustomSelectDropdown
+                        value={String(p.title_font_weight || "800")}
+                        placeholder="Weight"
+                        options={[
+                          { label: "SemiBold 600", value: "600" },
+                          { label: "Bold 700", value: "700" },
+                          { label: "ExtraBold 800", value: "800" },
+                          { label: "Black 900", value: "900" },
+                        ]}
+                        onChange={(val) => updateProps({ title_font_weight: val })}
+                      />
+                    </div>
+                  </div>
+                )}
+                {hasSectionSubtitle && (
+                  <NumberStepperField
+                    label="Subtitle Size" value={parsedSubtitleSize} min={10} max={20} step={1} unit="px"
+                    onChange={(val) => updateProps({ subtitle_font_size: `${val}px` })}
+                  />
+                )}
               </div>
-              <NumberStepperField
-                label="Subtitle Size" value={parsedSubtitleSize} min={10} max={20} step={1} unit="px"
-                onChange={(val) => updateProps({ subtitle_font_size: `${val}px` })}
-              />
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* Product Title / Card Text Styling */}
           <section style={sectionCardStyle(isLightMode)}>
@@ -6704,21 +6933,8 @@ function CompactToggleRow({
         gap: "8px",
         padding: "5px 7px",
         borderRadius: "5px",
-        background: isDark
-          ? checked
-            ? "rgba(59,130,246,0.12)"
-            : tokens.elevatedSurfaceBg
-          : checked
-            ? "rgba(37,99,235,0.05)"
-            : "#f8fafc",
-        border: `1px solid ${isDark
-            ? checked
-              ? "rgba(59,130,246,0.3)"
-              : tokens.border
-            : checked
-              ? "#bfdbfe"
-              : "#e2e8f0"
-          }`,
+        background: isDark ? tokens.elevatedSurfaceBg : "#f8fafc",
+        border: `1px solid ${isDark ? tokens.border : "#e2e8f0"}`,
         cursor: "pointer",
         transition: "all 0.15s ease",
         userSelect: "none",
@@ -6729,13 +6945,7 @@ function CompactToggleRow({
           style={{
             fontSize: "10px",
             fontWeight: 700,
-            color: isDark
-              ? checked
-                ? tokens.accent
-                : tokens.textPrimary
-              : checked
-                ? "#1e40af"
-                : "#334155",
+            color: isDark ? tokens.textPrimary : "#334155",
             lineHeight: 1.2,
           }}
         >
@@ -6753,9 +6963,9 @@ function CompactToggleRow({
           height: "16px",
           borderRadius: "999px",
           background: checked
-            ? tokens.accent
+            ? "#10b981"
             : isDark
-              ? "rgba(255,255,255,0.15)"
+              ? "rgba(255,255,255,0.18)"
               : "#cbd5e1",
           position: "relative",
           transition: "background 0.2s ease",

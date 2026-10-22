@@ -44,6 +44,7 @@ export interface SectionGroupCarouselProps {
   card_title_weight?: string | number;
   card_title_align?: "left" | "center" | "right";
   badge_style?: "pill" | "square" | "minimal" | "hidden";
+  show_badges?: boolean;
   layout?: "carousel" | "grid";
   grid_columns?: number | string;
   grid_gap?: string | number;
@@ -58,6 +59,7 @@ export interface SectionGroupCarouselProps {
   card_shadow?: string;
   title_color?: string;
   card_title_color?: string;
+  card_subtitle_color?: string;
   subtitle_color?: string;
   accent_color?: string;
   image_fit?: "cover" | "contain";
@@ -103,6 +105,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
   card_title_weight,
   card_title_align,
   badge_style = "pill",
+  show_badges = true,
   layout = "carousel",
   grid_columns,
   grid_gap,
@@ -117,6 +120,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
   card_shadow,
   title_color,
   card_title_color,
+  card_subtitle_color,
   subtitle_color,
   accent_color,
   image_fit = "cover",
@@ -208,18 +212,26 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
   const isCardDark = isColorDarkHex(resolvedCardBg);
 
   const rawCardTitleColor = card_title_color || (theme as any)?.card_text_color || (theme as any)?.product_name_color || resolvedTitleColor;
-  let resolvedCardTitleColor = rawCardTitleColor;
-  if (isCardDark && isColorDarkHex(resolvedCardTitleColor)) {
-    resolvedCardTitleColor = "#ffffff";
-  } else if (!isCardDark && !isColorDarkHex(resolvedCardTitleColor)) {
-    resolvedCardTitleColor = "#0f172a";
-  }
+  const resolvedCardTitleColor =
+    card_title_color ||
+    (() => {
+      if (isCardDark && isColorDarkHex(rawCardTitleColor)) return "#ffffff";
+      if (!isCardDark && !isColorDarkHex(rawCardTitleColor)) return "#0f172a";
+      return rawCardTitleColor;
+    })();
 
-  let resolvedSubtitleColor = subtitle_color || theme?.muted_text_color;
-  if (!resolvedSubtitleColor || (isCardDark && isColorDarkHex(resolvedSubtitleColor)) || (!isCardDark && !isColorDarkHex(resolvedSubtitleColor))) {
-    resolvedSubtitleColor = isCardDark ? "rgba(241, 245, 249, 0.70)" : "rgba(15, 23, 42, 0.65)";
-  }
+  const resolvedSubtitleColor =
+    subtitle_color ||
+    theme?.muted_text_color ||
+    (isDark ? "rgba(241, 245, 249, 0.70)" : "rgba(15, 23, 42, 0.65)");
+
+  const resolvedCardSubtitleColor =
+    card_subtitle_color ||
+    theme?.muted_text_color ||
+    (isDark ? "rgba(241, 245, 249, 0.70)" : "rgba(15, 23, 42, 0.65)");
   const resolvedAccentColor = accent_color || theme?.accent_color || tokens.accentColor;
+  const resolvedBadgeBg = badge_bg_color || resolvedAccentColor;
+  const resolvedBadgeTextColor = badge_text_color || (isColorDarkHex(resolvedBadgeBg) ? "#ffffff" : "#0f172a");
   const resolvedImageBg = image_bg || (isCardDark ? "rgba(255, 255, 255, 0.05)" : "#f1f5f9");
   const resolvedImageFit = image_fit || "cover";
   const resolvedMaxWidth =
@@ -562,11 +574,14 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                     height: shapeConfig.imageHeight,
                     borderRadius: shapeConfig.borderRadius,
                     overflow: "hidden",
-                    border: shapeConfig.isCircular ? `2.5px solid ${resolvedAccentColor}` : resolvedCardBorder,
+                    border: shapeConfig.isCircular
+                      ? `2.5px solid ${accent_color || card_border_color || resolvedAccentColor}`
+                      : resolvedCardBorder,
                     padding: shapeConfig.isCircular ? (isMobile ? "2px" : "3px") : 0,
                     background: resolvedCardBg,
                     boxShadow: resolvedCardShadow,
                     position: "relative",
+                    boxSizing: "border-box",
                   }}
                   className="section-group-tile-hover"
                 >
@@ -612,24 +627,39 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                   </div>
 
                   {/* Top Badge (if any & not circular) */}
-                  {!shapeConfig.isCircular && badge_style !== "hidden" && tile.subtitle && (
+                  {!shapeConfig.isCircular && show_badges !== false && badge_style !== "hidden" && tile.subtitle && (
                     <div
                       style={{
                         position: "absolute",
                         top: "8px",
                         left: "8px",
-                        background: badge_bg_color || resolvedAccentColor,
-                        color: badge_text_color || "#ffffff",
+                        background: resolvedBadgeBg,
+                        color: resolvedBadgeTextColor,
                         fontSize: "9.5px",
                         fontWeight: 700,
                         padding: badge_style === "pill" ? "2px 8px" : "2px 5px",
                         borderRadius: badge_style === "pill" ? "12px" : "4px",
                         letterSpacing: "0.02em",
                         boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+                        zIndex: 3,
                       }}
                     >
                       {tile.subtitle}
                     </div>
+                  )}
+
+                  {/* Crisp Border Overlay for non-circular cards */}
+                  {!shapeConfig.isCircular && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        borderRadius: shapeConfig.borderRadius,
+                        border: resolvedCardBorder,
+                        pointerEvents: "none",
+                        zIndex: 2,
+                      }}
+                    />
                   )}
                 </div>
 
@@ -647,11 +677,11 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                   >
                     {tile.title}
                   </div>
-                  {tile.subtitle && shapeConfig.isCircular && (
+                  {show_badges !== false && tile.subtitle && shapeConfig.isCircular && (
                     <div
                       style={{
                         fontSize: isMobile ? "10px" : "11px",
-                        color: resolvedAccentColor,
+                        color: resolvedCardSubtitleColor,
                         fontWeight: 600,
                         marginTop: "1px",
                         whiteSpace: "nowrap",
@@ -701,7 +731,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: justifyContent,
-                background: resolvedImageBg,
+                background: card_bg_color || resolvedImageBg,
                 border: resolvedCardBorder,
                 boxShadow: resolvedCardShadow,
                 scrollSnapAlign: "start",
@@ -757,22 +787,35 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                 }}
               />
 
+              {/* Crisp Border Overlay */}
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  borderRadius: shapeConfig.borderRadius,
+                  border: resolvedCardBorder,
+                  pointerEvents: "none",
+                  zIndex: 2,
+                }}
+              />
+
               {/* Top Badge (if any & not hidden) */}
-              {badge_style !== "hidden" && tile.subtitle && (
+              {show_badges !== false && badge_style !== "hidden" && tile.subtitle && (
                 <div
                   style={{
                     position: "absolute",
                     top: isMobile ? "8px" : "10px",
                     left: isMobile ? "8px" : "10px",
-                    background: badge_bg_color || "rgba(15, 23, 42, 0.85)",
+                    background: resolvedBadgeBg,
                     backdropFilter: "blur(6px)",
-                    color: badge_text_color || "#ffffff",
+                    color: resolvedBadgeTextColor,
                     fontSize: isMobile ? "10px" : "11px",
                     fontWeight: 700,
                     padding: badge_style === "pill" ? "2px 8px" : "2px 6px",
                     borderRadius: badge_style === "pill" ? "12px" : "5px",
                     letterSpacing: "0.02em",
                     boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+                    zIndex: 3,
                   }}
                 >
                   {tile.subtitle}
@@ -785,7 +828,7 @@ export const SectionGroupCarousel: React.FC<SectionGroupCarouselProps> = ({
                   position: "relative",
                   zIndex: 1,
                   padding: card_padding !== undefined ? (typeof card_padding === "number" ? `${card_padding}px` : card_padding) : isMobile ? "10px" : "14px",
-                  color: "#ffffff",
+                  color: card_title_color || "#ffffff",
                   textAlign: textAlign,
                   width: "100%",
                   boxSizing: "border-box",
