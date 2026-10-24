@@ -803,8 +803,8 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               style={{
                 padding: `${scalePx(2, 2)} ${scalePx(6, 4)}`,
                 borderRadius: "5px",
-                background: col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
-                color: "#ffffff",
+                background: badge_bg_color || badge_color || col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
+                color: badge_text_color || col.badge_text_color || "#ffffff",
                 fontSize: scalePx(8.5, 7.5),
                 fontWeight: 800,
                 letterSpacing: "0.04em",
@@ -1657,8 +1657,8 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                     style={{
                       padding: `${scalePx(1.5, 1)} ${scalePx(5, 3)}`,
                       borderRadius: "3px",
-                      background: col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
-                      color: "#ffffff",
+                      background: badge_bg_color || badge_color || col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
+                      color: badge_text_color || col.badge_text_color || "#ffffff",
                       fontSize: scalePx(7.5, 6.5),
                       fontWeight: 700,
                       letterSpacing: "0.02em",
@@ -1674,8 +1674,8 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
                     style={{
                       padding: `${scalePx(1.5, 1)} ${scalePx(5.5, 3.5)}`,
                       borderRadius: "3px",
-                      background: "linear-gradient(135deg, #16a34a, #15803d)",
-                      color: "#ffffff",
+                      background: badge_bg_color || badge_color || "linear-gradient(135deg, #16a34a, #15803d)",
+                      color: badge_text_color || "#ffffff",
                       fontSize: scalePx(8, 7),
                       fontWeight: 800,
                       letterSpacing: "0.02em",

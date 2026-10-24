@@ -1401,7 +1401,7 @@ const RenderPage: React.FC<RenderPageProps> = ({
     const blockProps = (block.props ?? {}) as Record<string, any>;
     const resolvedTheme: Theme | undefined = theme;
 
-    const componentProps = {
+    const componentProps: Record<string, any> = {
       siteId,
       siteSlug,
       siteName,
@@ -1441,7 +1441,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
           sortBy={sortBy}
           onSortChange={setSortBy}
           onFilterClick={() => setFilterModalOpen(true)}
-          showFilterButton={!isDedicatedSectionOrSearchView}
+          showFilterButton={
+            componentProps.show_filter_button !== undefined
+              ? componentProps.show_filter_button
+              : componentProps.showFilterButton !== undefined
+                ? componentProps.showFilterButton
+                : !isDedicatedSectionOrSearchView
+          }
         />
       );
     }
@@ -1548,7 +1554,13 @@ const RenderPage: React.FC<RenderPageProps> = ({
             sortBy={sortBy}
             onSortChange={setSortBy}
             onFilterClick={() => setFilterModalOpen(true)}
-            showFilterButton={!isDedicatedSectionOrSearchView}
+            showFilterButton={
+              componentProps.show_filter_button !== undefined
+                ? componentProps.show_filter_button
+                : componentProps.showFilterButton !== undefined
+                  ? componentProps.showFilterButton
+                  : !isDedicatedSectionOrSearchView
+            }
             currentPage={currentPage}
             totalPages={resolvedTotalPages}
             onPageChange={(newPage: number) => {
@@ -1678,23 +1690,81 @@ const RenderPage: React.FC<RenderPageProps> = ({
               </React.Fragment>
             );
           })}
-          <FilterModal
-            open={filterModalOpen}
-            onClose={() => setFilterModalOpen(false)}
-            onApply={(newFilters) => setFilters(newFilters)}
-            currentFilters={filters}
-            categories={categories}
-            collections={collections}
-            productTypes={availableProductTypes}
-            brands={availableBrands}
-            products={sourceProductsForFilters}
-            siteId={effectiveSiteId}
-            searchQuery={searchQuery}
-            priceRange={{ min: 0, max: 100000 }}
-            theme={theme}
-            container={isInAdminSpace ? containerEl : undefined}
-            isAdmin={isInAdminSpace}
-          />
+          {(() => {
+            const isProductGridBlock = (b: any) => {
+              if (!b) return false;
+              const t = String(b?.type || "").toLowerCase().trim();
+              const id = String(b?.id || "").toLowerCase().trim();
+              if (t.includes("carousel") || id.includes("carousel")) return false;
+              return (
+                t === "product_grid" ||
+                t === "productgrid" ||
+                t === "products_grid" ||
+                t === "productsgrid" ||
+                t === "product_list" ||
+                t === "productlist" ||
+                t === "products_section" ||
+                t === "productssection" ||
+                t === "shop_products" ||
+                t === "shopproducts" ||
+                t === "products" ||
+                t === "product_listing" ||
+                id === "product_grid" ||
+                id.includes("product_grid")
+              );
+            };
+
+            const allCandidateBlocks = [...(page?.blocks || []), ...blocksToRender];
+            const productGridBlock =
+              allCandidateBlocks.find((b: any) => Object.keys(b?.props || {}).some((k) => k.startsWith("filter_modal_"))) ||
+              allCandidateBlocks.find(isProductGridBlock) ||
+              blocksToRender.find((b: any) => {
+                const t = String(b?.type || "").toLowerCase();
+                return !t.includes("carousel") && (t.includes("product") || t.includes("grid") || t.includes("filter"));
+              });
+
+            const filterPropsFromAllBlocks = allCandidateBlocks.reduce((acc: any, b: any) => {
+              const p = b?.props || {};
+              const filterKeys = Object.keys(p).filter((k) =>
+                k.startsWith("filter_modal_") ||
+                k.startsWith("filter_btn_") ||
+                k.startsWith("filter_accent_") ||
+                k.startsWith("sort_dropdown_") ||
+                k.startsWith("toolbar_")
+              );
+              if (filterKeys.length > 0) {
+                const extracted: any = {};
+                filterKeys.forEach((k) => { extracted[k] = p[k]; });
+                return { ...acc, ...extracted };
+              }
+              return acc;
+            }, {});
+
+            const effectiveFilterModalTheme = {
+              ...(theme || {}),
+              ...(productGridBlock?.props || {}),
+              ...filterPropsFromAllBlocks,
+            };
+            return (
+              <FilterModal
+                open={filterModalOpen}
+                onClose={() => setFilterModalOpen(false)}
+                onApply={(newFilters) => setFilters(newFilters)}
+                currentFilters={filters}
+                categories={categories}
+                collections={collections}
+                productTypes={availableProductTypes}
+                brands={availableBrands}
+                products={sourceProductsForFilters}
+                siteId={effectiveSiteId}
+                searchQuery={searchQuery}
+                priceRange={{ min: 0, max: 100000 }}
+                theme={effectiveFilterModalTheme}
+                container={isInAdminSpace ? containerEl : undefined}
+                isAdmin={isInAdminSpace}
+              />
+            );
+          })()}
         </div>
       </ThemeProvider>
     );

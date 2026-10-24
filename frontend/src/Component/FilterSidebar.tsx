@@ -34,10 +34,42 @@ type FilterSidebarProps = {
     text_color?: string;
     accent_color?: string;
     primary_bg?: string;
+    [key: string]: any;
   };
   filters?: string[];
   selectedFilter?: string;
   onFilterChange?: (filter: string) => void;
+
+  // Toolbar & Button Layout / Editability
+  toolbar_layout?: "space_between" | "center" | "split_stacked";
+  toolbar_actions_order?: "filter_first" | "sort_first";
+  toolbar_btn_size?: "compact" | "standard" | "large";
+  show_sort_button?: boolean;
+  show_item_count?: boolean;
+  filter_button_label?: string;
+
+  // Button & Dropdown Styles
+  toolbar_btn_radius?: string | number;
+  toolbar_btn_style?: "outline" | "outlined" | "solid" | "duotone" | "soft" | "ghost";
+  sort_dropdown_radius?: string | number;
+
+  // Toolbar & Button Colors
+  toolbar_bg?: string;
+  filter_btn_bg?: string;
+  filter_btn_text?: string;
+  sort_btn_bg?: string;
+  sort_btn_text?: string;
+  toolbar_btn_border_color?: string;
+  sort_dropdown_bg?: string;
+  sort_dropdown_text_color?: string;
+  sort_active_color?: string;
+  sort_dropdown_header_label?: string;
+  sort_dropdown_border_color?: string;
+  filter_accent_color?: string;
+  accent_color?: string;
+  title_color?: string;
+  subtitle_color?: string;
+  item_count_color?: string;
 };
 
 export const FilterSidebar = ({
@@ -50,6 +82,34 @@ export const FilterSidebar = ({
   onFilterClick,
   showFilterButton = true,
   theme,
+  // Toolbar layout & visibility
+  toolbar_layout = "space_between",
+  toolbar_actions_order = "filter_first",
+  toolbar_btn_size = "standard",
+  show_sort_button = true,
+  show_item_count = true,
+  filter_button_label,
+  // Toolbar styles
+  toolbar_btn_radius,
+  toolbar_btn_style = "outlined",
+  sort_dropdown_radius,
+  // Toolbar colors
+  toolbar_bg,
+  filter_btn_bg: customFilterBtnBg,
+  filter_btn_text: customFilterBtnText,
+  sort_btn_bg: customSortBtnBg,
+  sort_btn_text: customSortBtnText,
+  toolbar_btn_border_color,
+  sort_dropdown_bg: customSortDropdownBg,
+  sort_dropdown_text_color: customSortDropdownTextColor,
+  sort_active_color,
+  sort_dropdown_header_label,
+  sort_dropdown_border_color,
+  filter_accent_color,
+  accent_color,
+  title_color,
+  subtitle_color,
+  item_count_color,
 }: FilterSidebarProps) => {
   const deviceMode = useDeviceMode();
   const [innerIsMobile, setInnerIsMobile] = useState<boolean>(() => {
@@ -108,12 +168,14 @@ export const FilterSidebar = ({
   }, [sortOpen, isMobile, isInsidePreviewStage]);
 
   const isDark =
+    (theme?.mode === "dark") ||
+    Boolean(toolbar_bg && toolbar_bg !== "transparent" && isColorDarkHex(toolbar_bg)) ||
     ((theme as any)?.filter_bg ? isColorDarkHex((theme as any).filter_bg) : false) ||
     (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
     ((theme as any)?.filter_text_color ? !isColorDarkHex((theme as any).filter_text_color) : false) ||
-    (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
-    theme?.mode === "dark";
-  const accentColor = (theme as any)?.filter_accent_color || theme?.accent_color || (isDark ? "#60a5fa" : "#2563eb");
+    (theme?.text_color ? !isColorDarkHex(theme.text_color) : false);
+
+  const resolvedAccentColor = accent_color || filter_accent_color || (theme as any)?.filter_accent_color || theme?.accent_color || (isDark ? "#60a5fa" : "#2563eb");
   const resolvedPrimaryBg = (theme as any)?.filter_bg || theme?.primary_bg || (isDark ? "#0f172a" : "#f8fafc");
   const isSectionDark = isColorDarkHex(resolvedPrimaryBg);
 
@@ -121,23 +183,84 @@ export const FilterSidebar = ({
   const textSecondary = (theme as any)?.muted_text_color && (isColorDarkHex((theme as any).muted_text_color) !== isSectionDark)
     ? (theme as any).muted_text_color
     : (isSectionDark ? "rgba(241, 245, 249, 0.65)" : "rgba(15, 23, 42, 0.65)");
-  const borderColor = (theme as any)?.filter_border_color || (theme as any)?.border_color || (isSectionDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
+  const borderColor = toolbar_btn_border_color || (theme as any)?.filter_border_color || (theme as any)?.border_color || (isSectionDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)");
 
-  const btnBg = (theme as any)?.filter_card_bg || (isSectionDark
+  const baseBtnBg = (theme as any)?.filter_card_bg || (isSectionDark
     ? "rgba(255, 255, 255, 0.08)"
     : (resolvedPrimaryBg === "#ffffff" ? "rgba(0, 0, 0, 0.04)" : "rgba(255, 255, 255, 0.65)"));
 
-  const filterBtnBg = (theme as any)?.filter_btn_bg || btnBg;
-  const filterBtnText = (theme as any)?.filter_btn_text || textPrimary;
-  const sortBtnBg = (theme as any)?.sort_btn_bg || btnBg;
-  const sortBtnText = (theme as any)?.sort_btn_text || textPrimary;
+  let filterBtnBg = customFilterBtnBg || (theme as any)?.filter_btn_bg || baseBtnBg;
+  let filterBtnText = customFilterBtnText || (theme as any)?.filter_btn_text || textPrimary;
+  let filterBorder = borderColor;
 
-  const dropdownBg = (theme as any)?.sort_dropdown_bg || (theme as any)?.filter_card_bg || (theme as any)?.dialog_bg || (theme as any)?.surface_bg || (theme as any)?.card_bg || (isSectionDark ? "#1e293b" : "#ffffff");
+  let sortBtnBg = customSortBtnBg || (theme as any)?.sort_btn_bg || baseBtnBg;
+  let sortBtnText = customSortBtnText || (theme as any)?.sort_btn_text || textPrimary;
+  let sortBorder = borderColor;
+
+  if (toolbar_btn_style === "solid") {
+    if (!customFilterBtnBg) filterBtnBg = isSectionDark ? "rgba(255, 255, 255, 0.16)" : "#e2e8f0";
+    if (!customSortBtnBg) sortBtnBg = isSectionDark ? "rgba(255, 255, 255, 0.16)" : "#e2e8f0";
+    filterBorder = "transparent";
+    sortBorder = "transparent";
+  } else if (toolbar_btn_style === "duotone" || toolbar_btn_style === "soft") {
+    if (!customFilterBtnBg) filterBtnBg = `${resolvedAccentColor}18`;
+    if (!customFilterBtnText) filterBtnText = resolvedAccentColor;
+    if (!customSortBtnBg) sortBtnBg = `${resolvedAccentColor}18`;
+    if (!customSortBtnText) sortBtnText = resolvedAccentColor;
+    filterBorder = toolbar_btn_border_color || `${resolvedAccentColor}35`;
+    sortBorder = toolbar_btn_border_color || `${resolvedAccentColor}35`;
+  } else if (toolbar_btn_style === "ghost") {
+    if (!customFilterBtnBg) filterBtnBg = "transparent";
+    if (!customSortBtnBg) sortBtnBg = "transparent";
+    filterBorder = "transparent";
+    sortBorder = "transparent";
+  }
+
+  const btnRadius =
+    toolbar_btn_radius !== undefined && toolbar_btn_radius !== null && String(toolbar_btn_radius).trim() !== ""
+      ? typeof toolbar_btn_radius === "number"
+        ? `${toolbar_btn_radius}px`
+        : String(toolbar_btn_radius).includes("px") || String(toolbar_btn_radius).includes("%")
+          ? String(toolbar_btn_radius)
+          : `${toolbar_btn_radius}px`
+      : "8px";
+
+  const sizeStyles =
+    toolbar_btn_size === "compact"
+      ? { height: "30px", padding: "4px 10px", fontSize: "11.5px", iconSize: 12 }
+      : toolbar_btn_size === "large"
+        ? { height: "40px", padding: "8px 16px", fontSize: "13.5px", iconSize: 15 }
+        : { height: "34px", padding: "6px 12px", fontSize: "12.5px", iconSize: 13 };
+
+  const resolvedDropdownRadius =
+    sort_dropdown_radius !== undefined && sort_dropdown_radius !== null && String(sort_dropdown_radius).trim() !== ""
+      ? typeof sort_dropdown_radius === "number"
+        ? `${sort_dropdown_radius}px`
+        : String(sort_dropdown_radius).includes("px")
+          ? String(sort_dropdown_radius)
+          : `${sort_dropdown_radius}px`
+      : "12px";
+
+  const dropdownBg = customSortDropdownBg || (theme as any)?.sort_dropdown_bg || (theme as any)?.filter_card_bg || (theme as any)?.dialog_bg || (theme as any)?.surface_bg || (theme as any)?.card_bg || (isSectionDark ? "#1e293b" : "#ffffff");
   const isDropdownDark = isColorDarkHex(dropdownBg);
-  const dropdownTextColor = isDropdownDark ? "#f1f5f9" : "#0f172a";
+  const dropdownTextColor = customSortDropdownTextColor || (isDropdownDark ? "#f1f5f9" : "#0f172a");
   const dropdownMutedText = isDropdownDark ? "rgba(241, 245, 249, 0.65)" : "rgba(15, 23, 42, 0.65)";
   const dropdownBorderColor = isDropdownDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)";
-  const hoverBg = `${accentColor}1c`;
+  const resolvedSortActiveColor =
+    sort_active_color ||
+    (theme as any)?.sort_active_color ||
+    filter_accent_color ||
+    resolvedAccentColor;
+  const sortHoverBg = `${resolvedSortActiveColor}18`;
+  const resolvedSortHeaderLabel =
+    sort_dropdown_header_label ||
+    (theme as any)?.sort_dropdown_header_label ||
+    "SORT BY";
+  const resolvedSortBorderColor =
+    sort_dropdown_border_color ||
+    (theme as any)?.sort_dropdown_border_color ||
+    dropdownBorderColor;
+  const hoverBg = `${resolvedAccentColor}1c`;
 
   const mobileTheme = resolveMobileDrawerTheme(theme);
 
@@ -162,18 +285,54 @@ export const FilterSidebar = ({
       ? title
       : null) || "Newest Arrivals";
 
+  const isCentered = toolbar_layout === "center";
+  const isStacked = toolbar_layout === "split_stacked";
+  const resolvedFilterLabel = filter_button_label && filter_button_label.trim() ? filter_button_label : "Filter & Categories";
+
   return (
-    <div className={`product-toolbar-wrapper ${isMobile ? "is-mobile" : ""}`}>
-      <div className="product-toolbar-container">
+    <div
+      className={`product-toolbar-wrapper ${isMobile ? "is-mobile" : ""}`}
+      style={{
+        background: toolbar_bg || "transparent",
+        padding: toolbar_bg && toolbar_bg !== "transparent" ? "8px 12px" : undefined,
+        borderRadius: toolbar_bg && toolbar_bg !== "transparent" ? "12px" : undefined,
+      }}
+    >
+      <div
+        className="product-toolbar-container"
+        style={{
+          justifyContent: isCentered ? "center" : "space-between",
+          flexDirection: isStacked ? "column" : undefined,
+          alignItems: isStacked ? "stretch" : "center",
+          textAlign: isCentered ? "center" : undefined,
+        }}
+      >
         {/* Left: Subtitle & Title */}
-        <div className="product-toolbar-title-group">
-          <p className="product-toolbar-subtitle">
+        <div className="product-toolbar-title-group" style={{ textAlign: isCentered ? "center" : undefined }}>
+          <p
+            className="product-toolbar-subtitle"
+            style={{
+              color: subtitle_color || undefined,
+            }}
+          >
             {subtitle || "Browse Products"}
           </p>
-          <h2 className="product-toolbar-title" title={displayTitle}>
+          <h2
+            className="product-toolbar-title"
+            title={displayTitle}
+            style={{
+              justifyContent: isCentered ? "center" : "flex-start",
+              color: title_color || undefined,
+            }}
+          >
             {displayTitle}
-            {itemCount > 0 && (
-              <span className="product-toolbar-title-count">
+            {itemCount > 0 && show_item_count !== false && (
+              <span
+                className="product-toolbar-title-count"
+                style={{
+                  color: item_count_color || textSecondary,
+                }}
+              >
                 ({itemCount.toLocaleString()})
               </span>
             )}
@@ -181,7 +340,12 @@ export const FilterSidebar = ({
         </div>
 
         {/* Right: Actions */}
-        <div className="product-toolbar-actions">
+        <div
+          className="product-toolbar-actions"
+          style={{
+            justifyContent: isCentered ? "center" : isStacked ? "flex-end" : undefined,
+          }}
+        >
           {/* Filter button */}
           {showFilterButton && (
             isMobile ? (
@@ -189,10 +353,20 @@ export const FilterSidebar = ({
                 type="button"
                 onClick={onFilterClick}
                 className="product-toolbar-icon-btn"
-                aria-label="Filter products and categories"
-                title="Filter & Categories"
+                aria-label={resolvedFilterLabel}
+                title={resolvedFilterLabel}
+                style={{
+                  order: toolbar_actions_order === "sort_first" ? 2 : 1,
+                  borderRadius: btnRadius,
+                  borderColor: filterBorder,
+                  background: filterBtnBg,
+                  color: filterBtnText,
+                  height: sizeStyles.height,
+                  width: sizeStyles.height,
+                  minWidth: sizeStyles.height,
+                }}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width={sizeStyles.iconSize + 2} height={sizeStyles.iconSize + 2} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="4" y1="21" x2="4" y2="14" />
                   <line x1="4" y1="10" x2="4" y2="3" />
                   <line x1="12" y1="21" x2="12" y2="12" />
@@ -204,7 +378,7 @@ export const FilterSidebar = ({
                   <line x1="17" y1="16" x2="23" y2="16" />
                 </svg>
                 {activeFilterCount > 0 && (
-                  <span className="product-toolbar-icon-badge">
+                  <span className="product-toolbar-icon-badge" style={{ background: resolvedAccentColor }}>
                     {activeFilterCount}
                   </span>
                 )}
@@ -215,12 +389,17 @@ export const FilterSidebar = ({
                 onClick={onFilterClick}
                 className="product-toolbar-btn product-toolbar-filter-btn"
                 style={{
+                  order: toolbar_actions_order === "sort_first" ? 2 : 1,
                   background: filterBtnBg,
                   color: filterBtnText,
-                  borderColor: borderColor,
+                  borderColor: filterBorder,
+                  borderRadius: btnRadius,
+                  height: sizeStyles.height,
+                  padding: sizeStyles.padding,
+                  fontSize: sizeStyles.fontSize,
                 }}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <svg width={sizeStyles.iconSize} height={sizeStyles.iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <line x1="4" y1="21" x2="4" y2="14" />
                   <line x1="4" y1="10" x2="4" y2="3" />
                   <line x1="12" y1="21" x2="12" y2="12" />
@@ -231,9 +410,9 @@ export const FilterSidebar = ({
                   <line x1="9" y1="8" x2="15" y2="8" />
                   <line x1="17" y1="16" x2="23" y2="16" />
                 </svg>
-                <span>Filter & Categories</span>
+                <span>{resolvedFilterLabel}</span>
                 {activeFilterCount > 0 && (
-                  <span className="product-toolbar-badge">
+                  <span className="product-toolbar-badge" style={{ background: resolvedAccentColor }}>
                     {activeFilterCount}
                   </span>
                 )}
@@ -242,100 +421,119 @@ export const FilterSidebar = ({
           )}
 
           {/* Sort button */}
-          <div ref={sortRef} style={{ position: "relative" }}>
-            {isMobile ? (
-              <button
-                type="button"
-                onClick={() => setSortOpen(!sortOpen)}
-                className="product-toolbar-icon-btn"
-                aria-label={`Sort by: ${currentSort.label}`}
-                title={`Sort by: ${currentSort.label}`}
-                style={{
-                  borderColor: sortBy !== "newest" ? accentColor : borderColor,
-                  background: sortBy !== "newest" ? `${accentColor}16` : sortBtnBg,
-                  color: sortBy !== "newest" ? accentColor : sortBtnText,
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 5h10M11 9h7M11 13h4" />
-                  <path d="M3 17l3 3 3-3" />
-                  <path d="M6 18V4" />
-                </svg>
-                {sortBy !== "newest" && (
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: "5px",
-                      right: "5px",
-                      width: "6px",
-                      height: "6px",
-                      borderRadius: "999px",
-                      background: accentColor,
-                    }}
-                  />
-                )}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setSortOpen(!sortOpen)}
-                className="product-toolbar-btn product-toolbar-sort-btn"
-                style={{
-                  background: sortBtnBg,
-                  color: sortBtnText,
-                  borderColor: borderColor,
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <path d="M11 5h10M11 9h7M11 13h4" />
-                  <path d="M3 17l3 3 3-3" />
-                  <path d="M6 18V4" />
-                </svg>
-                <span>
-                  Sort by: <strong style={{ fontWeight: 600 }}>{currentSort.label}</strong>
-                </span>
-                <span style={{ fontSize: "8px", marginLeft: "3px", opacity: 0.75, transition: "transform 200ms", transform: sortOpen ? "rotate(180deg)" : "rotate(0)" }}>▼</span>
-              </button>
-            )}
-
-            {/* Desktop Popover Dropdown */}
-            {sortOpen && !isMobile && (
-              <div className="product-sort-dropdown" style={{ background: dropdownBg, border: `1px solid ${dropdownBorderColor}` }}>
-                <div className="product-sort-header" style={{ color: dropdownMutedText, borderBottom: `1px solid ${dropdownBorderColor}` }}>
-                  Sort by
-                </div>
-                {SORT_OPTIONS.map((opt) => {
-                  const isActive = sortBy === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        onSortChange?.(opt.value);
-                        setSortOpen(false);
-                      }}
-                      className="product-sort-item"
+          {show_sort_button !== false && (
+            <div ref={sortRef} style={{ position: "relative", order: toolbar_actions_order === "sort_first" ? 1 : 2 }}>
+              {isMobile ? (
+                <button
+                  type="button"
+                  onClick={() => setSortOpen(!sortOpen)}
+                  className="product-toolbar-icon-btn"
+                  aria-label={`Sort by: ${currentSort.label}`}
+                  title={`Sort by: ${currentSort.label}`}
+                  style={{
+                    borderColor: sortBy !== "newest" ? resolvedAccentColor : sortBorder,
+                    background: sortBy !== "newest" ? `${resolvedAccentColor}16` : sortBtnBg,
+                    color: sortBy !== "newest" ? resolvedAccentColor : sortBtnText,
+                    borderRadius: btnRadius,
+                    height: sizeStyles.height,
+                    width: sizeStyles.height,
+                    minWidth: sizeStyles.height,
+                  }}
+                >
+                  <svg width={sizeStyles.iconSize + 2} height={sizeStyles.iconSize + 2} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 5h10M11 9h7M11 13h4" />
+                    <path d="M3 17l3 3 3-3" />
+                    <path d="M6 18V4" />
+                  </svg>
+                  {sortBy !== "newest" && (
+                    <span
                       style={{
-                        background: isActive ? hoverBg : "transparent",
+                        position: "absolute",
+                        top: "5px",
+                        right: "5px",
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "999px",
+                        background: resolvedAccentColor,
                       }}
-                    >
-                      <div>
-                        <div style={{ fontSize: "13px", fontWeight: isActive ? 700 : 500, color: isActive ? accentColor : dropdownTextColor }}>
-                          {opt.label}
+                    />
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSortOpen(!sortOpen)}
+                  className="product-toolbar-btn product-toolbar-sort-btn"
+                  style={{
+                    background: sortBtnBg,
+                    color: sortBtnText,
+                    borderColor: sortBorder,
+                    borderRadius: btnRadius,
+                    height: sizeStyles.height,
+                    padding: sizeStyles.padding,
+                    fontSize: sizeStyles.fontSize,
+                  }}
+                >
+                  <svg width={sizeStyles.iconSize} height={sizeStyles.iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <path d="M11 5h10M11 9h7M11 13h4" />
+                    <path d="M3 17l3 3 3-3" />
+                    <path d="M6 18V4" />
+                  </svg>
+                  <span>
+                    Sort by: <strong style={{ fontWeight: 600 }}>{currentSort.label}</strong>
+                  </span>
+                  <span style={{ fontSize: "8px", marginLeft: "3px", opacity: 0.75, transition: "transform 200ms", transform: sortOpen ? "rotate(180deg)" : "rotate(0)" }}>▼</span>
+                </button>
+              )}
+
+              {/* Desktop Popover Dropdown */}
+              {sortOpen && !isMobile && (
+                <div
+                  className="product-sort-dropdown"
+                  style={{
+                    background: `${dropdownBg} !important`,
+                    backgroundColor: `${dropdownBg} !important`,
+                    border: `1px solid ${resolvedSortBorderColor} !important`,
+                    borderRadius: `${resolvedDropdownRadius} !important`,
+                  }}
+                >
+                  <div className="product-sort-header" style={{ color: dropdownMutedText, borderBottom: `1px solid ${resolvedSortBorderColor}` }}>
+                    {resolvedSortHeaderLabel}
+                  </div>
+                  {SORT_OPTIONS.map((opt) => {
+                    const isActive = sortBy === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          onSortChange?.(opt.value);
+                          setSortOpen(false);
+                        }}
+                        className="product-sort-item"
+                        style={{
+                          background: isActive ? sortHoverBg : "transparent",
+                          borderRadius: `calc(${resolvedDropdownRadius} - 4px)`,
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: "13px", fontWeight: isActive ? 700 : 500, color: isActive ? resolvedSortActiveColor : dropdownTextColor }}>
+                            {opt.label}
+                          </div>
+                          <div style={{ fontSize: "11px", color: dropdownMutedText, marginTop: "1px" }}>
+                            {opt.description}
+                          </div>
                         </div>
-                        <div style={{ fontSize: "11px", color: dropdownMutedText, marginTop: "1px" }}>
-                          {opt.description}
-                        </div>
-                      </div>
-                      {isActive && (
-                        <span style={{ color: accentColor, fontSize: "16px", fontWeight: 700 }}>✓</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                        {isActive && (
+                          <span style={{ color: resolvedSortActiveColor, fontSize: "16px", fontWeight: 700 }}>✓</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -368,10 +566,10 @@ export const FilterSidebar = ({
                 maxWidth: "540px",
                 margin: "0 auto",
                 maxHeight: "85%",
-                background: mobileTheme.drawerBg,
-                borderTopLeftRadius: "22px",
-                borderTopRightRadius: "22px",
-                border: `1px solid ${mobileTheme.drawerBorder}`,
+                background: customSortDropdownBg || mobileTheme.drawerBg,
+                borderTopLeftRadius: resolvedDropdownRadius || "22px",
+                borderTopRightRadius: resolvedDropdownRadius || "22px",
+                border: `1px solid ${resolvedSortBorderColor || mobileTheme.drawerBorder}`,
                 borderBottom: "none",
                 boxShadow: mobileTheme.boxShadow,
                 display: "flex",
@@ -412,15 +610,15 @@ export const FilterSidebar = ({
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "14px 18px 12px",
-                  borderBottom: `1px solid ${mobileTheme.cardBorder}`,
-                  background: mobileTheme.isDark ? "rgba(255, 255, 255, 0.02)" : "transparent",
+                  borderBottom: `1px solid ${resolvedSortBorderColor || mobileTheme.cardBorder}`,
+                  background: isDropdownDark ? "rgba(255, 255, 255, 0.02)" : "transparent",
                 }}
               >
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: mobileTheme.textPrimary, letterSpacing: "-0.01em" }}>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: dropdownTextColor, letterSpacing: "-0.01em" }}>
                     Sort by
                   </h3>
-                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: mobileTheme.textSecondary }}>
+                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: dropdownMutedText }}>
                     Choose your preferred product order
                   </p>
                 </div>
@@ -437,7 +635,7 @@ export const FilterSidebar = ({
                     alignItems: "center",
                     justifyContent: "center",
                     cursor: "pointer",
-                    color: mobileTheme.textPrimary,
+                    color: dropdownTextColor,
                     fontSize: "14px",
                     fontWeight: 700,
                     padding: 0,
@@ -473,9 +671,9 @@ export const FilterSidebar = ({
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "12px 14px",
-                        borderRadius: "14px",
-                        border: `1.5px solid ${isActive ? mobileTheme.accentColor : mobileTheme.cardBorder}`,
-                        background: isActive ? mobileTheme.itemActiveBg : mobileTheme.itemBg,
+                        borderRadius: resolvedDropdownRadius || "14px",
+                        border: `1.5px solid ${isActive ? resolvedSortActiveColor : (resolvedSortBorderColor || mobileTheme.cardBorder)}`,
+                        background: isActive ? (sortHoverBg || mobileTheme.itemActiveBg) : (customSortDropdownBg ? (isDropdownDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)") : mobileTheme.itemBg),
                         cursor: "pointer",
                         textAlign: "left",
                         transition: "all 140ms ease",
@@ -483,10 +681,10 @@ export const FilterSidebar = ({
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: "14px", fontWeight: isActive ? 700 : 600, color: isActive ? mobileTheme.accentColor : mobileTheme.textPrimary }}>
+                        <div style={{ fontSize: "14px", fontWeight: isActive ? 700 : 600, color: isActive ? resolvedSortActiveColor : dropdownTextColor }}>
                           {opt.label}
                         </div>
-                        <div style={{ fontSize: "11.5px", color: mobileTheme.textSecondary, marginTop: "2px" }}>
+                        <div style={{ fontSize: "11.5px", color: dropdownMutedText, marginTop: "2px" }}>
                           {opt.description}
                         </div>
                       </div>
@@ -497,12 +695,12 @@ export const FilterSidebar = ({
                           width: "20px",
                           height: "20px",
                           borderRadius: "999px",
-                          border: `2px solid ${isActive ? mobileTheme.accentColor : mobileTheme.textSecondary}`,
+                          border: `2px solid ${isActive ? resolvedSortActiveColor : dropdownMutedText}`,
                           display: "grid",
                           placeItems: "center",
                           flexShrink: 0,
                           marginLeft: "12px",
-                          background: isActive ? `${mobileTheme.accentColor}20` : "transparent",
+                          background: isActive ? `${resolvedSortActiveColor}20` : "transparent",
                         }}
                       >
                         {isActive && (
@@ -511,7 +709,7 @@ export const FilterSidebar = ({
                               width: "8px",
                               height: "8px",
                               borderRadius: "999px",
-                              background: mobileTheme.accentColor,
+                              background: resolvedSortActiveColor,
                             }}
                           />
                         )}
@@ -585,7 +783,7 @@ export const FilterSidebar = ({
           height: 34px;
           border-radius: 8px;
           border: 1px solid ${borderColor};
-          background: ${btnBg};
+          background: ${baseBtnBg};
           color: ${textPrimary};
           font-size: 12.5px;
           font-weight: 500;
@@ -595,14 +793,14 @@ export const FilterSidebar = ({
           user-select: none;
         }
         .product-toolbar-btn:hover {
-          border-color: ${accentColor};
+          border-color: ${resolvedAccentColor};
           background: ${hoverBg};
         }
         .product-toolbar-btn:active {
           transform: scale(0.98);
         }
         .product-toolbar-badge {
-          background: ${accentColor};
+          background: ${resolvedAccentColor};
           color: #fff;
           font-size: 10px;
           font-weight: 700;
@@ -626,7 +824,7 @@ export const FilterSidebar = ({
           align-items: center;
           justify-content: center;
           border: 1px solid ${borderColor};
-          background: ${btnBg};
+          background: ${baseBtnBg};
           color: ${textPrimary};
           cursor: pointer;
           position: relative;
@@ -635,7 +833,7 @@ export const FilterSidebar = ({
           outline: none;
         }
         .product-toolbar-icon-btn:hover {
-          border-color: ${accentColor};
+          border-color: ${resolvedAccentColor};
           background: ${hoverBg};
         }
         .product-toolbar-icon-btn:active {
@@ -645,7 +843,7 @@ export const FilterSidebar = ({
           position: absolute;
           top: -4px;
           right: -4px;
-          background: ${accentColor};
+          background: ${resolvedAccentColor};
           color: #ffffff;
           font-size: 9.5px;
           font-weight: 700;
@@ -670,8 +868,8 @@ export const FilterSidebar = ({
           right: 0;
           width: 250px;
           max-width: calc(100vw - 32px);
-          border-radius: 12px;
-          border: 1px solid ${borderColor};
+          border-radius: ${resolvedDropdownRadius};
+          border: 1px solid ${resolvedSortBorderColor};
           background: ${dropdownBg};
           box-shadow: ${isDark ? "0 16px 36px rgba(0,0,0,0.55)" : "0 12px 30px rgba(15,23,42,0.12)"};
           padding: 6px;
@@ -684,8 +882,8 @@ export const FilterSidebar = ({
           font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 0.06em;
-          color: ${textSecondary};
-          border-bottom: 1px solid ${borderColor};
+          color: ${dropdownMutedText};
+          border-bottom: 1px solid ${resolvedSortBorderColor};
           margin-bottom: 4px;
         }
         .product-sort-item {
@@ -699,6 +897,9 @@ export const FilterSidebar = ({
           cursor: pointer;
           transition: background 140ms ease;
           text-align: left;
+        }
+        .product-sort-item:hover {
+          background: ${sortHoverBg} !important;
         }
 
         /* Responsive Mobile Layout: Single row with Title on left & Icons on right */

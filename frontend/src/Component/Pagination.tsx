@@ -277,10 +277,10 @@ export const Pagination: React.FC<PaginationProps> = ({
   // Ground-Truth Luminance Darkness Detection (storefront never inherits admin theme toggle)
   const isDarkCanvas = isStorefront
     ? Boolean(
+        ((theme as any)?.outer_bg_color ? isColorDarkHex((theme as any).outer_bg_color) : false) ||
         ((theme as any)?.pagination_bg ? isColorDarkHex((theme as any).pagination_bg) : false) ||
         (theme?.primary_bg ? isColorDarkHex(theme.primary_bg) : false) ||
         (theme?.secondary_bg ? isColorDarkHex(theme.secondary_bg) : false) ||
-        ((theme as any)?.pagination_text_color ? !isColorDarkHex((theme as any).pagination_text_color) : false) ||
         (theme?.text_color ? !isColorDarkHex(theme.text_color) : false) ||
         theme?.mode === "dark"
       )
@@ -296,28 +296,38 @@ export const Pagination: React.FC<PaginationProps> = ({
 
   const resolvedAccent = isStorefront
     ? (customAccent || (theme as any)?.pagination_active_bg || theme?.accent_color || "#2563eb")
-    : (customAccent || adminTokens?.accent || "#2563eb");
+    : (adminTokens?.accent || "#2563eb");
 
-  const activeBtnTextColor = isColorDarkHex(resolvedAccent) ? "#ffffff" : "#0f172a";
+  const activeBtnTextColor = isStorefront && (theme as any)?.pagination_active_text_color
+    ? (theme as any).pagination_active_text_color
+    : (isColorDarkHex(resolvedAccent) ? "#ffffff" : "#0f172a");
 
-  const btnBg = (theme as any)?.pagination_bg || (theme as any)?.background_color || (isStorefront
-    ? (isDarkCanvas ? (theme?.secondary_bg || "#1e293b") : (theme?.secondary_bg || "#ffffff"))
-    : (isDarkCanvas ? (adminTokens?.elevatedSurfaceBg || "#242429") : "#ffffff"));
+  const btnBg = isStorefront
+    ? ((theme as any)?.pagination_bg || (theme as any)?.background_color || (isDarkCanvas ? (theme?.secondary_bg || "#1e293b") : (theme?.secondary_bg || "#ffffff")))
+    : (isDarkCanvas ? (adminTokens?.elevatedSurfaceBg || "#242429") : "#ffffff");
 
   const btnHoverBg = isStorefront
     ? (isDarkCanvas ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9")
     : (isDarkCanvas ? (adminTokens?.hoverBg || "rgba(255, 255, 255, 0.08)") : "#f1f5f9");
 
-  const borderColor = (theme as any)?.pagination_border_color || (theme as any)?.border_color || (isStorefront
-    ? (theme?.border_color || (isDarkCanvas ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.14)"))
-    : (isDarkCanvas ? (adminTokens?.border || "rgba(255, 255, 255, 0.08)") : (adminTokens?.border || "rgba(15, 23, 42, 0.14)")));
+  const borderColor = isStorefront
+    ? ((theme as any)?.pagination_border_color || (theme as any)?.border_color || (theme?.border_color || (isDarkCanvas ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.14)")))
+    : (isDarkCanvas ? (adminTokens?.border || "rgba(255, 255, 255, 0.08)") : (adminTokens?.border || "rgba(15, 23, 42, 0.14)"));
 
-  const btnTextColor = (theme as any)?.pagination_text_color || (theme as any)?.text_color || (isStorefront
-    ? (theme?.text_color || (isDarkCanvas ? "#f4f4f5" : "#0f172a"))
-    : (isDarkCanvas ? (adminTokens?.textPrimary || "#f4f4f5") : (adminTokens?.textPrimary || "#0f172a")));
+  const btnTextColor = isStorefront
+    ? ((theme as any)?.pagination_text_color || (theme as any)?.text_color || (theme?.text_color || (isDarkCanvas ? "#f4f4f5" : "#0f172a")))
+    : (isDarkCanvas ? (adminTokens?.textPrimary || "#f4f4f5") : (adminTokens?.textPrimary || "#0f172a"));
+
+  const infoTextColor = isStorefront
+    ? ((theme as any)?.pagination_info_color || (theme as any)?.text_color || (isDarkCanvas ? "rgba(255, 255, 255, 0.75)" : "rgba(15, 23, 42, 0.75)"))
+    : (isDarkCanvas ? (adminTokens?.textSecondary || "#a1a1aa") : (adminTokens?.textSecondary || "#475569"));
+
+  const infoHighlightColor = isStorefront
+    ? ((theme as any)?.pagination_info_color || (theme as any)?.text_color || (isDarkCanvas ? "#f4f4f5" : "#0f172a"))
+    : (isDarkCanvas ? (adminTokens?.textPrimary || "#f4f4f5") : (adminTokens?.textPrimary || "#0f172a"));
 
   const mutedText = isStorefront
-    ? (isDarkCanvas ? "rgba(255, 255, 255, 0.6)" : "rgba(15, 23, 42, 0.6)")
+    ? ((theme as any)?.pagination_info_color || (isDarkCanvas ? "rgba(255, 255, 255, 0.6)" : "rgba(15, 23, 42, 0.6)"))
     : (isDarkCanvas ? (adminTokens?.textSecondary || "#a1a1aa") : (adminTokens?.textSecondary || "#475569"));
 
   const disabledText = isStorefront
@@ -533,14 +543,14 @@ export const Pagination: React.FC<PaginationProps> = ({
 
       {/* Optional Range Text */}
       {showRangeText && totalItems !== undefined && totalItems > 0 && pageSize && (
-        <div style={{ fontSize: "12px", color: mutedText, fontWeight: 500 }}>
-          Showing <strong style={{ color: isDarkCanvas ? "#f4f4f5" : "#0f172a" }}>{Math.min((currentPage - 1) * pageSize + 1, totalItems)}</strong>–<strong style={{ color: isDarkCanvas ? "#f4f4f5" : "#0f172a" }}>{Math.min(currentPage * pageSize, totalItems)}</strong> of <strong style={{ color: isDarkCanvas ? "#f4f4f5" : "#0f172a" }}>{totalItems}</strong>
+        <div style={{ fontSize: "12px", color: infoTextColor, fontWeight: 500 }}>
+          Showing <strong style={{ color: infoHighlightColor }}>{Math.min((currentPage - 1) * pageSize + 1, totalItems)}</strong>–<strong style={{ color: infoHighlightColor }}>{Math.min(currentPage * pageSize, totalItems)}</strong> of <strong style={{ color: infoHighlightColor }}>{totalItems}</strong>
         </div>
       )}
 
       {/* Optional Page Size Selector (Centered below) */}
       {pageSizeOptions && pageSizeOptions.length > 0 && onPageSizeChange && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "12.5px", color: mutedText, marginTop: "2px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "12.5px", color: infoTextColor, marginTop: "2px" }}>
           <span>Per page:</span>
           {isStorefront ? (
             <StorefrontPageSizeSelect

@@ -73,6 +73,9 @@ type ProductGridProps = {
   max_width?: string;
   padding_y?: string | number;
   padding_x?: string | number;
+  columns?: number | string;
+  grid_columns?: number | string;
+  card_width?: number | string;
 
   // Card Container & Background
   outer_bg_color?: string;
@@ -90,6 +93,7 @@ type ProductGridProps = {
 
   // Typography & Colors
   title_color?: string;
+  subtitle_color?: string;
   product_name_color?: string;
   product_title_color?: string;
   product_name_font_family?: string;
@@ -116,10 +120,47 @@ type ProductGridProps = {
   hideFilterButton?: boolean;
   hide_filter_sidebar?: boolean;
   hideFilterSidebar?: boolean;
+  show_filter_bar?: boolean;
+  badge_style?: "pill" | "square" | "minimal";
+  badge_bg_color?: string;
+  badge_color?: string;
+  badge_text_color?: string;
+  editMode?: boolean;
   card_style?: string;
   cardStyle?: string;
   show_brand_name?: boolean;
   isProductsLoading?: boolean;
+
+  // Toolbar / Filter & Sort By Customization Props
+  toolbar_layout?: "space_between" | "center" | "split_stacked";
+  toolbar_actions_order?: "filter_first" | "sort_first";
+  toolbar_btn_size?: "compact" | "standard" | "large";
+  toolbar_btn_radius?: string | number;
+  toolbar_btn_style?: "outlined" | "solid" | "soft" | "ghost";
+  toolbar_btn_border_color?: string;
+  show_sort_button?: boolean;
+  show_item_count?: boolean;
+  filter_button_label?: string;
+  default_sort?: string;
+  sort_dropdown_radius?: string | number;
+  sort_dropdown_bg?: string;
+  sort_dropdown_text_color?: string;
+  sort_active_color?: string;
+  sort_dropdown_header_label?: string;
+  sort_dropdown_border_color?: string;
+  toolbar_bg?: string;
+  filter_btn_bg?: string;
+  filter_btn_text?: string;
+  sort_btn_bg?: string;
+  sort_btn_text?: string;
+  filter_accent_color?: string;
+  item_count_color?: string;
+  pagination_bg?: string;
+  pagination_text_color?: string;
+  pagination_active_bg?: string;
+  pagination_active_text_color?: string;
+  pagination_border_color?: string;
+  pagination_info_color?: string;
 
   theme?: {
     mode?: string;
@@ -180,6 +221,9 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   max_width,
   padding_y,
   padding_x,
+  columns,
+  grid_columns,
+  card_width,
   outer_bg_color,
   card_bg_color,
   card_radius,
@@ -193,6 +237,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   image_radius,
   image_corner_radius,
   title_color,
+  subtitle_color,
   product_name_color,
   product_title_color,
   product_name_font_family,
@@ -217,7 +262,43 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   hideFilterButton,
   hide_filter_sidebar,
   hideFilterSidebar,
+  show_filter_bar = true,
+  badge_style = "pill",
+  badge_bg_color,
+  badge_color,
+  badge_text_color,
+  editMode = false,
   show_brand_name = true,
+  // Toolbar / Filter & Sort By Customization Props
+  toolbar_layout,
+  toolbar_actions_order,
+  toolbar_btn_size,
+  toolbar_btn_radius,
+  toolbar_btn_style,
+  toolbar_btn_border_color,
+  show_sort_button,
+  show_item_count,
+  filter_button_label,
+  default_sort,
+  sort_dropdown_radius,
+  sort_dropdown_bg,
+  sort_dropdown_text_color,
+  sort_active_color,
+  sort_dropdown_header_label,
+  sort_dropdown_border_color,
+  toolbar_bg,
+  filter_btn_bg,
+  filter_btn_text,
+  sort_btn_bg,
+  sort_btn_text,
+  filter_accent_color,
+  item_count_color,
+  pagination_bg,
+  pagination_text_color,
+  pagination_active_bg,
+  pagination_active_text_color,
+  pagination_border_color,
+  pagination_info_color,
   theme,
 }) => {
   const navigate = useNavigate();
@@ -373,17 +454,12 @@ const ProductGrid: React.FC<ProductGridProps> = ({
   const rawPreferredTextColor =
     product_name_color ||
     product_title_color ||
-    title_color ||
     (theme as any)?.product_name_color ||
     (theme as any)?.card_text_color;
 
-  // Zero-Camouflage Contrast Guardrail: Guarantee text is always readable
-  let pageText = rawPreferredTextColor || defaultTextColor || (isCardDark ? "#ffffff" : "#0f172a");
-  if (isCardDark && isColorDarkHex(pageText)) {
-    pageText = "#ffffff";
-  } else if (!isCardDark && !isColorDarkHex(pageText)) {
-    pageText = "#0f172a";
-  }
+  let pageText = rawPreferredTextColor
+    ? rawPreferredTextColor
+    : (defaultTextColor || (isCardDark ? "#ffffff" : "#0f172a"));
 
   let mutedText = (theme as any)?.muted_text_color || (theme as any)?.muted_text || defaultMutedText;
   if (!mutedText || (isCardDark && isColorDarkHex(mutedText)) || (!isCardDark && !isColorDarkHex(mutedText))) {
@@ -617,18 +693,28 @@ const ProductGrid: React.FC<ProductGridProps> = ({
     ? `${parsedPaddingXNum}px`
     : isMobile ? "8px" : "16px";
 
-  const resolvedColumns =
-    cardStyleKey === "grocery"
-      ? isMobile
+  const parsedCardWidth = (() => {
+    const v = card_width;
+    if (v === undefined || v === null || String(v).trim() === "") return cardStyleKey === "grocery" ? 320 : 230;
+    const n = typeof v === "number" ? v : parseInt(String(v), 10);
+    return isNaN(n) ? (cardStyleKey === "grocery" ? 320 : 230) : Math.max(140, Math.min(400, n));
+  })();
+
+  const resolvedColumns = useMemo(() => {
+    if (cardStyleKey === "grocery") {
+      return isMobile
         ? "repeat(1, 1fr)"
         : isTablet
-          ? "repeat(auto-fill, minmax(290px, 1fr))"
-          : "repeat(auto-fill, minmax(320px, 1fr))"
-      : isMobile
-        ? "repeat(2, minmax(0, 1fr))"
-        : isTablet
-          ? "repeat(auto-fill, minmax(190px, 1fr))"
-          : "repeat(auto-fill, minmax(230px, 1fr))";
+          ? `repeat(auto-fill, minmax(${Math.min(parsedCardWidth, 290)}px, 1fr))`
+          : `repeat(auto-fill, minmax(${parsedCardWidth}px, 1fr))`;
+    }
+
+    return isMobile
+      ? "repeat(2, minmax(0, 1fr))"
+      : isTablet
+        ? `repeat(auto-fill, minmax(${Math.min(parsedCardWidth, 190)}px, 1fr))`
+        : `repeat(auto-fill, minmax(${parsedCardWidth}px, 1fr))`;
+  }, [isMobile, isTablet, cardStyleKey, parsedCardWidth]);
 
   const resolvedImageFit = image_fit || "cover";
   const resolvedImageBg = image_bg || (isCardDark ? "rgba(255,255,255,0.04)" : "#f8fafc");
@@ -659,17 +745,42 @@ const ProductGrid: React.FC<ProductGridProps> = ({
         }
       `}</style>
       {/* Header & Filter Toolbar */}
-      {!hideFilterSidebar && !hide_filter_sidebar && (
+      {!hideFilterSidebar && !hide_filter_sidebar && show_filter_bar !== false && (
         <FilterSidebar
           title={title}
           subtitle={subtitle}
+          title_color={title_color}
+          subtitle_color={subtitle_color}
+          accent_color={resolvedAccentColor}
           itemCount={itemCount ?? normalizedProducts.length}
           activeFilterCount={activeFilterCount}
-          sortBy={sortBy}
+          sortBy={sortBy || default_sort || (theme as any)?.default_sort || "newest"}
           onSortChange={onSortChange}
           onFilterClick={onFilterClick}
           showFilterButton={effectiveShowFilterButton}
           theme={theme}
+          toolbar_layout={toolbar_layout ?? (theme as any)?.toolbar_layout}
+          toolbar_actions_order={toolbar_actions_order ?? (theme as any)?.toolbar_actions_order}
+          toolbar_btn_size={toolbar_btn_size ?? (theme as any)?.toolbar_btn_size}
+          toolbar_btn_radius={toolbar_btn_radius ?? (theme as any)?.toolbar_btn_radius}
+          toolbar_btn_style={toolbar_btn_style ?? (theme as any)?.toolbar_btn_style}
+          toolbar_btn_border_color={toolbar_btn_border_color ?? (theme as any)?.toolbar_btn_border_color}
+          show_sort_button={show_sort_button ?? (theme as any)?.show_sort_button}
+          show_item_count={show_item_count ?? (theme as any)?.show_item_count}
+          item_count_color={item_count_color ?? (theme as any)?.item_count_color}
+          filter_button_label={filter_button_label ?? (theme as any)?.filter_button_label}
+          sort_dropdown_radius={sort_dropdown_radius ?? (theme as any)?.sort_dropdown_radius}
+          sort_dropdown_bg={sort_dropdown_bg ?? (theme as any)?.sort_dropdown_bg}
+          sort_dropdown_text_color={sort_dropdown_text_color ?? (theme as any)?.sort_dropdown_text_color}
+          sort_active_color={sort_active_color ?? (theme as any)?.sort_active_color}
+          sort_dropdown_header_label={sort_dropdown_header_label ?? (theme as any)?.sort_dropdown_header_label}
+          sort_dropdown_border_color={sort_dropdown_border_color ?? (theme as any)?.sort_dropdown_border_color}
+          toolbar_bg={toolbar_bg ?? (theme as any)?.toolbar_bg}
+          filter_btn_bg={filter_btn_bg ?? (theme as any)?.filter_btn_bg}
+          filter_btn_text={filter_btn_text ?? (theme as any)?.filter_btn_text}
+          sort_btn_bg={sort_btn_bg ?? (theme as any)?.sort_btn_bg}
+          sort_btn_text={sort_btn_text ?? (theme as any)?.sort_btn_text}
+          filter_accent_color={filter_accent_color ?? (theme as any)?.filter_accent_color}
         />
       )}
 
@@ -822,6 +933,30 @@ const ProductGrid: React.FC<ProductGridProps> = ({
 
             const badgeCollections = (product.collections || []).filter((c: any) => c && c.is_badge);
 
+            const festTheme = (theme as any)?.festival_theme;
+            const isPreorder = isProductPreorderActive(product);
+
+            const badgeRadius =
+              badge_style === "pill"
+                ? "999px"
+                : badge_style === "square"
+                ? "0px"
+                : badge_style === "minimal"
+                ? "4px"
+                : "6px";
+
+            const resolvedBadgeBg =
+              badge_bg_color ||
+              badge_color ||
+              (badge_style === "minimal" ? "rgba(22, 163, 74, 0.12)" : "linear-gradient(135deg, #16a34a, #15803d)");
+
+            const resolvedBadgeTextColor =
+              badge_text_color ||
+              (badge_style === "minimal" && !badge_bg_color && !badge_color ? "#16a34a" : "#ffffff");
+
+            const badgeBorder =
+              badge_style === "minimal" ? "1px solid rgba(22, 163, 74, 0.4)" : undefined;
+
             const renderCollectionBadges = (isCompact = false) => {
               if (!badgeCollections || badgeCollections.length === 0) return null;
 
@@ -844,13 +979,14 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                       key={col.id || col.name}
                       style={{
                         padding: isCompact ? "2px 5px" : "3px 8px",
-                        borderRadius: "6px",
-                        background: col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
-                        color: "#ffffff",
+                        borderRadius: badgeRadius || "6px",
+                        background: badge_bg_color || badge_color || col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
+                        color: badge_text_color || col.badge_text_color || "#ffffff",
+                        border: badgeBorder,
                         fontSize: isCompact ? "8px" : "9px",
                         fontWeight: 800,
                         letterSpacing: "0.04em",
-                        boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
+                        boxShadow: badge_style === "minimal" ? "none" : "0 2px 6px rgba(0,0,0,0.18)",
                         textTransform: "uppercase",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
@@ -865,11 +1001,11 @@ const ProductGrid: React.FC<ProductGridProps> = ({
               );
             };
 
-            const festTheme = (theme as any)?.festival_theme;
-            const isPreorder = isProductPreorderActive(product);
-
             const renderDiscountBadge = (isFrosted = true, badgePos: "top-right" | "top-left" = "top-right") => {
-              if (!show_discount_badge || product.normalizedDiscountPercent <= 0) return null;
+              const displayPercent = product.normalizedDiscountPercent > 0
+                ? product.normalizedDiscountPercent
+                : (editMode && show_discount_badge ? 20 : 0);
+              if (!show_discount_badge || displayPercent <= 0) return null;
               return (
                 <div
                   style={{
@@ -880,17 +1016,18 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                       : { right: isMobile ? "6px" : "10px" }),
                     zIndex: 3,
                     padding: isMobile ? "3px 7px" : "4px 9px",
-                    borderRadius: "6px",
-                    background: "linear-gradient(135deg, #16a34a, #15803d)",
-                    color: "#ffffff",
+                    borderRadius: badgeRadius,
+                    background: resolvedBadgeBg,
+                    color: resolvedBadgeTextColor,
+                    border: badgeBorder,
                     fontSize: isMobile ? "9px" : "10px",
                     fontWeight: 800,
                     letterSpacing: "0.03em",
-                    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.18)",
+                    boxShadow: badge_style === "minimal" ? "none" : "0 2px 6px rgba(0, 0, 0, 0.18)",
                     userSelect: "none",
                   }}
                 >
-                  {product.normalizedDiscountPercent}% OFF
+                  {displayPercent}% OFF
                 </div>
               );
             };
@@ -1634,9 +1771,10 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                             key={col.id || col.name}
                             style={{
                               padding: isMobile ? "1.5px 4px" : "2px 5px",
-                              borderRadius: "3px",
-                              background: col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
-                              color: "#ffffff",
+                              borderRadius: badgeRadius || "3px",
+                              background: badge_bg_color || badge_color || col.badge_color || "linear-gradient(135deg, #d97706, #b45309)",
+                              color: badge_text_color || col.badge_text_color || "#ffffff",
+                              border: badgeBorder,
                               fontSize: isMobile ? "7px" : "8px",
                               fontWeight: 700,
                               letterSpacing: "0.02em",
@@ -1647,13 +1785,14 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                             {col.name}
                           </span>
                         ))}
-                        {show_discount_badge && product.normalizedDiscountPercent > 0 && (
+                        {show_discount_badge && (product.normalizedDiscountPercent > 0 || editMode) && (
                           <span
                             style={{
                               padding: isMobile ? "1.5px 4px" : "2px 5.5px",
-                              borderRadius: "3px",
-                              background: "linear-gradient(135deg, #16a34a, #15803d)",
-                              color: "#ffffff",
+                              borderRadius: badgeRadius || "3px",
+                              background: resolvedBadgeBg,
+                              color: resolvedBadgeTextColor,
+                              border: badgeBorder,
                               fontSize: isMobile ? "7.5px" : "8.5px",
                               fontWeight: 800,
                               letterSpacing: "0.02em",
@@ -1661,7 +1800,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({
                               whiteSpace: "nowrap",
                             }}
                           >
-                            {product.normalizedDiscountPercent}% OFF
+                            {product.normalizedDiscountPercent > 0 ? product.normalizedDiscountPercent : 20}% OFF
                           </span>
                         )}
                       </div>
@@ -1835,18 +1974,26 @@ const ProductGrid: React.FC<ProductGridProps> = ({
         </div>
       )}
 
-      {Boolean((totalPages && totalPages > 1) || (totalProducts && totalProducts > 0) || onPageSizeChange) ? (
+      {Boolean((totalPages && totalPages > 1) || (totalProducts && totalProducts > 0) || onPageSizeChange || editMode) ? (
         <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={onPageChange}
-          totalItems={totalProducts || itemCount}
+          currentPage={currentPage || 1}
+          totalPages={totalPages && totalPages > 1 ? totalPages : (editMode ? 3 : 1)}
+          onPageChange={onPageChange || (() => {})}
+          totalItems={totalProducts || itemCount || (editMode ? 72 : 0)}
           pageSize={pageSize || 24}
           pageSizeOptions={[24, 48, 96, 100]}
           onPageSizeChange={onPageSizeChange}
           showRangeText={true}
-          theme={theme}
-          accentColor={accentColor}
+          theme={{
+            ...(theme || {}),
+            pagination_bg: pagination_bg ?? (theme as any)?.pagination_bg,
+            pagination_text_color: pagination_text_color ?? (theme as any)?.pagination_text_color,
+            pagination_active_bg: pagination_active_bg ?? (theme as any)?.pagination_active_bg,
+            pagination_active_text_color: pagination_active_text_color ?? (theme as any)?.pagination_active_text_color,
+            pagination_border_color: pagination_border_color ?? (theme as any)?.pagination_border_color,
+            pagination_info_color: pagination_info_color ?? (theme as any)?.pagination_info_color,
+          }}
+          accentColor={pagination_active_bg || accentColor}
         />
       ) : null}
     </section>

@@ -39,12 +39,14 @@ export function resolveMobileDrawerTheme(theme?: any): MobileDrawerThemeTokens {
 
   // Border colors matching the site's design tokens
   const drawerBorder =
+    theme?.filter_modal_border ||
     theme?.filter_border_color ||
     theme?.border_color ||
     tokens.borderColor ||
     (isDrawerDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.10)");
 
   const cardBorder =
+    theme?.filter_modal_border ||
     tokens.softBorderColor ||
     (isDrawerDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.07)");
 
@@ -63,7 +65,7 @@ export function resolveMobileDrawerTheme(theme?: any): MobileDrawerThemeTokens {
 
   // Accent color directly from the site's AI palette
   const accentColor =
-    theme?.filter_btn_bg ||
+    theme?.filter_modal_accent ||
     theme?.filter_accent_color ||
     theme?.accent_color ||
     tokens.accentColor ||
@@ -71,7 +73,7 @@ export function resolveMobileDrawerTheme(theme?: any): MobileDrawerThemeTokens {
 
   const pillColor = isDrawerDark ? "rgba(255, 255, 255, 0.25)" : "rgba(0, 0, 0, 0.18)";
   const closeBtnBg = isDrawerDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)";
-  const itemBg = isDrawerDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.025)";
+  const itemBg = theme?.filter_modal_item_bg || (isDrawerDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.025)");
   const itemActiveBg = `${accentColor}18`;
 
   const boxShadow = isDrawerDark

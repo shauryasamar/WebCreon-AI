@@ -114,6 +114,49 @@ const IconFontItalic = ({ size = 14 }: { size?: number }) => (
   </svg>
 );
 
+const IconStyleOutline = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <circle cx="8" cy="8" r="5" />
+  </svg>
+);
+
+const IconStyleSolid = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
+    <circle cx="8" cy="8" r="5" />
+  </svg>
+);
+
+const IconStyleDuotone = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" stroke="currentColor" strokeWidth="1.3">
+    <circle cx="8" cy="8" r="5" fill="currentColor" fillOpacity="0.25" />
+    <path d="M8 3a5 5 0 0 0 0 10V3z" fill="currentColor" />
+  </svg>
+);
+
+const IconShapeRounded = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <rect x="2" y="2" width="12" height="12" rx="3.5" />
+  </svg>
+);
+
+const IconShapeCircle = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <circle cx="8" cy="8" r="6" />
+  </svg>
+);
+
+const IconShapeSquare = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <rect x="2" y="2" width="12" height="12" rx="0.5" />
+  </svg>
+);
+
+const IconShapeGhost = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.5 2">
+    <rect x="2" y="2" width="12" height="12" rx="2.5" />
+  </svg>
+);
+
 function PageBlocksTreeView({
   siteDefinition: _siteDefinition,
   onSelectBlock,
@@ -2153,8 +2196,13 @@ const NumberStepperField = ({
   onChange: (val: number) => void;
 }) => {
   const { isDark, tokens } = useAdminTheme();
-  const valueRef = useRef(value);
-  valueRef.current = value;
+
+  const rawNum = typeof value === "number" ? value : parseFloat(String(value));
+  const safeValue = isNaN(rawNum) ? min : rawNum;
+  const clampedValue = Math.max(min, Math.min(max, safeValue));
+
+  const valueRef = useRef(clampedValue);
+  valueRef.current = clampedValue;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const stepRef = useRef(step);
@@ -2165,15 +2213,18 @@ const NumberStepperField = ({
   maxRef.current = max;
 
   const isFocusedRef = useRef(false);
-  const [inputValue, setInputValue] = useState(String(value ?? ""));
+  const [inputValue, setInputValue] = useState(String(clampedValue));
 
   useEffect(() => {
     if (!isFocusedRef.current) {
-      setInputValue(String(value ?? ""));
+      setInputValue(String(clampedValue));
     }
-  }, [value]);
+  }, [clampedValue]);
 
-  const clamp = (val: number) => Math.max(minRef.current, Math.min(maxRef.current, val));
+  const clamp = (val: number) => {
+    const num = isNaN(val) ? minRef.current : val;
+    return Math.max(minRef.current, Math.min(maxRef.current, num));
+  };
 
   const attachWheel = useCallback((node: HTMLInputElement | null) => {
     if (!node) return;
@@ -2184,10 +2235,11 @@ const NumberStepperField = ({
       e.preventDefault();
       e.stopPropagation();
       const delta = e.deltaY < 0 ? stepRef.current : -stepRef.current;
-      const current = typeof valueRef.current === "number" ? valueRef.current : parseFloat(String(valueRef.current)) || 0;
+      const current = typeof valueRef.current === "number" ? valueRef.current : parseFloat(String(valueRef.current));
+      const safeCurrent = isNaN(current) ? minRef.current : current;
       const nextVal = Math.max(
         minRef.current,
-        Math.min(maxRef.current, Number((current + delta).toFixed(2)))
+        Math.min(maxRef.current, Number((safeCurrent + delta).toFixed(2)))
       );
       if (nextVal !== valueRef.current) {
         setInputValue(String(nextVal));
@@ -2204,14 +2256,18 @@ const NumberStepperField = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowUp") {
       e.preventDefault();
-      const next = clamp(Number((value + step).toFixed(2)));
-      setInputValue(String(next));
-      onChange(next);
+      const next = clamp(Number((clampedValue + step).toFixed(2)));
+      if (next !== clampedValue) {
+        setInputValue(String(next));
+        onChange(next);
+      }
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      const next = clamp(Number((value - step).toFixed(2)));
-      setInputValue(String(next));
-      onChange(next);
+      const next = clamp(Number((clampedValue - step).toFixed(2)));
+      if (next !== clampedValue) {
+        setInputValue(String(next));
+        onChange(next);
+      }
     }
   };
 
@@ -2219,17 +2275,17 @@ const NumberStepperField = ({
     isFocusedRef.current = false;
     const parsed = parseFloat(inputValue);
     if (isNaN(parsed)) {
-      setInputValue(String(value));
+      setInputValue(String(clampedValue));
     } else {
       const clamped = clamp(parsed);
       setInputValue(String(clamped));
-      if (clamped !== value) {
+      if (clamped !== clampedValue) {
         onChange(clamped);
       }
     }
   };
 
-  const percent = max > min ? Math.max(0, Math.min(100, ((Number(value ?? min) - min) / (max - min)) * 100)) : 0;
+  const percent = max > min ? Math.max(0, Math.min(100, ((clampedValue - min) / (max - min)) * 100)) : 0;
 
   const formattedUnit = unit ? (unit.toLowerCase() === "px" ? "Px" : unit) : "";
   const displayLabel = formattedUnit && !label.includes("(")
@@ -2269,8 +2325,10 @@ const NumberStepperField = ({
       <div style={{ display: "flex", alignItems: "center", gap: "3px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
         <button
           type="button"
+          disabled={clampedValue <= min}
           onClick={() => {
-            const next = clamp(Number((value - step).toFixed(2)));
+            if (clampedValue <= min) return;
+            const next = clamp(Number((clampedValue - step).toFixed(2)));
             setInputValue(String(next));
             onChange(next);
           }}
@@ -2284,7 +2342,8 @@ const NumberStepperField = ({
             color: tokens.textPrimary,
             fontWeight: 700,
             fontSize: "13px",
-            cursor: "pointer",
+            cursor: clampedValue <= min ? "not-allowed" : "pointer",
+            opacity: clampedValue <= min ? 0.35 : 1,
             display: "grid",
             placeItems: "center",
             flexShrink: 0,
@@ -2313,8 +2372,9 @@ const NumberStepperField = ({
             const raw = e.target.value;
             setInputValue(raw);
             const parsed = parseFloat(raw);
-            if (!isNaN(parsed) && parsed >= min && parsed <= max) {
-              onChange(parsed);
+            if (!isNaN(parsed)) {
+              const clamped = clamp(parsed);
+              onChange(clamped);
             }
           }}
           style={{
@@ -2337,8 +2397,10 @@ const NumberStepperField = ({
 
         <button
           type="button"
+          disabled={clampedValue >= max}
           onClick={() => {
-            const next = clamp(Number((value + step).toFixed(2)));
+            if (clampedValue >= max) return;
+            const next = clamp(Number((clampedValue + step).toFixed(2)));
             setInputValue(String(next));
             onChange(next);
           }}
@@ -2352,7 +2414,8 @@ const NumberStepperField = ({
             color: tokens.textPrimary,
             fontWeight: 700,
             fontSize: "13px",
-            cursor: "pointer",
+            cursor: clampedValue >= max ? "not-allowed" : "pointer",
+            opacity: clampedValue >= max ? 0.35 : 1,
             display: "grid",
             placeItems: "center",
             flexShrink: 0,
@@ -2371,17 +2434,29 @@ const NumberStepperField = ({
         min={min}
         max={max}
         step={step}
-        value={value}
+        value={clampedValue}
         draggable={false}
         onDragStart={(e) => {
           e.preventDefault();
           e.stopPropagation();
         }}
         onMouseDown={(e) => e.stopPropagation()}
+        onWheel={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const delta = e.deltaY < 0 ? step : -step;
+          const next = clamp(Number((clampedValue + delta).toFixed(2)));
+          if (next !== clampedValue) {
+            setInputValue(String(next));
+            onChange(next);
+          }
+        }}
         onChange={(e) => {
           const next = clamp(Number(e.target.value));
-          setInputValue(String(next));
-          onChange(next);
+          if (next !== clampedValue) {
+            setInputValue(String(next));
+            onChange(next);
+          }
         }}
         style={{
           width: "100%",
@@ -3919,13 +3994,11 @@ function SectionGroupCarouselEditor({
   const parsedCardTitleSize = parseInt(String(currentProps.card_title_size || "15"), 10) || 15;
 
   const hasSectionTitle = Boolean(
-    (currentProps.show_title !== false) &&
     currentProps.title &&
     String(currentProps.title).trim().length > 0
   );
 
   const hasSectionSubtitle = Boolean(
-    (currentProps.show_subtitle !== false) &&
     currentProps.subtitle &&
     String(currentProps.subtitle).trim().length > 0
   );
@@ -4534,16 +4607,20 @@ function ProductCarouselEditor({
   })();
 
   const hasSectionTitle = Boolean(
-    (p.show_title !== false) &&
     p.title &&
     String(p.title).trim().length > 0
   );
 
   const hasSectionSubtitle = Boolean(
-    (p.show_subtitle !== false) &&
     p.subtitle &&
     String(p.subtitle).trim().length > 0
   );
+
+  const isBadgeOn = p.show_discount_badge !== false;
+  const isRatingsOn = p.show_ratings !== false;
+  const isBrandOn = p.show_brand_name !== false;
+  const isOldPriceOn = p.show_original_price !== false;
+  const isTitleOn = p.show_title !== false;
 
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -4825,68 +4902,70 @@ function ProductCarouselEditor({
           )}
 
           {/* Product Typography & Font */}
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Product Title & Typography
-            </div>
-            <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Font Family</label>
-                <CustomSelectDropdown
-                  value={p.product_name_font_family || p.product_title_font_family || "sans_modern"}
-                  placeholder="Font"
-                  options={[
-                    { label: "Inter (Modern Sans)", value: "sans_modern" },
-                    { label: "Roboto (Sans)", value: "roboto_sans" },
-                    { label: "Outfit (Tech)", value: "outfit_tech" },
-                    { label: "Plus Jakarta", value: "plus_jakarta" },
-                    { label: "Poppins (Rounded)", value: "poppins_rounded" },
-                    { label: "Montserrat", value: "montserrat_bold" },
-                    { label: "Space Grotesk", value: "space_grotesk" },
-                    { label: "Playfair (Serif)", value: "playfair_serif" },
-                    { label: "Cinzel (Display)", value: "cinzel_display" },
-                    { label: "Cormorant (Serif)", value: "cormorant_serif" },
-                  ]}
-                  onChange={(val) => updateProps({ product_name_font_family: val, product_title_font_family: val })}
-                />
+          {isTitleOn && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Product Title & Typography
               </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Font Family</label>
+                  <CustomSelectDropdown
+                    value={p.product_name_font_family || p.product_title_font_family || "sans_modern"}
+                    placeholder="Font"
+                    options={[
+                      { label: "Inter (Modern Sans)", value: "sans_modern" },
+                      { label: "Roboto (Sans)", value: "roboto_sans" },
+                      { label: "Outfit (Tech)", value: "outfit_tech" },
+                      { label: "Plus Jakarta", value: "plus_jakarta" },
+                      { label: "Poppins (Rounded)", value: "poppins_rounded" },
+                      { label: "Montserrat", value: "montserrat_bold" },
+                      { label: "Space Grotesk", value: "space_grotesk" },
+                      { label: "Playfair (Serif)", value: "playfair_serif" },
+                      { label: "Cinzel (Display)", value: "cinzel_display" },
+                      { label: "Cormorant (Serif)", value: "cormorant_serif" },
+                    ]}
+                    onChange={(val) => updateProps({ product_name_font_family: val, product_title_font_family: val })}
+                  />
+                </div>
 
-              <NumberStepperField
-                label="Title Size"
-                value={parsedProductNameSize}
-                min={11}
-                max={24}
-                step={1}
-                unit="px"
-                onChange={(val) => updateProps({ product_name_font_size: `${val}px`, product_title_font_size: `${val}px` })}
-              />
-
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Weight</label>
-                <CustomSelectDropdown
-                  value={String(p.product_name_font_weight || p.product_title_font_weight || "700")}
-                  placeholder="Weight"
-                  options={[
-                    { label: "Regular (400)", value: "400" },
-                    { label: "Medium (500)", value: "500" },
-                    { label: "Semi-Bold (600)", value: "600" },
-                    { label: "Bold (700)", value: "700" },
-                    { label: "Extra Bold (800)", value: "800" },
-                  ]}
-                  onChange={(val) => updateProps({ product_name_font_weight: val, product_title_font_weight: val })}
+                <NumberStepperField
+                  label="Title Size"
+                  value={parsedProductNameSize}
+                  min={11}
+                  max={24}
+                  step={1}
+                  unit="px"
+                  onChange={(val) => updateProps({ product_name_font_size: `${val}px`, product_title_font_size: `${val}px` })}
                 />
-              </div>
 
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Font Style</label>
-                <SegmentedRow
-                  value={p.product_name_font_style || p.product_title_font_style || "normal"}
-                  onChange={(val) => updateProps({ product_name_font_style: val, product_title_font_style: val })}
-                  options={[{ label: "Normal", value: "normal" }, { label: "Italic", value: "italic" }]}
-                />
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Weight</label>
+                  <CustomSelectDropdown
+                    value={String(p.product_name_font_weight || p.product_title_font_weight || "700")}
+                    placeholder="Weight"
+                    options={[
+                      { label: "Regular (400)", value: "400" },
+                      { label: "Medium (500)", value: "500" },
+                      { label: "Semi-Bold (600)", value: "600" },
+                      { label: "Bold (700)", value: "700" },
+                      { label: "Extra Bold (800)", value: "800" },
+                    ]}
+                    onChange={(val) => updateProps({ product_name_font_weight: val, product_title_font_weight: val })}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Font Style</label>
+                  <SegmentedRow
+                    value={p.product_name_font_style || p.product_title_font_style || "normal"}
+                    onChange={(val) => updateProps({ product_name_font_style: val, product_title_font_style: val })}
+                    options={[{ label: "Normal", value: "normal" }, { label: "Italic", value: "italic" }]}
+                  />
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* Card Visibility */}
           <section style={sectionCardStyle(isLightMode)}>
@@ -5076,24 +5155,26 @@ function ProductCarouselEditor({
               Product Text & Price Colors
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
-              <CompactColorRow
-                label="Product Title Color"
-                value={p.product_name_color || p.product_title_color || p.title_color || siteDefinition.theme?.text_color || "#0f172a"}
-                onChange={(val) => updateProps({ product_name_color: val, product_title_color: val })}
-              />
+              {isTitleOn && (
+                <CompactColorRow
+                  label="Product Title Color"
+                  value={p.product_name_color || p.product_title_color || p.title_color || siteDefinition.theme?.text_color || "#0f172a"}
+                  onChange={(val) => updateProps({ product_name_color: val, product_title_color: val })}
+                />
+              )}
               <CompactColorRow
                 label="Selling Price Color"
                 value={p.price_color || siteDefinition.theme?.text_color || "#0f172a"}
                 onChange={(val) => updateProps({ price_color: val })}
               />
-              {p.show_original_price !== false && (
+              {isOldPriceOn && (
                 <CompactColorRow
                   label="Original (Old) Price"
                   value={p.original_price_color || siteDefinition.theme?.muted_text_color || "#94a3b8"}
                   onChange={(val) => updateProps({ original_price_color: val })}
                 />
               )}
-              {p.show_brand_name !== false && (
+              {isBrandOn && (
                 <CompactColorRow
                   label="Brand Label Color"
                   value={p.brand_color || siteDefinition.theme?.muted_text_color || "#64748b"}
@@ -5104,34 +5185,36 @@ function ProductCarouselEditor({
           </section>
 
           {/* Section 4: Badges & Ratings */}
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Badges & Ratings Colors
-            </div>
-            <div style={{ display: "grid", gap: "6px" }}>
-              {p.show_ratings !== false && (
-                <CompactColorRow
-                  label="Star Rating Color"
-                  value={p.rating_star_color || "#d97706"}
-                  onChange={(val) => updateProps({ rating_star_color: val })}
-                />
-              )}
-              {p.show_discount_badge !== false && (
-                <>
+          {(isRatingsOn || isBadgeOn) && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                {isRatingsOn && isBadgeOn ? "Badges & Ratings Colors" : isRatingsOn ? "Ratings Color" : "Badge Colors"}
+              </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                {isRatingsOn && (
                   <CompactColorRow
-                    label="Badge Background"
-                    value={p.badge_bg_color || p.badge_color || "#16a34a"}
-                    onChange={(val) => updateProps({ badge_bg_color: val, badge_color: val })}
+                    label="Star Rating Color"
+                    value={p.rating_star_color || "#d97706"}
+                    onChange={(val) => updateProps({ rating_star_color: val })}
                   />
-                  <CompactColorRow
-                    label="Badge Text Color"
-                    value={p.badge_text_color || "#ffffff"}
-                    onChange={(val) => updateProps({ badge_text_color: val })}
-                  />
-                </>
-              )}
-            </div>
-          </section>
+                )}
+                {isBadgeOn && (
+                  <>
+                    <CompactColorRow
+                      label="Badge Background"
+                      value={p.badge_bg_color || p.badge_color || "#16a34a"}
+                      onChange={(val) => updateProps({ badge_bg_color: val, badge_color: val })}
+                    />
+                    <CompactColorRow
+                      label="Badge Text Color"
+                      value={p.badge_text_color || "#ffffff"}
+                      onChange={(val) => updateProps({ badge_text_color: val })}
+                    />
+                  </>
+                )}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>
@@ -5154,31 +5237,129 @@ function ProductGridEditor({
   siteDefinition: EditorSiteDefinition;
 }) {
   const { isDark, tokens } = useAdminTheme();
-  const [activeTab, setActiveTab] = useState<"layout" | "styling">("layout");
-  const p = selectedBlock.props ?? {};
+  const [activeTab, setActiveTab] = useState<"layout" | "styling" | "colors">("layout");
+  const targetBlock = (() => {
+    if (Array.isArray(siteDefinition.pages)) {
+      for (const page of siteDefinition.pages) {
+        for (const block of (page.blocks ?? [])) {
+          if (
+            block.id === selectedBlock.id ||
+            block.id === "product_grid" ||
+            block.type === "product_grid" ||
+            block.type === "productgrid" ||
+            block.type === "products" ||
+            block.type === "product_listing" ||
+            (selectedBlock.id && String(block.id).includes("product_grid"))
+          ) {
+            return block;
+          }
+        }
+      }
+    }
+    return selectedBlock;
+  })();
+
+  const blockProps = { ...(targetBlock?.props ?? {}), ...(selectedBlock.props ?? {}) };
+  const themeProps = (siteDefinition.theme ?? {}) as Record<string, any>;
+  const p: Record<string, any> = { ...themeProps, ...blockProps };
+
+  const currentFilterButtonLabel = (() => {
+    if (p.filter_button_label !== undefined && p.filter_button_label !== null) {
+      return p.filter_button_label;
+    }
+    if (siteDefinition.theme?.filter_button_label) {
+      return siteDefinition.theme.filter_button_label;
+    }
+    if (Array.isArray(siteDefinition.pages)) {
+      for (const page of siteDefinition.pages) {
+        for (const block of (page.blocks ?? [])) {
+          const t = String(block.type || "").toLowerCase();
+          const id = String(block.id || "").toLowerCase();
+          if ((t.includes("product") && t.includes("grid")) || id.includes("product_grid")) {
+            if (block.props?.filter_button_label !== undefined && block.props?.filter_button_label !== null) {
+              return block.props.filter_button_label;
+            }
+          }
+        }
+      }
+    }
+    return "Filter & Categories";
+  })();
 
   const updateProps = (patch: Record<string, any>) => {
     const nextDef = JSON.parse(JSON.stringify(siteDefinition));
     if (Array.isArray(nextDef.pages)) {
       nextDef.pages = nextDef.pages.map((page: any) => ({
         ...page,
-        blocks: (page.blocks ?? []).map((block: any) =>
-          block.id === selectedBlock.id
+        blocks: (page.blocks ?? []).map((block: any) => {
+          const isTarget =
+            block.id === selectedBlock.id ||
+            block.id === "product_grid" ||
+            block.type === "product_grid" ||
+            block.type === "productgrid" ||
+            block.type === "products" ||
+            block.type === "product_listing" ||
+            (selectedBlock.id && String(block.id).includes("product_grid"));
+          return isTarget
             ? { ...block, props: { ...(block.props ?? {}), ...patch } }
-            : block
-        ),
+            : block;
+        }),
       }));
     }
-    const incomingCardStyle = patch.card_style || patch.cardStyle;
-    if (incomingCardStyle) {
-      if (!nextDef.theme) nextDef.theme = {};
-      if (incomingCardStyle !== "default") {
-        nextDef.theme.card_style = incomingCardStyle;
-        nextDef.theme.product_grid_card_style = incomingCardStyle;
-      }
+    if (patch.filter_button_label !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), filter_button_label: patch.filter_button_label };
+    }
+    if (patch.subtitle_color !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), subtitle_color: patch.subtitle_color };
+    }
+    if (patch.item_count_color !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), item_count_color: patch.item_count_color };
+    }
+    if (patch.pagination_bg !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), pagination_bg: patch.pagination_bg };
+    }
+    if (patch.pagination_text_color !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), pagination_text_color: patch.pagination_text_color };
+    }
+    if (patch.pagination_active_bg !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), pagination_active_bg: patch.pagination_active_bg };
+    }
+    if (patch.pagination_active_text_color !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), pagination_active_text_color: patch.pagination_active_text_color };
+    }
+    if (patch.pagination_border_color !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), pagination_border_color: patch.pagination_border_color };
+    }
+    if (patch.pagination_info_color !== undefined) {
+      nextDef.theme = { ...(nextDef.theme || {}), pagination_info_color: patch.pagination_info_color };
+    }
+    if (nextDef.theme && "outer_bg_color" in nextDef.theme) {
+      delete nextDef.theme.outer_bg_color;
     }
     onSiteDefinitionChange(nextDef);
   };
+
+  const defaultGridStyle = getEffectiveProductGridCardStyle(siteDefinition);
+  const rawGridCardStyle = String(p.card_style || p.cardStyle || "").toLowerCase().trim();
+  const cardStyleKey =
+    rawGridCardStyle &&
+    rawGridCardStyle !== "default" &&
+    rawGridCardStyle !== "inherit" &&
+    rawGridCardStyle !== "theme" &&
+    rawGridCardStyle !== "auto"
+      ? rawGridCardStyle
+      : defaultGridStyle;
+  const isGrocery = cardStyleKey === "grocery";
+  const minCardWidth = isGrocery ? 220 : 150;
+  const maxCardWidth = isGrocery ? 360 : 360;
+  const defaultCardWidth = isGrocery ? 320 : 230;
+
+  const parsedCardWidth = (() => {
+    const v = p.card_width;
+    if (v === undefined || v === null || String(v).trim() === "") return defaultCardWidth;
+    const n = typeof v === "number" ? v : parseInt(String(v), 10) || defaultCardWidth;
+    return Math.max(minCardWidth, Math.min(maxCardWidth, n));
+  })();
 
   const parsedProductNameSize =
     parseInt(String(p.product_name_font_size || p.product_title_font_size || "15"), 10) || 15;
@@ -5197,109 +5378,104 @@ function ProductGridEditor({
     return isNaN(num) ? 18 : num;
   })();
 
+  const parsedToolbarBtnRadius = (() => {
+    const v = p.toolbar_btn_radius;
+    if (v === undefined || v === null || String(v).trim() === "") return 8;
+    const num = typeof v === "number" ? v : parseInt(String(v), 10);
+    return isNaN(num) ? 8 : Math.max(0, Math.min(20, num));
+  })();
+
+  const parsedFilterModalRadius = (() => {
+    const v = p.filter_modal_radius;
+    if (v === undefined || v === null || String(v).trim() === "") return 18;
+    const num = typeof v === "number" ? v : parseInt(String(v), 10);
+    return isNaN(num) ? 18 : Math.max(0, Math.min(36, num));
+  })();
+
+  const parsedFilterModalItemRadius = (() => {
+    const v = p.filter_modal_item_radius;
+    if (v === undefined || v === null || String(v).trim() === "") return 9;
+    const num = typeof v === "number" ? v : parseInt(String(v), 10);
+    return isNaN(num) ? 9 : Math.max(0, Math.min(24, num));
+  })();
+
+  const parsedSortDropdownRadius = (() => {
+    const v = p.sort_dropdown_radius;
+    if (v === undefined || v === null || String(v).trim() === "") return 12;
+    const num = typeof v === "number" ? v : parseInt(String(v), 10);
+    return isNaN(num) ? 12 : Math.max(0, Math.min(24, num));
+  })();
+
+  const parsedPaddingY = (() => {
+    const v = p.padding_y;
+    if (v === undefined || v === null || String(v).trim() === "") return 12;
+    const num = typeof v === "number" ? v : parseInt(String(v), 10);
+    return isNaN(num) ? 12 : Math.max(0, Math.min(80, num));
+  })();
+
+  const parsedPaddingX = (() => {
+    const v = p.padding_x;
+    if (v === undefined || v === null || String(v).trim() === "") return 16;
+    const num = typeof v === "number" ? v : parseInt(String(v), 10);
+    return isNaN(num) ? 16 : Math.max(4, Math.min(48, num));
+  })();
+
+  const hasSectionTitle = Boolean(
+    p.title &&
+    String(p.title).trim().length > 0
+  );
+
+  const hasSectionSubtitle = Boolean(
+    p.subtitle &&
+    String(p.subtitle).trim().length > 0
+  );
+
+  const isFilterBarOn = p.show_filter_bar !== false;
+  const isFilterButtonOn = isFilterBarOn && p.show_filter_button !== false;
+  const isSortButtonOn = isFilterBarOn && p.show_sort_button !== false;
+  const isBadgeOn = p.show_discount_badge !== false;
+  const isRatingsOn = p.show_ratings !== false;
+  const isBrandOn = p.show_brand_name !== false;
+  const isOldPriceOn = p.show_original_price !== false;
+
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
       <EditorSubTabs
         tabs={[
           { id: "layout", label: "Layout" },
           { id: "styling", label: "Styles" },
+          { id: "colors", label: "Colors" },
         ]}
         activeTab={activeTab}
         onChange={(val) => setActiveTab(val as any)}
       />
 
-      {/* ── Layout Tab ─────────────────────────────────────────────────────── */}
+      {/* ── 1. LAYOUT & STRUCTURE TAB ───────────────────────────────────────── */}
       {activeTab === "layout" && (
         <div style={{ display: "grid", gap: "8px" }}>
+          {/* Card Size & Sizing */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Card Style & Preset</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card Size & Layout
+            </div>
             <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Card Style</label>
-                <CustomSelectDropdown
-                  value={p.card_style || p.cardStyle || "default"}
-                  placeholder="Card Style"
-                  options={[
-                    { label: `Default (${formatCardPresetName(siteDefinition.theme?.card_style || "fashion")})`, value: "default" },
-                    { label: "Grocery", value: "grocery" },
-                    { label: "Fashion", value: "fashion" },
-                    { label: "Electronics", value: "electronics" },
-                    { label: "Beauty", value: "beauty" },
-                    { label: "Books", value: "books" },
-                  ]}
-                  onChange={(val) => {
-                    if (val === "default") {
-                      updateProps({
-                        card_style: "default",
-                        cardStyle: "default",
-                        image_aspect_ratio: undefined,
-                        image_radius: undefined,
-                        image_corner_radius: undefined,
-                        card_radius: undefined,
-                      });
-                    } else if (val === "fashion") {
-                      updateProps({
-                        card_style: val,
-                        cardStyle: val,
-                        image_aspect_ratio: "3/4",
-                        image_radius: undefined,
-                        image_corner_radius: undefined,
-                        card_radius: "16px",
-                      });
-                    } else if (val === "electronics") {
-                      updateProps({
-                        card_style: val,
-                        cardStyle: val,
-                        image_aspect_ratio: "4/3",
-                        image_radius: "12px",
-                        image_corner_radius: "12px",
-                        card_radius: "16px",
-                      });
-                    } else if (val === "beauty") {
-                      updateProps({
-                        card_style: val,
-                        cardStyle: val,
-                        image_aspect_ratio: "3/4",
-                        image_radius: "12px",
-                        image_corner_radius: "12px",
-                        card_radius: "16px",
-                      });
-                    } else if (val === "books") {
-                      updateProps({
-                        card_style: val,
-                        cardStyle: val,
-                        image_aspect_ratio: "3/4",
-                        image_radius: "10px",
-                        image_corner_radius: "10px",
-                        card_radius: "16px",
-                      });
-                    } else if (val === "grocery") {
-                      updateProps({
-                        card_style: val,
-                        cardStyle: val,
-                        image_aspect_ratio: "1/1",
-                        image_radius: "10px",
-                        image_corner_radius: "10px",
-                        card_radius: "14px",
-                      });
-                    } else {
-                      updateProps({
-                        card_style: val,
-                        cardStyle: val,
-                        image_aspect_ratio: "1/1",
-                        image_radius: "12px",
-                        image_corner_radius: "12px",
-                        card_radius: "16px",
-                      });
-                    }
-                  }}
-                />
-              </div>
+              <NumberStepperField
+                label="Card Size"
+                value={parsedCardWidth}
+                min={minCardWidth}
+                max={maxCardWidth}
+                step={10}
+                unit="px"
+                onChange={(val) => updateProps({ card_width: `${val}px` })}
+              />
             </div>
           </section>
 
+          {/* Spacing & Bounds */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Spacing & Bounds</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Spacing & Bounds
+            </div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <div style={{ display: "grid", gap: "2px" }}>
@@ -5309,51 +5485,33 @@ function ProductGridEditor({
                     placeholder="Max Width"
                     options={[
                       { label: "Full Width (100%)", value: "full" },
-                      { label: "1440px", value: "1440px" },
-                      { label: "1280px", value: "1280px" },
-                      { label: "1200px", value: "1200px" },
+                      { label: "Extra Wide (1440px)", value: "1440px" },
+                      { label: "Wide (1280px)", value: "1280px" },
+                      { label: "Standard (1200px)", value: "1200px" },
                     ]}
                     onChange={(val) => updateProps({ max_width: val })}
                   />
                 </div>
                 <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Grid Gap</label>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Card Gap</label>
                   <CustomSelectDropdown
                     value={String(p.gap || p.grid_gap || "16px")}
                     placeholder="Gap"
                     options={[
-                      { label: "Compact 8px", value: "8px" },
-                      { label: "Default 16px", value: "16px" },
-                      { label: "Spacious 20px", value: "20px" },
-                      { label: "Wide 28px", value: "28px" },
+                      { label: "Compact (8px)", value: "8px" },
+                      { label: "Default (16px)", value: "16px" },
+                      { label: "Spacious (20px)", value: "20px" },
+                      { label: "Wide (28px)", value: "28px" },
                     ]}
                     onChange={(val) => updateProps({ gap: val, grid_gap: val })}
                   />
                 </div>
               </div>
-              <NumberStepperField
-                label="Card Width"
-                value={
-                  p.card_width !== undefined && p.card_width !== null && String(p.card_width).trim() !== ""
-                    ? parseInt(String(p.card_width), 10) || 230
-                    : 230
-                }
-                min={150}
-                max={360}
-                step={10}
-                unit="px"
-                onChange={(val) => updateProps({ card_width: `${val}px` })}
-              />
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <NumberStepperField
-                  label="Vertical Pad"
-                  value={
-                    p.padding_y !== undefined && p.padding_y !== null && String(p.padding_y).trim() !== ""
-                      ? !isNaN(parseInt(String(p.padding_y), 10))
-                        ? parseInt(String(p.padding_y), 10)
-                        : 12
-                      : 12
-                  }
+                  label="Vertical Padding"
+                  value={parsedPaddingY}
                   min={0}
                   max={80}
                   step={2}
@@ -5361,23 +5519,70 @@ function ProductGridEditor({
                   onChange={(val) => updateProps({ padding_y: `${val}px` })}
                 />
                 <NumberStepperField
-                  label="Horiz. Pad" value={parseInt(String(p.padding_x || "16"), 10) || 16}
-                  min={4} max={48} step={4} unit="px"
+                  label="Horizontal Padding"
+                  value={parsedPaddingX}
+                  min={4}
+                  max={48}
+                  step={4}
+                  unit="px"
                   onChange={(val) => updateProps({ padding_x: `${val}px` })}
                 />
               </div>
             </div>
           </section>
 
+          {/* Filter & Sort Bar Layout */}
+          {isFilterBarOn && (isFilterButtonOn || isSortButtonOn) && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                {isFilterButtonOn && isSortButtonOn
+                  ? "Filter & Sort Bar Layout"
+                  : isFilterButtonOn
+                    ? "Filter Bar Layout"
+                    : "Sort Bar Layout"}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: (isFilterButtonOn && isSortButtonOn) ? "1fr 1fr" : "1fr", gap: "6px" }}>
+                {isFilterButtonOn && isSortButtonOn && (
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Button Order</label>
+                    <CustomSelectDropdown
+                      value={p.toolbar_actions_order || "filter_first"}
+                      placeholder="Order"
+                      options={[
+                        { label: "Filter then Sort", value: "filter_first" },
+                        { label: "Sort then Filter", value: "sort_first" },
+                      ]}
+                      onChange={(val) => updateProps({ toolbar_actions_order: val })}
+                    />
+                  </div>
+                )}
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Button Size</label>
+                  <CustomSelectDropdown
+                    value={p.toolbar_btn_size || "standard"}
+                    placeholder="Size"
+                    options={[
+                      { label: "Compact (30px)", value: "compact" },
+                      { label: "Standard (34px)", value: "standard" },
+                      { label: "Large (40px)", value: "large" },
+                    ]}
+                    onChange={(val) => updateProps({ toolbar_btn_size: val })}
+                  />
+                </div>
+              </div>
+            </section>
+          )}
         </div>
       )}
 
-      {/* ── Styles Tab ─────────────────────────────────────────────────────── */}
+      {/* ── 2. TYPOGRAPHY & STYLES TAB ───────────────────────────────────────── */}
       {activeTab === "styling" && (
         <div style={{ display: "grid", gap: "8px" }}>
-          {/* Product Title / Card Text Styling */}
+          {/* Product Title & Font */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Product Title & Font</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Product Title & Typography
+            </div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gap: "2px" }}>
                 <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Font Family</label>
@@ -5401,7 +5606,7 @@ function ProductGridEditor({
               </div>
 
               <NumberStepperField
-                label="Font Size"
+                label="Title Size"
                 value={parsedProductNameSize}
                 min={11}
                 max={24}
@@ -5409,8 +5614,9 @@ function ProductGridEditor({
                 unit="px"
                 onChange={(val) => updateProps({ product_name_font_size: `${val}px`, product_title_font_size: `${val}px` })}
               />
+
               <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Font Weight</label>
+                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Title Weight</label>
                 <CustomSelectDropdown
                   value={String(p.product_name_font_weight || p.product_title_font_weight || "700")}
                   placeholder="Weight"
@@ -5436,40 +5642,24 @@ function ProductGridEditor({
             </div>
           </section>
 
+          {/* Image Fit & Card Styling */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Card Visibility</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-              {[
-                { label: "Badge", key: "show_discount_badge" },
-                { label: "Ratings", key: "show_ratings" },
-                { label: "Brand", key: "show_brand_name" },
-                { label: "Old Price", key: "show_original_price" },
-                { label: "Stock", key: "show_stock_badge" },
-                { label: "Filter Button", key: "show_filter_button" },
-              ].map(({ label, key }) => (
-                <div key={key} style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>{label}</label>
-                  <SegmentedRow
-                    value={p[key] !== false ? "on" : "off"}
-                    onChange={(val) => updateProps({ [key]: val === "on" })}
-                    options={[{ label: "On", value: "on" }, { label: "Off", value: "off" }]}
-                  />
-                </div>
-              ))}
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Image Fit & Card Styling
             </div>
-          </section>
-
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Image Fit & Card Styling</div>
             <div style={{ display: "grid", gap: "6px" }}>
               <div style={{ display: "grid", gap: "2px" }}>
                 <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Image Fit</label>
                 <SegmentedRow
                   value={p.image_fit || "cover"}
                   onChange={(val) => updateProps({ image_fit: val })}
-                  options={[{ label: "Cover", value: "cover" }, { label: "Contain", value: "contain" }]}
+                  options={[
+                    { label: "Cover", value: "cover", title: "Cover", icon: <IconFitCover /> },
+                    { label: "Contain", value: "contain", title: "Contain", icon: <IconFitContain /> },
+                  ]}
                 />
               </div>
+
               <div style={{ display: "grid", gap: "2px" }}>
                 <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Aspect Ratio</label>
                 <CustomSelectDropdown
@@ -5485,6 +5675,7 @@ function ProductGridEditor({
                   onChange={(val) => updateProps({ image_aspect_ratio: val })}
                 />
               </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <NumberStepperField
                   label="Card Radius"
@@ -5505,36 +5696,490 @@ function ProductGridEditor({
                   onChange={(val) => updateProps({ image_radius: `${val}px`, image_corner_radius: `${val}px` })}
                 />
               </div>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Card Shadow</label>
-                <CustomSelectDropdown
-                  value={p.card_shadow || "soft"}
-                  placeholder="Shadow"
-                  options={[
-                    { label: "None", value: "none" },
-                    { label: "Subtle", value: "subtle" },
-                    { label: "Soft", value: "soft" },
-                    { label: "Elevated", value: "elevated" },
-                  ]}
-                  onChange={(val) => updateProps({ card_shadow: val })}
-                />
+
+              <div style={{ display: "grid", gridTemplateColumns: isBadgeOn ? "1fr 1fr" : "1fr", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Card Shadow</label>
+                  <CustomSelectDropdown
+                    value={p.card_shadow || "soft"}
+                    placeholder="Shadow"
+                    options={[
+                      { label: "None", value: "none" },
+                      { label: "Subtle (Crisp)", value: "subtle" },
+                      { label: "Soft (Floating)", value: "soft" },
+                      { label: "Elevated (Deep)", value: "elevated" },
+                    ]}
+                    onChange={(val) => updateProps({ card_shadow: val })}
+                  />
+                </div>
+
+                {isBadgeOn && (
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Badge Tag Style
+                    </label>
+                    <CustomSelectDropdown
+                      value={p.badge_style || "pill"}
+                      placeholder="Badge Style"
+                      options={[
+                        { label: "Pill (Rounded)", value: "pill" },
+                        { label: "Corner Tag", value: "square" },
+                        { label: "Minimal Clean", value: "minimal" },
+                      ]}
+                      onChange={(val) => updateProps({ badge_style: val })}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </section>
 
+          {/* Card Visibility */}
           <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>Theme Colors</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Visibility & Elements
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              {[
+                { label: "Badge", key: "show_discount_badge" },
+                { label: "Ratings", key: "show_ratings" },
+                { label: "Brand", key: "show_brand_name" },
+                { label: "Old Price", key: "show_original_price" },
+                { label: "Filter Bar", key: "show_filter_bar" },
+                ...(isFilterBarOn
+                  ? [
+                      { label: "Filter Button", key: "show_filter_button" },
+                      { label: "Sort By", key: "show_sort_button" },
+                      { label: "Item Count", key: "show_item_count" },
+                    ]
+                  : []),
+              ].map(({ label, key }) => (
+                <div key={key} style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>{label}</label>
+                  <SegmentedRow
+                    value={p[key] !== false ? "on" : "off"}
+                    onChange={(val) => updateProps({ [key]: val === "on" })}
+                    options={[{ label: "On", value: "on" }, { label: "Off", value: "off" }]}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Toolbar Buttons Style (Common) */}
+          {isFilterBarOn && (isFilterButtonOn || isSortButtonOn) && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Toolbar Buttons Style (Common)
+              </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Button Style</label>
+                  <SegmentedRow
+                    value={p.toolbar_btn_style || "outline"}
+                    onChange={(val) => updateProps({ toolbar_btn_style: val })}
+                    options={[
+                      { label: "Outline", value: "outline", icon: <IconStyleOutline /> },
+                      { label: "Solid", value: "solid", icon: <IconStyleSolid /> },
+                      { label: "Duotone", value: "duotone", icon: <IconStyleDuotone /> },
+                    ]}
+                  />
+                </div>
+
+                <NumberStepperField
+                  label="Button Radius"
+                  value={parsedToolbarBtnRadius}
+                  min={0}
+                  max={20}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ toolbar_btn_radius: `${val}px` })}
+                />
+              </div>
+            </section>
+          )}
+
+          {/* Filter & Drawer Settings (Dedicated) */}
+          {isFilterButtonOn && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Filter & Drawer Settings
+              </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                <TextColorInputRow
+                  label="Filter Button Label"
+                  value={currentFilterButtonLabel}
+                  placeholder="Filter & Categories"
+                  colorValue={p.filter_btn_text || siteDefinition.theme?.text_color || (isDark ? "#f8fafc" : "#0f172a")}
+                  defaultColor={siteDefinition.theme?.text_color || (isDark ? "#f8fafc" : "#0f172a")}
+                  onChangeText={(val) => updateProps({ filter_button_label: val })}
+                  onChangeColor={(val) => updateProps({ filter_btn_text: val })}
+                />
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                  <NumberStepperField
+                    label="Drawer Radius"
+                    value={parsedFilterModalRadius}
+                    min={0}
+                    max={36}
+                    step={2}
+                    unit="px"
+                    onChange={(val) => updateProps({ filter_modal_radius: `${val}px` })}
+                  />
+                  <NumberStepperField
+                    label="Option Card Radius"
+                    value={parsedFilterModalItemRadius}
+                    min={0}
+                    max={24}
+                    step={1}
+                    unit="px"
+                    onChange={(val) => updateProps({ filter_modal_item_radius: `${val}px` })}
+                  />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Sort By & Menu Settings (Dedicated) */}
+          {isSortButtonOn && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Sort By & Menu Settings
+              </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Default Sort</label>
+                  <CustomSelectDropdown
+                    value={p.default_sort || "newest"}
+                    placeholder="Default Sort"
+                    options={[
+                      { label: "Newest Arrivals", value: "newest" },
+                      { label: "Price: Low to High", value: "price_asc" },
+                      { label: "Price: High to Low", value: "price_desc" },
+                      { label: "Highest Rated", value: "rating_desc" },
+                      { label: "Biggest Discount", value: "discount_desc" },
+                      { label: "Relevance", value: "relevance" },
+                    ]}
+                    onChange={(val) => updateProps({ default_sort: val })}
+                  />
+                </div>
+
+                <NumberStepperField
+                  label="Dropdown Radius"
+                  value={parsedSortDropdownRadius}
+                  min={0}
+                  max={24}
+                  step={2}
+                  unit="px"
+                  onChange={(val) => updateProps({ sort_dropdown_radius: `${val}px` })}
+                />
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      {/* ── 3. COLORS TAB ─────────────────────────────────────────────────────── */}
+      {activeTab === "colors" && (
+        <div style={{ display: "grid", gap: "8px" }}>
+          {/* Section 1: Section Header & Background */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Section Header & Background
+            </div>
             <div style={{ display: "grid", gap: "6px" }}>
-              <CompactColorRow label="Section BG" value={p.outer_bg_color || "transparent"} onChange={(val) => updateProps({ outer_bg_color: val })} />
-              <CompactColorRow label="Card BG" value={p.card_bg_color || siteDefinition.theme?.card_bg || "#ffffff"} onChange={(val) => updateProps({ card_bg_color: val })} />
-              <CompactColorRow label="Card Border" value={p.card_border_color || siteDefinition.theme?.card_border_color || "rgba(226,232,240,0.8)"} onChange={(val) => updateProps({ card_border_color: val })} />
-              <CompactColorRow label="Image BG" value={p.image_bg || (isLightMode ? "#f8fafc" : "rgba(255,255,255,0.04)")} onChange={(val) => updateProps({ image_bg: val })} />
-              <CompactColorRow label="Product Title" value={p.product_name_color || p.product_title_color || p.title_color || siteDefinition.theme?.text_color || "#0f172a"} onChange={(val) => updateProps({ product_name_color: val, product_title_color: val, title_color: val })} />
-              <CompactColorRow label="Brand Label" value={p.brand_color || siteDefinition.theme?.muted_text_color || "#64748b"} onChange={(val) => updateProps({ brand_color: val })} />
-              <CompactColorRow label="Sale Price" value={p.price_color || siteDefinition.theme?.text_color || "#0f172a"} onChange={(val) => updateProps({ price_color: val })} />
-              <CompactColorRow label="Old Price" value={p.original_price_color || siteDefinition.theme?.muted_text_color || "#94a3b8"} onChange={(val) => updateProps({ original_price_color: val })} />
-              <CompactColorRow label="Star Color" value={p.rating_star_color || "#d97706"} onChange={(val) => updateProps({ rating_star_color: val })} />
-              <CompactColorRow label="Accent" value={p.accent_color || siteDefinition.theme?.accent_color || ADMIN_BLUE} onChange={(val) => updateProps({ accent_color: val })} />
+              <CompactColorRow
+                label="Section Background"
+                value={p.outer_bg_color || "transparent"}
+                onChange={(val) => updateProps({ outer_bg_color: val })}
+              />
+              <CompactColorRow
+                label="Section Title Color"
+                value={p.title_color || (isDark ? "#f8fafc" : "#0f172a")}
+                onChange={(val) => updateProps({ title_color: val })}
+              />
+              <CompactColorRow
+                label="Toolbar Subtitle Color"
+                value={p.subtitle_color || (isDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)")}
+                onChange={(val) => updateProps({ subtitle_color: val })}
+              />
+              {p.show_item_count !== false && (
+                <CompactColorRow
+                  label="Item Count Color (123)"
+                  value={p.item_count_color || (isDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)")}
+                  onChange={(val) => updateProps({ item_count_color: val })}
+                />
+              )}
+              <CompactColorRow
+                label="Grid Accent Color"
+                value={p.accent_color || "#2563eb"}
+                onChange={(val) => updateProps({ accent_color: val })}
+              />
+            </div>
+          </section>
+
+          {/* Section 2: Card Surface & Media */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Card Surface & Media Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Card Background"
+                value={p.card_bg_color || siteDefinition.theme?.card_bg || "#ffffff"}
+                onChange={(val) => updateProps({ card_bg_color: val })}
+              />
+              <CompactColorRow
+                label="Card Border"
+                value={p.card_border_color || siteDefinition.theme?.card_border_color || "rgba(226,232,240,0.8)"}
+                onChange={(val) => updateProps({ card_border_color: val })}
+              />
+              <CompactColorRow
+                label="Image Background"
+                value={p.image_bg || (isLightMode ? "#f8fafc" : "rgba(255,255,255,0.04)")}
+                onChange={(val) => updateProps({ image_bg: val })}
+              />
+            </div>
+          </section>
+
+          {/* Section 3: Product Typography & Price Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Product Text & Price Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Product Title Color"
+                value={p.product_name_color || p.product_title_color || p.title_color || siteDefinition.theme?.text_color || "#0f172a"}
+                onChange={(val) => updateProps({ product_name_color: val, product_title_color: val })}
+              />
+              <CompactColorRow
+                label="Selling Price Color"
+                value={p.price_color || siteDefinition.theme?.text_color || "#0f172a"}
+                onChange={(val) => updateProps({ price_color: val })}
+              />
+              {isOldPriceOn && (
+                <CompactColorRow
+                  label="Original (Old) Price"
+                  value={p.original_price_color || siteDefinition.theme?.muted_text_color || "#94a3b8"}
+                  onChange={(val) => updateProps({ original_price_color: val })}
+                />
+              )}
+              {isBrandOn && (
+                <CompactColorRow
+                  label="Brand Label Color"
+                  value={p.brand_color || siteDefinition.theme?.muted_text_color || "#64748b"}
+                  onChange={(val) => updateProps({ brand_color: val })}
+                />
+              )}
+            </div>
+          </section>
+
+          {/* Section 4: Badges & Ratings */}
+          {(isRatingsOn || isBadgeOn) && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                {isRatingsOn && isBadgeOn ? "Badges & Ratings Colors" : isRatingsOn ? "Ratings Color" : "Badge Colors"}
+              </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                {isRatingsOn && (
+                  <CompactColorRow
+                    label="Star Rating Color"
+                    value={p.rating_star_color || "#d97706"}
+                    onChange={(val) => updateProps({ rating_star_color: val })}
+                  />
+                )}
+                {isBadgeOn && (
+                  <>
+                    <CompactColorRow
+                      label="Badge Background"
+                      value={p.badge_bg_color || p.badge_color || "#16a34a"}
+                      onChange={(val) => updateProps({ badge_bg_color: val, badge_color: val })}
+                    />
+                    <CompactColorRow
+                      label="Badge Text Color"
+                      value={p.badge_text_color || "#ffffff"}
+                      onChange={(val) => updateProps({ badge_text_color: val })}
+                    />
+                  </>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Section 5: Toolbar Bar & Borders */}
+          {isFilterBarOn && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Toolbar Bar & Borders
+              </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                <CompactColorRow
+                  label="Toolbar Background"
+                  value={p.toolbar_bg || "transparent"}
+                  onChange={(val) => updateProps({ toolbar_bg: val })}
+                />
+                <CompactColorRow
+                  label="Subtitle Color (Browse Products)"
+                  value={p.subtitle_color || (isDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)")}
+                  onChange={(val) => updateProps({ subtitle_color: val })}
+                />
+                {p.show_item_count !== false && (
+                  <CompactColorRow
+                    label="Item Count Color (123)"
+                    value={p.item_count_color || (isDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)")}
+                    onChange={(val) => updateProps({ item_count_color: val })}
+                  />
+                )}
+                {(isFilterButtonOn || isSortButtonOn) && (
+                  <CompactColorRow
+                    label="Buttons Border"
+                    value={p.toolbar_btn_border_color || (isLightMode ? "rgba(15, 23, 42, 0.12)" : "rgba(255, 255, 255, 0.12)")}
+                    onChange={(val) => updateProps({ toolbar_btn_border_color: val })}
+                  />
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Section 6: Filter & Drawer Colors (Dedicated) */}
+          {isFilterButtonOn && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Filter & Drawer Colors
+              </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                <CompactColorRow
+                  label="Filter Button BG"
+                  value={p.filter_btn_bg || "transparent"}
+                  onChange={(val) => updateProps({ filter_btn_bg: val })}
+                />
+                <CompactColorRow
+                  label="Filter Button Text"
+                  value={p.filter_btn_text || siteDefinition.theme?.text_color || "#0f172a"}
+                  onChange={(val) => updateProps({ filter_btn_text: val })}
+                />
+                <CompactColorRow
+                  label="Drawer Background"
+                  value={p.filter_modal_bg || (isLightMode ? "#ffffff" : "#0f172a")}
+                  onChange={(val) => updateProps({ filter_modal_bg: val })}
+                />
+                <CompactColorRow
+                  label="Drawer Border"
+                  value={p.filter_modal_border || (isLightMode ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.12)")}
+                  onChange={(val) => updateProps({ filter_modal_border: val })}
+                />
+                <CompactColorRow
+                  label="Left Tabs Panel BG"
+                  value={p.filter_modal_nav_bg || (isLightMode ? "#f8fafc" : "rgba(0,0,0,0.25)")}
+                  onChange={(val) => updateProps({ filter_modal_nav_bg: val })}
+                />
+                <CompactColorRow
+                  label="Option Card BG"
+                  value={p.filter_modal_item_bg || (isLightMode ? "#ffffff" : "rgba(255,255,255,0.06)")}
+                  onChange={(val) => updateProps({ filter_modal_item_bg: val })}
+                />
+                <CompactColorRow
+                  label="Drawer Text Color"
+                  value={p.filter_modal_text || (isLightMode ? "#0f172a" : "#f8fafc")}
+                  onChange={(val) => updateProps({ filter_modal_text: val })}
+                />
+                <CompactColorRow
+                  label="Drawer Accent & Tags"
+                  value={p.filter_modal_accent || p.filter_accent_color || siteDefinition.theme?.accent_color || "#2563eb"}
+                  onChange={(val) => updateProps({ filter_modal_accent: val, filter_accent_color: val })}
+                />
+                <CompactColorRow
+                  label="Apply Button BG"
+                  value={p.filter_modal_apply_bg || p.filter_modal_accent || siteDefinition.theme?.accent_color || "#2563eb"}
+                  onChange={(val) => updateProps({ filter_modal_apply_bg: val })}
+                />
+                <CompactColorRow
+                  label="Apply Button Text"
+                  value={p.filter_modal_apply_text || "#ffffff"}
+                  onChange={(val) => updateProps({ filter_modal_apply_text: val })}
+                />
+              </div>
+            </section>
+          )}
+
+          {/* Section 7: Sort By & Dropdown Colors (Dedicated) */}
+          {isSortButtonOn && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Sort By & Menu Colors
+              </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                <CompactColorRow
+                  label="Sort Button BG"
+                  value={p.sort_btn_bg || "transparent"}
+                  onChange={(val) => updateProps({ sort_btn_bg: val })}
+                />
+                <CompactColorRow
+                  label="Sort Button Text"
+                  value={p.sort_btn_text || siteDefinition.theme?.text_color || "#0f172a"}
+                  onChange={(val) => updateProps({ sort_btn_text: val })}
+                />
+                <CompactColorRow
+                  label="Dropdown Menu BG"
+                  value={p.sort_dropdown_bg || (isLightMode ? "#ffffff" : "#1e293b")}
+                  onChange={(val) => updateProps({ sort_dropdown_bg: val })}
+                />
+                <CompactColorRow
+                  label="Dropdown Menu Text"
+                  value={p.sort_dropdown_text_color || (isLightMode ? "#0f172a" : "#f1f5f9")}
+                  onChange={(val) => updateProps({ sort_dropdown_text_color: val })}
+                />
+                <CompactColorRow
+                  label="Dropdown Border"
+                  value={p.sort_dropdown_border_color || (isLightMode ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.12)")}
+                  onChange={(val) => updateProps({ sort_dropdown_border_color: val })}
+                />
+                <CompactColorRow
+                  label="Active Sort Highlight"
+                  value={p.sort_active_color || siteDefinition.theme?.accent_color || "#2563eb"}
+                  onChange={(val) => updateProps({ sort_active_color: val })}
+                />
+              </div>
+            </section>
+          )}
+
+          {/* Section 8: Pagination Colors */}
+          <section style={sectionCardStyle(isLightMode)}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+              Pagination Colors
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <CompactColorRow
+                label="Button Background"
+                value={p.pagination_bg || (isLightMode ? "#ffffff" : "rgba(255, 255, 255, 0.06)")}
+                onChange={(val) => updateProps({ pagination_bg: val })}
+              />
+              <CompactColorRow
+                label="Button Text Color"
+                value={p.pagination_text_color || (isLightMode ? "#0f172a" : "#f4f4f5")}
+                onChange={(val) => updateProps({ pagination_text_color: val })}
+              />
+              <CompactColorRow
+                label="Active Page Background"
+                value={p.pagination_active_bg || p.accent_color || siteDefinition.theme?.accent_color || "#2563eb"}
+                onChange={(val) => updateProps({ pagination_active_bg: val })}
+              />
+              <CompactColorRow
+                label="Active Page Text Color"
+                value={p.pagination_active_text_color || "#ffffff"}
+                onChange={(val) => updateProps({ pagination_active_text_color: val })}
+              />
+              <CompactColorRow
+                label="Button Border Color"
+                value={p.pagination_border_color || (isLightMode ? "rgba(15, 23, 42, 0.14)" : "rgba(255, 255, 255, 0.12)")}
+                onChange={(val) => updateProps({ pagination_border_color: val })}
+              />
+              <CompactColorRow
+                label="Info & Range Text Color"
+                value={p.pagination_info_color || (isLightMode ? "#64748b" : "rgba(255, 255, 255, 0.75)")}
+                onChange={(val) => updateProps({ pagination_info_color: val })}
+              />
             </div>
           </section>
         </div>
@@ -6208,6 +6853,13 @@ function CartEditor({
         ? currentCartMaxWidth
         : `${currentCartMaxWidth}px`;
 
+  const isPromoEnabled =
+    p.show_promo !== undefined
+      ? Boolean(p.show_promo)
+      : siteDefinition.theme?.show_promo !== undefined
+        ? Boolean(siteDefinition.theme.show_promo)
+        : true;
+
   return (
     <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       <EditorSubTabs
@@ -6606,82 +7258,86 @@ function CartEditor({
           {/* Promo & Items */}
           <section style={sectionCardStyle(isLightMode)}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Promo Box & Item Actions
+              {isPromoEnabled ? "Promo Box & Item Actions" : "Item Actions"}
             </div>
             <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                  Promo Box Title
-                </label>
-                <input
-                  type="text"
-                  value={getStr("promo_title", "Promo code")}
-                  placeholder="Promo code"
-                  onChange={(e) => updateProps({ promo_title: e.target.value })}
-                  style={{
-                    width: "100%",
-                    height: "28px",
-                    padding: "0 8px",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    borderRadius: "4px",
-                    border: `1px solid ${tokens.border}`,
-                    background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                    color: tokens.textPrimary,
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
+              {isPromoEnabled && (
+                <>
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Promo Box Title
+                    </label>
+                    <input
+                      type="text"
+                      value={getStr("promo_title", "Promo code")}
+                      placeholder="Promo code"
+                      onChange={(e) => updateProps({ promo_title: e.target.value })}
+                      style={{
+                        width: "100%",
+                        height: "28px",
+                        padding: "0 8px",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        borderRadius: "4px",
+                        border: `1px solid ${tokens.border}`,
+                        background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                        color: tokens.textPrimary,
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                    Promo Placeholder
-                  </label>
-                  <input
-                    type="text"
-                    value={getStr("promo_placeholder", "Enter code")}
-                    placeholder="Enter code"
-                    onChange={(e) => updateProps({ promo_placeholder: e.target.value })}
-                    style={{
-                      width: "100%",
-                      height: "28px",
-                      padding: "0 8px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      borderRadius: "4px",
-                      border: `1px solid ${tokens.border}`,
-                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                      color: tokens.textPrimary,
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                    <div style={{ display: "grid", gap: "2px" }}>
+                      <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                        Promo Placeholder
+                      </label>
+                      <input
+                        type="text"
+                        value={getStr("promo_placeholder", "Enter code")}
+                        placeholder="Enter code"
+                        onChange={(e) => updateProps({ promo_placeholder: e.target.value })}
+                        style={{
+                          width: "100%",
+                          height: "28px",
+                          padding: "0 8px",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderRadius: "4px",
+                          border: `1px solid ${tokens.border}`,
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          color: tokens.textPrimary,
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
 
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                    Apply Button Text
-                  </label>
-                  <input
-                    type="text"
-                    value={getStr("promo_button_label", "Apply")}
-                    placeholder="Apply"
-                    onChange={(e) => updateProps({ promo_button_label: e.target.value })}
-                    style={{
-                      width: "100%",
-                      height: "28px",
-                      padding: "0 8px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      borderRadius: "4px",
-                      border: `1px solid ${tokens.border}`,
-                      background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
-                      color: tokens.textPrimary,
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-              </div>
+                    <div style={{ display: "grid", gap: "2px" }}>
+                      <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                        Apply Button Text
+                      </label>
+                      <input
+                        type="text"
+                        value={getStr("promo_button_label", "Apply")}
+                        placeholder="Apply"
+                        onChange={(e) => updateProps({ promo_button_label: e.target.value })}
+                        style={{
+                          width: "100%",
+                          height: "28px",
+                          padding: "0 8px",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderRadius: "4px",
+                          border: `1px solid ${tokens.border}`,
+                          background: isDark ? tokens.elevatedSurfaceBg : "#ffffff",
+                          color: tokens.textPrimary,
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div style={{ display: "grid", gap: "2px" }}>
                 <label style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
@@ -10466,6 +11122,12 @@ function CheckoutOrderSummaryEditor({
 
   const parsedBorderRadius = parseNumProp(p.border_radius, 16);
   const parsedCardRadius = parseNumProp(p.card_radius, 12);
+  const isPromoEnabled =
+    p.show_promo !== undefined
+      ? Boolean(p.show_promo)
+      : siteDefinition.theme?.show_promo !== undefined
+        ? Boolean(siteDefinition.theme.show_promo)
+        : true;
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
@@ -10687,47 +11349,49 @@ function CheckoutOrderSummaryEditor({
           </section>
 
           {/* Promo Box & Actions */}
-          <section style={sectionCardStyle(isLightMode)}>
-            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
-              Promo Box & Coupons
-            </div>
-            <div style={{ display: "grid", gap: "6px" }}>
-              <div style={{ display: "grid", gap: "2px" }}>
-                <label style={fieldLabelStyle}>Promo Box Title</label>
-                <input
-                  type="text"
-                  value={getStr("promo_title", "")}
-                  placeholder="e.g. Apply Promo Code"
-                  onChange={(e) => updateProps({ promo_title: e.target.value })}
-                  style={inputStyle}
-                />
+          {isPromoEnabled && (
+            <section style={sectionCardStyle(isLightMode)}>
+              <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>
+                Promo Box & Coupons
               </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+              <div style={{ display: "grid", gap: "6px" }}>
                 <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={fieldLabelStyle}>Promo Placeholder</label>
+                  <label style={fieldLabelStyle}>Promo Box Title</label>
                   <input
                     type="text"
-                    value={getStr("promo_placeholder", "Enter promo code")}
-                    placeholder="Enter promo code"
-                    onChange={(e) => updateProps({ promo_placeholder: e.target.value })}
+                    value={getStr("promo_title", "")}
+                    placeholder="e.g. Apply Promo Code"
+                    onChange={(e) => updateProps({ promo_title: e.target.value })}
                     style={inputStyle}
                   />
                 </div>
 
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <label style={fieldLabelStyle}>Apply Button Text</label>
-                  <input
-                    type="text"
-                    value={getStr("promo_button_label", "Apply")}
-                    placeholder="Apply"
-                    onChange={(e) => updateProps({ promo_button_label: e.target.value })}
-                    style={inputStyle}
-                  />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={fieldLabelStyle}>Promo Placeholder</label>
+                    <input
+                      type="text"
+                      value={getStr("promo_placeholder", "Enter promo code")}
+                      placeholder="Enter promo code"
+                      onChange={(e) => updateProps({ promo_placeholder: e.target.value })}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <label style={fieldLabelStyle}>Apply Button Text</label>
+                    <input
+                      type="text"
+                      value={getStr("promo_button_label", "Apply")}
+                      placeholder="Apply"
+                      onChange={(e) => updateProps({ promo_button_label: e.target.value })}
+                      style={inputStyle}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
+          )}
         </div>
       )}
 
@@ -12376,49 +13040,6 @@ const IconScrollStatic = ({ size = 13 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
     <rect x="2.5" y="3.5" width="11" height="9" rx="1.5" />
     <line x1="2.5" y1="7" x2="13.5" y2="7" />
-  </svg>
-);
-
-const IconStyleOutline = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-    <circle cx="8" cy="8" r="5" />
-  </svg>
-);
-
-const IconStyleSolid = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
-    <circle cx="8" cy="8" r="5" />
-  </svg>
-);
-
-const IconStyleDuotone = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" stroke="currentColor" strokeWidth="1.3">
-    <circle cx="8" cy="8" r="5" fill="currentColor" fillOpacity="0.25" />
-    <path d="M8 3a5 5 0 0 0 0 10V3z" fill="currentColor" />
-  </svg>
-);
-
-const IconShapeRounded = ({ size = 15 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-    <rect x="2" y="2" width="12" height="12" rx="3.5" />
-  </svg>
-);
-
-const IconShapeCircle = ({ size = 15 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-    <circle cx="8" cy="8" r="6" />
-  </svg>
-);
-
-const IconShapeSquare = ({ size = 15 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-    <rect x="2" y="2" width="12" height="12" rx="0.5" />
-  </svg>
-);
-
-const IconShapeGhost = ({ size = 15 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.5 2">
-    <rect x="2" y="2" width="12" height="12" rx="2.5" />
   </svg>
 );
 

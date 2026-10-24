@@ -179,19 +179,20 @@ const FilterModal: React.FC<FilterModalProps> = ({
 
   const rawBg =
     (theme as any)?.filter_modal_bg ||
+    (theme as any)?.filter_drawer_bg ||
     (theme as any)?.filter_bg ||
     (theme as any)?.dialog_bg ||
     (theme as any)?.surface_bg ||
     theme?.primary_bg;
   const desktopBg = rawBg || (isDark ? "#0f172a" : "#ffffff");
-  const bg = (theme as any)?.filter_modal_bg || (theme as any)?.filter_bg || (isMobile ? mobileTheme.drawerBg : desktopBg);
+  const bg = (theme as any)?.filter_modal_bg || (theme as any)?.filter_drawer_bg || (theme as any)?.filter_bg || (isMobile ? mobileTheme.drawerBg : desktopBg);
   const isModalDark = isColorDarkHex(bg);
 
-  const navBg = isMobile
+  const navBg = (theme as any)?.filter_modal_nav_bg || (isMobile
     ? (isModalDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.03)")
-    : ((theme as any)?.filter_card_bg || (theme as any)?.nav_bg || (theme as any)?.secondary_bg || (isModalDark ? "rgba(0, 0, 0, 0.35)" : "rgba(0, 0, 0, 0.025)"));
+    : ((theme as any)?.filter_card_bg || (theme as any)?.nav_bg || (theme as any)?.secondary_bg || (isModalDark ? "rgba(0, 0, 0, 0.35)" : "rgba(0, 0, 0, 0.025)")));
   const panelBg = bg;
-  const cardBg = (theme as any)?.filter_card_bg || (isModalDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.035)");
+  const cardBg = (theme as any)?.filter_modal_item_bg || (theme as any)?.filter_card_bg || (isModalDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.035)");
 
   const textPrimary =
     (theme as any)?.filter_modal_text ||
@@ -207,19 +208,34 @@ const FilterModal: React.FC<FilterModalProps> = ({
       : (isModalDark ? "rgba(248, 250, 252, 0.65)" : "rgba(15, 23, 42, 0.65)");
 
   const borderColor =
+    (theme as any)?.filter_modal_border ||
     (theme as any)?.filter_border_color ||
     (isMobile ? mobileTheme.cardBorder : null) ||
     ((theme as any)?.border_color || (isModalDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)"));
 
   const accentColor =
-    (theme as any)?.filter_btn_bg ||
+    (theme as any)?.filter_modal_accent ||
     (theme as any)?.filter_accent_color ||
     (isMobile ? mobileTheme.accentColor : null) ||
     (theme?.accent_color || "#3b82f6");
-  const activeBg = `${accentColor}1c`;
+  const activeBg =
+    (theme as any)?.filter_modal_active_bg ||
+    (accentColor.startsWith("#") && accentColor.length === 7
+      ? `${accentColor}1c`
+      : accentColor.startsWith("rgb")
+        ? accentColor.replace("rgb(", "rgba(").replace(")", ", 0.12)")
+        : `${accentColor}1c`);
+  const applyBtnBg = (theme as any)?.filter_modal_apply_bg || accentColor;
   const applyTextColor =
-    (theme as any)?.filter_btn_text ||
-    (isColorDarkHex(accentColor) ? "#ffffff" : "#0f172a");
+    (theme as any)?.filter_modal_apply_text ||
+    (isColorDarkHex(applyBtnBg) ? "#ffffff" : "#0f172a");
+
+  const modalRadius = (theme as any)?.filter_modal_radius !== undefined && (theme as any)?.filter_modal_radius !== null && String((theme as any)?.filter_modal_radius).trim() !== ""
+    ? (typeof (theme as any).filter_modal_radius === "number" ? `${(theme as any).filter_modal_radius}px` : (theme as any).filter_modal_radius)
+    : "18px";
+  const itemRadius = (theme as any)?.filter_modal_item_radius !== undefined && (theme as any)?.filter_modal_item_radius !== null && String((theme as any)?.filter_modal_item_radius).trim() !== ""
+    ? (typeof (theme as any).filter_modal_item_radius === "number" ? `${(theme as any).filter_modal_item_radius}px` : (theme as any).filter_modal_item_radius)
+    : "9px";
 
   const { dragHandleProps, drawerStyle, isDragging } = useDrawerDragToClose({
     onClose,
@@ -706,7 +722,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                     alignItems: "center",
                     justifyContent: "space-between",
                     padding: "9px 12px",
-                    borderRadius: "9px",
+                    borderRadius: itemRadius,
                     border: `1px solid ${draft.categoryId === null ? accentColor : borderColor}`,
                     background: draft.categoryId === null ? activeBg : cardBg,
                     cursor: "pointer",
@@ -754,7 +770,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "9px 12px",
-                        borderRadius: "9px",
+                        borderRadius: itemRadius,
                         border: `1px solid ${selected ? accentColor : borderColor}`,
                         background: selected ? activeBg : cardBg,
                         cursor: "pointer",
@@ -1082,7 +1098,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "9px 12px",
-                        borderRadius: "9px",
+                        borderRadius: itemRadius,
                         border: `1px solid ${checked ? accentColor : borderColor}`,
                         background: checked ? activeBg : cardBg,
                         cursor: "pointer",
@@ -1200,7 +1216,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "9px 12px",
-                        borderRadius: "9px",
+                        borderRadius: itemRadius,
                         border: `1px solid ${checked ? accentColor : borderColor}`,
                         background: checked ? activeBg : cardBg,
                         cursor: "pointer",
@@ -1318,7 +1334,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "9px 12px",
-                        borderRadius: "9px",
+                        borderRadius: itemRadius,
                         border: `1px solid ${checked ? accentColor : borderColor}`,
                         background: checked ? activeBg : cardBg,
                         cursor: "pointer",
@@ -1403,7 +1419,10 @@ const FilterModal: React.FC<FilterModalProps> = ({
       <div
         ref={modalRef}
         className="filter-modal-dialog"
-        style={isMobile ? drawerStyle : undefined}
+        style={{
+          borderRadius: isMobile ? undefined : modalRadius,
+          ...(isMobile ? drawerStyle : {}),
+        }}
       >
         {/* Grab Handle for Touch UI on Mobile (Draggable to close) */}
         {isMobile && (
@@ -1436,7 +1455,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
         <div className="filter-modal-header">
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <h2 style={{ margin: 0, fontSize: "16px", fontWeight: isMobile ? 700 : 800, color: textPrimary, letterSpacing: "-0.01em" }}>
-              Filters
+              {(theme as any)?.filter_modal_title || "Filters"}
             </h2>
             {totalActiveCount > 0 && (
               <span
@@ -1604,7 +1623,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
               padding: "10px 18px",
               borderRadius: "9px",
               border: "none",
-              background: accentColor,
+              background: applyBtnBg,
               color: applyTextColor,
               fontSize: "13px",
               fontWeight: 700,
@@ -1618,7 +1637,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
             }}
           >
             <span>
-              Apply Filters{serverFacets && typeof serverFacets.total === "number" ? ` (${serverFacets.total.toLocaleString("en-IN")})` : ""}
+              {((theme as any)?.filter_modal_apply_label || "Apply Filters") + (serverFacets && typeof serverFacets.total === "number" ? ` (${serverFacets.total.toLocaleString("en-IN")})` : "")}
             </span>
             {totalActiveCount > 0 && (
               <span
@@ -1687,7 +1706,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
           height: 520px;
           min-height: 520px;
           max-height: 85vh;
-          border-radius: 18px;
+          border-radius: ${modalRadius};
           background: ${bg};
           border: 1px solid ${borderColor};
           box-shadow: ${isDark ? "0 24px 50px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255,255,255,0.08)" : "0 20px 45px rgba(15, 23, 42, 0.16)"};
@@ -1775,14 +1794,14 @@ const FilterModal: React.FC<FilterModalProps> = ({
             border-top-right-radius: 22px !important;
             border-bottom-left-radius: 0 !important;
             border-bottom-right-radius: 0 !important;
-            border: 1px solid ${mobileTheme.drawerBorder} !important;
+            border: 1px solid ${borderColor} !important;
             border-bottom: none !important;
             box-shadow: ${mobileTheme.boxShadow} !important;
             animation: filterModalSlideUp 240ms cubic-bezier(0.16, 1, 0.3, 1) !important;
           }
           .filter-modal-header {
             padding: 14px 18px 12px !important;
-            border-bottom: 1px solid ${mobileTheme.cardBorder} !important;
+            border-bottom: 1px solid ${borderColor} !important;
             background: ${bg} !important;
           }
           .filter-modal-body {
@@ -1795,8 +1814,8 @@ const FilterModal: React.FC<FilterModalProps> = ({
             width: 114px !important;
             min-width: 114px !important;
             max-width: 114px !important;
-            border-right: 1px solid ${mobileTheme.cardBorder} !important;
-            background: ${mobileTheme.isDark ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)"} !important;
+            border-right: 1px solid ${borderColor} !important;
+            background: ${navBg} !important;
             border-bottom: none !important;
             padding: 8px 5px !important;
             flex-direction: column !important;
@@ -1816,7 +1835,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
             padding: 10px 14px !important;
             padding-bottom: max(12px, env(safe-area-inset-bottom, 12px)) !important;
             background: ${bg} !important;
-            border-top: 1px solid ${mobileTheme.cardBorder} !important;
+            border-top: 1px solid ${borderColor} !important;
           }
         }
 
@@ -1843,7 +1862,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
           border-top-right-radius: 22px !important;
           border-bottom-left-radius: 0 !important;
           border-bottom-right-radius: 0 !important;
-          border: 1px solid ${mobileTheme.drawerBorder} !important;
+          border: 1px solid ${borderColor} !important;
           border-bottom: none !important;
           box-shadow: ${mobileTheme.boxShadow} !important;
           animation: filterModalSlideUp 240ms cubic-bezier(0.16, 1, 0.3, 1) !important;
@@ -1851,7 +1870,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
         .filter-modal-overlay.is-mobile .filter-modal-header,
         .is-mobile-preview .filter-modal-header {
           padding: 14px 18px 12px !important;
-          border-bottom: 1px solid ${mobileTheme.cardBorder} !important;
+          border-bottom: 1px solid ${borderColor} !important;
           background: ${bg} !important;
         }
         .filter-modal-overlay.is-mobile .filter-modal-body,
@@ -1866,8 +1885,8 @@ const FilterModal: React.FC<FilterModalProps> = ({
           width: 114px !important;
           min-width: 114px !important;
           max-width: 114px !important;
-          border-right: 1px solid ${mobileTheme.cardBorder} !important;
-          background: ${mobileTheme.isDark ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)"} !important;
+          border-right: 1px solid ${borderColor} !important;
+          background: ${navBg} !important;
           border-bottom: none !important;
           padding: 8px 5px !important;
           flex-direction: column !important;
@@ -1889,7 +1908,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
           padding: 10px 14px !important;
           padding-bottom: max(12px, env(safe-area-inset-bottom, 12px)) !important;
           background: ${bg} !important;
-          border-top: 1px solid ${mobileTheme.cardBorder} !important;
+          border-top: 1px solid ${borderColor} !important;
         }
       `}</style>
     </div>,
